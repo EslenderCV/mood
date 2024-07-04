@@ -2,7 +2,6 @@ import { View, Text, Image } from "react-native";
 import React, { ReactNode } from "react";
 import { Tabs, Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
 
 const TabsLayout = () => {
   return (

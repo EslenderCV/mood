@@ -24,11 +24,11 @@ const index = () => {
               text="Create an account"
               containerStyles="w-[300px] mt-20"
               handlePress={() => router.push("/signIn")}
+              textStyles=""
             />
           </View>
         </View>
       </ScrollView>
-      <StatusBar backgroundColor="#181818" style="dark" />
     </SafeAreaView>
   );
 };
