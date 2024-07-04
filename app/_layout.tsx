@@ -1,12 +1,10 @@
-import { Text, View } from "react-native";
-import React from "react";
+import { Stack } from "expo-router/stack";
 
-const RootLayout = () => {
+export default function Layout() {
   return (
-    <View className="flex-1 justify-center items-center bg-black">
-      <Text className="text-primaryy">RootLayout</Text>
-    </View>
+    <Stack>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+    </Stack>
   );
-};
-
-export default RootLayout;
+}

@@ -1,18 +1,15 @@
-import { View, Text, Image } from "react-native";
-import React, { ReactNode } from "react";
-import { Tabs, Redirect } from "expo-router";
+import { Image } from "react-native";
+import React from "react";
+import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
 
-const TabsLayout = () => {
+export const TabsLayout = () => {
   return (
     <>
       <Tabs
         screenOptions={{
           tabBarStyle: {
             backgroundColor: "#181818",
-            borderTopColor: "#181818",
-            height: 88,
           },
         }}
       >
@@ -22,9 +19,9 @@ const TabsLayout = () => {
             title: "",
             tabBarIcon: ({ focused }) =>
               focused ? (
-                <Ionicons name="home" size={30} color="#5E17EB" />
+                <Ionicons name="home" size={24} color="#5E17EB" />
               ) : (
-                <Ionicons name="home-outline" size={30} color="#5E17EB" />
+                <Ionicons name="home-outline" size={24} color="#5E17EB" />
               ),
           }}
         />
@@ -34,9 +31,9 @@ const TabsLayout = () => {
             title: "",
             tabBarIcon: ({ focused }) =>
               focused ? (
-                <Ionicons name="compass" size={30} color="#5E17EB" />
+                <Ionicons name="compass" size={24} color="#5E17EB" />
               ) : (
-                <Ionicons name="compass-outline" size={30} color="#5E17EB" />
+                <Ionicons name="compass-outline" size={24} color="#5E17EB" />
               ),
           }}
         />
@@ -59,9 +56,9 @@ const TabsLayout = () => {
             title: "",
             tabBarIcon: ({ focused }) =>
               focused ? (
-                <Ionicons name="albums" size={30} color="#5E17EB" />
+                <Ionicons name="library" size={24} color="#5E17EB" />
               ) : (
-                <Ionicons name="albums-outline" size={30} color="#5E17EB" />
+                <Ionicons name="library-outline" size={24} color="#5E17EB" />
               ),
           }}
         />
@@ -71,9 +68,9 @@ const TabsLayout = () => {
             title: "",
             tabBarIcon: ({ focused }) =>
               focused ? (
-                <Ionicons name="close" size={30} color="#5E17EB" />
+                <Ionicons name="close" size={24} color="#5E17EB" />
               ) : (
-                <Ionicons name="menu" size={30} color="#5E17EB" />
+                <Ionicons name="menu" size={24} color="#5E17EB" />
               ),
           }}
         />
@@ -81,5 +78,3 @@ const TabsLayout = () => {
     </>
   );
 };
-
-export default TabsLayout;
