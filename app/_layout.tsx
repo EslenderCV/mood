@@ -1,22 +1,12 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import React from "react";
-import { Slot } from "expo-router";
 
 const RootLayout = () => {
   return (
-    <>
-      <Slot />
-    </>
+    <View className="flex-1 justify-center items-center bg-black">
+      <Text className="text-primaryy">RootLayout</Text>
+    </View>
   );
 };
 
 export default RootLayout;
-
-const styles = StyleSheet.create({
-  container: {
-    display: "flex",
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
