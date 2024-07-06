@@ -5,6 +5,7 @@ import CustomButtom from "@/components/CustomButtom";
 import { TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
+import { router } from "expo-router";
 
 const signIn = () => {
   const [textInputValue, setTextInputValue] = React.useState("");
@@ -75,11 +76,14 @@ const signIn = () => {
                 Sign in with Google
               </Text>
             </TouchableOpacity>
-            <View className="mt-4">
-              <Text className="text-white">
-                Dont have an account?{" "}
-                <Text className="text-primaryy font-semibold">Sign up</Text>
-              </Text>
+            <View className="mt-4 flex-row items-center justify-center">
+              <Text className="text-white">Dont have an account? </Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => router.push("/signUp")}
+              >
+                <Text className="text-primaryy font-bold">Sign up</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
