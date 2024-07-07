@@ -6,6 +6,9 @@ import { TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { Link } from "expo-router";
+import { signInn } from "@/lib/appwrite";
+import { Alert } from "react-native";
+import { router } from "expo-router";
 
 const signIn = () => {
   const [passwordShow, setPasswordShow] = useState(true);
@@ -14,14 +17,26 @@ const signIn = () => {
     password: "",
   });
 
-  const submit = () => {};
+  const submit = async () => {
+    if (!form.email.trim() || !form.password.trim()) {
+      Alert.alert("Error", "Please fill in all the fields!");
+    } else {
+      try {
+        await signInn(form.email, form.password);
+
+        router.replace("/home");
+      } catch (error) {
+        Alert.alert("Error", "Something happened, please try again!");
+      }
+    }
+  };
 
   return (
     <SafeAreaView className="bg-black h-full">
       <ScrollView>
         <View className="w-full items-center h-full">
           <Image
-            source={require("../../assets/fullLogo.png")}
+            source={require("@/assets/fullLogo.png")}
             className="w-[150px] h-[150px]"
             resizeMode="contain"
           />

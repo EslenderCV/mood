@@ -5,14 +5,16 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomButtom from "@/components/CustomButtom";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import { useState } from "react";
+import { createUser } from "@/lib/appwrite";
 
 const signUp = () => {
   const [form, setForm] = useState({
@@ -20,16 +22,39 @@ const signUp = () => {
     username: "",
     email: "",
     password: "",
-    confirmPassword: "",
   });
   const [passwordShow, setPasswordShow] = React.useState(true);
+
+  const submit = async () => {
+    if (
+      !form.email.trim() ||
+      !form.password.trim() ||
+      !form.name.trim() ||
+      !form.username.trim()
+    ) {
+      Alert.alert("Error", "Please fill in all the fields!");
+    } else {
+      try {
+        const result = await createUser(
+          form.email,
+          form.password,
+          form.name,
+          form.username
+        );
+
+        router.replace("/home");
+      } catch (error) {
+        Alert.alert("Error", "Something happened, please try again!");
+      }
+    }
+  };
 
   return (
     <SafeAreaView className="bg-black h-full">
       <ScrollView>
         <View className="w-full items-center h-full">
           <Image
-            source={require("../../assets/fullLogo.png")}
+            source={require("@/assets/fullLogo.png")}
             className="w-[150px] h-[150px]"
             resizeMode="contain"
           />
@@ -71,21 +96,16 @@ const signUp = () => {
             onPress={() => setPasswordShow(passwordShow ? false : true)}
           >
             <View className="relative bottom-[30px] left-[130px]">
-              <Ionicons name="eye-outline" color="#6D6D6D" size={20} />
+              <Ionicons
+                name={!passwordShow ? "eye-outline" : "eye-off-outline"}
+                color="#6D6D6D"
+                size={20}
+              />
             </View>
           </TouchableOpacity>
-          <TextInput
-            autoCapitalize={"none"}
-            autoCorrect={false}
-            secureTextEntry={passwordShow}
-            onChangeText={(e) => setForm({ ...form, confirmPassword: e })}
-            value={form.confirmPassword}
-            placeholder="Confirm password"
-            className="text-sm -mt-1 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border-2 border-gray/20 focus:border-primaryy"
-          />
           <CustomButtom
             text="CREATE ACCOUNT"
-            handlePress={() => {}}
+            handlePress={submit}
             containerStyles="w-[300px] mt-4 bg-primaryy"
             textStyles="text-white"
           />
