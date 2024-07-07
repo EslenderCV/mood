@@ -1,23 +1,28 @@
-import { View, Text } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+} from "react-native";
 import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ScrollView } from "react-native";
-import { Image } from "react-native";
-import { TextInput } from "react-native";
 import CustomButtom from "@/components/CustomButtom";
-import { TouchableOpacity } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Link } from "expo-router";
+import { useState } from "react";
 
 const signUp = () => {
-  const [textInputValue, setTextInputValue] = React.useState("");
-  const [EmailInputValue, setEmailInputValue] = React.useState("");
-  const [UserInputValue, setUserInputValue] = React.useState("");
-  const [textInputValuePassword, setTextInputValuePassword] =
-    React.useState("");
-  const [textInputValueConfirmPassword, setTextInputValueConfirmPassword] =
-    React.useState("");
+  const [form, setForm] = useState({
+    name: "",
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
+  const [passwordShow, setPasswordShow] = React.useState(true);
 
   return (
     <SafeAreaView className="bg-black h-full">
@@ -31,46 +36,52 @@ const signUp = () => {
           <TextInput
             autoCapitalize={"none"}
             autoCorrect={false}
-            onChangeText={(text) => setTextInputValue(text)}
-            value={textInputValue}
+            onChangeText={(e) => setForm({ ...form, name: e })}
+            value={form.name}
             placeholder="Name"
-            className="text-sm mt-62 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border border-gray focus:border-primaryy"
+            className="text-sm mt-62 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border-2 border-gray/20 focus:border-primaryy"
           />
           <TextInput
             autoCapitalize={"none"}
             autoCorrect={false}
-            onChangeText={(text) => setUserInputValue(text)}
-            value={UserInputValue}
+            onChangeText={(e) => setForm({ ...form, username: e })}
+            value={form.username}
             placeholder="Username"
-            className="text-sm mt-4 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border border-gray focus:border-primaryy"
+            className="text-sm mt-4 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border-2 border-gray/20 focus:border-primaryy"
           />
           <TextInput
             autoCapitalize={"none"}
             autoCorrect={false}
-            onChangeText={(text) => setEmailInputValue(text)}
-            value={EmailInputValue}
+            onChangeText={(e) => setForm({ ...form, email: e })}
+            value={form.email}
             placeholder="Email address"
-            className="text-sm mt-4 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border border-gray focus:border-primaryy"
+            className="text-sm mt-4 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border-2 border-gray/20 focus:border-primaryy"
           />
           <TextInput
             autoCapitalize={"none"}
             autoCorrect={false}
-            secureTextEntry={true}
-            textContentType={"password"}
-            onChangeText={(text) => setTextInputValuePassword(text)}
-            value={textInputValuePassword}
+            secureTextEntry={passwordShow}
+            onChangeText={(e) => setForm({ ...form, password: e })}
+            value={form.password}
             placeholder="Password"
-            className="text-sm mt-4 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border border-gray focus:border-primaryy"
+            className="text-sm mt-4 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border-2 border-gray/20 focus:border-primaryy"
           />
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setPasswordShow(passwordShow ? false : true)}
+          >
+            <View className="relative bottom-[30px] left-[130px]">
+              <Ionicons name="eye-outline" color="#6D6D6D" size={20} />
+            </View>
+          </TouchableOpacity>
           <TextInput
             autoCapitalize={"none"}
             autoCorrect={false}
-            secureTextEntry={true}
-            textContentType={"password"}
-            onChangeText={(text) => setTextInputValueConfirmPassword(text)}
-            value={textInputValueConfirmPassword}
+            secureTextEntry={passwordShow}
+            onChangeText={(e) => setForm({ ...form, confirmPassword: e })}
+            value={form.confirmPassword}
             placeholder="Confirm password"
-            className="text-sm mt-4 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border border-gray focus:border-primaryy"
+            className="text-sm -mt-1 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border-2 border-gray/20 focus:border-primaryy"
           />
           <CustomButtom
             text="CREATE ACCOUNT"
@@ -108,12 +119,9 @@ const signUp = () => {
             </TouchableOpacity>
             <View className="mt-4 flex-row items-center justify-center">
               <Text className="text-white">Already have an account? </Text>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => router.push("/signIn")}
-              >
+              <Link href="/signIn">
                 <Text className="text-primaryy font-bold">Sign in</Text>
-              </TouchableOpacity>
+              </Link>
             </View>
           </View>
         </View>

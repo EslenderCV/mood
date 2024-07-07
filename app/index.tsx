@@ -15,26 +15,17 @@ const index = () => {
             className="w-[170px] h-[170px]"
             resizeMode="contain"
           />
-          <View className="-mt-6 items-center">
+          <View className="-mt-6 w-full items-center">
             <Text className="text-2xl text-white text-center">
               Listen, Share,{" "}
               <Text className="text-primaryy font-bold">Enjoy!</Text>
             </Text>
             <CustomButtom
-              text="SIGN IN"
-              containerStyles="w-[200px] mt-20"
+              text="Continue with Email"
+              containerStyles="w-[80%] mt-20"
               handlePress={() => router.push("/signIn")}
               textStyles=""
             />
-            <View className="flex-row gap-2 mt-4 justify-center items-center">
-              <Text className="text-white text-sm">Dont have an account?</Text>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => router.push("/signUp")}
-              >
-                <Text className="text-primaryy font-bold">Sign up</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </ScrollView>

@@ -1,16 +1,20 @@
 import { View, Text, Image, ScrollView, TextInput } from "react-native";
-import React from "react";
+import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomButtom from "@/components/CustomButtom";
 import { TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import { router } from "expo-router";
+import { Link } from "expo-router";
 
 const signIn = () => {
-  const [textInputValue, setTextInputValue] = React.useState("");
-  const [textInputValuePassword, setTextInputValuePassword] =
-    React.useState("");
+  const [passwordShow, setPasswordShow] = useState(true);
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+  });
+
+  const submit = () => {};
 
   return (
     <SafeAreaView className="bg-black h-full">
@@ -24,28 +28,41 @@ const signIn = () => {
           <TextInput
             autoCapitalize={"none"}
             autoCorrect={false}
-            onChangeText={(text) => setTextInputValue(text)}
-            value={textInputValue}
+            onChangeText={(text) => setForm({ ...form, email: text })}
+            value={form.email}
             placeholder="Username or email address"
-            className="text-sm mt-10 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border border-gray"
+            className="text-sm mt-10 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border-2 border-gray/20 focus:border-primaryy"
           />
           <TextInput
             autoCapitalize={"none"}
             autoCorrect={false}
-            secureTextEntry={true}
-            textContentType={"password"}
-            onChangeText={(text) => setTextInputValuePassword(text)}
-            value={textInputValuePassword}
+            secureTextEntry={passwordShow}
+            onChangeText={(text) => setForm({ ...form, password: text })}
+            value={form.password}
             placeholder="Password"
-            className="text-sm mt-4 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border border-gray"
+            className="text-sm mt-4 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border-2 border-gray/20 focus:border-primaryy"
           />
-          <Text className="text-primaryy mt-4 ml-[190px] font-light">
-            Forgot password?
-          </Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setPasswordShow(passwordShow ? false : true)}
+          >
+            <View className="relative bottom-[30px] left-[130px]">
+              <Ionicons
+                name={!passwordShow ? "eye-outline" : "eye-off-outline"}
+                color="#6D6D6D"
+                size={20}
+              />
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.7}>
+            <Text className="text-primaryy -mt-2 ml-[190px] font-light">
+              Forgot password?
+            </Text>
+          </TouchableOpacity>
           <CustomButtom
             text="SIGN IN"
-            handlePress={() => {}}
-            containerStyles="w-[300px] mt-4 bg-primaryy"
+            handlePress={submit}
+            containerStyles="w-[300px] mt-8 bg-primaryy"
             textStyles="text-white"
           />
           <View className="flex-row justify-center items-center w-full gap-3 mt-6">
@@ -78,12 +95,9 @@ const signIn = () => {
             </TouchableOpacity>
             <View className="mt-4 flex-row items-center justify-center">
               <Text className="text-white">Dont have an account? </Text>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => router.push("/signUp")}
-              >
+              <Link href="/signUp">
                 <Text className="text-primaryy font-bold">Sign up</Text>
-              </TouchableOpacity>
+              </Link>
             </View>
           </View>
         </View>
