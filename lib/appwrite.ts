@@ -55,7 +55,7 @@ export const createUser = async (
 
     return newUser;
   } catch (err) {
-    console.log(err);
+    err;
     throw new Error();
   }
 };
@@ -66,7 +66,7 @@ export const signInn = async (email: string, password: string) => {
 
     return session;
   } catch (err) {
-    console.log(err);
+    err;
   }
 };
 
@@ -85,6 +85,6 @@ export const getCurrentUser = async () => {
 
     return currentUser.documents[0];
   } catch (error) {
-    console.log(error);
+    error;
   }
 };

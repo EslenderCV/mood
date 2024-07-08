@@ -1,14 +1,13 @@
-import React, { useState } from "react";
+import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Image, ScrollView, Text, View } from "react-native";
 import CustomButtom from "@/components/CustomButtom";
 import { Redirect, router } from "expo-router";
 import { useGlobalContext } from "@/context/GlobalProvider";
 
 const index = () => {
-  const { loadding, loggedIn } = useGlobalContext;
-
-  if (!loadding && loggedIn) return <Redirect href="/home" />;
+  const { loading, loggedIn } = useGlobalContext();
+  if (!loading && loggedIn) return <Redirect href="/home" />;
 
   return (
     <SafeAreaView className="bg-black flex-1">

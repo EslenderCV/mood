@@ -4,29 +4,46 @@ import {
   useState,
   useEffect,
   ReactNode,
+  Dispatch,
+  SetStateAction,
 } from "react";
 
 import { getCurrentUser } from "@/lib/appwrite";
 import { Models } from "react-native-appwrite";
 
-const GlobalContext = createContext({});
-
-export const useGlobalContext = () => useContext(GlobalContext);
-
 interface Props {
   children: ReactNode;
 }
 
+interface contextProps {
+  loggedIn: boolean;
+  setLoggedIn: Dispatch<SetStateAction<boolean>>;
+  user: Models.Document | null;
+  setUser: Dispatch<SetStateAction<Models.Document | null>> | null;
+  loading: boolean;
+}
+
+const GlobalContext = createContext<contextProps>({
+  loggedIn: false,
+  setLoggedIn: () => {},
+  user: null,
+  setUser: null,
+  loading: true,
+});
+
+export const useGlobalContext: () => contextProps = () =>
+  useContext(GlobalContext);
+
 const GlobalProvider = ({ children }: Props) => {
   const [loggedIn, setLoggedIn] = useState(false);
   const [user, setUser] = useState<Models.Document | null>(null);
-  const [loadding, setLoadding] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     getCurrentUser()
       .then((res) => {
         if (res) {
-          setLoadding(true);
+          setLoggedIn(true);
           setUser(res);
         } else {
           setLoggedIn(false);
@@ -34,16 +51,16 @@ const GlobalProvider = ({ children }: Props) => {
         }
       })
       .catch((err) => {
-        console.log(err);
+        err;
       })
       .finally(() => {
-        setLoadding(false);
+        setLoading(false);
       });
   }, []);
 
   return (
     <GlobalContext.Provider
-      value={{ loggedIn, setLoggedIn, user, setUser, loadding }}
+      value={{ loggedIn, setLoggedIn, user, setUser, loading }}
     >
       {children}
     </GlobalContext.Provider>
