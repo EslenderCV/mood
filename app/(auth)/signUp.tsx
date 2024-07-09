@@ -15,6 +15,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
 import { useState } from "react";
 import { createUser } from "@/lib/appwrite";
+import { useGlobalContext } from "@/context/GlobalProvider";
+import { Models } from "react-native-appwrite";
 
 const signUp = () => {
   const [form, setForm] = useState({
@@ -23,6 +25,8 @@ const signUp = () => {
     email: "",
     password: "",
   });
+
+  const { setUser, setLoggedIn } = useGlobalContext();
   const [passwordShow, setPasswordShow] = React.useState(true);
 
   const submit = async () => {
@@ -35,12 +39,15 @@ const signUp = () => {
       Alert.alert("Error", "Please fill in all the fields!");
     } else {
       try {
-        const result = await createUser(
+        const result = (await createUser(
           form.email,
           form.password,
           form.name,
           form.username
-        );
+        )) as Models.Document;
+
+        setUser(result);
+        setLoggedIn(true);
 
         router.replace("/home");
       } catch (error) {

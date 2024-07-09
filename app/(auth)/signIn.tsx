@@ -6,11 +6,14 @@ import { TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { Link } from "expo-router";
-import { signInn } from "@/lib/appwrite";
+import { getCurrentUser, signInn } from "@/lib/appwrite";
 import { Alert } from "react-native";
 import { router } from "expo-router";
+import { useGlobalContext } from "@/context/GlobalProvider";
+import { Models } from "react-native-appwrite";
 
 const signIn = () => {
+  const { setUser, setLoggedIn } = useGlobalContext();
   const [passwordShow, setPasswordShow] = useState(true);
   const [form, setForm] = useState({
     email: "",
@@ -24,6 +27,9 @@ const signIn = () => {
       try {
         await signInn(form.email, form.password);
 
+        const result = (await getCurrentUser()) as Models.Document;
+        setLoggedIn(true);
+        setUser(result);
         router.replace("/home");
       } catch (error) {
         Alert.alert("Error", "Something happened, please try again!");

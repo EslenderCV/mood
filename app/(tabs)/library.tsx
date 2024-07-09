@@ -1,11 +1,16 @@
 import { View, Text } from "react-native";
 import React from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
+import TopBar from "@/components/TopBar";
+import { ScrollView } from "react-native";
 
 const Library = () => {
   return (
-    <View>
-      <Text>Library</Text>
-    </View>
+    <>
+      <SafeAreaView className="bg-black h-full">
+        <ScrollView></ScrollView>
+      </SafeAreaView>
+    </>
   );
 };
 

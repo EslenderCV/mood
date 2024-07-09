@@ -1,6 +1,6 @@
-import { View, Text, Image } from "react-native";
-import React, { ReactNode } from "react";
-import { Tabs, Redirect } from "expo-router";
+import { Image } from "react-native";
+import React from "react";
+import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 const TabsLayout = () => {
@@ -25,6 +25,7 @@ const TabsLayout = () => {
               ) : (
                 <Ionicons name="home-outline" size={30} color="#5E17EB" />
               ),
+            headerShown: false,
           }}
         />
         <Tabs.Screen
@@ -37,6 +38,7 @@ const TabsLayout = () => {
               ) : (
                 <Ionicons name="compass-outline" size={30} color="#5E17EB" />
               ),
+            headerShown: false,
           }}
         />
         <Tabs.Screen
@@ -50,6 +52,7 @@ const TabsLayout = () => {
                 className="w-6 h-6"
               />
             ),
+            headerShown: false,
           }}
         />
         <Tabs.Screen
@@ -62,6 +65,7 @@ const TabsLayout = () => {
               ) : (
                 <Ionicons name="albums-outline" size={30} color="#5E17EB" />
               ),
+            headerShown: false,
           }}
         />
         <Tabs.Screen
@@ -74,6 +78,7 @@ const TabsLayout = () => {
               ) : (
                 <Ionicons name="menu" size={30} color="#5E17EB" />
               ),
+            headerShown: false,
           }}
         />
       </Tabs>

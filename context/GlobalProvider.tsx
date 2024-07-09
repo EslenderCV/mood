@@ -51,7 +51,7 @@ const GlobalProvider = ({ children }: Props) => {
         }
       })
       .catch((err) => {
-        err;
+        console.log(err);
       })
       .finally(() => {
         setLoading(false);

@@ -9,6 +9,8 @@ const index = () => {
   const { loading, loggedIn } = useGlobalContext();
   if (!loading && loggedIn) return <Redirect href="/home" />;
 
+
+  
   return (
     <SafeAreaView className="bg-black flex-1">
       <ScrollView contentContainerStyle={{ height: "100%" }}>
