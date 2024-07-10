@@ -1,9 +1,10 @@
 import { Image } from "react-native";
-import React from "react";
+import React, { useState } from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 const TabsLayout = () => {
+  const [setting, setSetting] = useState(false);
   return (
     <>
       <Tabs
@@ -12,6 +13,7 @@ const TabsLayout = () => {
             backgroundColor: "#181818",
             borderTopColor: "#181818",
             height: 88,
+            width: "83%",
           },
         }}
       >
@@ -49,7 +51,7 @@ const TabsLayout = () => {
               <Image
                 source={require("../../assets/mood.png")}
                 resizeMode="contain"
-                className="w-6 h-6"
+                className="w-7 h-7"
               />
             ),
             headerShown: false,
@@ -68,20 +70,24 @@ const TabsLayout = () => {
             headerShown: false,
           }}
         />
-        <Tabs.Screen
-          name="settings"
-          options={{
-            title: "",
-            tabBarIcon: ({ focused }) =>
-              focused ? (
-                <Ionicons name="close" size={30} color="#5E17EB" />
-              ) : (
-                <Ionicons name="menu" size={30} color="#5E17EB" />
-              ),
-            headerShown: false,
-          }}
-        />
       </Tabs>
+
+      <Ionicons
+        name={setting ? "close" : "menu"}
+        size={32}
+        color="#5E17EB"
+        style={{
+          position: "absolute",
+          bottom: 0,
+          right: 0,
+          backgroundColor: "#181818",
+          width: "17%",
+          paddingTop: 6,
+          textAlign: "center",
+          height: 88,
+        }}
+        onPress={() => setSetting(setting ? false : true)}
+      />
     </>
   );
 };

@@ -7,10 +7,20 @@ import { useGlobalContext } from "@/context/GlobalProvider";
 
 const index = () => {
   const { loading, loggedIn } = useGlobalContext();
-  if (!loading && loggedIn) return <Redirect href="/home" />;
 
-
-  
+  if (loading)
+    return (
+      <View className="w-full h-full bg-black justify-center items-center">
+        <Image
+          source={require("@/assets/fullLogo.png")}
+          className="w-[200px]"
+          resizeMode="contain"
+        />
+      </View>
+    );
+  if (!loading && loggedIn) {
+    return <Redirect href="/home" />;
+  }
   return (
     <SafeAreaView className="bg-black flex-1">
       <ScrollView contentContainerStyle={{ height: "100%" }}>
