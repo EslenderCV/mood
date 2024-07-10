@@ -1,10 +1,14 @@
-import { Image } from "react-native";
+import { Image, View } from "react-native";
 import React, { useState } from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Text } from "react-native";
+import { useGlobalContext } from "@/context/GlobalProvider";
 
 const TabsLayout = () => {
   const [setting, setSetting] = useState(false);
+  const { user } = useGlobalContext();
+
   return (
     <>
       <Tabs
@@ -88,6 +92,16 @@ const TabsLayout = () => {
         }}
         onPress={() => setSetting(setting ? false : true)}
       />
+
+      <View
+        className={`bg-black/70 absolute bottom-[88px] right-0 h-[90%] w-full ${
+          !setting ? "hidden" : ""
+        }`}
+      >
+        <View className="bg-graysecondd w-[300px] h-[88%] absolute right-0 bottom-0">
+          <Text className="text-white">This is the settings popup</Text>
+        </View>
+      </View>
     </>
   );
 };
