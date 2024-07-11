@@ -27,9 +27,9 @@ const signIn = () => {
       try {
         await signInn(form.email, form.password);
 
-        const result = (await getCurrentUser()) as Models.Document;
+        const result = await getCurrentUser();
         setLoggedIn(true);
-        setUser(result);
+        setUser(result ? result : null);
         router.replace("/home");
       } catch (error) {
         Alert.alert("Error", "Something happened, please try again!");

@@ -39,12 +39,12 @@ const signUp = () => {
       Alert.alert("Error", "Please fill in all the fields!");
     } else {
       try {
-        const result = (await createUser(
+        const result = await createUser(
           form.email,
           form.password,
           form.name,
           form.username
-        )) as Models.Document;
+        );
 
         setUser(result);
         setLoggedIn(true);

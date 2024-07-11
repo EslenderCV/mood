@@ -1,9 +1,10 @@
-import { Image, View } from "react-native";
+import { Image, TouchableOpacity, View } from "react-native";
 import React, { useState } from "react";
-import { Tabs } from "expo-router";
+import { Link, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "react-native";
 import { useGlobalContext } from "@/context/GlobalProvider";
+import SettOption from "@/components/settOption";
 
 const TabsLayout = () => {
   const [setting, setSetting] = useState(false);
@@ -51,7 +52,7 @@ const TabsLayout = () => {
           name="mood"
           options={{
             title: "",
-            tabBarIcon: ({ focused }) => (
+            tabBarIcon: () => (
               <Image
                 source={require("../../assets/mood.png")}
                 resizeMode="contain"
@@ -71,6 +72,13 @@ const TabsLayout = () => {
               ) : (
                 <Ionicons name="albums-outline" size={30} color="#5E17EB" />
               ),
+            headerShown: false,
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            href: null,
             headerShown: false,
           }}
         />
@@ -94,12 +102,57 @@ const TabsLayout = () => {
       />
 
       <View
-        className={`bg-black/70 absolute bottom-[88px] right-0 h-[90%] w-full ${
+        className={`bg-black/70 absolute bottom-[88px] right-0 h-[90%] w-full  ${
           !setting ? "hidden" : ""
         }`}
       >
-        <View className="bg-graysecondd w-[300px] h-[88%] absolute right-0 bottom-0">
-          <Text className="text-white">This is the settings popup</Text>
+        <View className="bg-graysecondd w-[300px] h-[88%] p-5 absolute right-0 bottom-0 items-center">
+          <Link href="/profile" onPress={() => setSetting(false)}>
+            <View className="flex-row gap-3 w-full">
+              <Image
+                source={{ uri: user?.pfp }}
+                className="w-12 h-12 rounded-full "
+                resizeMode="contain"
+              />
+              <View>
+                <Text className="text-white font-semibold text-2xl">
+                  {user?.name}
+                </Text>
+                <Text className="text-gray text-md">See profile</Text>
+              </View>
+            </View>
+          </Link>
+          <View className="h-[2px] w-[70%] bg-gray mt-3"></View>
+          <View className="absolute bottom-2 right-0 p-5">
+            <SettOption
+              name="Get Plus"
+              icon={<Ionicons name="diamond" color="#5E17EB" size={30} />}
+            />
+            <SettOption
+              name="Help"
+              icon={
+                <Ionicons name="information-circle" color="#5E17EB" size={30} />
+              }
+            />
+            <SettOption
+              name="Notifications"
+              icon={
+                <Ionicons name="notifications-off" color="#5E17EB" size={30} />
+              }
+            />
+            <SettOption
+              name="Security"
+              icon={<Ionicons name="shield" color="#5E17EB" size={30} />}
+            />
+            <SettOption
+              name="Privacy"
+              icon={<Ionicons name="key" color="#5E17EB" size={30} />}
+            />
+            <SettOption
+              name="Settings"
+              icon={<Ionicons name="cog" color="#5E17EB" size={30} />}
+            />
+          </View>
         </View>
       </View>
     </>
