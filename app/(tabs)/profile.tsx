@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { signOut } from "@/lib/appwrite";
 import { router } from "expo-router";
 import { useState } from "react";
+import SongPreview from "@/components/SongPreview";
 
 const profile = () => {
   const { setUser, setLoggedIn } = useGlobalContext();
@@ -84,6 +85,32 @@ const profile = () => {
             </TouchableOpacity>
           </View>
           <View className="w-[300px] h-[1px] bg-white"></View>
+        </View>
+        <View className="w-full p-2">
+          <View className="w-full flex-row justify-between items-center">
+            <Text className="font-bold text-2xl text-white">Songs</Text>
+            <TouchableOpacity activeOpacity={0.7}>
+              <Text className="text-gray">See All</Text>
+            </TouchableOpacity>
+          </View>
+          <SongPreview
+            img="https://i.scdn.co/image/ab67616d0000b273d28d2ebdedb220e479743797"
+            songTitle="Money Trees"
+            autor="Kendrick Lamar"
+            replays={31}
+          />
+          <SongPreview
+            img="https://upload.wikimedia.org/wikipedia/en/6/61/Kendrick_Lamar_-_Not_Like_Us.png"
+            songTitle="Not Like Us"
+            autor="Kendrick Lamar"
+            replays={23}
+          />
+          <SongPreview
+            img="https://images.genius.com/bc3bc77f6ba7f01baf80a8ab795f9760.1000x1000x1.jpg"
+            songTitle="First Person Shooter (ft. J Cole)"
+            autor="Drake"
+            replays={15}
+          />
         </View>
       </ScrollView>
     </SafeAreaView>
