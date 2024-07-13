@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image, ScrollView, Text, View } from "react-native";
 import CustomButtom from "@/components/CustomButtom";
@@ -40,6 +40,7 @@ const index = () => {
               containerStyles="w-[80%] mt-20"
               handlePress={() => router.push("/signIn")}
               textStyles=""
+              loading={false}
             />
           </View>
         </View>

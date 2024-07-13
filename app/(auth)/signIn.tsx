@@ -1,16 +1,21 @@
-import { View, Text, Image, ScrollView, TextInput } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  ScrollView,
+  TextInput,
+  Alert,
+  TouchableOpacity,
+} from "react-native";
 import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomButtom from "@/components/CustomButtom";
-import { TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import { getCurrentUser, signInn } from "@/lib/appwrite";
-import { Alert } from "react-native";
-import { router } from "expo-router";
 import { useGlobalContext } from "@/context/GlobalProvider";
-import { Models } from "react-native-appwrite";
+import { AppwriteException } from "react-native-appwrite";
 
 const signIn = () => {
   const { setUser, setLoggedIn } = useGlobalContext();
@@ -19,12 +24,14 @@ const signIn = () => {
     email: "",
     password: "",
   });
+  const [isLoading, setIsLoading] = useState(false);
 
   const submit = async () => {
     if (!form.email.trim() || !form.password.trim()) {
       Alert.alert("Error", "Please fill in all the fields!");
     } else {
       try {
+        setIsLoading(true);
         await signInn(form.email, form.password);
 
         const result = await getCurrentUser();
@@ -32,7 +39,9 @@ const signIn = () => {
         setUser(result ? result : null);
         router.replace("/home");
       } catch (error) {
-        Alert.alert("Error", "Something happened, please try again!");
+        Alert.alert("Error", (error as AppwriteException).message);
+      } finally {
+        setIsLoading(false);
       }
     }
   };
@@ -85,6 +94,7 @@ const signIn = () => {
             handlePress={submit}
             containerStyles="w-[300px] mt-8 bg-primaryy"
             textStyles="text-white"
+            loading={isLoading}
           />
           <View className="flex-row justify-center items-center w-full gap-3 mt-6">
             <View className="bg-gray w-[130px] h-[1px]"></View>

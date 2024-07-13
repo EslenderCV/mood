@@ -16,7 +16,7 @@ import { Link, router } from "expo-router";
 import { useState } from "react";
 import { createUser } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
-import { Models } from "react-native-appwrite";
+import { AppwriteException, Models } from "react-native-appwrite";
 
 const signUp = () => {
   const [form, setForm] = useState({
@@ -28,6 +28,7 @@ const signUp = () => {
 
   const { setUser, setLoggedIn } = useGlobalContext();
   const [passwordShow, setPasswordShow] = React.useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   const submit = async () => {
     if (
@@ -39,6 +40,7 @@ const signUp = () => {
       Alert.alert("Error", "Please fill in all the fields!");
     } else {
       try {
+        setIsLoading(true);
         const result = await createUser(
           form.email,
           form.password,
@@ -51,7 +53,9 @@ const signUp = () => {
 
         router.replace("/home");
       } catch (error) {
-        Alert.alert("Error", "Something happened, please try again!");
+        Alert.alert("Error", (error as AppwriteException).message);
+      } finally {
+        setIsLoading(false);
       }
     }
   };
@@ -115,6 +119,7 @@ const signUp = () => {
             handlePress={submit}
             containerStyles="w-[300px] mt-4 bg-primaryy"
             textStyles="text-white"
+            loading={isLoading}
           />
           <View className="flex-row justify-center items-center w-full gap-3 mt-2">
             <View className="bg-gray w-[130px] h-[1px]"></View>

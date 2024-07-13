@@ -4,6 +4,7 @@ import {
   Avatars,
   Databases,
   Query,
+  AppwriteException,
 } from "react-native-appwrite";
 import { ID } from "react-native-appwrite";
 
@@ -55,8 +56,7 @@ export const createUser = async (
 
     return newUser;
   } catch (err) {
-    err;
-    throw new Error();
+    throw new Error((err as AppwriteException).message);
   }
 };
 
@@ -66,6 +66,7 @@ export const signInn = async (email: string, password: string) => {
 
     return session;
   } catch (err) {
+    throw new Error((err as AppwriteException).message);
     console.log(err);
   }
 };
@@ -86,5 +87,15 @@ export const getCurrentUser = async () => {
     return currentUser.documents[0];
   } catch (error) {
     error;
+  }
+};
+
+export const signOut = async () => {
+  try {
+    const session = await account.deleteSession("current");
+
+    return session;
+  } catch (error) {
+    throw new Error((error as AppwriteException).message);
   }
 };
