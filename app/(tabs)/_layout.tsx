@@ -82,6 +82,13 @@ const TabsLayout = () => {
             headerShown: false,
           }}
         />
+        <Tabs.Screen
+          name="edit"
+          options={{
+            href: null,
+            headerShown: false,
+          }}
+        />
       </Tabs>
 
       <Ionicons
