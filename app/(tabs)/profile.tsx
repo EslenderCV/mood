@@ -8,6 +8,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import SongPreview from "@/components/SongPreview";
 import ArtistPreview from "@/components/artistPreview";
+import PostsPreview from "@/components/postsPreview";
 
 const Music = () => {
   return (
@@ -72,7 +73,22 @@ const Music = () => {
 };
 
 const Posts = () => {
-  return <Text className="text-white">Posts</Text>;
+  return (
+    <View className="p-2 flex-row justify-center">
+      <PostsPreview
+        img="https://akamai.sscdn.co/letras/360x360/albuns/d/a/0/9/1720801679057910.jpg"
+        action={() => {}}
+      />
+      <PostsPreview
+        img="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSKEvkLFCXXu6M-wQzar-CphRcNkXE62Rao4Q&s"
+        action={() => {}}
+      />
+      <PostsPreview
+        img="https://i1.sndcdn.com/artworks-xHQ5tvnbzVooD0yz-gkzBjg-t500x500.jpg"
+        action={() => {}}
+      />
+    </View>
+  );
 };
 
 const profile = () => {
