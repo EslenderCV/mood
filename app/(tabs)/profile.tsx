@@ -1,4 +1,11 @@
-import { View, Text, ScrollView, Image, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  Image,
+  TouchableOpacity,
+  Alert,
+} from "react-native";
 import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useGlobalContext } from "@/context/GlobalProvider";
@@ -9,6 +16,7 @@ import { useState } from "react";
 import SongPreview from "@/components/SongPreview";
 import ArtistPreview from "@/components/artistPreview";
 import PostsPreview from "@/components/postsPreview";
+import edit from "./edit";
 
 const Music = () => {
   return (
@@ -105,7 +113,12 @@ const profile = () => {
 
     router.replace("/signIn");
   };
-
+  const logOutConfirm = () => {
+    Alert.alert("Sign out", "Do you want to sign out?", [
+      { text: "Cancel" },
+      { text: "Yes", onPress: logOut },
+    ]);
+  };
   return (
     <>
       <View className="h-full w-full bg-black pt-16">
@@ -124,10 +137,13 @@ const profile = () => {
             </View>
           </View>
           <View className="flex-row justify-between top-0 absolute w-full px-5">
-            <TouchableOpacity onPress={() => {}} activeOpacity={0.7}>
+            <TouchableOpacity onPress={edit} activeOpacity={0.7}>
               <Ionicons name="create-outline" color="#5E17EB" size={24} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => logOut()} activeOpacity={0.7}>
+            <TouchableOpacity
+              onPress={() => logOutConfirm()}
+              activeOpacity={0.7}
+            >
               <Ionicons name="exit-outline" color="#5E17EB" size={24} />
             </TouchableOpacity>
           </View>
