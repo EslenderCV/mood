@@ -36,6 +36,7 @@ const signIn = () => {
 
         const result = await getCurrentUser();
         setLoggedIn(true);
+        // @ts-ignore
         setUser(result ? result : null);
         router.replace("/home");
       } catch (error) {

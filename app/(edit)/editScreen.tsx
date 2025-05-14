@@ -1,26 +1,24 @@
 import { View, Text, ScrollView, Image, TouchableOpacity } from "react-native";
-import React, { useState } from "react";
+import React from "react";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { StyleSheet } from "react-native";
+import { updateImage } from "@/lib/appwrite";
 
 const editScreen = () => {
   const { user } = useGlobalContext();
-  const [image, setImage] = useState<any>(null);
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 4],
       quality: 1,
     });
 
-    console.log(result);
-
-    if (!result.canceled) setImage(result.assets[0].uri);
+    if (!result.canceled) updateImage(result.assets[0]);
+    
   };
 
   return (
@@ -36,7 +34,7 @@ const editScreen = () => {
               <Ionicons name="camera-outline" color="#6D6D6D" size={34} />
             </TouchableOpacity>
             <Image
-              source={{ uri: user?.pfp }}
+              source={user?.pfp != null ? {uri: user.pfp} : require("@/assets/noPfp.jpg")}
               resizeMode="contain"
               className="w-[110px] h-[110px] rounded-full"
             />

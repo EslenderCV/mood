@@ -7,7 +7,6 @@ import {
   Alert,
 } from "react-native";
 import React from "react";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { Ionicons } from "@expo/vector-icons";
 import { signOut } from "@/lib/appwrite";
@@ -107,6 +106,7 @@ const profile = () => {
   const { user } = useGlobalContext();
   const logOut = async () => {
     await signOut();
+    // @ts-ignore
     setUser(null);
     setLoggedIn(false);
 
@@ -118,13 +118,16 @@ const profile = () => {
       { text: "Yes", onPress: logOut },
     ]);
   };
+
+  console.log(user?.pfp)
+
   return (
     <>
       <View className="h-full w-full bg-black pt-16">
         <ScrollView showsVerticalScrollIndicator={false}>
           <View className="items-center gap-3 px-5">
             <Image
-              source={{ uri: user?.pfp }}
+              source={ user?.pfp != null ? {uri: user.pfp} : require("@/assets/noPfp.jpg")}
               resizeMode="contain"
               className="w-[120px] h-[120px] rounded-full"
             />

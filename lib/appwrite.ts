@@ -1,3 +1,4 @@
+import { ImagePickerAsset } from "expo-image-picker";
 import {
   Client,
   Account,
@@ -5,6 +6,7 @@ import {
   Databases,
   Query,
   AppwriteException,
+  Storage
 } from "react-native-appwrite";
 import { ID } from "react-native-appwrite";
 
@@ -19,6 +21,7 @@ export const appwriteConfig = {
 };
 
 const client = new Client();
+const storage = new Storage(client);
 
 client
   .setEndpoint(appwriteConfig.endpoint)
@@ -28,6 +31,7 @@ client
 const account = new Account(client);
 const pfp = new Avatars(client);
 const databases = new Databases(client);
+
 export const createUser = async (
   email: string,
   password: string,
@@ -68,7 +72,6 @@ export const signInn = async (email: string, password: string) => {
     return session;
   } catch (err) {
     throw new Error((err as AppwriteException).message);
-    console.log(err);
   }
 };
 
@@ -100,3 +103,64 @@ export const signOut = async () => {
     throw new Error((error as AppwriteException).message);
   }
 };
+export const updateImage = async (asset: ImagePickerAsset) => {
+  const fileUrl = await uploadImageAsync(asset)
+  
+  try {
+    const currentAccount = await getCurrentUser();
+
+    if(!currentAccount) return
+
+    const result = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      currentAccount?.$id,
+      { pfp: fileUrl},
+    );
+
+    console.log(result) 
+  } catch(err) {
+    console.log(err)
+  }
+  
+}
+
+const uploadImageAsync = async (asset: ImagePickerAsset) => {
+  try {
+    const response = await storage.createFile(
+      appwriteConfig.storageId,
+      ID.unique(),
+      await prepareNativeFile(asset)
+    )
+
+    const fileUrl = storage.getFileView(
+      appwriteConfig.storageId,
+      response.$id
+    )
+
+    console.log(fileUrl)
+
+    return fileUrl
+  } catch (err) {
+    console.error(err)
+    return Promise.reject(err)
+  }
+}
+
+const prepareNativeFile = async (
+  asset: ImagePickerAsset
+): Promise<{ name: string; type: string; size: number; uri: string }> => {
+  try {
+    const url = new URL(asset.uri)
+
+    return {
+      name: url.pathname.split("/").pop()!,
+      type: asset.mimeType!,
+      size: asset.fileSize!,
+      uri: url.href
+    } as any;
+  } catch (err) {
+    console.error(err)
+    return Promise.reject(err)
+  }
+}

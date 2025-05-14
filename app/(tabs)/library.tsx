@@ -1,7 +1,6 @@
 import { View, Text, TouchableOpacity } from "react-native";
 import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import TopBar from "@/components/TopBar";
 import { ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
