@@ -6,55 +6,74 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
-import React from "react";
+import React, { useState } from "react";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { Ionicons } from "@expo/vector-icons";
 import { signOut } from "@/lib/appwrite";
 import { router } from "expo-router";
-import { useState } from "react";
+
+// Existing Components
 import SongPreview from "@/components/SongPreview";
 import ArtistPreview from "@/components/artistPreview";
 import PostsPreview from "@/components/postsPreview";
 
+/**
+ * MUSIC COMPONENT
+ * Renders the "Songs" and "Artists" sections
+ */
 const Music = () => {
   return (
-    <>
+    <View className="pb-10">
+      {/* Songs Section */}
       <View className="w-full py-2 px-5 mt-3">
-        <View className="w-full flex-row justify-between items-center">
-          <Text className="font-black text-2xl text-white">Songs</Text>
-          <TouchableOpacity activeOpacity={0.7}>
-            <Text className="text-gray">See All</Text>
+        <View className="w-full flex-row justify-between items-center mb-4">
+          <Text className="font-black text-xl text-white">Top Songs</Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            className="bg-white/10 px-3 py-1 rounded-full"
+          >
+            <Text className="text-gray-400 text-xs font-bold">SEE ALL</Text>
           </TouchableOpacity>
         </View>
-        <SongPreview
-          img="https://i.scdn.co/image/ab67616d0000b273d28d2ebdedb220e479743797"
-          songTitle="Money Trees"
-          autor="Kendrick Lamar"
-          replays={31}
-        />
-        <SongPreview
-          img="https://upload.wikimedia.org/wikipedia/en/6/61/Kendrick_Lamar_-_Not_Like_Us.png"
-          songTitle="Not Like Us"
-          autor="Kendrick Lamar"
-          replays={23}
-        />
-        <SongPreview
-          img="https://images.genius.com/bc3bc77f6ba7f01baf80a8ab795f9760.1000x1000x1.jpg"
-          songTitle="First Person Shooter (ft. J Cole)"
-          autor="Drake"
-          replays={15}
-        />
+
+        <View className="gap-y-2">
+          <SongPreview
+            img="https://i.scdn.co/image/ab67616d0000b273d28d2ebdedb220e479743797"
+            songTitle="Money Trees"
+            autor="Kendrick Lamar"
+            replays={31}
+          />
+          <SongPreview
+            img="https://upload.wikimedia.org/wikipedia/en/6/61/Kendrick_Lamar_-_Not_Like_Us.png"
+            songTitle="Not Like Us"
+            autor="Kendrick Lamar"
+            replays={23}
+          />
+          <SongPreview
+            img="https://images.genius.com/bc3bc77f6ba7f01baf80a8ab795f9760.1000x1000x1.jpg"
+            songTitle="First Person Shooter"
+            autor="Drake ft. J Cole"
+            replays={15}
+          />
+        </View>
       </View>
-      <View className="w-full p-2 mt-3">
-        <View className="w-full flex-row justify-between items-center px-5">
-          <Text className="font-black text-2xl text-white">Artists</Text>
-          <TouchableOpacity activeOpacity={0.7}>
-            <Text className="text-gray">See All</Text>
+
+      {/* Artists Section */}
+      <View className="w-full p-2 mt-6">
+        <View className="w-full flex-row justify-between items-center px-5 mb-4">
+          <Text className="font-black text-xl text-white">
+            Favorite Artists
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            className="bg-white/10 px-3 py-1 rounded-full"
+          >
+            <Text className="text-gray-400 text-xs font-bold">SEE ALL</Text>
           </TouchableOpacity>
         </View>
         <ScrollView
           horizontal={true}
-          className="p-2"
+          className="pl-4"
           showsHorizontalScrollIndicator={false}
         >
           <ArtistPreview
@@ -74,13 +93,17 @@ const Music = () => {
           />
         </ScrollView>
       </View>
-    </>
+    </View>
   );
 };
 
+/**
+ * POSTS COMPONENT
+ * Renders a grid-like view of posts/moods
+ */
 const Posts = () => {
   return (
-    <View className="p-2 flex-row justify-center">
+    <View className="p-4 flex-row flex-wrap justify-start gap-3">
       <PostsPreview
         img="https://akamai.sscdn.co/letras/360x360/albuns/d/a/0/9/1720801679057910.jpg"
         action={() => {}}
@@ -97,107 +120,152 @@ const Posts = () => {
   );
 };
 
-const profile = () => {
-  const { setUser, setLoggedIn } = useGlobalContext();
-  const [focused, setFocused] = useState({
-    post: true,
-    music: false,
-  });
-  const { user } = useGlobalContext();
-  const logOut = async () => {
-    await signOut();
-    // @ts-ignore
-    setUser(null);
-    setLoggedIn(false);
+/**
+ * MAIN PROFILE SCREEN
+ */
+const Profile = () => {
+  const { user, setUser, setLoggedIn } = useGlobalContext();
+  const [focused, setFocused] = useState({ post: true, music: false });
 
-    router.replace("/signIn");
+  const logOut = async () => {
+    try {
+      await signOut();
+      setUser(null);
+      setLoggedIn(false);
+      router.replace("/signIn");
+    } catch (error) {
+      Alert.alert("Error", "Failed to log out");
+    }
   };
+
   const logOutConfirm = () => {
-    Alert.alert("Sign out", "Do you want to sign out?", [
-      { text: "Cancel" },
-      { text: "Yes", onPress: logOut },
+    Alert.alert("Sign Out", "Are you sure you want to leave?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Logout", style: "destructive", onPress: logOut },
     ]);
   };
 
-  console.log(user?.pfp)
-
   return (
-    <>
-      <View className="h-full w-full bg-black pt-16">
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <View className="items-center gap-3 px-5">
-            <Image
-              source={ user?.pfp != null ? {uri: user.pfp} : require("@/assets/noPfp.jpg")}
-              resizeMode="contain"
-              className="w-[120px] h-[120px] rounded-full"
-            />
-            <View className="items-center">
-              <Text className="text-white text-xl font-semibold">
-                {user?.name}
-              </Text>
-              <Text className="text-gray text-sm -mt-2">@{user?.username}</Text>
-            </View>
-          </View>
-          <View className="flex-row justify-between top-0 absolute w-full px-5">
+    <View className="flex-1 bg-black">
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Top Header Bar */}
+        <View className="flex-row justify-between items-center px-6 pt-14 pb-2">
+          <Text className="text-white font-black text-2xl tracking-tighter">
+            Profile
+          </Text>
+          <View className="flex-row gap-x-3">
             <TouchableOpacity
               onPress={() => router.push("/editScreen")}
-              activeOpacity={0.7}
+              className="bg-white/10 p-2 rounded-full border border-white/5"
             >
-              <Ionicons name="create-outline" color="#5E17EB" size={24} />
+              <Ionicons name="create-outline" color="white" size={20} />
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => logOutConfirm()}
-              activeOpacity={0.7}
+              onPress={logOutConfirm}
+              className="bg-red-500/10 p-2 rounded-full border border-red-500/10"
             >
-              <Ionicons name="exit-outline" color="#5E17EB" size={24} />
+              <Ionicons name="log-out-outline" color="#ef4444" size={20} />
             </TouchableOpacity>
           </View>
-          <View className="flex-row justify-around px-5 mt-3">
-            <Text className="text-white">
-              Followers{" "}
-              <Text className="text-white font-bold">{user?.followers}</Text>
-            </Text>
-            <Text className="text-white">
-              Moods <Text className="text-white font-bold">1</Text>
-            </Text>
-            <Text className="text-white">
-              Following{" "}
-              <Text className="text-white font-bold">{user?.following}</Text>
+        </View>
+
+        {/* Identity Section */}
+        <View className="items-center px-5 mt-6">
+          <View className="p-1.5 rounded-full border-2 border-primaryy shadow-lg shadow-primaryy/50">
+            <Image
+              source={
+                user?.pfp ? { uri: user.pfp } : require("@/assets/noPfp.jpg")
+              }
+              className="w-[110px] h-[110px] rounded-full"
+            />
+          </View>
+
+          <View className="items-center mt-4">
+            <Text className="text-white text-2xl font-bold">{user?.name}</Text>
+            <Text className="text-primaryy font-semibold text-sm">
+              @{user?.username}
             </Text>
           </View>
-          <View className="w-full items-center px-5 mt-3">
-            <View className="w-full flex-row justify-around">
-              <TouchableOpacity
-                onPress={() => setFocused({ post: true, music: false })}
-                activeOpacity={0.7}
-                className="w-[50%] h-full items-center"
-              >
-                <Ionicons
-                  name="library-outline"
-                  color={focused.post ? "white" : "#6D6D6D"}
-                  size={25}
-                />
-              </TouchableOpacity>
-              <View className="h-[31px] w-[1px] bg-white"></View>
-              <TouchableOpacity
-                onPress={() => setFocused({ post: false, music: true })}
-                activeOpacity={0.7}
-                className="w-[50%] h-full items-center"
-              >
-                <Ionicons
-                  name="musical-notes-outline"
-                  color={focused.music ? "white" : "#6D6D6D"}
-                  size={25}
-                />
-              </TouchableOpacity>
-            </View>
-            <View className="w-[300px] h-[1px] bg-white"></View>
+        </View>
+
+        {/* Stats Card */}
+        <View className="flex-row justify-between px-8 mt-10 bg-white/5 mx-6 py-5 rounded-3xl border border-white/5">
+          <View className="items-center flex-1">
+            <Text className="text-white text-xl font-black">
+              {user?.followers || 0}
+            </Text>
+            <Text className="text-white text-[10px] font-bold uppercase tracking-widest mt-1">
+              Followers
+            </Text>
           </View>
-          {focused.music ? <Music /> : <Posts />}
-        </ScrollView>
-      </View>
-    </>
+          <View className="w-[1px] h-8 bg-white/10 self-center" />
+          <View className="items-center flex-1">
+            <Text className="text-white text-xl font-black">1</Text>
+            <Text className="text-white text-[10px] font-bold uppercase tracking-widest mt-1">
+              Moods
+            </Text>
+          </View>
+          <View className="w-[1px] h-8 bg-white/10 self-center" />
+          <View className="items-center flex-1">
+            <Text className="text-white text-xl font-black">
+              {user?.following || 0}
+            </Text>
+            <Text className="text-white text-[10px] font-bold uppercase tracking-widest mt-1">
+              Following
+            </Text>
+          </View>
+        </View>
+
+        {/* Tabs */}
+        <View className="mt-10 px-6">
+          <View className="flex-row bg-white/5 rounded-2xl p-1.5">
+            <TouchableOpacity
+              onPress={() => setFocused({ post: true, music: false })}
+              className={`flex-1 flex-row gap-x-2 py-3 justify-center items-center rounded-xl ${
+                focused.post ? "bg-primaryy" : ""
+              }`}
+            >
+              <Ionicons
+                name="library-outline"
+                color={focused.post ? "white" : "#6b7280"}
+                size={18}
+              />
+              <Text
+                className={`font-bold text-xs ${
+                  focused.post ? "text-white" : "text-gray-500"
+                }`}
+              >
+                MOODS
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setFocused({ post: false, music: true })}
+              className={`flex-1 flex-row gap-x-2 py-3 justify-center items-center rounded-xl ${
+                focused.music ? "bg-primaryy" : ""
+              }`}
+            >
+              <Ionicons
+                name="musical-notes-outline"
+                color={focused.music ? "white" : "#6b7280"}
+                size={18}
+              />
+              <Text
+                className={`font-bold text-xs ${
+                  focused.music ? "text-white" : "text-gray-500"
+                }`}
+              >
+                MUSIC
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Dynamic Content */}
+        <View className="mt-2">{focused.music ? <Music /> : <Posts />}</View>
+      </ScrollView>
+    </View>
   );
 };
 
-export default profile;
+export default Profile;

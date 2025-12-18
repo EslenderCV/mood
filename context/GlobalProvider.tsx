@@ -11,32 +11,44 @@ import {
 import { getCurrentUser } from "@/lib/appwrite";
 import { Models } from "react-native-appwrite";
 
+// 1. Definimos exactamente qué campos tiene TU usuario en Appwrite
+export interface User extends Models.Document {
+  name: string;
+  username: string;
+  email: string;
+  pfp: string | null;
+  followers: number;
+  following: number;
+}
+
 interface Props {
   children: ReactNode;
 }
 
-interface contextProps {
+// 2. Definimos el tipo del Contexto con la nueva interfaz User
+interface GlobalContextType {
   loggedIn: boolean;
   setLoggedIn: Dispatch<SetStateAction<boolean>>;
-  user: Models.Document | null;
-  setUser: Dispatch<SetStateAction<Models.Document | null>> | null;
+  user: User | null;
+  setUser: Dispatch<SetStateAction<User | null>>;
   loading: boolean;
 }
 
-const GlobalContext = createContext<contextProps>({
+// 3. Inicializamos con valores por defecto para evitar errores de "undefined"
+const GlobalContext = createContext<GlobalContextType>({
   loggedIn: false,
   setLoggedIn: () => {},
   user: null,
-  setUser: null,
+  setUser: () => {}, // Función vacía en lugar de null
   loading: true,
 });
 
-export const useGlobalContext: () => contextProps = () =>
-  useContext(GlobalContext);
+export const useGlobalContext = () => useContext(GlobalContext);
 
 const GlobalProvider = ({ children }: Props) => {
   const [loggedIn, setLoggedIn] = useState(false);
-  const [user, setUser] = useState<Models.Document | null>(null);
+  // Aplicamos el tipo User al estado
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,14 +56,15 @@ const GlobalProvider = ({ children }: Props) => {
       .then((res) => {
         if (res) {
           setLoggedIn(true);
-          setUser(res);
+          // Hacemos un cast seguro a nuestra interfaz User
+          setUser(res as unknown as User);
         } else {
           setLoggedIn(false);
           setUser(null);
         }
       })
       .catch((err) => {
-        console.log(err);
+        console.error("Error fetching user:", err);
       })
       .finally(() => {
         setLoading(false);
@@ -60,7 +73,13 @@ const GlobalProvider = ({ children }: Props) => {
 
   return (
     <GlobalContext.Provider
-      value={{ loggedIn, setLoggedIn, user, setUser, loading }}
+      value={{
+        loggedIn,
+        setLoggedIn,
+        user,
+        setUser,
+        loading,
+      }}
     >
       {children}
     </GlobalContext.Provider>

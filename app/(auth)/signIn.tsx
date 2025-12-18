@@ -3,139 +3,143 @@ import {
   Text,
   Image,
   ScrollView,
-  TextInput,
   Alert,
   TouchableOpacity,
 } from "react-native";
 import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import CustomButtom from "@/components/CustomButtom";
-import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { Link, router } from "expo-router";
+
+// Componentes y Contexto
+import CustomButtom from "@/components/CustomButtom";
+import FormField from "@/components/FormField";
+import { useGlobalContext, User } from "@/context/GlobalProvider";
+
+// Appwrite
 import { getCurrentUser, signInn } from "@/lib/appwrite";
-import { useGlobalContext } from "@/context/GlobalProvider";
 import { AppwriteException } from "react-native-appwrite";
 
 const signIn = () => {
   const { setUser, setLoggedIn } = useGlobalContext();
-  const [passwordShow, setPasswordShow] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({
     email: "",
     password: "",
   });
-  const [isLoading, setIsLoading] = useState(false);
 
   const submit = async () => {
     if (!form.email.trim() || !form.password.trim()) {
-      Alert.alert("Error", "Please fill in all the fields!");
-    } else {
-      try {
-        setIsLoading(true);
-        await signInn(form.email, form.password);
+      Alert.alert("Error", "Por favor, completa todos los campos.");
+      return;
+    }
 
-        const result = await getCurrentUser();
-        setLoggedIn(true);
-        // @ts-ignore
-        setUser(result ? result : null);
-        router.replace("/home");
-      } catch (error) {
-        Alert.alert("Error", (error as AppwriteException).message);
-      } finally {
-        setIsLoading(false);
-      }
+    try {
+      setIsLoading(true);
+
+      // 1. Iniciar sesión
+      await signInn(form.email, form.password);
+
+      // 2. Obtener los datos del usuario actual
+      const result = await getCurrentUser();
+
+      // 3. Actualizar estado global con el TIPADO CORRECTO
+      setLoggedIn(true);
+      setUser(result as unknown as User);
+
+      // 4. Navegar al Home
+      router.replace("/home");
+    } catch (error) {
+      const appwriteError = error as AppwriteException;
+      Alert.alert("Error de Inicio de Sesión", appwriteError.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <SafeAreaView className="bg-black h-full">
-      <ScrollView>
-        <View className="w-full items-center h-full">
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <View className="w-full items-center px-6 justify-center min-h-[85vh]">
+          {/* Logo con dimensiones consistentes */}
           <Image
             source={require("@/assets/fullLogo.png")}
             className="w-[150px] h-[150px]"
             resizeMode="contain"
           />
-          <TextInput
-            autoCapitalize={"none"}
-            autoCorrect={false}
-            onChangeText={(text) => setForm({ ...form, email: text })}
+
+          <Text className="text-white text-2xl font-bold mt-2">Bienvenido</Text>
+
+          {/* Formulario usando el nuevo FormField */}
+          <FormField
+            placeholder="Correo electrónico o usuario"
             value={form.email}
-            placeholder="Username or email address"
-            className="text-sm mt-10 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border-2 border-gray/20 focus:border-primaryy"
+            handleChangeText={(text) => setForm({ ...form, email: text })}
+            otherStyles="mt-10"
           />
-          <TextInput
-            autoCapitalize={"none"}
-            autoCorrect={false}
-            secureTextEntry={passwordShow}
-            onChangeText={(text) => setForm({ ...form, password: text })}
+
+          <FormField
+            placeholder="Contraseña"
             value={form.password}
-            placeholder="Password"
-            className="text-sm mt-4 bg-gray/40 w-[300px] h-[40px] text-white pl-4 pb-1 rounded border-solid border-2 border-gray/20 focus:border-primaryy"
+            handleChangeText={(text) => setForm({ ...form, password: text })}
+            otherStyles="mt-4"
+            secureTextEntry
           />
+
+          {/* Forgot Password Link */}
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => setPasswordShow(passwordShow ? false : true)}
+            className="w-[300px] items-end mt-3"
           >
-            <View className="relative bottom-[30px] left-[130px]">
-              <Ionicons
-                name={!passwordShow ? "eye-outline" : "eye-off-outline"}
-                color="#6D6D6D"
-                size={20}
-              />
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.7}>
-            <Text className="text-primaryy -mt-2 ml-[190px] font-light">
-              Forgot password?
+            <Text className="text-primaryy font-light">
+              ¿Olvidaste tu contraseña?
             </Text>
           </TouchableOpacity>
+
+          {/* Botón Principal con prop textStyles corregido */}
           <CustomButtom
-            text="SIGN IN"
+            text="INICIAR SESIÓN"
             handlePress={submit}
             containerStyles="w-[300px] mt-8 bg-primaryy"
-            textStyles="text-white"
+            textStyles="text-white font-bold"
             loading={isLoading}
           />
-          <View className="flex-row justify-center items-center w-full gap-3 mt-6">
-            <View className="bg-gray w-[130px] h-[1px]"></View>
-            <Text className="text-gray">OR</Text>
-            <View className="bg-gray w-[130px] h-[1px]"></View>
+
+          {/* Separador Visual */}
+          <View className="flex-row justify-center items-center w-full gap-3 mt-10">
+            <View className="bg-gray/20 flex-1 h-[1px]"></View>
+            <Text className="text-gray-500 text-xs">O CONTINÚA CON</Text>
+            <View className="bg-gray/20 flex-1 h-[1px]"></View>
           </View>
-          <View className="mt-14 items-center justify-center">
-            <TouchableOpacity
-              activeOpacity={0.7}
-              className={`rounded h-[40px] justify-center items-center bg-white w-[300px] flex-row`}
-            >
-              <View className="absolute left-3">
-                <Ionicons name="logo-apple" size={20} />
-              </View>
-              <Text className={`text-primaryy text-base text-black font-bold`}>
-                Sign in with Apple
-              </Text>
+
+          {/* Botones Sociales */}
+          <View className="flex-row gap-4 mt-8">
+            <TouchableOpacity className="bg-white p-3 rounded-full">
+              <Image
+                source={require("@/assets/google-icon.png")}
+                className="w-6 h-6"
+              />
             </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              className={`rounded h-[40px] justify-center items-center bg-white w-[300px] mt-4 flex-row`}
-            >
-              <View className="absolute left-3">
-                <Ionicons name="logo-google" size={20} />
-              </View>
-              <Text className={`text-primaryy text-base text-black font-bold`}>
-                Sign in with Google
-              </Text>
+            <TouchableOpacity className="bg-white p-3 rounded-full">
+              <Image
+                source={require("@/assets/apple-icon.png")}
+                className="w-6 h-6"
+              />
             </TouchableOpacity>
-            <View className="mt-4 flex-row items-center justify-center">
-              <Text className="text-white">Dont have an account? </Text>
-              <Link href="/signUp">
-                <Text className="text-primaryy font-bold">Sign up</Text>
-              </Link>
-            </View>
+          </View>
+
+          {/* Link al SignUp */}
+          <View className="mt-12 flex-row items-center justify-center">
+            <Text className="text-gray-400">¿No tienes cuenta? </Text>
+            <Link href="/signUp">
+              <Text className="text-primaryy font-bold text-lg">
+                Regístrate
+              </Text>
+            </Link>
           </View>
         </View>
       </ScrollView>
-
-      <StatusBar backgroundColor="black" style="light" />
+      <StatusBar style="light" />
     </SafeAreaView>
   );
 };
