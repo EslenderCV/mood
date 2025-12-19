@@ -1,20 +1,25 @@
 import { Stack } from "expo-router";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import GlobalProvider from "@/context/GlobalProvider";
+import { StatusBar } from "expo-status-bar";
+import GlobalProvider from "../context/GlobalProvider";
+import { ModalProvider } from "../context/ModalContext";
+import PostModal from "../components/PostModal";
 
-// This is your MAIN layout file
 const RootLayout = () => {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <GlobalProvider>
-        <Stack>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="(edit)" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <GlobalProvider>
+      <ModalProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="index" />
+          {/* Si tienes otras pantallas, van aquí */}
         </Stack>
-      </GlobalProvider>
-    </GestureHandlerRootView>
+
+        <PostModal />
+
+        <StatusBar style="light" />
+      </ModalProvider>
+    </GlobalProvider>
   );
 };
 

@@ -49,7 +49,11 @@ export const createUser = async (
     if (!newAccount) throw new Error("Error creating account");
 
     // getInitials devuelve una URL, la convertimos a string
-    const avatarUrl = avatars.getInitials(name).toString();
+    const avatarUrl = `${
+      appwriteConfig.endpoint
+    }/avatars/initials?name=${encodeURIComponent(name)}&project=${
+      appwriteConfig.projectId
+    }`;
 
     // Iniciamos sesión automáticamente
     await signInn(email, password);
@@ -140,13 +144,10 @@ export const updateProfile = async (updates: {
 
 export const getCurrentUser = async () => {
   try {
-    // Paso 1: Verificar si hay sesión de Auth
     const currentAccount = await account.get();
-    console.log("✅ Sesión Auth activa:", currentAccount.$id);
 
     if (!currentAccount) throw new Error("No active session");
 
-    // Paso 2: Buscar datos en la Base de Datos
     const currentUser = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
@@ -154,19 +155,19 @@ export const getCurrentUser = async () => {
     );
 
     if (!currentUser || currentUser.documents.length === 0) {
-      console.log(
-        "⚠️ ¡ALERTA! El usuario existe en Auth pero NO tiene documento en la Base de Datos."
-      );
       return null;
     }
 
-    console.log(
-      "✅ Usuario encontrado en DB:",
-      currentUser.documents[0].username
-    );
     return currentUser.documents[0];
-  } catch (error) {
-    console.log("❌ Error en getCurrentUser:", error); // <-- Aquí verás el error real
+  } catch (error: any) {
+    // SI EL ERROR ES QUE NO HAY SESIÓN, NO ES UN ERROR REAL, SOLO RETORNA NULL
+    if (error.code === 401 || error.message?.includes("missing scopes")) {
+      console.log("ℹ️ Usuario no logueado (Visitante)");
+      return null;
+    }
+
+    // Si es otro error (ej. sin internet), sí muéstralo
+    console.log("❌ Error real en getCurrentUser:", error);
     return null;
   }
 };
@@ -209,14 +210,15 @@ const uploadImageAsync = async (asset: ImagePickerAsset) => {
       file
     );
 
-    // getFileView devuelve una URL object, la convertimos a string
-    const fileUrl = storage
-      .getFileView(appwriteConfig.storageId, response.$id)
-      .toString();
+    // CORRECCIÓN: Construimos la URL manualmente como texto.
+    // Esto evita el error de "[object Object]"
+    const fileUrl = `${appwriteConfig.endpoint}/storage/buckets/${appwriteConfig.storageId}/files/${response.$id}/view?project=${appwriteConfig.projectId}`;
+
+    console.log("LINK IMAGEN SUBIDA:", fileUrl);
 
     return fileUrl;
   } catch (err) {
-    console.error("Error uploading image:", err);
+    console.error("Error subiendo imagen:", err);
     throw err;
   }
 };
