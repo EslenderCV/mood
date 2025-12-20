@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 const TopBar = () => {
   return (
-    <View className="flex-row items-center justify-between w-full px-5 py-2">
+    <View className="flex-row items-center justify-between w-full px-5 py-2 border-b border-b-gray">
       {/* Logo Refined */}
       <View className="h-[45px] w-[80px] justify-center">
         <Image

@@ -8,7 +8,10 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import React, { useState } from "react";
+// IMPORTACIÓN CORREGIDA
+import * as React from "react";
+import { useState } from "react";
+
 import { useGlobalContext, User } from "@/context/GlobalProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,17 +19,15 @@ import * as ImagePicker from "expo-image-picker";
 import { updateImage, updateProfile } from "@/lib/appwrite";
 import { router } from "expo-router";
 
-const editScreen = () => {
+const EditScreen = () => {
   const { user, setUser } = useGlobalContext();
   const [isSaving, setIsSaving] = useState(false);
 
-  // Local state for text fields
   const [formData, setFormData] = useState({
     name: user?.name || "",
     username: user?.username || "",
   });
 
-  // 1. Logic to pick and upload image
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -35,44 +36,42 @@ const editScreen = () => {
       quality: 1,
     });
 
-    if (!result.canceled) {
+    if (!result.canceled && result.assets) {
       try {
         setIsSaving(true);
         const updatedDoc = await updateImage(result.assets[0]);
-        setUser(updatedDoc as unknown as User); // Update global state
-        Alert.alert("Success", "Profile picture updated!");
+        if (setUser) setUser(updatedDoc as unknown as User);
+        Alert.alert("Éxito", "¡Foto de perfil actualizada!");
       } catch (error) {
-        Alert.alert("Error", "Could not upload image.");
+        Alert.alert("Error", "No se pudo subir la imagen.");
       } finally {
         setIsSaving(false);
       }
     }
   };
 
-  // 2. Logic to save text changes
   const handleSave = async () => {
-    // 1. Validation Logic
     if (formData.username.length < 3) {
-      Alert.alert("Error", "Username must be at least 3 characters.");
+      Alert.alert("Error", "El usuario debe tener al menos 3 caracteres.");
       return;
     }
 
     try {
       setIsSaving(true);
-
-      // 2. Persist to Appwrite
       const updatedDoc = await updateProfile({
         name: formData.name.trim(),
         username: formData.username.toLowerCase().trim(),
       });
 
-      // 3. Sync Global State
-      setUser(updatedDoc as unknown as User);
+      if (setUser) setUser(updatedDoc as unknown as User);
 
-      Alert.alert("Success", "Profile updated successfully!");
+      Alert.alert("Éxito", "Perfil actualizado correctamente.");
       router.back();
     } catch (error) {
-      Alert.alert("Error", "This username might already be taken.");
+      Alert.alert(
+        "Error",
+        "Es posible que el nombre de usuario ya esté tomado."
+      );
     } finally {
       setIsSaving(false);
     }
@@ -83,7 +82,6 @@ const editScreen = () => {
       <ScrollView
         contentContainerStyle={{ alignItems: "center", paddingTop: 20 }}
       >
-        {/* Profile Picture Section (RESTORED) */}
         <View className="relative w-[140px] h-[140px]">
           <Image
             source={
@@ -106,30 +104,33 @@ const editScreen = () => {
         </View>
 
         <Text className="text-gray-400 mt-4 font-medium">
-          Tap icon to change photo
+          Toca el icono para cambiar la foto
         </Text>
 
-        {/* Form Fields (EDITABLE) */}
         <View className="w-full px-10 mt-12 gap-y-6">
           <View>
             <Text className="text-gray-500 mb-1 ml-1 text-xs font-bold uppercase">
-              Display Name
+              Nombre a mostrar
             </Text>
             <TextInput
               className="bg-gray/20 p-4 rounded-xl border border-gray/10 text-white"
               value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
+              // TIPADO AGREGADO (text: string)
+              onChangeText={(text: string) =>
+                setFormData({ ...formData, name: text })
+              }
             />
           </View>
 
           <View>
             <Text className="text-gray-500 mb-1 ml-1 text-xs font-bold uppercase">
-              Username
+              Nombre de usuario
             </Text>
             <TextInput
               className="bg-gray/20 p-4 rounded-xl border border-gray/10 text-white"
               value={formData.username}
-              onChangeText={(text) =>
+              // TIPADO AGREGADO (text: string)
+              onChangeText={(text: string) =>
                 setFormData({ ...formData, username: text })
               }
               autoCapitalize="none"
@@ -138,15 +139,21 @@ const editScreen = () => {
         </View>
 
         <TouchableOpacity
-          className="w-[300px] mt-20 bg-primaryy h-[50px] items-center justify-center rounded-lg"
+          className="w-[300px] mt-20 bg-primaryy h-[50px] items-center justify-center rounded-lg shadow-lg"
           onPress={handleSave}
           disabled={isSaving}
         >
-          <Text className="text-white font-bold text-lg">SAVE CHANGES</Text>
+          {isSaving ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text className="text-white font-bold text-lg">
+              GUARDAR CAMBIOS
+            </Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-export default editScreen;
+export default EditScreen;

@@ -243,3 +243,18 @@ const prepareNativeFile = async (asset: ImagePickerAsset) => {
     throw err;
   }
 };
+
+export const getLatestUsers = async () => {
+  try {
+    const result = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      [Query.orderDesc("$createdAt"), Query.limit(20)]
+    );
+
+    return result.documents;
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    throw new Error((error as AppwriteException).message);
+  }
+};

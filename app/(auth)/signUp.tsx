@@ -3,33 +3,35 @@ import {
   Text,
   Image,
   ScrollView,
-  TextInput,
   TouchableOpacity,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import CustomButtom from "@/components/CustomButtom";
 import { StatusBar } from "expo-status-bar";
-import { Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
 
-// 1. IMPORTANTE: Importar 'User' desde tu GlobalProvider
+// Componentes y Contexto
+import CustomButtom from "@/components/CustomButtom";
+import FormField from "@/components/FormField";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
+
+// Appwrite
 import { createUser } from "@/lib/appwrite";
 import { AppwriteException } from "react-native-appwrite";
 
-const signUp = () => {
+const SignUp = () => {
+  const { setUser, setLoggedIn } = useGlobalContext();
+  const [isLoading, setIsLoading] = useState(false);
+
   const [form, setForm] = useState({
     name: "",
     username: "",
     email: "",
     password: "",
   });
-
-  const { setUser, setLoggedIn } = useGlobalContext();
-  const [passwordShow, setPasswordShow] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
 
   const submit = async () => {
     if (
@@ -38,7 +40,7 @@ const signUp = () => {
       !form.name.trim() ||
       !form.username.trim()
     ) {
-      Alert.alert("Error", "Please fill in all the fields!");
+      Alert.alert("Campos vacíos", "Por favor completa todos los campos.");
       return;
     }
 
@@ -51,122 +53,139 @@ const signUp = () => {
         form.username
       );
 
-      // 2. Aquí aplicamos el cast para que TS no se queje
+      // Actualizar contexto global
       if (setUser) {
         setUser(result as unknown as User);
         setLoggedIn(true);
         router.replace("/home");
       }
     } catch (error) {
-      Alert.alert("Error", (error as AppwriteException).message);
+      const appwriteError = error as AppwriteException;
+      Alert.alert(
+        "Error",
+        appwriteError.message || "No se pudo crear la cuenta."
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <SafeAreaView className="bg-black h-full">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        <View className="w-full items-center px-4 py-10">
-          <Image
-            source={require("@/assets/fullLogo.png")}
-            className="w-[150px] h-[150px]"
-            resizeMode="contain"
-          />
-
-          {/* Inputs con estilos corregidos (Cuidado con mt-62, mejor mt-6) */}
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={(e) => setForm({ ...form, name: e })}
-            value={form.name}
-            placeholder="Name"
-            placeholderTextColor="#7B7B8B"
-            className="text-sm mt-6 bg-gray/40 w-[300px] h-[40px] text-white pl-4 rounded border-2 border-gray/20 focus:border-primaryy"
-          />
-
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={(e) => setForm({ ...form, username: e })}
-            value={form.username}
-            placeholder="Username"
-            placeholderTextColor="#7B7B8B"
-            className="text-sm mt-4 bg-gray/40 w-[300px] h-[40px] text-white pl-4 rounded border-2 border-gray/20 focus:border-primaryy"
-          />
-
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={(e) => setForm({ ...form, email: e })}
-            value={form.email}
-            placeholder="Email address"
-            placeholderTextColor="#7B7B8B"
-            className="text-sm mt-4 bg-gray/40 w-[300px] h-[40px] text-white pl-4 rounded border-2 border-gray/20 focus:border-primaryy"
-          />
-
-          <View className="mt-4 relative">
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry={passwordShow}
-              onChangeText={(e) => setForm({ ...form, password: e })}
-              value={form.password}
-              placeholder="Password"
-              placeholderTextColor="#7B7B8B"
-              className="text-sm bg-gray/40 w-[300px] h-[40px] text-white pl-4 rounded border-2 border-gray/20 focus:border-primaryy"
-            />
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => setPasswordShow(!passwordShow)}
-              className="absolute right-3 top-2"
-            >
-              <Ionicons
-                name={!passwordShow ? "eye-outline" : "eye-off-outline"}
-                color="#6D6D6D"
-                size={20}
+    <SafeAreaView className="bg-black flex-1">
+      {/* KeyboardAvoidingView para mejorar la experiencia al escribir */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+          <View className="w-full px-6 justify-center min-h-[85vh] py-10">
+            {/* --- HEADER --- */}
+            <View className="items-center mb-8">
+              <Image
+                source={require("@/assets/fullLogo.png")}
+                className="w-20 h-20 mb-4"
+                resizeMode="contain"
               />
-            </TouchableOpacity>
+              <Text className="text-white text-3xl font-bold tracking-tight text-center">
+                Únete a Mood
+              </Text>
+              <Text className="text-zinc-400 text-base mt-2 text-center px-4">
+                Crea una cuenta para descubrir y compartir música como nunca
+                antes.
+              </Text>
+            </View>
+
+            {/* --- FORMULARIO --- */}
+            <View className="space-y-4">
+              <FormField
+                placeholder="Nombre completo"
+                value={form.name}
+                handleChangeText={(e) => setForm({ ...form, name: e })}
+                otherStyles="mt-2"
+              />
+
+              <FormField
+                placeholder="Nombre de usuario"
+                value={form.username}
+                handleChangeText={(e) => setForm({ ...form, username: e })}
+                otherStyles="mt-4"
+                autoCapitalize="none" // Importante para usernames
+              />
+
+              <FormField
+                placeholder="Correo electrónico"
+                value={form.email}
+                handleChangeText={(e) => setForm({ ...form, email: e })}
+                otherStyles="mt-4"
+                keyboardType="email-address"
+              />
+
+              <FormField
+                placeholder="Contraseña"
+                value={form.password}
+                handleChangeText={(e) => setForm({ ...form, password: e })}
+                otherStyles="mt-4"
+                secureTextEntry
+              />
+
+              {/* Botón Principal */}
+              <CustomButtom
+                text="CREAR CUENTA"
+                handlePress={submit}
+                containerStyles="w-full mt-8 bg-[#5E17EB] rounded-2xl py-4 shadow-lg shadow-[#5E17EB]/40"
+                textStyles="text-white font-bold text-lg"
+                loading={isLoading}
+              />
+            </View>
+
+            {/* --- SEPARADOR --- */}
+            <View className="flex-row justify-center items-center w-full gap-4 mt-10 mb-8">
+              <View className="bg-zinc-800 flex-1 h-[1px]"></View>
+              <Text className="text-zinc-500 text-xs font-semibold uppercase tracking-widest">
+                O regístrate con
+              </Text>
+              <View className="bg-zinc-800 flex-1 h-[1px]"></View>
+            </View>
+
+            {/* --- SOCIALS (Estilo Consistente con Login) --- */}
+            <View className="flex-row justify-center gap-6">
+              <TouchableOpacity className="bg-zinc-900 border border-zinc-800 w-16 h-16 rounded-2xl items-center justify-center">
+                <Image
+                  source={require("@/assets/google-icon.png")}
+                  className="w-7 h-7"
+                  resizeMode="contain"
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity className="bg-zinc-900 border border-zinc-800 w-16 h-16 rounded-2xl items-center justify-center">
+                <Image
+                  source={require("@/assets/apple-icon.png")}
+                  className="w-7 h-7"
+                  resizeMode="contain"
+                  style={{ tintColor: "white" }}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* --- FOOTER --- */}
+            <View className="mt-10 flex-row items-center justify-center">
+              <Text className="text-zinc-400 text-base">
+                ¿Ya tienes cuenta?{" "}
+              </Text>
+              <Link href="/signIn" asChild>
+                <TouchableOpacity>
+                  <Text className="text-[#5E17EB] font-bold text-base">
+                    Inicia sesión
+                  </Text>
+                </TouchableOpacity>
+              </Link>
+            </View>
           </View>
-
-          {/* 3. Aseguramos que textStyles esté presente para quitar el error rojo */}
-          <CustomButtom
-            text="CREATE ACCOUNT"
-            handlePress={submit}
-            containerStyles="w-[300px] mt-8 bg-primaryy"
-            textStyles="text-white font-bold"
-            loading={isLoading}
-          />
-
-          <View className="flex-row justify-center items-center w-full gap-3 mt-6">
-            <View className="bg-gray/20 w-[120px] h-[1px]"></View>
-            <Text className="text-gray-500">OR</Text>
-            <View className="bg-gray/20 w-[120px] h-[1px]"></View>
-          </View>
-
-          <View className="mt-6 gap-4">
-            <TouchableOpacity className="rounded h-[40px] justify-center items-center bg-white w-[300px] flex-row">
-              <Ionicons name="logo-apple" size={20} className="mr-2" />
-              <Text className="font-bold text-black">Sign up with Apple</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity className="rounded h-[40px] justify-center items-center bg-white w-[300px] flex-row">
-              <Ionicons name="logo-google" size={20} className="mr-2" />
-              <Text className="font-bold text-black">Sign up with Google</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View className="mt-8 flex-row items-center">
-            <Text className="text-white">Already have an account? </Text>
-            <Link href="/signIn">
-              <Text className="text-primaryy font-bold">Sign in</Text>
-            </Link>
-          </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
       <StatusBar style="light" />
     </SafeAreaView>
   );
 };
 
-export default signUp;
+export default SignUp;

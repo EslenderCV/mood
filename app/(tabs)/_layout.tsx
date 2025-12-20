@@ -74,7 +74,7 @@ const TabsLayout = () => {
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "compass" : "compass-outline"}
-                size={29}
+                size={30}
                 color={color}
               />
             ),
@@ -138,9 +138,9 @@ const TabsLayout = () => {
             // Si el menú está abierto, mostramos la X roja, si no, el Grid gris
             tabBarIcon: ({ color }) => (
               <Ionicons
-                name={menuOpen ? "close" : "grid-outline"}
-                size={28}
-                color={menuOpen ? "#EF4444" : "#71717a"}
+                name={"grid-outline"}
+                size={TAB_ICON_SIZE}
+                color={"#71717a"}
               />
             ),
           }}
