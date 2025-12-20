@@ -1,24 +1,33 @@
 import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import GlobalProvider from "../context/GlobalProvider";
-import { ModalProvider } from "../context/ModalContext";
-import PostModal from "../components/PostModal";
+import React from "react";
+// Importamos el Proveedor de Audio
+import { AudioProvider } from "@/context/AudioContext";
+// Importamos tus otros proveedores si los tienes (ej: GlobalProvider)
+import GlobalProvider from "@/context/GlobalProvider";
+import { ModalProvider } from "@/context/ModalContext";
 
 const RootLayout = () => {
   return (
+    // Envuelve TODO con los proveedores globales
     <GlobalProvider>
-      <ModalProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="index" />
-          {/* Si tienes otras pantallas, van aquí */}
-        </Stack>
-
-        <PostModal />
-
-        <StatusBar style="light" />
-      </ModalProvider>
+      <AudioProvider>
+        <ModalProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            {/* Pantallas Modales o Full Screen */}
+            <Stack.Screen
+              name="music-player"
+              options={{
+                presentation: "modal", // Opcional: animación de subir
+                headerShown: false,
+                animation: "slide_from_bottom",
+              }}
+            />
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+          </Stack>
+        </ModalProvider>
+      </AudioProvider>
     </GlobalProvider>
   );
 };

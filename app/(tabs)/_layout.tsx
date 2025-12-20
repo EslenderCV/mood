@@ -1,16 +1,28 @@
-import { Image, View, StyleSheet, Pressable, Animated } from "react-native";
+import {
+  Image,
+  View,
+  StyleSheet,
+  Pressable,
+  Animated,
+  Text,
+} from "react-native";
 import React, { useState, useRef, useEffect } from "react";
-import { Link, Tabs } from "expo-router";
+import { Link, Tabs, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Text } from "react-native";
 import { useGlobalContext } from "@/context/GlobalProvider";
-import SettOption from "@/components/settOption";
 import { useModal } from "@/context/ModalContext";
+import { useAudio } from "@/context/AudioContext";
+
+import SettOption from "@/components/settOption";
+import MiniPlayer from "@/components/MiniPlayer";
+// 1. IMPORTAMOS EL MODAL QUE FALTABA
+import PostModal from "@/components/PostModal";
 
 const TabsLayout = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const { user } = useGlobalContext();
   const { setPostModalVisible } = useModal();
+  const { currentSong } = useAudio();
 
   const TAB_ICON_SIZE = 26;
   const TAB_BAR_HEIGHT = 85;
@@ -40,7 +52,6 @@ const TabsLayout = () => {
             backgroundColor: "#121212",
             borderTopWidth: 0,
             height: TAB_BAR_HEIGHT,
-            // SOLUCIÓN: Usamos 100% para que Expo distribuya los 5 iconos automáticamente
             width: "100%",
             position: "absolute",
             bottom: 0,
@@ -57,6 +68,7 @@ const TabsLayout = () => {
           name="home"
           options={{
             title: "",
+            headerShown: false,
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "home" : "home-outline"}
@@ -64,13 +76,13 @@ const TabsLayout = () => {
                 color={color}
               />
             ),
-            headerShown: false,
           }}
         />
         <Tabs.Screen
           name="explore"
           options={{
             title: "",
+            headerShown: false,
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "compass" : "compass-outline"}
@@ -78,7 +90,6 @@ const TabsLayout = () => {
                 color={color}
               />
             ),
-            headerShown: false,
           }}
         />
 
@@ -110,6 +121,7 @@ const TabsLayout = () => {
           name="library"
           options={{
             title: "",
+            headerShown: false,
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "albums" : "albums-outline"}
@@ -117,26 +129,21 @@ const TabsLayout = () => {
                 color={color}
               />
             ),
-            headerShown: false,
           }}
         />
 
-        {/* TRUCO: Usamos la ruta 'profile' (que sí existe) como el botón de Menú.
-           Esto hace que el icono aparezca y se alinee perfectamente.
-        */}
         <Tabs.Screen
           name="profile"
           listeners={() => ({
             tabPress: (e: any) => {
-              e.preventDefault(); // Evitamos ir al perfil, solo abrimos menú
+              e.preventDefault();
               setMenuOpen(!menuOpen);
             },
           })}
           options={{
             title: "",
             headerShown: false,
-            // Si el menú está abierto, mostramos la X roja, si no, el Grid gris
-            tabBarIcon: ({ color }) => (
+            tabBarIcon: () => (
               <Ionicons
                 name={"grid-outline"}
                 size={TAB_ICON_SIZE}
@@ -147,9 +154,9 @@ const TabsLayout = () => {
         />
       </Tabs>
 
-      {/* --- MENU LATERAL (Sin cambios en la lógica) --- */}
+      {/* --- MENÚ LATERAL (OVERLAY) --- */}
       {menuOpen && (
-        <View style={StyleSheet.absoluteFill} className="z-[50]">
+        <View style={StyleSheet.absoluteFill} className="z-[60]">
           <Pressable
             style={StyleSheet.absoluteFill}
             className="bg-black/40"
@@ -165,7 +172,6 @@ const TabsLayout = () => {
           >
             <View className="p-6">
               <View className="p-6">
-                {/* Header del Usuario */}
                 <Link
                   href="/profile"
                   asChild
@@ -184,10 +190,10 @@ const TabsLayout = () => {
                     </View>
                     <View className="ml-3">
                       <Text className="text-white font-bold text-lg leading-tight">
-                        {user?.name}
+                        {user?.name || "Usuario"}
                       </Text>
                       <Text className="text-zinc-500 text-xs mt-1">
-                        View Profile
+                        Ver Perfil
                       </Text>
                     </View>
                   </Pressable>
@@ -199,6 +205,10 @@ const TabsLayout = () => {
                   <SettOption
                     name="Get Plus"
                     icon={<Ionicons name="diamond" color="#5E17EB" size={20} />}
+                    onPress={() => {
+                      setMenuOpen(false);
+                      router.push("/plus");
+                    }}
                   />
                   <SettOption
                     name="Notifications"
@@ -209,6 +219,10 @@ const TabsLayout = () => {
                         size={20}
                       />
                     }
+                    onPress={() => {
+                      setMenuOpen(false);
+                      router.push("/notifications");
+                    }}
                   />
                   <SettOption
                     name="Security"
@@ -219,6 +233,10 @@ const TabsLayout = () => {
                         size={20}
                       />
                     }
+                    onPress={() => {
+                      setMenuOpen(false);
+                      router.push("/security" as any);
+                    }}
                   />
                   <SettOption
                     name="Privacy"
@@ -229,6 +247,10 @@ const TabsLayout = () => {
                         size={20}
                       />
                     }
+                    onPress={() => {
+                      setMenuOpen(false);
+                      router.push("/privacy" as any);
+                    }}
                   />
                   <SettOption
                     name="Settings"
@@ -239,6 +261,10 @@ const TabsLayout = () => {
                         size={20}
                       />
                     }
+                    onPress={() => {
+                      setMenuOpen(false);
+                      router.push("/settings" as any);
+                    }}
                   />
                 </View>
 
@@ -253,12 +279,22 @@ const TabsLayout = () => {
                       size={20}
                     />
                   }
+                  onPress={() => {
+                    setMenuOpen(false);
+                    router.push("/help" as any);
+                  }}
                 />
               </View>
             </View>
           </Animated.View>
         </View>
       )}
+
+      {/* --- MINI PLAYER --- */}
+      {!menuOpen && currentSong && <MiniPlayer />}
+
+      {/* 2. AQUÍ ESTÁ EL MODAL: Ahora sí funcionará el botón */}
+      <PostModal />
     </View>
   );
 };

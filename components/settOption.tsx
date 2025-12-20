@@ -1,18 +1,22 @@
-import { View, Text } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import React, { ReactNode } from "react";
-import { TouchableOpacity } from "react-native";
 
 interface Props {
   name: string;
   icon: ReactNode;
+  onPress?: () => void; // Añadimos la función opcional de presionar
 }
 
-const SettOption = ({ name, icon }: Props) => {
+const SettOption = ({ name, icon, onPress }: Props) => {
   return (
-    <TouchableOpacity activeOpacity={0.7} className="w-full">
+    <TouchableOpacity
+      activeOpacity={0.7}
+      className="w-full"
+      onPress={onPress} // Conectamos el clic al Touchable
+    >
       <View className="flex-row justify-end w-full items-center gap-2 mt-3">
         <Text className="text-white font-semibold text-lg">{name}</Text>
-        {icon}
+        <View className="w-8 items-center justify-center">{icon}</View>
       </View>
     </TouchableOpacity>
   );

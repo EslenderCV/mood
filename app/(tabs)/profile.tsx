@@ -3,7 +3,6 @@ import {
   Text,
   Image,
   TouchableOpacity,
-  FlatList,
   Dimensions,
   Alert,
   ScrollView,
@@ -16,13 +15,12 @@ import { useGlobalContext } from "@/context/GlobalProvider";
 import { router } from "expo-router";
 import { signOut } from "@/lib/appwrite";
 
-// --- MOCK DATA (Se mantiene igual) ---
 const ALBUM_COVERS = [
   "https://i.scdn.co/image/ab67616d0000b2731ea0c62b2339cbf493a999ad",
-  "https://i.scdn.co/image/ab67616d0000b27371d62ea7ea8a5be92d3c1f62",
-  "https://i.scdn.co/image/ab67616d0000b273881d8d8378cd01099babcd44",
-  "https://i.scdn.co/image/ab67616d0000b273ba5db46f4b838ef6027e6f96",
-  "https://i.scdn.co/image/ab67616d0000b273cdb645498cd3d8a2db4d05e1",
+  "https://i.scdn.co/image/ab67616d0000b2737b1fc51ff32b312d4363c288",
+  "https://i.scdn.co/image/ab67616d0000b273f5507e7d6928e190dc450422",
+  "https://i.scdn.co/image/ab67616d0000b2734718e28d24527d9774635ded",
+  "https://i.scdn.co/image/ab67616d0000b2734a7b838e3610351292680794",
 ];
 
 const MOCK_MOODS = ALBUM_COVERS.map((coverUrl, i) => ({
@@ -32,17 +30,12 @@ const MOCK_MOODS = ALBUM_COVERS.map((coverUrl, i) => ({
 const MOCK_MUSIC = [
   {
     id: "1",
-    title: "wacced out murals",
+    title: "Money Trees",
     artist: "Kendrick Lamar",
     cover: ALBUM_COVERS[0],
   },
-  {
-    id: "2",
-    title: "Espresso",
-    artist: "Sabrina Carpenter",
-    cover: ALBUM_COVERS[1],
-  },
-  { id: "3", title: "LUNCH", artist: "Billie Eilish", cover: ALBUM_COVERS[2] },
+  { id: "2", title: "MONACO", artist: "Bad Bunny", cover: ALBUM_COVERS[1] },
+  { id: "3", title: "Gogo Dance", artist: "El Alfa", cover: ALBUM_COVERS[2] },
 ];
 
 const { width } = Dimensions.get("window");
@@ -50,10 +43,10 @@ const ITEM_SIZE = width / 3;
 
 const Profile = () => {
   const { user } = useGlobalContext();
-  const [activeTab, setActiveTab] = useState(0); // 0 para Moods, 1 para Música
-  const scrollRef = useRef<ScrollView>(null);
+  const [activeTab, setActiveTab] = useState(0);
+  const horizontalScrollRef = useRef<ScrollView>(null);
+  const mainScrollRef = useRef<ScrollView>(null);
 
-  // --- LOGIC (Logout y Edit se mantienen) ---
   const handleLogout = async () => {
     Alert.alert("Cerrar Sesión", "¿Seguro?", [
       { text: "Cancelar", style: "cancel" },
@@ -68,13 +61,16 @@ const Profile = () => {
     ]);
   };
 
-  // Función para cambiar de pestaña con deslizamiento
   const handleTabPress = (index: number) => {
     setActiveTab(index);
-    scrollRef.current?.scrollTo({ x: index * width, animated: true });
+    horizontalScrollRef.current?.scrollTo({ x: index * width, animated: true });
   };
 
-  // Render Helpers
+  const scrollToMoods = () => {
+    mainScrollRef.current?.scrollTo({ y: 380, animated: true });
+    handleTabPress(0);
+  };
+
   const renderMoodItem = (item: any) => (
     <TouchableOpacity
       key={item.id}
@@ -111,13 +107,11 @@ const Profile = () => {
   return (
     <SafeAreaView className="flex-1 bg-black" edges={["top"]}>
       <StatusBar style="light" />
-
-      {/* Usamos ScrollView principal para que el Header también suba */}
       <ScrollView
+        ref={mainScrollRef}
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[3]}
       >
-        {/* 1. HEADER SUPERIOR */}
         <View className="flex-row justify-between items-center px-6 py-2 mb-6">
           <Text className="text-white text-3xl font-bold">Perfil</Text>
           <View className="flex-row gap-4">
@@ -136,7 +130,6 @@ const Profile = () => {
           </View>
         </View>
 
-        {/* 2. INFO USUARIO */}
         <View className="items-center">
           <View className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/50">
             <Image
@@ -154,33 +147,50 @@ const Profile = () => {
           </Text>
         </View>
 
-        {/* 3. STATS */}
-        <View className="flex-row justify-between items-center bg-zinc-900 mx-4 h-[70px] mt-8 mb-3 py-5 px-8 rounded-3xl border border-zinc-800">
-          <View className="items-center">
+        <View className="flex-row justify-between items-center bg-zinc-900 mx-4 h-[70px] mt-8 mb-3 px-2 rounded-3xl border border-zinc-800">
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: "/user-list",
+                params: { title: "Seguidores" },
+              })
+            }
+            className="flex-1 items-center py-4"
+          >
             <Text className="text-white text-xl font-bold">15</Text>
             <Text className="text-zinc-500 text-[10px] font-bold mt-1">
               SEGUIDORES
             </Text>
-          </View>
+          </TouchableOpacity>
           <View className="h-8 w-[1px] bg-zinc-700" />
-          <View className="items-center">
+          <TouchableOpacity
+            onPress={scrollToMoods}
+            className="flex-1 items-center py-4"
+          >
             <Text className="text-white text-xl font-bold">
               {MOCK_MOODS.length}
             </Text>
             <Text className="text-zinc-500 text-[10px] font-bold mt-1">
               MOODS
             </Text>
-          </View>
+          </TouchableOpacity>
           <View className="h-8 w-[1px] bg-zinc-700" />
-          <View className="items-center">
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: "/user-list",
+                params: { title: "Seguidos" },
+              })
+            }
+            className="flex-1 items-center py-4"
+          >
             <Text className="text-white text-xl font-bold">24</Text>
             <Text className="text-zinc-500 text-[10px] font-bold mt-1">
               SEGUIDOS
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
-        {/* 4. TABS (Sticky) */}
         <View className="bg-black pt-4">
           <View className="flex-row px-4 mb-4 gap-4">
             <TouchableOpacity
@@ -203,7 +213,6 @@ const Profile = () => {
                 MOODS
               </Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               onPress={() => handleTabPress(1)}
               className={`flex-1 py-3 rounded-xl items-center justify-center flex-row ${
@@ -227,9 +236,8 @@ const Profile = () => {
           </View>
         </View>
 
-        {/* 5. CONTENIDO DESLIZABLE (SLIDE) */}
         <ScrollView
-          ref={scrollRef}
+          ref={horizontalScrollRef}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
@@ -238,15 +246,11 @@ const Profile = () => {
           }
           scrollEventThrottle={16}
         >
-          {/* Lado Moods (Grid) */}
           <View style={{ width }} className="flex-row flex-wrap">
             {MOCK_MOODS.map(renderMoodItem)}
           </View>
-
-          {/* Lado Música (Lista) */}
           <View style={{ width }}>{MOCK_MUSIC.map(renderMusicItem)}</View>
         </ScrollView>
-
         <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
