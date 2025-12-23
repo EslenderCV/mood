@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,21 +11,36 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   Alert,
+  ActivityIndicator,
+  FlatList,
 } from "react-native";
-import { Ionicons, Feather, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useModal } from "@/context/ModalContext";
 import { useGlobalContext } from "@/context/GlobalProvider";
-import * as ImagePicker from "expo-image-picker"; // Importamos ImagePicker
+import { createPost } from "@/lib/appwrite";
+import SongPreview from "./SongPreview";
+interface Song {
+  trackId: number;
+  trackName: string;
+  artistName: string;
+  artworkUrl100: string;
+  previewUrl: string;
+}
 
 export default function PostModal() {
   const { isPostModalVisible, setPostModalVisible } = useModal();
   const { user } = useGlobalContext();
 
-  // Estados del formulario
   const [text, setText] = useState("");
-  const [linkedSong, setLinkedSong] = useState<any | null>(null);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null); // Estado para la imagen
-  const [isPublic, setIsPublic] = useState(true); // Estado para la privacidad
+  const [isPublic, setIsPublic] = useState(true);
+
+  // Estados de Música y Búsqueda
+  const [linkedSong, setLinkedSong] = useState<Song | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Song[]>([]);
+  const [isSearchingMusic, setIsSearchingMusic] = useState(false);
+  const [isLoadingSearch, setIsLoadingSearch] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const closeModal = () => {
     Keyboard.dismiss();
@@ -35,77 +50,98 @@ export default function PostModal() {
   const resetForm = () => {
     setText("");
     setLinkedSong(null);
-    setSelectedImage(null);
     setIsPublic(true);
+    setSearchQuery("");
+    setSearchResults([]);
+    setIsSearchingMusic(false);
   };
 
-  const handlePost = () => {
-    // Aquí iría la lógica para enviar al Backend
-    console.log("Posteando:", {
-      text,
-      song: linkedSong?.title,
-      image: selectedImage ? "Imagen seleccionada" : "Sin imagen",
-      privacy: isPublic ? "Public" : "Private",
-    });
+  // --- BÚSQUEDA (DEBOUNCE) ---
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 2) {
+      setSearchResults([]);
+      setIsLoadingSearch(false);
+      return;
+    }
+    setIsLoadingSearch(true);
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `https://itunes.apple.com/search?term=${encodeURIComponent(
+            searchQuery
+          )}&media=music&entity=song&limit=5`
+        );
+        const data = await response.json();
+        setSearchResults(data.results);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsLoadingSearch(false);
+      }
+    }, 500);
 
-    resetForm();
-    closeModal();
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
+  const handleSelectSong = (song: Song) => {
+    setLinkedSong(song);
+    setIsSearchingMusic(false);
+    setSearchQuery("");
   };
 
-  // --- FUNCIONES DE LOS BOTONES ---
+  // --- SUBIR A APPWRITE ---
+  const handlePost = async () => {
+    if (!linkedSong) return;
+    if (!user) {
+      Alert.alert("Error", "No se encontró el usuario activo.");
+      return;
+    }
 
-  // 1. Función de Galería
-  const pickImage = async () => {
-    // Pedir permisos (opcional en versiones nuevas, pero buena práctica)
-    const permissionResult =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) {
+    setIsUploading(true);
+
+    try {
+      const songDataString = JSON.stringify({
+        title: linkedSong.trackName,
+        artist: linkedSong.artistName,
+        cover: linkedSong.artworkUrl100,
+        preview: linkedSong.previewUrl,
+      });
+
+      // Usamos la función centralizada
+      await createPost(text, songDataString, user.$id);
+
       Alert.alert(
-        "Permiso requerido",
-        "Necesitas dar acceso a la galería para subir fotos."
+        "¡Mood Publicado!",
+        `Has compartido "${linkedSong.trackName}"`
       );
-      return;
-    }
-
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"], // Usando la nueva sintaxis de array string
-      allowsEditing: true,
-      aspect: [4, 5], // Aspecto vertical tipo Instagram
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setSelectedImage(result.assets[0].uri);
+      resetForm();
+      closeModal();
+    } catch (error: any) {
+      Alert.alert("Error", error.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  // 2. Función de Micrófono (Placeholder)
-  const handleMicPress = () => {
-    Alert.alert(
-      "Próximamente",
-      "La función de grabar notas de voz estará disponible en futuras actualizaciones de Mood."
-    );
-    // Aquí se implementaría la lógica de expo-av para grabar
-  };
-
-  // 3. Función de Privacidad
-  const togglePrivacy = () => {
-    setIsPublic(!isPublic);
-  };
-
-  // Simulación de integración musical
-  const simulateSpotifyLink = () => {
-    if (linkedSong) {
-      setLinkedSong(null);
-      return;
-    }
-    setLinkedSong({
-      title: "Telekinesis",
-      artist: "Travis Scott ft. SZA",
-      cover: "https://i.scdn.co/image/ab67616d0000b273881d8d8378cd01099babcd44",
-      source: "spotify",
-    });
-  };
+  // Render item de búsqueda
+  const renderSongItem = ({ item }: { item: Song }) => (
+    <TouchableOpacity
+      className="flex-row items-center p-3 border-b border-white/10"
+      onPress={() => handleSelectSong(item)}
+    >
+      <Image
+        source={{ uri: item.artworkUrl100 }}
+        className="w-12 h-12 rounded mr-3 bg-zinc-800"
+      />
+      <View className="flex-1">
+        <Text className="text-white font-medium text-base">
+          {item.trackName}
+        </Text>
+        <Text className="text-zinc-400 text-sm">{item.artistName}</Text>
+      </View>
+      <Ionicons name="add-circle-outline" size={24} color="#52525B" />
+    </TouchableOpacity>
+  );
 
   return (
     <Modal
@@ -114,16 +150,13 @@ export default function PostModal() {
       visible={isPostModalVisible}
       onRequestClose={closeModal}
     >
-      {/* Fondo Oscuro Transparente */}
       <TouchableWithoutFeedback onPress={closeModal}>
         <View className="flex-1 bg-black/80 justify-end">
-          {/* Evitar cerrar al tocar el contenido */}
           <TouchableWithoutFeedback>
             <KeyboardAvoidingView
               behavior={Platform.OS === "ios" ? "padding" : "height"}
               className="w-full"
             >
-              {/* --- CONTENEDOR DEL MODAL --- */}
               <View className="bg-[#121212] w-full rounded-t-[30px] border-t border-white/10 p-5 pb-8 shadow-2xl shadow-[#5E17EB]/10">
                 {/* Header */}
                 <View className="flex-row justify-between items-center mb-6">
@@ -133,31 +166,28 @@ export default function PostModal() {
                     </Text>
                   </TouchableOpacity>
 
-                  {/* Botón de enviar dinámico */}
-                  <TouchableOpacity
-                    onPress={handlePost}
-                    // Se deshabilita si no hay nada que postear
-                    disabled={!text && !linkedSong && !selectedImage}
-                    className={`px-5 py-1.5 rounded-full ${
-                      text || linkedSong || selectedImage
-                        ? "bg-[#5E17EB]"
-                        : "bg-zinc-800/50"
-                    }`}
-                  >
-                    <Text
-                      className={`font-bold text-base ${
-                        text || linkedSong || selectedImage
-                          ? "text-white"
-                          : "text-zinc-500"
+                  {isUploading ? (
+                    <ActivityIndicator color="#5E17EB" />
+                  ) : (
+                    <TouchableOpacity
+                      onPress={handlePost}
+                      disabled={!linkedSong}
+                      className={`px-6 py-2 rounded-full ${
+                        linkedSong ? "bg-[#5E17EB]" : "bg-zinc-800/50"
                       }`}
                     >
-                      Mood
-                    </Text>
-                  </TouchableOpacity>
+                      <Text
+                        className={`font-bold text-base ${
+                          linkedSong ? "text-white" : "text-zinc-500"
+                        }`}
+                      >
+                        Publicar
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 <View className="flex-row gap-4">
-                  {/* Avatar */}
                   <Image
                     source={
                       user?.pfp
@@ -168,138 +198,98 @@ export default function PostModal() {
                   />
 
                   <View className="flex-1">
-                    {/* Input de Texto */}
                     <TextInput
-                      placeholder="¿Qué vibra traes hoy?"
+                      placeholder="¿Qué vibra musical traes?"
                       placeholderTextColor="#52525B"
                       multiline
                       style={{
                         color: "white",
-                        fontSize: 17,
+                        fontSize: 18,
                         minHeight: 50,
                         textAlignVertical: "top",
                       }}
                       value={text}
                       onChangeText={setText}
-                      autoFocus={true}
                     />
 
-                    {/* --- AREA DE PREVISUALIZACIÓN --- */}
-                    <View className="mt-2 gap-3">
-                      {/* Preview de Imagen */}
-                      {selectedImage && (
-                        <View className="relative rounded-2xl overflow-hidden border border-white/10">
-                          <Image
-                            source={{ uri: selectedImage }}
-                            className="w-full h-64 bg-zinc-900"
-                            resizeMode="cover"
+                    {/* Zona Dinámica: Buscador o Reproductor */}
+                    <View className="mt-4 gap-3">
+                      {/* BUSCADOR */}
+                      {isSearchingMusic && (
+                        <View className="bg-zinc-900 rounded-xl p-3 mb-2 border border-white/10 shadow-lg">
+                          <View className="flex-row items-center bg-black/50 rounded-lg px-3 mb-2 border border-[#5E17EB]/30">
+                            <Ionicons name="search" color="#A1A1AA" size={20} />
+                            <TextInput
+                              placeholder="Buscar artista o canción..."
+                              placeholderTextColor="#71717A"
+                              className="flex-1 text-white py-3 ml-2 text-base font-medium"
+                              value={searchQuery}
+                              onChangeText={setSearchQuery}
+                              autoFocus
+                            />
+                            {isLoadingSearch && (
+                              <ActivityIndicator size="small" color="#5E17EB" />
+                            )}
+                          </View>
+                          <FlatList
+                            data={searchResults}
+                            renderItem={renderSongItem}
+                            keyExtractor={(item) => item.trackId.toString()}
+                            style={{ maxHeight: 250 }}
+                            nestedScrollEnabled
+                            keyboardShouldPersistTaps="handled"
                           />
-                          {/* Botón para quitar imagen */}
-                          <TouchableOpacity
-                            onPress={() => setSelectedImage(null)}
-                            className="absolute top-3 right-3 bg-black/60 backdrop-blur-md p-1.5 rounded-full"
-                          >
-                            <Ionicons name="close" size={18} color="white" />
-                          </TouchableOpacity>
                         </View>
                       )}
 
-                      {/* Preview de Canción Vinculada */}
+                      {/* CANCIÓN SELECCIONADA (Usando el nuevo componente SongPreview) */}
                       {linkedSong && (
-                        <View className="bg-zinc-900/90 p-2.5 pr-4 rounded-2xl flex-row items-center border border-[#5E17EB]/30 relative overflow-hidden">
-                          {/* Decoración de fondo */}
-                          <View className="absolute -right-2 -bottom-2 w-16 h-16 bg-[#5E17EB]/20 blur-xl rounded-full" />
-
-                          <Image
-                            source={{ uri: linkedSong.cover }}
-                            className="w-11 h-11 rounded-xl bg-zinc-800"
-                          />
-                          <View className="ml-3 flex-1">
-                            <Text
-                              className="text-white font-bold text-[15px]"
-                              numberOfLines={1}
-                            >
-                              {linkedSong.title}
-                            </Text>
-                            <Text
-                              className="text-zinc-400 text-xs"
-                              numberOfLines={1}
-                            >
-                              {linkedSong.artist}
-                            </Text>
-                          </View>
-                          <Ionicons
-                            name="musical-notes"
-                            size={18}
-                            color="#5E17EB"
-                            className="mr-1"
-                          />
-
-                          {/* Botón para quitar canción */}
-                          <TouchableOpacity
-                            onPress={() => setLinkedSong(null)}
-                            className="absolute -top-1 -right-1 bg-zinc-800 p-1 rounded-bl-lg border-b border-l border-white/5"
-                          >
-                            <Ionicons name="close" size={12} color="zinc" />
-                          </TouchableOpacity>
-                        </View>
+                        <SongPreview
+                          song={linkedSong}
+                          onRemove={() => setLinkedSong(null)}
+                        />
                       )}
                     </View>
                   </View>
                 </View>
 
-                {/* --- BARRA DE HERRAMIENTAS INFERIOR --- */}
-                <View className="flex-row items-center mt-6 pt-3 border-t border-white/5">
-                  <View className="flex-row gap-1 items-center bg-zinc-900/50 rounded-full p-1 pr-4 border border-white/5">
-                    {/* Botón MÚSICA */}
+                {/* Toolbar Inferior */}
+                <View className="mt-6 pt-2 border-t border-white/5">
+                  {!linkedSong && !isSearchingMusic && (
                     <TouchableOpacity
-                      onPress={simulateSpotifyLink}
-                      className={`p-2 rounded-full ${
-                        linkedSong ? "bg-[#5E17EB]" : "bg-zinc-800"
-                      }`}
+                      onPress={() => setIsSearchingMusic(true)}
+                      className="flex-row items-center justify-center bg-zinc-800/80 w-full py-4 rounded-xl border border-white/10 active:bg-zinc-700"
                     >
-                      <Ionicons
-                        name="musical-notes"
-                        size={22}
-                        color={linkedSong ? "white" : "#A1A1AA"}
-                      />
+                      <View className="bg-[#5E17EB] p-2 rounded-full mr-3">
+                        <Ionicons
+                          name="musical-notes"
+                          size={20}
+                          color="white"
+                        />
+                      </View>
+                      <Text className="text-white font-bold text-lg">
+                        Elegir Canción
+                      </Text>
                     </TouchableOpacity>
+                  )}
 
-                    {/* Botón GALERÍA (Funcional) */}
-                    <TouchableOpacity onPress={pickImage} className="p-2">
-                      <Ionicons
-                        name="image-outline"
-                        size={24}
-                        color={selectedImage ? "#5E17EB" : "#A1A1AA"}
-                      />
-                    </TouchableOpacity>
-
-                    {/* Botón MICRÓFONO (Con alerta) */}
-                    <TouchableOpacity onPress={handleMicPress} className="p-2">
-                      <Ionicons name="mic-outline" size={24} color="#A1A1AA" />
-                    </TouchableOpacity>
-                  </View>
-
-                  <View className="flex-1" />
-
-                  {/* Botón PRIVACIDAD (Funcional) */}
-                  <TouchableOpacity
-                    onPress={togglePrivacy}
-                    className="flex-row items-center bg-zinc-900/80 px-3 py-2 rounded-full border border-white/10"
-                  >
-                    <Text className="text-zinc-400 text-xs font-medium mr-2">
-                      {isPublic ? "Público" : "Privado"}
-                    </Text>
-                    {isPublic ? (
-                      <Ionicons name="earth" size={14} color="#A1A1AA" />
-                    ) : (
-                      <MaterialIcons
-                        name="lock-outline"
-                        size={14}
-                        color="#A1A1AA"
-                      />
-                    )}
-                  </TouchableOpacity>
+                  {(linkedSong || isSearchingMusic) && (
+                    <View className="flex-row justify-end">
+                      <TouchableOpacity
+                        onPress={() => setIsPublic(!isPublic)}
+                        className="flex-row items-center bg-zinc-900/80 px-3 py-2 rounded-full border border-white/10"
+                      >
+                        <Text className="text-zinc-400 text-xs font-medium mr-2">
+                          {isPublic ? "Público" : "Privado"}
+                        </Text>
+                        <Ionicons
+                          name={isPublic ? "earth" : "lock-closed"}
+                          size={14}
+                          color="#A1A1AA"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               </View>
             </KeyboardAvoidingView>

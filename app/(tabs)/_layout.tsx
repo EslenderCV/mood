@@ -14,7 +14,6 @@ import { useModal } from "@/context/ModalContext";
 import { useAudio } from "@/context/AudioContext";
 
 import SettOption from "@/components/settOption";
-import MiniPlayer from "@/components/MiniPlayer";
 // 1. IMPORTAMOS EL MODAL QUE FALTABA
 import PostModal from "@/components/PostModal";
 
@@ -289,9 +288,6 @@ const TabsLayout = () => {
           </Animated.View>
         </View>
       )}
-
-      {/* --- MINI PLAYER --- */}
-      {!menuOpen && currentSong && <MiniPlayer />}
 
       {/* 2. AQUÍ ESTÁ EL MODAL: Ahora sí funcionará el botón */}
       <PostModal />

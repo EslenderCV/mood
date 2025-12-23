@@ -6,27 +6,25 @@ import {
   Dimensions,
   Alert,
   ScrollView,
+  RefreshControl,
+  ActivityIndicator,
 } from "react-native";
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { useGlobalContext } from "@/context/GlobalProvider";
-import { router } from "expo-router";
-import { signOut } from "@/lib/appwrite";
+import { router, useFocusEffect } from "expo-router";
+// AGREGADO: Importamos getFollowCounts
+import { signOut, getUserPosts, getFollowCounts } from "@/lib/appwrite";
 
+// --- DATOS MOCK PARA LA PESTAÑA DE MÚSICA (TAB 2) ---
 const ALBUM_COVERS = [
   "https://i.scdn.co/image/ab67616d0000b2731ea0c62b2339cbf493a999ad",
   "https://i.scdn.co/image/ab67616d0000b2737b1fc51ff32b312d4363c288",
   "https://i.scdn.co/image/ab67616d0000b273f5507e7d6928e190dc450422",
-  "https://i.scdn.co/image/ab67616d0000b2734718e28d24527d9774635ded",
-  "https://i.scdn.co/image/ab67616d0000b2734a7b838e3610351292680794",
 ];
 
-const MOCK_MOODS = ALBUM_COVERS.map((coverUrl, i) => ({
-  id: `mood-${i}`,
-  image: coverUrl,
-}));
 const MOCK_MUSIC = [
   {
     id: "1",
@@ -41,11 +39,67 @@ const MOCK_MUSIC = [
 const { width } = Dimensions.get("window");
 const ITEM_SIZE = width / 3;
 
+// --- FUNCIÓN AUXILIAR CORREGIDA PARA TU JSON ---
+const getPostImage = (songDataString: string) => {
+  try {
+    if (!songDataString) return "https://via.placeholder.com/300";
+
+    const song = JSON.parse(songDataString);
+    const coverUrl = song.cover;
+
+    if (!coverUrl) return "https://via.placeholder.com/300";
+
+    const highResImage = coverUrl.replace("100x100bb", "600x600bb");
+
+    return highResImage;
+  } catch (error) {
+    console.log("Error parsing song data image", error);
+    return "https://via.placeholder.com/300";
+  }
+};
+
 const Profile = () => {
   const { user } = useGlobalContext();
   const [activeTab, setActiveTab] = useState(0);
+  const [posts, setPosts] = useState<any[]>([]);
+  // AGREGADO: Estado para los contadores
+  const [stats, setStats] = useState({ followersCount: 0, followingCount: 0 });
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
   const horizontalScrollRef = useRef<ScrollView>(null);
   const mainScrollRef = useRef<ScrollView>(null);
+
+  // --- LOGICA DE CARGA DE DATOS ---
+  const fetchData = async () => {
+    if (!user) return;
+    try {
+      // 1. Cargar Posts
+      const response = await getUserPosts(user.$id);
+      setPosts(response);
+
+      // 2. Cargar Estadísticas Reales (AGREGADO)
+      const counts = await getFollowCounts(user.$id);
+      setStats(counts);
+    } catch (error) {
+      console.log("Error cargando perfil:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [user])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  };
 
   const handleLogout = async () => {
     Alert.alert("Cerrar Sesión", "¿Seguro?", [
@@ -71,20 +125,27 @@ const Profile = () => {
     handleTabPress(0);
   };
 
-  const renderMoodItem = (item: any) => (
-    <TouchableOpacity
-      key={item.id}
-      activeOpacity={0.8}
-      onPress={() => router.push(`/post/${item.id}` as any)}
-    >
-      <Image
-        source={{ uri: item.image }}
-        style={{ width: ITEM_SIZE, height: ITEM_SIZE }}
-        className="border-[0.5px] border-black/20"
-      />
-    </TouchableOpacity>
-  );
+  // --- RENDER ITEM: MOODS ---
+  const renderMoodItem = (item: any) => {
+    const imageUrl = getPostImage(item.songData);
 
+    return (
+      <TouchableOpacity
+        key={item.$id}
+        activeOpacity={0.8}
+        onPress={() => router.push(`/post/${item.$id}` as any)}
+      >
+        <Image
+          source={{ uri: imageUrl }}
+          style={{ width: ITEM_SIZE, height: ITEM_SIZE }}
+          className="border-[0.5px] border-black/20 bg-zinc-900"
+          resizeMode="cover"
+        />
+      </TouchableOpacity>
+    );
+  };
+
+  // --- RENDER ITEM: MUSICA ---
   const renderMusicItem = (item: any) => (
     <View
       key={item.id}
@@ -111,7 +172,15 @@ const Profile = () => {
         ref={mainScrollRef}
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[3]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#fff"
+          />
+        }
       >
+        {/* HEADER */}
         <View className="flex-row justify-between items-center px-6 py-2 mb-6">
           <Text className="text-white text-3xl font-bold">Perfil</Text>
           <View className="flex-row gap-4">
@@ -130,6 +199,7 @@ const Profile = () => {
           </View>
         </View>
 
+        {/* INFO DE USUARIO */}
         <View className="items-center">
           <View className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/50">
             <Image
@@ -147,50 +217,65 @@ const Profile = () => {
           </Text>
         </View>
 
+        {/* ESTADÍSTICAS */}
         <View className="flex-row justify-between items-center bg-zinc-900 mx-4 h-[70px] mt-8 mb-3 px-2 rounded-3xl border border-zinc-800">
+          {/* BOTÓN SEGUIDORES */}
           <TouchableOpacity
             onPress={() =>
               router.push({
                 pathname: "/user-list",
-                params: { title: "Seguidores" },
+                // Enviamos userId y type correcto para ver la lista real
+                params: { userId: user?.$id, type: "followers" },
               })
             }
             className="flex-1 items-center py-4"
           >
-            <Text className="text-white text-xl font-bold">15</Text>
+            {/* Dato Real */}
+            <Text className="text-white text-xl font-bold">
+              {stats.followersCount}
+            </Text>
             <Text className="text-zinc-500 text-[10px] font-bold mt-1">
               SEGUIDORES
             </Text>
           </TouchableOpacity>
+
           <View className="h-8 w-[1px] bg-zinc-700" />
+
+          {/* BOTÓN MOODS */}
           <TouchableOpacity
             onPress={scrollToMoods}
             className="flex-1 items-center py-4"
           >
-            <Text className="text-white text-xl font-bold">
-              {MOCK_MOODS.length}
-            </Text>
+            <Text className="text-white text-xl font-bold">{posts.length}</Text>
             <Text className="text-zinc-500 text-[10px] font-bold mt-1">
               MOODS
             </Text>
           </TouchableOpacity>
+
           <View className="h-8 w-[1px] bg-zinc-700" />
+
+          {/* BOTÓN SEGUIDOS */}
           <TouchableOpacity
             onPress={() =>
               router.push({
                 pathname: "/user-list",
-                params: { title: "Seguidos" },
+                // Enviamos userId y type correcto
+                params: { userId: user?.$id, type: "following" },
               })
             }
             className="flex-1 items-center py-4"
           >
-            <Text className="text-white text-xl font-bold">24</Text>
+            {/* Dato Real */}
+            <Text className="text-white text-xl font-bold">
+              {stats.followingCount}
+            </Text>
             <Text className="text-zinc-500 text-[10px] font-bold mt-1">
               SEGUIDOS
             </Text>
           </TouchableOpacity>
         </View>
 
+        {/* TABS STICKY */}
         <View className="bg-black pt-4">
           <View className="flex-row px-4 mb-4 gap-4">
             <TouchableOpacity
@@ -236,6 +321,7 @@ const Profile = () => {
           </View>
         </View>
 
+        {/* CONTENIDO SWIPEABLE */}
         <ScrollView
           ref={horizontalScrollRef}
           horizontal
@@ -246,9 +332,24 @@ const Profile = () => {
           }
           scrollEventThrottle={16}
         >
-          <View style={{ width }} className="flex-row flex-wrap">
-            {MOCK_MOODS.map(renderMoodItem)}
+          {/* TAB 1: MOODS (DINÁMICO) */}
+          <View style={{ width }} className="min-h-[200px]">
+            {isLoading ? (
+              <View className="flex-1 justify-center items-center py-10">
+                <ActivityIndicator size="large" color="#5E17EB" />
+              </View>
+            ) : posts.length === 0 ? (
+              <View className="flex-1 justify-center items-center py-10">
+                <Text className="text-zinc-500">No hay publicaciones aún</Text>
+              </View>
+            ) : (
+              <View className="flex-row flex-wrap">
+                {posts.map(renderMoodItem)}
+              </View>
+            )}
           </View>
+
+          {/* TAB 2: MÚSICA (MOCK) */}
           <View style={{ width }}>{MOCK_MUSIC.map(renderMusicItem)}</View>
         </ScrollView>
         <View style={{ height: 100 }} />

@@ -1,145 +1,268 @@
 import {
   View,
   Text,
-  TouchableOpacity,
   FlatList,
   Image,
+  TouchableOpacity,
   TextInput,
-  StatusBar,
+  RefreshControl,
 } from "react-native";
-import React from "react";
-import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useState, useCallback, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  getCurrentUser,
+  getUserChats,
+  searchUsers,
+  getOrCreateChat,
+  client,
+  appwriteConfig,
+} from "@/lib/appwrite";
 
-const MOCK_CHATS = [
-  {
-    id: "1",
-    name: "Bad Bunny",
-    message: "Hablamos luego 👁️",
-    time: "2m",
-    avatar: "https://i.scdn.co/image/ab6761610000e5eb9ad50e564cc8b7dc5da82c50",
-    unread: 2,
-  },
-  {
-    id: "2",
-    name: "Sarah Parker",
-    message: "Sent a photo 📷",
-    time: "15m",
-    avatar: "https://i.pravatar.cc/150?u=a042581f4e29026704d",
-    unread: 0,
-  },
-  {
-    id: "3",
-    name: "El Alfa",
-    message: "Toy en el estudio, llega",
-    time: "1h",
-    avatar: "https://i.scdn.co/image/ab6761610000e5ebf8697e555476a6d68205cd9c",
-    unread: 1,
-  },
-  {
-    id: "4",
-    name: "David Miller",
-    message: "See you at the gym?",
-    time: "3h",
-    avatar: "https://i.pravatar.cc/150?u=a04258114e29026302d",
-    unread: 0,
-  },
-  {
-    id: "5",
-    name: "Rosalía",
-    message: "Gracias por compartir! 🦋",
-    time: "1d",
-    avatar: "https://i.scdn.co/image/ab6761610000e5eb009265f02c6b41295fc37172",
-    unread: 0,
-  },
-];
+const ChatsList = () => {
+  const [chats, setChats] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-const Chats = () => {
-  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  const renderItem = ({ item }: { item: (typeof MOCK_CHATS)[0] }) => (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      className="flex-row items-center justify-between p-4 border-b border-white/5 bg-black"
-      onPress={() =>
-        router.push({
-          pathname: "/chat/[id]",
-          params: { id: item.id, name: item.name, avatar: item.avatar },
-        })
+  // 1. Carga inicial
+  useFocusEffect(
+    useCallback(() => {
+      loadChats();
+    }, [])
+  );
+
+  // 2. Realtime
+  useEffect(() => {
+    const unsubscribe = client.subscribe(
+      `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.chatsCollectionId}.documents`,
+      (response) => {
+        if (
+          response.events.includes(
+            "databases.*.collections.*.documents.*.update"
+          ) ||
+          response.events.includes(
+            "databases.*.collections.*.documents.*.create"
+          )
+        ) {
+          const payload = response.payload as any;
+          if (currentUser && payload.search_params.includes(currentUser.$id)) {
+            loadChats();
+          }
+        }
       }
-    >
-      <View className="flex-row items-center flex-1">
+    );
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser]);
+
+  const loadChats = async () => {
+    try {
+      let user = currentUser;
+      if (!user) {
+        user = await getCurrentUser();
+        setCurrentUser(user);
+      }
+      if (user) {
+        const res = await getUserChats(user.$id);
+        setChats(res);
+      }
+    } catch (e) {
+      console.log(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = async (text: string) => {
+    setSearchQuery(text);
+    if (text.length > 1) {
+      setIsSearching(true);
+      const users = await searchUsers(text);
+      setSearchResults(users.filter((u) => u.$id !== currentUser?.$id));
+    } else {
+      setIsSearching(false);
+      setSearchResults([]);
+    }
+  };
+
+  const handleOpenChat = async (
+    otherUserId: string,
+    otherUserFixedData?: any
+  ) => {
+    if (!currentUser) return;
+    try {
+      const chatDoc = await getOrCreateChat(currentUser.$id, otherUserId);
+      router.push({
+        pathname: "/chat/[id]",
+        params: {
+          id: chatDoc.$id,
+          otherUserId: otherUserId,
+          otherUserName: otherUserFixedData?.username || "Usuario",
+          otherUserAvatar: otherUserFixedData?.pfp || "",
+        },
+      });
+      setSearchQuery("");
+      setIsSearching(false);
+    } catch (error) {
+      console.log("Error abriendo chat:", error);
+    }
+  };
+
+  const renderChatItem = ({ item }: { item: any }) => {
+    // LÓGICA DE NO LEÍDO:
+    // 1. El último mensaje no está leído.
+    // 2. Y ADEMÁS, el que lo envió NO soy yo (lastSenderId != mi ID).
+    const isUnread =
+      !item.lastMessageIsRead && item.lastSenderId !== currentUser?.$id;
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => handleOpenChat(item.otherUser?.$id, item.otherUser)}
+        className="flex-row items-center px-5 py-4 border-b border-zinc-900 bg-black"
+      >
         <Image
-          source={{ uri: item.avatar }}
+          source={{
+            uri:
+              item.otherUser?.pfp ||
+              "https://cloud.appwrite.io/v1/avatars/initials?name=User",
+          }}
           className="w-14 h-14 rounded-full bg-zinc-800"
         />
-        <View className="ml-4 flex-1">
+        <View className="ml-4 flex-1 justify-center">
           <View className="flex-row justify-between items-center mb-1">
-            <Text className="text-white font-bold text-base">{item.name}</Text>
-            <Text className="text-zinc-500 text-xs">{item.time}</Text>
+            <Text
+              className={`text-white text-[16px] ${
+                isUnread ? "font-bold" : "font-semibold"
+              }`}
+            >
+              {item.otherUser?.username || "Usuario"}
+            </Text>
+            <Text
+              className={`text-xs ${
+                isUnread
+                  ? "text-[#5E17EB] font-bold"
+                  : "text-zinc-500 font-medium"
+              }`}
+            >
+              {new Date(item.lastMessageAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </Text>
           </View>
-          <Text
-            className={
-              item.unread > 0 ? "text-white font-semibold" : "text-zinc-400"
-            }
-            numberOfLines={1}
-          >
-            {item.message}
-          </Text>
+
+          <View className="flex-row items-center justify-between">
+            <Text
+              className={`text-[14px] leading-5 flex-1 mr-2 ${
+                isUnread ? "text-white font-bold" : "text-zinc-400 font-normal"
+              }`}
+              numberOfLines={1}
+            >
+              {/* Si yo fui el último, pongo "Tú: " */}
+              {item.lastSenderId === currentUser?.$id && (
+                <Text className="font-normal text-zinc-500">Tú: </Text>
+              )}
+              {item.lastMessage}
+            </Text>
+
+            {/* PUNTO AZUL SI NO LEÍDO */}
+            {isUnread && (
+              <View className="w-2.5 h-2.5 rounded-full bg-[#5E17EB]" />
+            )}
+          </View>
         </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderSearchItem = ({ item }: { item: any }) => (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={() => handleOpenChat(item.$id, item)}
+      className="flex-row items-center px-5 py-3 border-b border-zinc-900 bg-black"
+    >
+      <Image
+        source={{ uri: item.pfp }}
+        className="w-12 h-12 rounded-full bg-zinc-800"
+      />
+      <View className="ml-4 flex-1">
+        <Text className="text-white font-bold text-[16px]">{item.name}</Text>
+        <Text className="text-zinc-500 text-sm">@{item.username}</Text>
       </View>
-      {item.unread > 0 && (
-        <View className="ml-2 w-5 h-5 bg-[#5E17EB] rounded-full items-center justify-center">
-          <Text className="text-white text-[10px] font-bold">
-            {item.unread}
-          </Text>
-        </View>
-      )}
+      <View className="bg-[#5E17EB] p-2 rounded-full">
+        <Ionicons name="chatbubble-outline" size={18} color="white" />
+      </View>
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-black">
-      <StatusBar barStyle="light-content" />
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-white/10">
-        <View className="flex-row items-center">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="p-2 -ml-2 rounded-full active:bg-zinc-900"
-          >
-            <Ionicons name="chevron-back" size={28} color="white" />
+    <SafeAreaView className="flex-1 bg-black" edges={["top"]}>
+      <View className="px-4 pt-2 pb-4 border-b border-zinc-900 bg-black z-10">
+        <View className="flex-row items-center mb-4">
+          <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+            <Ionicons name="arrow-back" size={26} color="white" />
           </TouchableOpacity>
-          <Text className="text-white text-xl font-bold ml-2">Chats</Text>
+          <Text className="text-white font-bold text-3xl ml-2">Mensajes</Text>
         </View>
-        <TouchableOpacity className="p-2 bg-zinc-900 rounded-full">
-          <Ionicons name="create-outline" size={22} color="#5E17EB" />
-        </TouchableOpacity>
-      </View>
-      <View className="px-4 py-4">
-        <View className="flex-row items-center bg-zinc-900 p-3 rounded-2xl border border-zinc-800">
-          <Ionicons name="search" size={20} color="#71717A" />
+        <View className="bg-zinc-900/80 rounded-2xl flex-row items-center px-4 py-3 border border-zinc-800">
+          <Ionicons name="search" size={20} color="#A1A1AA" />
           <TextInput
-            placeholder="Search messages..."
+            placeholder="Buscar personas..."
             placeholderTextColor="#71717A"
-            className="ml-3 flex-1 text-white font-medium"
+            className="flex-1 text-white ml-3 text-[16px] font-medium h-full"
+            value={searchQuery}
+            onChangeText={handleSearch}
+            autoCapitalize="none"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => handleSearch("")}>
+              <Ionicons name="close-circle" size={20} color="#71717A" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {isSearching ? (
+        <View className="flex-1">
+          <Text className="text-zinc-500 text-xs font-bold uppercase tracking-widest px-5 py-4">
+            Resultados
+          </Text>
+          <FlatList
+            data={searchResults}
+            keyExtractor={(item) => item.$id}
+            renderItem={renderSearchItem}
           />
         </View>
-      </View>
-      <FlatList
-        data={MOCK_CHATS}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 20 }}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={() => (
-          <View className="flex-1 items-center justify-center mt-20">
-            <Text className="text-zinc-500">No active chats</Text>
-          </View>
-        )}
-      />
+      ) : (
+        <FlatList
+          data={chats}
+          keyExtractor={(item) => item.$id}
+          renderItem={renderChatItem}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={loadChats}
+              tintColor="#5E17EB"
+            />
+          }
+          ListEmptyComponent={
+            <View className="flex-1 justify-center items-center mt-32 px-10">
+              <Text className="text-zinc-500 text-center">
+                No tienes chats activos
+              </Text>
+            </View>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 };
 
-export default Chats;
+export default ChatsList;

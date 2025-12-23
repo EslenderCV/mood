@@ -15,15 +15,6 @@ const RootLayout = () => {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            {/* Pantallas Modales o Full Screen */}
-            <Stack.Screen
-              name="music-player"
-              options={{
-                presentation: "modal", // Opcional: animación de subir
-                headerShown: false,
-                animation: "slide_from_bottom",
-              }}
-            />
             <Stack.Screen name="index" options={{ headerShown: false }} />
           </Stack>
         </ModalProvider>

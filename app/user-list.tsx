@@ -1,114 +1,99 @@
-import { View, Text, FlatList, Image, TouchableOpacity } from "react-native";
-import React from "react";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import {
+  View,
+  Text,
+  FlatList,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams, router } from "expo-router";
+import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { getUserFollowers, getUserFollowing } from "../lib/appwrite";
 
-// Mock Data de Usuarios
-const USERS_LIST = [
-  {
-    id: "1",
-    name: "Bad Bunny",
-    username: "@sanbenito",
-    avatar: "https://i.scdn.co/image/ab6761610000e5eb9ad50e564cc8b7dc5da82c50",
-    isFollowing: true,
-  },
-  {
-    id: "2",
-    name: "Rosalía",
-    username: "@rosalia",
-    avatar: "https://i.scdn.co/image/ab6761610000e5eb009265f02c6b41295fc37172",
-    isFollowing: false,
-  },
-  {
-    id: "3",
-    name: "Drake",
-    username: "@champagnepapi",
-    avatar: "https://i.scdn.co/image/ab6761610000e5eb4293385d324db8558179afd9",
-    isFollowing: true,
-  },
-  {
-    id: "4",
-    name: "Karol G",
-    username: "@karolg",
-    avatar: "https://i.scdn.co/image/ab6761610000e5eb827c1975e5330368b6d47d6b",
-    isFollowing: false,
-  },
-  {
-    id: "5",
-    name: "Feid",
-    username: "@ferxxo",
-    avatar: "https://i.scdn.co/image/ab6761610000e5eb512b186b406df677b1022131",
-    isFollowing: true,
-  },
-];
+const UserItem = ({ user }: { user: any }) => (
+  <TouchableOpacity
+    onPress={() => router.push(`/user/${user.$id}`)}
+    className="flex-row items-center p-4 border-b border-zinc-900"
+  >
+    <Image
+      source={user.pfp ? { uri: user.pfp } : require("../assets/noPfp.jpg")}
+      className="w-12 h-12 rounded-full bg-zinc-800"
+    />
+    <View className="ml-4">
+      {/* 1. Nombre Real (o usuario si no tiene nombre) */}
+      <Text className="text-white font-bold text-base">
+        {user.name || user.username}
+      </Text>
+
+      {/* 2. Usuario con @ (En lugar del email) */}
+      <Text className="text-zinc-500 text-sm">@{user.username}</Text>
+    </View>
+  </TouchableOpacity>
+);
 
 const UserList = () => {
-  const router = useRouter();
-  const { title } = useLocalSearchParams(); // Recibe "Seguidores" o "Seguidos"
+  const { userId, type } = useLocalSearchParams();
+  // type puede ser "followers" o "following"
+
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      // PROTECCIÓN: Si userId aún no carga, no hacemos nada para evitar el error
+      if (!userId) return;
+
+      setLoading(true);
+      try {
+        let result = [];
+        // Nos aseguramos de tener un string limpio
+        const idString = Array.isArray(userId) ? userId[0] : userId;
+
+        if (type === "followers") {
+          result = await getUserFollowers(idString);
+        } else {
+          result = await getUserFollowing(idString);
+        }
+        setUsers(result);
+      } catch (error) {
+        console.log("Error loading user list:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [userId, type]);
 
   return (
     <SafeAreaView className="flex-1 bg-black">
       {/* Header */}
-      <View className="px-6 py-4 flex-row items-center border-b border-zinc-900">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          className="mr-4 p-2 bg-zinc-900 rounded-full"
-        >
-          <Ionicons name="arrow-back" size={22} color="white" />
+      <View className="flex-row items-center px-4 py-2 border-b border-zinc-900 mb-2">
+        <TouchableOpacity onPress={() => router.back()} className="p-2">
+          <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text className="text-white text-2xl font-bold">
-          {title || "Usuarios"}
+        <Text className="text-white text-xl font-bold ml-4 capitalize">
+          {type === "followers" ? "Seguidores" : "Seguidos"}
         </Text>
       </View>
 
-      <FlatList
-        data={USERS_LIST}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 24 }}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            activeOpacity={0.7}
-            // Al tocar, vamos a su perfil público
-            onPress={() =>
-              router.push({
-                pathname: "/user/[id]",
-                params: { id: item.id, user: item.name, avatar: item.avatar },
-              })
-            }
-            className="flex-row items-center justify-between mb-6"
-          >
-            <View className="flex-row items-center">
-              <Image
-                source={{ uri: item.avatar }}
-                className="w-12 h-12 rounded-full bg-zinc-800 border border-white/10"
-              />
-              <View className="ml-3">
-                <Text className="text-white font-bold text-base">
-                  {item.name}
-                </Text>
-                <Text className="text-zinc-500 text-sm">{item.username}</Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              className={`px-4 py-1.5 rounded-lg border ${
-                item.isFollowing
-                  ? "bg-transparent border-zinc-600"
-                  : "bg-[#5E17EB] border-[#5E17EB]"
-              }`}
-            >
-              <Text
-                className={`font-bold text-xs ${
-                  item.isFollowing ? "text-white" : "text-white"
-                }`}
-              >
-                {item.isFollowing ? "Siguiendo" : "Seguir"}
+      {loading ? (
+        <ActivityIndicator size="large" color="#5E17EB" className="mt-10" />
+      ) : (
+        <FlatList
+          data={users}
+          keyExtractor={(item) => item.$id}
+          renderItem={({ item }) => <UserItem user={item} />}
+          ListEmptyComponent={() => (
+            <View className="items-center mt-10">
+              <Text className="text-zinc-500 text-center">
+                No se encontraron usuarios.
               </Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        )}
-      />
+            </View>
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 };

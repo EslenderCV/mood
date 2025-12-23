@@ -4,44 +4,34 @@
     "slug": "mood",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "",
+    "icon": "./assets/images/icon.png",
     "scheme": "mood",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "",
+      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true,
-      "package": "com.gammes.mood"
+      "bundleIdentifier": "com.gammes.mood"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "",
+        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.RECORD_AUDIO"
-      ],
       "package": "com.eslender.mood"
     },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": ""
-    },
     "plugins": [
-      [
-        "expo-router"
-      ],
+      "expo-router",
       [
         "expo-image-picker",
         {
           "photosPermission": "The app accesses your photos to let you share them with your friends."
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true
