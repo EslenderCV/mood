@@ -11,7 +11,7 @@ import {
 import { getCurrentUser } from "@/lib/appwrite";
 import { Models } from "react-native-appwrite";
 
-// 1. Definimos exactamente qué campos tiene TU usuario en Appwrite
+// 1. Interfaz de Usuario
 export interface User extends Models.Document {
   name: string;
   username: string;
@@ -25,7 +25,7 @@ interface Props {
   children: ReactNode;
 }
 
-// 2. Definimos el tipo del Contexto con la nueva interfaz User
+// 2. Definición del Contexto (Usando 'loggedIn' como pediste)
 interface GlobalContextType {
   loggedIn: boolean;
   setLoggedIn: Dispatch<SetStateAction<boolean>>;
@@ -34,12 +34,11 @@ interface GlobalContextType {
   loading: boolean;
 }
 
-// 3. Inicializamos con valores por defecto para evitar errores de "undefined"
 const GlobalContext = createContext<GlobalContextType>({
   loggedIn: false,
   setLoggedIn: () => {},
   user: null,
-  setUser: () => {}, // Función vacía en lugar de null
+  setUser: () => {},
   loading: true,
 });
 
@@ -47,7 +46,6 @@ export const useGlobalContext = () => useContext(GlobalContext);
 
 const GlobalProvider = ({ children }: Props) => {
   const [loggedIn, setLoggedIn] = useState(false);
-  // Aplicamos el tipo User al estado
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -56,17 +54,21 @@ const GlobalProvider = ({ children }: Props) => {
       .then((res) => {
         if (res) {
           setLoggedIn(true);
-          // Hacemos un cast seguro a nuestra interfaz User
           setUser(res as unknown as User);
         } else {
           setLoggedIn(false);
           setUser(null);
         }
       })
-      .catch((err) => {
-        console.error("Error fetching user:", err);
+      .catch((error) => {
+        console.log("Error en GlobalProvider:", error);
+        // EN CASO DE ERROR, FORZAMOS EL ESTADO A 'NO LOGUEADO'
+        // Esto evita que la app se quede en un estado limbo
+        setLoggedIn(false);
+        setUser(null);
       })
       .finally(() => {
+        // Solo aquí terminamos la carga
         setLoading(false);
       });
   }, []);

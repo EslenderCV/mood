@@ -114,8 +114,8 @@ export const signOut = async () => {
 export const getCurrentUser = async () => {
   try {
     const currentAccount = await account.get();
-    if (!currentAccount) throw new Error("No active session");
 
+    // Si llegamos aquí, hay sesión. Buscamos el documento del usuario.
     const currentUser = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
@@ -125,30 +125,14 @@ export const getCurrentUser = async () => {
     if (!currentUser || currentUser.documents.length === 0) return null;
     return currentUser.documents[0];
   } catch (error: any) {
+    // CÓDIGO 401: Falta de autenticación (Invitado)
+    // Silenciamos el error porque es esperado al iniciar la app sin login
     if (error.code === 401 || error.message?.includes("missing scopes")) {
       return null;
     }
+
     console.log("Error getCurrentUser:", error);
     return null;
-  }
-};
-
-export const updateProfile = async (updates: {
-  name?: string;
-  username?: string;
-}) => {
-  try {
-    const currentUser = await getCurrentUser();
-    if (!currentUser) throw new Error("User not found");
-    return await databases.updateDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      currentUser.$id,
-      updates
-    );
-  } catch (err) {
-    console.error("Error updating profile:", err);
-    throw err;
   }
 };
 
@@ -296,8 +280,11 @@ export async function getAllPosts() {
     );
     return postsWithUserData;
   } catch (error: any) {
+    if (error.code === 401 || error.message?.includes("authorized")) {
+      return [];
+    }
     console.log("Error en getAllPosts:", error);
-    throw new Error(error.message || String(error));
+    throw new Error(error);
   }
 }
 

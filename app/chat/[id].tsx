@@ -13,10 +13,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  GestureHandlerRootView,
-  Swipeable,
-} from "react-native-gesture-handler";
+import { GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
 import {
   getCurrentUser,
@@ -28,166 +25,205 @@ import {
   getPostById,
 } from "@/lib/appwrite";
 
-// --- MEJORA: Burbuja de Post "Card Style" ---
+// --- COMPONENTE: TARJETA DE POST (Estilo Spotify/Card) ---
 const PostPreviewBubble = ({ postId }: { postId: string }) => {
   const [post, setPost] = useState<any>(null);
 
   useEffect(() => {
-    getPostById(postId).then(setPost);
+    let isMounted = true;
+    getPostById(postId).then((data) => {
+      if (isMounted) setPost(data);
+    });
+    return () => { isMounted = false; };
   }, [postId]);
 
-  if (!post)
-    return <View className="w-60 h-24 bg-zinc-900 rounded-2xl animate-pulse" />;
+  if (!post) return (
+    <View className="w-60 h-20 bg-zinc-900 rounded-2xl border border-zinc-800 justify-center items-center">
+      <ActivityIndicator color="#5E17EB" size="small" />
+    </View>
+  );
 
   const song = post.songData ? JSON.parse(post.songData) : null;
 
   return (
     <TouchableOpacity
+      activeOpacity={0.9}
       onPress={() => router.push(`/post/${postId}`)}
-      className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden w-64 shadow-2xl"
+      className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden w-64 mt-1"
     >
       <View className="flex-row p-3 items-center">
-        <Image
-          source={{ uri: song?.cover }}
-          className="w-14 h-14 rounded-xl shadow-md"
-        />
-        <View className="ml-3 flex-1">
-          <Text className="text-white font-bold text-sm" numberOfLines={1}>
-            {song?.title}
-          </Text>
-          <Text className="text-zinc-500 text-xs" numberOfLines={1}>
-            {song?.artist}
-          </Text>
+        {song?.cover ? (
+          <Image source={{ uri: song.cover }} className="w-12 h-12 rounded-md mr-3 bg-zinc-800" />
+        ) : (
+          <View className="w-12 h-12 rounded-md mr-3 bg-zinc-800 items-center justify-center">
+            <Ionicons name="musical-note" color="gray" size={20} />
+          </View>
+        )}
+        <View className="flex-1 justify-center">
+          <Text className="text-white font-bold text-sm" numberOfLines={1}>{song?.title || "Sin título"}</Text>
+          <Text className="text-zinc-400 text-xs" numberOfLines={1}>{song?.artist || "Desconocido"}</Text>
         </View>
-        <Ionicons name="chevron-forward" size={16} color="#52525B" />
+        <Ionicons name="play-circle" size={28} color="#5E17EB" />
       </View>
-      <View className="bg-zinc-800/50 px-3 py-2 flex-row items-center">
-        <Image
-          source={{ uri: post.postedBy?.pfp }}
-          className="w-4 h-4 rounded-full mr-2"
-        />
-        <Text className="text-zinc-400 text-[10px]">
-          Compartido por {post.postedBy?.username}
-        </Text>
+      <View className="bg-zinc-950 px-3 py-1.5 flex-row items-center border-t border-zinc-800">
+        <Ionicons name="share-social-outline" size={12} color="#71717A" />
+        <Text className="text-zinc-500 text-[10px] ml-1">Compartido por {post.postedBy?.username}</Text>
       </View>
     </TouchableOpacity>
   );
 };
 
+// --- PANTALLA PRINCIPAL ---
 const ChatRoom = () => {
   const params = useLocalSearchParams();
   const chatId = params.id as string;
+  const otherUserId = params.otherUserId as string;
+
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [replyingTo, setReplyingTo] = useState<any>(null);
-  const [isOtherActive, setIsOtherActive] = useState(false); // Simulación de presencia
+  const [isOtherUserOnline, setIsOtherUserOnline] = useState(false); // Simulado por ahora
+
+  const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
     loadData();
-    // Suscripción Realtime para mensajes y actualización de lectura
+
+    // SUSCRIPCIÓN REALTIME
     const unsubscribe = client.subscribe(
-      [
-        `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`,
-      ],
+      `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`,
       (response) => {
         const payload = response.payload as any;
+        
+        // Solo actuar si es de este chat
         if (payload.chatId === chatId) {
-          if (response.events.includes("*.create")) {
+          // 1. NUEVO MENSAJE
+          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
             setMessages((prev) => [payload, ...prev]);
-            if (payload.senderId !== currentUser?.$id) markAsRead();
+            
+            // Si el mensaje NO es mío, marcarlo como leído inmediatamente
+            getCurrentUser().then(user => {
+               if(user && payload.senderId !== user.$id) {
+                 markChatAsRead(chatId, user.$id);
+               }
+            });
           }
-          if (response.events.includes("*.update")) {
-            setMessages((prev) =>
-              prev.map((m) => (m.$id === payload.$id ? payload : m))
+          
+          // 2. ACTUALIZACIÓN (Ej: Alguien leyó el mensaje -> isRead cambia a true)
+          if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            setMessages((prev) => 
+              prev.map((msg) => (msg.$id === payload.$id ? payload : msg))
             );
           }
         }
       }
     );
+
     return () => unsubscribe();
-  }, [chatId, currentUser]);
+  }, [chatId]);
 
   const loadData = async () => {
-    const user = await getCurrentUser();
-    setCurrentUser(user);
-    const msgs = await getChatMessages(chatId);
-    setMessages(msgs);
-    markAsRead();
+    try {
+      const user = await getCurrentUser();
+      if(!user) {
+        // Redirigir si no hay usuario (protección extra)
+        return router.replace("/signIn");
+      }
+      setCurrentUser(user);
+      
+      const msgs = await getChatMessages(chatId);
+      setMessages(msgs);
+      
+      // Marcar como leídos al entrar
+      markChatAsRead(chatId, user.$id);
+    } catch (error) {
+      console.log("Error loading chat:", error);
+    }
   };
 
-  const markAsRead = () => markChatAsRead(chatId, currentUser?.$id);
-
-  const onReplySwipe = (message: any) => {
+  const onSwipeToReply = (message: any) => {
+    // Vibración suave estilo iOS
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setReplyingTo(message);
   };
 
   const handleSend = async () => {
-    if (!newMessage.trim()) return;
-    const content = replyingTo
-      ? `↪ Replying to: "${replyingTo.content.substring(
-          0,
-          20
-        )}..."\n${newMessage}`
-      : newMessage;
+    if (!newMessage.trim() || !currentUser) return;
+
+    // Lógica de respuesta (Cita)
+    let contentToSend = newMessage;
+    if (replyingTo) {
+      const replyPreview = replyingTo.content.length > 30 
+        ? replyingTo.content.substring(0, 30) + "..." 
+        : replyingTo.content;
+      // Añadimos metadata visual al texto (puedes mejorar esto guardándolo en un campo separado si prefieres)
+      contentToSend = `Replying to: "${replyPreview}"\n\n${newMessage}`;
+    }
+
+    const tempContent = contentToSend;
     setNewMessage("");
     setReplyingTo(null);
-    await sendMessage(
-      chatId,
-      currentUser.$id,
-      params.otherUserId as string,
-      content
-    );
+
+    try {
+      // Usamos tu función sendMessage del lib/appwrite.ts
+      // Argumentos: chatId, senderId, receiverId, content, sharedPostId
+      await sendMessage(chatId, currentUser.$id, otherUserId, tempContent, null);
+    } catch (error) {
+      console.log("Error sending:", error);
+      setNewMessage(tempContent); // Restaurar si falla
+    }
   };
 
   const renderMessage = ({ item }: { item: any }) => {
     const isMe = item.senderId === currentUser?.$id;
-    const time = new Date(item.$createdAt).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const time = new Date(item.$createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const isReply = item.content.startsWith("Replying to:");
 
     return (
       <Swipeable
-        renderRightActions={() => <View className="w-10" />}
-        onSwipeableWillOpen={() => onReplySwipe(item)}
+        renderRightActions={() => <View className="w-10" />} // Espacio vacío para permitir el gesto
+        onSwipeableWillOpen={() => onSwipeToReply(item)}
+        friction={2}
       >
-        <View
-          className={`mb-3 flex-row ${
-            isMe ? "justify-end" : "justify-start"
-          } px-4`}
-        >
+        <View className={`mb-2 flex-row ${isMe ? "justify-end" : "justify-start"} px-4`}>
           {!isMe && (
             <Image
               source={{ uri: params.otherUserAvatar as string }}
-              className="w-7 h-7 rounded-full self-end mr-2"
+              className="w-8 h-8 rounded-full self-end mr-2 mb-1"
             />
           )}
 
-          <View className="max-w-[80%]">
+          <View className={`max-w-[80%] ${isMe ? "items-end" : "items-start"}`}>
             {item.sharedPostId ? (
+              // --- RENDERIZADO DE POST ---
               <PostPreviewBubble postId={item.sharedPostId} />
             ) : (
+              // --- RENDERIZADO DE TEXTO ---
               <View
-                className={`px-4 py-2.5 rounded-[22px] ${
-                  isMe
-                    ? "bg-[#5E17EB] rounded-br-none"
-                    : "bg-[#27272A] rounded-bl-none border border-zinc-800"
+                className={`px-4 py-2 rounded-2xl ${
+                  isMe ? "bg-[#5E17EB] rounded-br-sm" : "bg-zinc-800 rounded-bl-sm border border-zinc-700"
                 }`}
               >
+                {/* Estilo especial para respuestas */}
+                {isReply && (
+                   <View className="mb-2 pl-2 border-l-2 border-white/30">
+                     <Text className="text-white/60 text-xs italic">{item.content.split("\n\n")[0]}</Text>
+                   </View>
+                )}
+                
                 <Text className="text-white text-[15px] leading-5">
-                  {item.content}
+                  {isReply ? item.content.split("\n\n")[1] : item.content}
                 </Text>
+
+                {/* Footer del mensaje: Hora + Visto */}
                 <View className="flex-row items-center justify-end mt-1 space-x-1">
-                  <Text className="text-[9px] text-zinc-300 opacity-60">
-                    {time}
-                  </Text>
+                  <Text className="text-[10px] text-white/50">{time}</Text>
                   {isMe && (
-                    <Ionicons
-                      name={item.isRead ? "checkmark-done" : "checkmark"}
-                      size={12}
-                      color={item.isRead ? "#A5F3FC" : "white"}
+                    <Ionicons 
+                      name="checkmark-done" 
+                      size={14} 
+                      color={item.isRead ? "#38BDF8" : "rgba(255,255,255,0.3)"} // Azul si leido, gris si no
                     />
                   )}
                 </View>
@@ -202,87 +238,82 @@ const ChatRoom = () => {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView className="flex-1 bg-black" edges={["top"]}>
-        {/* HEADER MEJORADO */}
-        <View className="flex-row items-center px-4 py-3 border-b border-zinc-900">
-          <TouchableOpacity onPress={() => router.back()}>
+        {/* --- HEADER --- */}
+        <View className="flex-row items-center px-2 py-2 border-b border-zinc-900 bg-black/90 blur-md z-10">
+          <TouchableOpacity onPress={() => router.back()} className="p-2">
             <Ionicons name="chevron-back" size={28} color="white" />
           </TouchableOpacity>
-          <Image
-            source={{ uri: params.otherUserAvatar as string }}
-            className="w-10 h-10 rounded-full ml-2"
-          />
+          
+          <Image source={{ uri: params.otherUserAvatar as string }} className="w-10 h-10 rounded-full bg-zinc-800" />
+          
           <View className="ml-3 flex-1">
-            <Text className="text-white font-bold text-base">
+            <Text className="text-white font-bold text-base" numberOfLines={1}>
               {params.otherUserName}
             </Text>
-            <View className="flex-row items-center">
-              <View
-                className={`w-2 h-2 rounded-full mr-1.5 ${
-                  isOtherActive ? "bg-emerald-500" : "bg-zinc-600"
-                }`}
-              />
-              <Text className="text-zinc-500 text-[10px] font-medium">
-                {isOtherActive ? "Activo ahora" : "Desconectado"}
-              </Text>
-            </View>
+            {/* Lógica de "En Línea" */}
+            <Text className={`text-xs ${isOtherUserOnline ? "text-emerald-400" : "text-zinc-500"}`}>
+               {isOtherUserOnline ? "En línea" : "Desconectado"}
+            </Text>
           </View>
+
+          <TouchableOpacity className="p-2">
+             <Ionicons name="videocam-outline" size={26} color="#71717A" /> 
+          </TouchableOpacity>
         </View>
 
+        {/* --- LISTA MENSAJES --- */}
         <FlatList
+          ref={flatListRef}
           data={messages}
           keyExtractor={(item) => item.$id}
           renderItem={renderMessage}
-          inverted
-          contentContainerStyle={{ paddingVertical: 20 }}
+          inverted // Importante para chat
+          contentContainerStyle={{ paddingVertical: 15 }}
+          className="flex-1"
         />
 
-        {/* INPUT TIPO WHATSAPP */}
+        {/* --- INPUT AREA --- */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={10}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
         >
+          {/* Barra de Respuesta */}
           {replyingTo && (
-            <View className="bg-zinc-900 px-4 py-2 border-t border-zinc-800 flex-row justify-between items-center">
-              <View className="border-l-4 border-[#5E17EB] pl-3">
-                <Text className="text-[#5E17EB] text-[10px] font-bold">
-                  Respondiendo a
-                </Text>
-                <Text className="text-zinc-400 text-xs" numberOfLines={1}>
-                  {replyingTo.content}
-                </Text>
+            <View className="flex-row items-center justify-between px-4 py-2 bg-zinc-900 border-t border-zinc-800">
+              <View className="flex-1 border-l-4 border-[#5E17EB] pl-3 py-1">
+                <Text className="text-[#5E17EB] text-xs font-bold mb-0.5">Respondiendo a</Text>
+                <Text className="text-zinc-400 text-xs" numberOfLines={1}>{replyingTo.content}</Text>
               </View>
-              <TouchableOpacity onPress={() => setReplyingTo(null)}>
-                <Ionicons name="close-circle" size={20} color="#71717A" />
+              <TouchableOpacity onPress={() => setReplyingTo(null)} className="p-2">
+                <Ionicons name="close-circle" size={24} color="#52525B" />
               </TouchableOpacity>
             </View>
           )}
-          <View className="flex-row items-end px-4 py-3 bg-black border-t border-zinc-900">
-            <View className="flex-1 bg-[#18181B] rounded-[24px] px-4 py-2.5 border border-zinc-800 flex-row items-center">
+
+          {/* Caja de Texto */}
+          <View className="flex-row items-end px-3 py-3 bg-black border-t border-zinc-900">
+            <View className="flex-1 flex-row items-center bg-zinc-900 rounded-3xl border border-zinc-800 px-4 min-h-[44px]">
               <TextInput
-                placeholder="Escribe un mensaje..."
+                placeholder="Mensaje..."
                 placeholderTextColor="#71717A"
-                className="flex-1 text-white text-[15px] max-h-24"
+                className="flex-1 text-white text-[15px] py-3 max-h-32"
                 multiline
                 value={newMessage}
                 onChangeText={setNewMessage}
               />
-              <Ionicons
-                name="happy-outline"
-                size={24}
-                color="#71717A"
-                className="ml-2"
-              />
             </View>
-            <TouchableOpacity
+            
+            <TouchableOpacity 
               onPress={handleSend}
-              className={`ml-3 w-11 h-11 rounded-full items-center justify-center ${
+              className={`ml-2 w-11 h-11 rounded-full items-center justify-center ${
                 newMessage.trim() ? "bg-[#5E17EB]" : "bg-zinc-800"
               }`}
+              disabled={!newMessage.trim()}
             >
-              <Ionicons
-                name={newMessage.trim() ? "send" : "mic-outline"}
-                size={20}
-                color="white"
+              <Ionicons 
+                name={newMessage.trim() ? "send" : "mic"} 
+                size={20} 
+                color={newMessage.trim() ? "white" : "#71717A"} 
               />
             </TouchableOpacity>
           </View>

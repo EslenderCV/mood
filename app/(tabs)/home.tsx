@@ -13,10 +13,27 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAudioPlayer } from "expo-audio";
-
+import { useGlobalContext } from "@/context/GlobalProvider";
 import TopBar from "@/components/TopBar";
 import { getAllPosts, toggleLikePost, getCurrentUser } from "@/lib/appwrite";
-import ShareModal from "@/components/ShareModal"; // <--- IMPORTAR MODAL
+import ShareModal from "@/components/ShareModal";
+
+// --- UTILIDAD: Formato de Tiempo Relativo ---
+const formatTimeAgo = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (seconds < 60) return "hace unos segundos";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Ayer";
+  if (days < 7) return `${days}d`;
+  return date.toLocaleDateString();
+};
 
 const parseSongData = (songDataString: string) => {
   try {
@@ -31,6 +48,7 @@ const parseSongData = (songDataString: string) => {
 };
 
 const Home = () => {
+  const { user, loading, loggedIn } = useGlobalContext();
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,6 +58,7 @@ const Home = () => {
   const [isShareVisible, setShareVisible] = useState(false);
   const [postToShare, setPostToShare] = useState<string>("");
 
+  // Audio Player
   const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
   const [playingPostId, setPlayingPostId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -70,12 +89,14 @@ const Home = () => {
 
   const fetchData = async () => {
     try {
-      const user = await getCurrentUser();
-      if (user) setCurrentUserId(user.$id);
+      if (!currentUserId) {
+        const currentUserData = await getCurrentUser();
+        if (currentUserData) setCurrentUserId(currentUserData.$id);
+      }
       const result = await getAllPosts();
       setPosts(result);
     } catch (error) {
-      console.log("Error:", error);
+      console.log("Error fetching posts:", error);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -83,8 +104,10 @@ const Home = () => {
   };
 
   useEffect(() => {
+    if (loading) return;
+    if (!user && !loggedIn) return;
     fetchData();
-  }, []);
+  }, [user, loading, loggedIn]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -98,12 +121,14 @@ const Home = () => {
   };
 
   const handleLike = async (post: any) => {
-    if (!currentUserId) return;
+    const userId = user?.$id || currentUserId;
+    if (!userId) return;
+
     const originalLikes = post.likedBy || [];
-    const isLiked = originalLikes.includes(currentUserId);
+    const isLiked = originalLikes.includes(userId);
     let newLikes = isLiked
-      ? originalLikes.filter((id: string) => id !== currentUserId)
-      : [...originalLikes, currentUserId];
+      ? originalLikes.filter((id: string) => id !== userId)
+      : [...originalLikes, userId];
 
     const updatedPosts = posts.map((p) =>
       p.$id === post.$id ? { ...p, likedBy: newLikes } : p
@@ -111,31 +136,36 @@ const Home = () => {
     setPosts(updatedPosts);
 
     try {
-      await toggleLikePost(post.$id, currentUserId, originalLikes);
+      await toggleLikePost(post.$id, userId, originalLikes);
     } catch (error) {
       setPosts(posts);
     }
   };
 
-  // --- FUNCIÓN PARA ABRIR MODAL ---
   const handleOpenShare = (postId: string) => {
     setPostToShare(postId);
     setShareVisible(true);
   };
 
-  const renderPost = ({ item }: { item: any }) => {
+  const renderPost = ({ item, index }: { item: any; index: number }) => {
     const songData = parseSongData(item.songData);
     const creator = item.postedBy || {};
     if (!songData) return null;
 
     const isActive = playingPostId === item.$id;
     const showPauseIcon = isActive && isPlaying;
+
+    const userId = user?.$id || currentUserId;
     const likedBy = item.likedBy || [];
-    const isLiked = currentUserId ? likedBy.includes(currentUserId) : false;
+    const isLiked = userId ? likedBy.includes(userId) : false;
+
+    const isLastItem = index === posts.length - 1;
+    const hasCaption = item.comment && item.comment.trim() !== "";
 
     return (
-      <View className="mb-6 border-b border-zinc-900 pb-4 px-4">
-        <View className="flex-row justify-between items-start mb-2">
+      <View className="flex-row px-4">
+        {/* --- COLUMNA IZQUIERDA --- */}
+        <View className="items-center mr-3">
           <TouchableOpacity
             onPress={() =>
               router.push({
@@ -148,108 +178,119 @@ const Home = () => {
                 },
               })
             }
-            className="flex-row"
+            className="z-10"
           >
             <Image
               source={{ uri: creator.pfp }}
-              className="w-10 h-10 rounded-full bg-zinc-800"
+              className="w-10 h-10 rounded-full bg-zinc-800 border border-black"
             />
-            <View className="ml-3">
-              <View className="flex-row items-center">
-                <Text className="text-white font-bold text-[15px] mr-1">
-                  {creator.name}
-                </Text>
-                <Text className="text-zinc-500 text-xs">
-                  @{creator.username} •{" "}
-                  {new Date(item.$createdAt).toLocaleDateString()}
-                </Text>
-              </View>
-              <Text className="text-zinc-300 text-[15px] mt-1 leading-5 pr-2">
-                {item.comment}
+          </TouchableOpacity>
+
+          {!isLastItem && <View className="flex-1 w-[2px] bg-zinc-800 my-1" />}
+        </View>
+
+        {/* --- COLUMNA DERECHA --- */}
+        <View className="flex-1 pb-6">
+          {/* HEADER */}
+          <View className="flex-row items-center justify-between mb-1">
+            <View className="flex-row items-center flex-1 flex-wrap">
+              <Text className="text-white font-bold text-[15px] mr-1">
+                {creator.name}
+              </Text>
+              <Text className="text-zinc-500 text-[14px]">
+                @{creator.username} · {formatTimeAgo(item.$createdAt)}
               </Text>
             </View>
-          </TouchableOpacity>
-          <Ionicons name="ellipsis-horizontal" size={20} color="#71717A" />
-        </View>
-
-        <View className="ml-[52px] mt-2 bg-zinc-900 rounded-xl p-3 flex-row items-center border border-zinc-800/50">
-          <Image
-            source={{ uri: songData.cover }}
-            className="w-12 h-12 rounded-lg bg-zinc-800"
-          />
-          <View className="flex-1 ml-3">
-            <Text className="text-white font-bold text-sm" numberOfLines={1}>
-              {songData.title}
-            </Text>
-            <Text className="text-zinc-400 text-xs" numberOfLines={1}>
-              {songData.artist}
-            </Text>
+            <TouchableOpacity>
+              <Ionicons name="ellipsis-horizontal" size={18} color="#71717A" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            onPress={() => handlePlayPreview(songData.preview, item.$id)}
-            className={`w-8 h-8 rounded-full items-center justify-center border ${
-              showPauseIcon
-                ? "bg-[#5E17EB] border-[#5E17EB]"
-                : "bg-[#5E17EB]/20 border-[#5E17EB]/50"
+
+          {/* TEXTO */}
+          {hasCaption && (
+            <Text className="text-white text-[15px] mb-3 leading-5">
+              {item.comment}
+            </Text>
+          )}
+
+          {/* CARD MUSICA */}
+          {/* AQUI ESTA EL CAMBIO: Agregamos 'mt-2' si NO hay caption */}
+          <View
+            className={`bg-[#1C1C1E] rounded-2xl p-3 flex-row items-center border border-zinc-800/50 mb-3 ${
+              hasCaption ? "" : "mt-2"
             }`}
           >
-            <Ionicons
-              name={showPauseIcon ? "pause" : "play"}
-              size={16}
-              color={showPauseIcon ? "white" : "#5E17EB"}
-              style={showPauseIcon ? {} : { marginLeft: 2 }}
+            <Image
+              source={{ uri: songData.cover }}
+              className="w-12 h-12 rounded-lg bg-zinc-800"
             />
-          </TouchableOpacity>
-        </View>
+            <View className="flex-1 ml-3 mr-2">
+              <Text className="text-white font-bold text-sm" numberOfLines={1}>
+                {songData.title}
+              </Text>
+              <Text className="text-zinc-400 text-xs" numberOfLines={1}>
+                {songData.artist}
+              </Text>
+            </View>
 
-        <View className="flex-row justify-between items-center mt-4 ml-[52px] pr-4">
-          <TouchableOpacity
-            onPress={() =>
-              router.push({
-                pathname: "/post/[id]",
-                params: {
-                  id: item.$id,
-                  content: item.comment,
-                  username: creator.username,
-                  name: creator.name,
-                  avatar: creator.pfp,
-                  createdAt: item.$createdAt,
-                  songTitle: songData.title,
-                  songArtist: songData.artist,
-                  songCover: songData.cover,
-                  preview: songData.preview,
-                  likedBy: JSON.stringify(likedBy),
-                },
-              })
-            }
-            className="flex-row items-center gap-1"
-          >
-            <Ionicons name="chatbubble-outline" size={18} color="#71717A" />
-            <Text className="text-zinc-500 text-xs">Comentar</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => handleLike(item)}
-            className="flex-row items-center gap-1"
-          >
-            <Ionicons
-              name={isLiked ? "heart" : "heart-outline"}
-              size={20}
-              color={isLiked ? "#EF4444" : "#71717A"}
-            />
-            <Text
-              className={`text-xs ${
-                isLiked ? "text-red-500" : "text-zinc-500"
-              }`}
+            <TouchableOpacity
+              onPress={() => handlePlayPreview(songData.preview, item.$id)}
+              className="w-10 h-10 rounded-full bg-[#5E17EB] items-center justify-center"
+              activeOpacity={0.8}
             >
-              {likedBy.length > 0 ? likedBy.length : ""}
-            </Text>
-          </TouchableOpacity>
+              <Ionicons
+                name={showPauseIcon ? "pause" : "play"}
+                size={20}
+                color="white"
+                style={{ marginLeft: showPauseIcon ? 0 : 2 }}
+              />
+            </TouchableOpacity>
+          </View>
 
-          {/* ✅ BOTÓN DE COMPARTIR CONECTADO AL MODAL */}
-          <TouchableOpacity onPress={() => handleOpenShare(item.$id)}>
-            <Ionicons name="share-social-outline" size={20} color="#71717A" />
-          </TouchableOpacity>
+          {/* FOOTER */}
+          <View className="flex-row justify-between items-center mt-1">
+            <TouchableOpacity
+              onPress={() =>
+                router.push({
+                  pathname: "/post/[id]",
+                  params: {
+                    id: item.$id,
+                    content: item.comment,
+                  },
+                })
+              }
+              className="flex-row items-center py-1 pr-2"
+            >
+              <Ionicons name="chatbubble-outline" size={20} color="#71717A" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => handleLike(item)}
+              className="flex-row items-center py-1 px-2"
+            >
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={22}
+                color={isLiked ? "#EF4444" : "#71717A"}
+              />
+              {likedBy.length > 0 && (
+                <Text
+                  className={`text-xs ml-1 ${
+                    isLiked ? "text-red-500" : "text-zinc-500"
+                  }`}
+                >
+                  {likedBy.length}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => handleOpenShare(item.$id)}
+              className="flex-row items-center py-1 pl-2"
+            >
+              <Ionicons name="share-outline" size={22} color="#71717A" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );
@@ -259,6 +300,7 @@ const Home = () => {
     <SafeAreaView className="flex-1 bg-black" edges={["top"]}>
       <StatusBar style="light" />
       <TopBar />
+
       {isLoading ? (
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="large" color="#5E17EB" />
@@ -268,7 +310,7 @@ const Home = () => {
           data={posts}
           keyExtractor={(item) => item.$id}
           renderItem={renderPost}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: 100, paddingTop: 10 }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -284,7 +326,6 @@ const Home = () => {
         />
       )}
 
-      {/* ✅ RENDERIZAR EL MODAL */}
       <ShareModal
         isVisible={isShareVisible}
         onClose={() => setShareVisible(false)}
