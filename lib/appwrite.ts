@@ -153,24 +153,6 @@ export async function getUser(userId: string) {
 //  2. IMÁGENES
 // ==========================================
 
-export const updateImage = async (asset: ImagePickerAsset) => {
-  try {
-    const fileUrl = await uploadImageAsync(asset);
-    if (!fileUrl) throw new Error("Image upload failed");
-    const currentUser = await getCurrentUser();
-    if (!currentUser) throw new Error("User not found");
-    return await databases.updateDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      currentUser.$id,
-      { pfp: fileUrl }
-    );
-  } catch (err) {
-    console.error("Error in updateImage:", err);
-    throw err;
-  }
-};
-
 const uploadImageAsync = async (asset: ImagePickerAsset) => {
   try {
     const file = await prepareNativeFile(asset);
@@ -862,3 +844,150 @@ export async function markChatAsRead(chatId: string, userId: string) {
 
 // Exportamos el cliente para las suscripciones Realtime
 export { client };
+
+// Agrega esto a tu lib/appwrite.ts
+
+// 1. Obtener lista de IDs de usuarios que sigo
+export async function getFollowedUserIds(currentUserId: string) {
+  try {
+    const follows = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.followsCollectionId, // Asegúrate de tener esta config
+      [Query.equal("followerId", currentUserId)]
+    );
+    // Retorna un array de IDs de la gente que sigo
+    return follows.documents.map((doc) => doc.followedId);
+  } catch (error) {
+    console.log("Error fetching followed users", error);
+    return [];
+  }
+}
+
+// 2. Traer candidatos (Mezcla de recientes y populares si es posible, por ahora recientes)
+// Traemos un limite más alto (ej. 100) para poder filtrar y ordenar en el cliente
+// Asegúrate de tener importado 'getUser' o la función que busca usuarios por ID
+// import { getUser } from ... (seguramente ya la tienes en este archivo)
+
+export async function getFeedCandidates() {
+  try {
+    const posts = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      // ⚠️ CORRECCIÓN IMAGEN 9: Usa el nombre real de tu colección
+      // Si antes usabas appwriteConfig.videoCollectionId y fallaba, prueba con:
+      appwriteConfig.postsCollectionId,
+      [Query.orderDesc("$createdAt"), Query.limit(100)]
+    );
+
+    // 🔥 SOLUCIÓN "USUARIO ANON": Hidratación manual
+    // Recorremos los posts. Si 'postedBy' es un ID (string), buscamos sus datos reales.
+    const populatedPosts = await Promise.all(
+      posts.documents.map(async (post) => {
+        if (post.postedBy && typeof post.postedBy === "string") {
+          try {
+            // Buscamos los datos del usuario usando su ID
+            const userData = await getUser(post.postedBy);
+            return {
+              ...post,
+              postedBy: userData, // Reemplazamos el ID con el Objeto Usuario
+            };
+          } catch (e) {
+            console.log("Error fetching creator for post:", post.$id);
+            return post;
+          }
+        }
+        return post;
+      })
+    );
+
+    return populatedPosts;
+  } catch (error: any) {
+    // ⚠️ CORRECCIÓN IMAGEN 9: Tipado del error
+    throw new Error(error.message || String(error));
+  }
+}
+
+// ====================================================
+// FUNCIONES DE EDICIÓN DE PERFIL (AGREGAR AL FINAL)
+// ====================================================
+
+// 1. Función para subir el archivo de imagen al Storage
+// IMPORTANTE: Asegúrate de tener 'account' importado en tus configs
+// import { account, databases, storage, appwriteConfig } from "./config"; (o donde lo tengas)
+
+// Interfaz SIN Bio y CON Email
+interface UpdateUserForm {
+  name: string;
+  username: string;
+  email: string;
+  pfp?: any;
+}
+
+// Función para subir archivo (se mantiene igual)
+export async function uploadFile(file: any) {
+  if (!file) return;
+  const { mimeType, ...rest } = file;
+  const asset = {
+    name: file.fileName,
+    type: file.mimeType,
+    size: file.fileSize,
+    uri: file.uri,
+  };
+  try {
+    const uploadedFile = await storage.createFile(
+      appwriteConfig.storageId,
+      ID.unique(),
+      asset
+    );
+    const fileUrl = await storage.getFileView(
+      appwriteConfig.storageId,
+      uploadedFile.$id
+    );
+    return fileUrl;
+  } catch (error) {
+    throw new Error(String(error));
+  }
+}
+
+// Alias para updateImage
+export async function updateImage(file: any) {
+  return await uploadFile(file);
+}
+
+// --- FUNCIÓN PRINCIPAL DE PERFIL ---
+export async function updateProfile(userId: string, form: UpdateUserForm) {
+  try {
+    const hasFile = form.pfp && typeof form.pfp !== "string";
+    let imageUrl = form.pfp;
+
+    // 1. Subir imagen si es nueva
+    if (hasFile) {
+      imageUrl = await uploadFile(form.pfp);
+    }
+
+    // 2. Intentar actualizar el Nombre en AUTH
+    try {
+      await account.updateName(form.name);
+    } catch (e) {
+      console.log("No se pudo actualizar Auth Name:", e);
+    }
+
+    // 3. Actualizar el documento en la BASE DE DATOS
+    // Aquí actualizamos el campo 'email' visible en el perfil público
+    const updatedUser = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId,
+      {
+        name: form.name,
+        username: form.username,
+        email: form.email,
+        ...(imageUrl && { pfp: imageUrl }),
+      }
+    );
+
+    return updatedUser;
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    throw new Error(String(error));
+  }
+}

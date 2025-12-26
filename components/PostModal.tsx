@@ -13,12 +13,19 @@ import {
   Alert,
   ActivityIndicator,
   FlatList,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useModal } from "@/context/ModalContext";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { createPost } from "@/lib/appwrite";
 import SongPreview from "./SongPreview";
+
+// 1. IMPORTACIONES: Usamos expo-audio para grabar y expo-av para configurar/permisos
+import { useAudioRecorder, RecordingPresets } from "expo-audio";
+import { Audio } from "expo-av";
+import * as FileSystem from "expo-file-system";
+
 interface Song {
   trackId: number;
   trackName: string;
@@ -27,23 +34,34 @@ interface Song {
   previewUrl: string;
 }
 
+const AUDD_API_TOKEN = "TU_TOKEN_DE_AUDD_AQUI";
+
 export default function PostModal() {
   const { isPostModalVisible, setPostModalVisible } = useModal();
   const { user } = useGlobalContext();
 
   const [text, setText] = useState("");
   const [isPublic, setIsPublic] = useState(true);
-
-  // Estados de Música y Búsqueda
   const [linkedSong, setLinkedSong] = useState<Song | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [isSearchingMusic, setIsSearchingMusic] = useState(false);
   const [isLoadingSearch, setIsLoadingSearch] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+
+  // 2. CONFIGURACIÓN DEL GRABADOR (TS FIX)
+  // Usamos el preset completo para evitar el error de "propiedades faltantes"
+  const audioRecorder = useAudioRecorder({
+    ...RecordingPresets.HIGH_QUALITY, // Esto rellena android, ios, extension...
+    sampleRate: 44100,
+  });
 
   const closeModal = () => {
     Keyboard.dismiss();
+    if (audioRecorder.isRecording) {
+      audioRecorder.stop();
+    }
     setPostModalVisible(false);
   };
 
@@ -54,9 +72,10 @@ export default function PostModal() {
     setSearchQuery("");
     setSearchResults([]);
     setIsSearchingMusic(false);
+    setIsListening(false);
   };
 
-  // --- BÚSQUEDA (DEBOUNCE) ---
+  // --- BÚSQUEDA MANUAL ---
   useEffect(() => {
     if (!searchQuery || searchQuery.length < 2) {
       setSearchResults([]);
@@ -89,7 +108,116 @@ export default function PostModal() {
     setSearchQuery("");
   };
 
-  // --- SUBIR A APPWRITE ---
+  // --- LÓGICA SHAZAM (REPARADA PARA iOS Y ANDROID) ---
+  const handleShazam = async () => {
+    if (linkedSong) return;
+
+    try {
+      // 3. PASO CRÍTICO: Solicitud de Permisos con expo-av
+      const { status } = await Audio.requestPermissionsAsync();
+
+      if (status !== "granted") {
+        Alert.alert(
+          "Permiso requerido",
+          "Ve a Configuración y permite el acceso al micrófono para identificar canciones.",
+          [
+            { text: "Cancelar", style: "cancel" },
+            {
+              text: "Abrir Configuración",
+              onPress: () => Linking.openSettings(),
+            },
+          ]
+        );
+        return;
+      }
+
+      // 4. PASO CRÍTICO: Configurar Modo de Audio (Evita el crash en iOS)
+      // Esto le dice al iPhone "Prepárate para grabar, no solo reproducir"
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      // Si llegamos aquí, todo está verde. Empezamos.
+      setIsListening(true);
+
+      // A. Iniciar Grabación (expo-audio)
+      audioRecorder.record();
+
+      // B. Esperar 5 segundos
+      setTimeout(async () => {
+        try {
+          if (!audioRecorder.isRecording) return;
+
+          // C. Detener Grabación
+          await audioRecorder.stop();
+
+          const uri = audioRecorder.uri;
+          if (!uri) throw new Error("No se generó el archivo de audio");
+
+          // D. Leer Archivo (Usando string literal 'base64' para evitar error de TS)
+          const base64Audio = await FileSystem.readAsStringAsync(uri, {
+            encoding: "base64",
+          });
+
+          // E. Enviar a AudD
+          const formData = new FormData();
+          formData.append("api_token", AUDD_API_TOKEN);
+          formData.append("audio", base64Audio);
+          formData.append("return", "apple_music,spotify");
+
+          const response = await fetch("https://api.audd.io/", {
+            method: "POST",
+            body: formData,
+          });
+
+          const result = await response.json();
+
+          if (result.status === "success" && result.result) {
+            const track = result.result;
+            const appleData = track.apple_music ? track.apple_music : null;
+
+            const foundSong: Song = {
+              trackId: appleData
+                ? appleData.playParams.id
+                : Math.floor(Math.random() * 100000),
+              trackName: track.title,
+              artistName: track.artist,
+              artworkUrl100: appleData
+                ? appleData.artwork.url
+                    .replace("{w}", "300")
+                    .replace("{h}", "300")
+                : "https://via.placeholder.com/300",
+              previewUrl: appleData ? appleData.previews[0].url : "",
+            };
+
+            setLinkedSong(foundSong);
+            Alert.alert(
+              "¡Encontrada!",
+              `Es "${track.title}" de ${track.artist}`
+            );
+          } else {
+            Alert.alert(
+              "Ups",
+              "No pudimos reconocer la canción. Intenta acercarte más."
+            );
+          }
+        } catch (error) {
+          console.log("Error procesando audio:", error);
+          Alert.alert("Error", "Ocurrió un error al analizar.");
+        } finally {
+          setIsListening(false);
+          // Opcional: Restaurar modo de audio a solo reproducción
+          Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        }
+      }, 5000);
+    } catch (error) {
+      console.log("Error general:", error);
+      setIsListening(false);
+      Alert.alert("Error", "No se pudo acceder al micrófono.");
+    }
+  };
+
   const handlePost = async () => {
     if (!linkedSong) return;
     if (!user) {
@@ -107,7 +235,6 @@ export default function PostModal() {
         preview: linkedSong.previewUrl,
       });
 
-      // Usamos la función centralizada
       await createPost(text, songDataString, user.$id);
 
       Alert.alert(
@@ -123,7 +250,6 @@ export default function PostModal() {
     }
   };
 
-  // Render item de búsqueda
   const renderSongItem = ({ item }: { item: Song }) => (
     <TouchableOpacity
       className="flex-row items-center p-3 border-b border-white/10"
@@ -157,9 +283,47 @@ export default function PostModal() {
               behavior={Platform.OS === "ios" ? "padding" : "height"}
               className="w-full"
             >
+              {/* BOTÓN SHAZAM FLOTANTE */}
+              {!isSearchingMusic && !linkedSong && (
+                <View className="items-center -mb-6 z-10">
+                  <TouchableOpacity
+                    onPress={handleShazam}
+                    disabled={isListening}
+                    activeOpacity={0.8}
+                    className={`flex-row items-center px-5 py-3 rounded-full shadow-lg shadow-[#5E17EB]/40 border-2 border-[#121212] ${
+                      isListening ? "bg-red-500" : "bg-[#5E17EB]"
+                    }`}
+                  >
+                    {isListening ? (
+                      <>
+                        <ActivityIndicator
+                          color="white"
+                          size="small"
+                          className="mr-2"
+                        />
+                        <Text className="text-white font-bold text-sm">
+                          Escuchando...
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Ionicons
+                          name="mic"
+                          size={20}
+                          color="white"
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text className="text-white font-bold text-sm">
+                          ¿Qué canción es?
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
               <View className="bg-[#121212] w-full rounded-t-[30px] border-t border-white/10 p-5 pb-8 shadow-2xl shadow-[#5E17EB]/10">
-                {/* Header */}
-                <View className="flex-row justify-between items-center mb-6">
+                <View className="flex-row justify-between items-center mb-6 mt-2">
                   <TouchableOpacity onPress={closeModal} className="p-1">
                     <Text className="text-zinc-400 text-base font-medium">
                       Cancelar
@@ -212,9 +376,7 @@ export default function PostModal() {
                       onChangeText={setText}
                     />
 
-                    {/* Zona Dinámica: Buscador o Reproductor */}
                     <View className="mt-4 gap-3">
-                      {/* BUSCADOR */}
                       {isSearchingMusic && (
                         <View className="bg-zinc-900 rounded-xl p-3 mb-2 border border-white/10 shadow-lg">
                           <View className="flex-row items-center bg-black/50 rounded-lg px-3 mb-2 border border-[#5E17EB]/30">
@@ -242,7 +404,6 @@ export default function PostModal() {
                         </View>
                       )}
 
-                      {/* CANCIÓN SELECCIONADA (Usando el nuevo componente SongPreview) */}
                       {linkedSong && (
                         <SongPreview
                           song={linkedSong}
@@ -253,7 +414,6 @@ export default function PostModal() {
                   </View>
                 </View>
 
-                {/* Toolbar Inferior */}
                 <View className="mt-6 pt-2 border-t border-white/5">
                   {!linkedSong && !isSearchingMusic && (
                     <TouchableOpacity
@@ -268,7 +428,7 @@ export default function PostModal() {
                         />
                       </View>
                       <Text className="text-white font-bold text-lg">
-                        Elegir Canción
+                        Elegir Canción Manualmente
                       </Text>
                     </TouchableOpacity>
                   )}

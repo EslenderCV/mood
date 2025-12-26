@@ -23,58 +23,41 @@ import {
   unfollowUser,
   checkIsFollowing,
   getFollowCounts,
-} from "../../lib/appwrite";
-
-// --- DATOS MOCK PARA LA PESTAÑA DE MÚSICA ---
-const ALBUM_COVERS = [
-  "https://i.scdn.co/image/ab67616d0000b2731ea0c62b2339cbf493a999ad",
-  "https://i.scdn.co/image/ab67616d0000b2737b1fc51ff32b312d4363c288",
-  "https://i.scdn.co/image/ab67616d0000b273f5507e7d6928e190dc450422",
-];
-
-const MOCK_MUSIC = [
-  {
-    id: "1",
-    title: "Money Trees",
-    artist: "Kendrick Lamar",
-    cover: ALBUM_COVERS[0],
-  },
-  { id: "2", title: "MONACO", artist: "Bad Bunny", cover: ALBUM_COVERS[1] },
-  { id: "3", title: "Gogo Dance", artist: "El Alfa", cover: ALBUM_COVERS[2] },
-];
+} from "@/lib/appwrite";
 
 const { width } = Dimensions.get("window");
 const ITEM_SIZE = width / 3;
 
-// --- FUNCIÓN AUXILIAR PARA IMÁGENES ---
-const getPostImage = (songDataString: string) => {
+// --- FUNCIÓN AUXILIAR ---
+const parseSongFromPost = (songDataString: string) => {
   try {
-    if (!songDataString) return "https://via.placeholder.com/300";
+    if (!songDataString) return null;
     const song = JSON.parse(songDataString);
-    const coverUrl = song.cover;
-    if (!coverUrl) return "https://via.placeholder.com/300";
+
     // Mejorar resolución de imagen de Apple Music
-    return coverUrl.replace("100x100bb", "600x600bb");
+    if (song.cover && song.cover.includes("100x100bb")) {
+      song.cover = song.cover.replace("100x100bb", "600x600bb");
+    }
+    return song;
   } catch (error) {
-    return "https://via.placeholder.com/300";
+    return null;
   }
 };
 
 const UserProfile = () => {
-  // 1. Obtener ID de la URL
   const { id } = useLocalSearchParams();
   const userId = Array.isArray(id) ? id[0] : id;
 
-  // 2. Estados
   const [visitedUser, setVisitedUser] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
+
+  const [topSongs, setTopSongs] = useState<any[]>([]);
 
   const [activeTab, setActiveTab] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Estados de Follow
   const [isFollowing, setIsFollowing] = useState(false);
   const [stats, setStats] = useState({ followersCount: 0, followingCount: 0 });
   const [followLoading, setFollowLoading] = useState(false);
@@ -82,23 +65,48 @@ const UserProfile = () => {
   const horizontalScrollRef = useRef<ScrollView>(null);
   const mainScrollRef = useRef<ScrollView>(null);
 
-  // 3. Carga de Datos
+  // --- LOGICA DE CARGA (MODIFICADA) ---
   const fetchData = async () => {
     if (!userId) return;
     try {
-      // Perfil visitado
+      // 1. Perfil visitado
       const userData = await getUser(userId);
       setVisitedUser(userData);
 
-      // Posts
+      // 2. Cargar Posts
       const userPosts = await getUserPosts(userId);
       setPosts(userPosts);
 
-      // Estadísticas
+      // 3. CALCULAR TOP 3 (Solo con Likes > 0)
+      const sortedPosts = [...userPosts].sort((a, b) => {
+        const likesA = a.likedBy ? a.likedBy.length : 0;
+        const likesB = b.likedBy ? b.likedBy.length : 0;
+        return likesB - likesA;
+      });
+
+      const top3 = sortedPosts
+        // --- FILTRO NUEVO: Solo posts con al menos 1 like ---
+        .filter((post) => post.likedBy && post.likedBy.length > 0)
+        // ----------------------------------------------------
+        .slice(0, 3) // Tomamos máximo 3
+        .map((post) => {
+          const songData = parseSongFromPost(post.songData);
+          if (!songData) return null;
+          return {
+            ...songData,
+            postId: post.$id,
+            likes: post.likedBy ? post.likedBy.length : 0,
+          };
+        })
+        .filter((item) => item !== null);
+
+      setTopSongs(top3);
+
+      // 4. Estadísticas
       const counts = await getFollowCounts(userId);
       setStats(counts);
 
-      // Verificar si yo lo sigo
+      // 5. Check Follow Status
       const myUser = await getCurrentUser();
       setCurrentUser(myUser);
 
@@ -126,7 +134,6 @@ const UserProfile = () => {
     setRefreshing(false);
   };
 
-  // 4. Lógica Seguir/Dejar de Seguir
   const handleFollowAction = async () => {
     if (!currentUser || !visitedUser || followLoading) return;
     if (currentUser.$id === visitedUser.$id) return;
@@ -134,7 +141,6 @@ const UserProfile = () => {
     setFollowLoading(true);
     try {
       if (isFollowing) {
-        // Unfollow
         await unfollowUser(currentUser.$id, visitedUser.$id);
         setIsFollowing(false);
         setStats((prev) => ({
@@ -142,7 +148,6 @@ const UserProfile = () => {
           followersCount: Math.max(0, prev.followersCount - 1),
         }));
       } else {
-        // Follow
         await followUser(currentUser.$id, visitedUser.$id);
         setIsFollowing(true);
         setStats((prev) => ({
@@ -157,7 +162,6 @@ const UserProfile = () => {
     }
   };
 
-  // 5. Interacciones UI
   const handleTabPress = (index: number) => {
     setActiveTab(index);
     horizontalScrollRef.current?.scrollTo({ x: index * width, animated: true });
@@ -168,10 +172,13 @@ const UserProfile = () => {
     handleTabPress(0);
   };
 
-  // --- RENDERIZADO ---
-
+  // --- RENDER ITEMS ---
   const renderMoodItem = (item: any) => {
-    const imageUrl = getPostImage(item.songData);
+    const songData = parseSongFromPost(item.songData);
+    const imageUrl = songData
+      ? songData.cover
+      : "https://via.placeholder.com/300";
+
     return (
       <TouchableOpacity
         key={item.$id}
@@ -188,23 +195,39 @@ const UserProfile = () => {
     );
   };
 
-  const renderMusicItem = (item: any) => (
-    <View
-      key={item.id}
+  const renderMusicItem = (item: any, index: number) => (
+    <TouchableOpacity
+      key={item.postId || index}
+      onPress={() => router.push(`/post/${item.postId}` as any)}
       className="flex-row items-center px-6 py-3 border-b border-zinc-900/50 w-full"
     >
+      <Text className="text-[#5E17EB] font-bold text-lg mr-4 w-4 text-center">
+        {index + 1}
+      </Text>
+
       <Image
         source={{ uri: item.cover }}
         className="w-14 h-14 rounded-xl mr-4 bg-zinc-800"
       />
       <View className="flex-1">
-        <Text className="text-white font-bold text-base">{item.title}</Text>
-        <Text className="text-zinc-500 text-sm">{item.artist}</Text>
+        <Text className="text-white font-bold text-base" numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text className="text-zinc-500 text-sm" numberOfLines={1}>
+          {item.artist}
+        </Text>
       </View>
-      <TouchableOpacity className="bg-zinc-800 p-2 rounded-full">
-        <Ionicons name="play" size={16} color="white" />
-      </TouchableOpacity>
-    </View>
+
+      <View className="flex-row items-center bg-zinc-800/50 px-2 py-1 rounded-lg">
+        <Ionicons
+          name="heart"
+          size={12}
+          color="#EF4444"
+          style={{ marginRight: 4 }}
+        />
+        <Text className="text-white text-xs font-bold">{item.likes}</Text>
+      </View>
+    </TouchableOpacity>
   );
 
   if (isLoading) {
@@ -272,7 +295,7 @@ const UserProfile = () => {
           </Text>
         </View>
 
-        {/* BOTÓN SEGUIR / SIGUIENDO */}
+        {/* SEGUIR / SIGUIENDO */}
         {currentUser && currentUser.$id !== visitedUser.$id && (
           <View className="px-6 mt-6">
             <TouchableOpacity
@@ -299,9 +322,8 @@ const UserProfile = () => {
           </View>
         )}
 
-        {/* ESTADÍSTICAS (CLICKABLES) */}
+        {/* ESTADÍSTICAS */}
         <View className="flex-row justify-between items-center bg-zinc-900 mx-4 h-[70px] mt-6 mb-3 px-2 rounded-3xl border border-zinc-800">
-          {/* SEGUIDORES -> LISTA */}
           <TouchableOpacity
             className="flex-1 items-center py-4"
             onPress={() =>
@@ -321,7 +343,6 @@ const UserProfile = () => {
 
           <View className="h-8 w-[1px] bg-zinc-700" />
 
-          {/* MOODS -> SCROLL */}
           <TouchableOpacity
             onPress={scrollToMoods}
             className="flex-1 items-center py-4"
@@ -334,7 +355,6 @@ const UserProfile = () => {
 
           <View className="h-8 w-[1px] bg-zinc-700" />
 
-          {/* SEGUIDOS -> LISTA */}
           <TouchableOpacity
             className="flex-1 items-center py-4"
             onPress={() =>
@@ -353,7 +373,7 @@ const UserProfile = () => {
           </TouchableOpacity>
         </View>
 
-        {/* TABS (STICKY HEADER) */}
+        {/* TABS */}
         <View className="bg-black pt-4">
           <View className="flex-row px-4 mb-4 gap-4">
             <TouchableOpacity
@@ -394,13 +414,13 @@ const UserProfile = () => {
                   activeTab === 1 ? "text-white" : "text-zinc-500"
                 }`}
               >
-                MÚSICA
+                TOP HITS
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* CONTENIDO SWIPEABLE */}
+        {/* CONTENIDO */}
         <ScrollView
           ref={horizontalScrollRef}
           horizontal
@@ -427,12 +447,20 @@ const UserProfile = () => {
             )}
           </View>
 
-          {/* TAB 2: MÚSICA */}
-          <View style={{ width }}>
-            {MOCK_MUSIC.map(renderMusicItem)}
-            <View className="items-center py-8">
-              <Text className="text-zinc-600">Próximamente...</Text>
-            </View>
+          {/* TAB 2: TOP HITS */}
+          <View style={{ width }} className="min-h-[200px]">
+            {topSongs.length === 0 ? (
+              <View className="flex-1 justify-center items-center py-10">
+                <Ionicons name="musical-note" size={40} color="#3f3f46" />
+                <Text className="text-zinc-500 mt-2">
+                  No hay canciones populares aún
+                </Text>
+              </View>
+            ) : (
+              <View>
+                {topSongs.map((song, index) => renderMusicItem(song, index))}
+              </View>
+            )}
           </View>
         </ScrollView>
         <View style={{ height: 100 }} />

@@ -7,25 +7,32 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Dimensions,
 } from "react-native";
-// IMPORTACIÓN CORREGIDA
 import * as React from "react";
 import { useState } from "react";
 
 import { useGlobalContext, User } from "@/context/GlobalProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, Feather } from "@expo/vector-icons"; // Agregamos Feather para más iconos
 import * as ImagePicker from "expo-image-picker";
 import { updateImage, updateProfile } from "@/lib/appwrite";
-import { router } from "expo-router";
+import { router, Stack } from "expo-router";
+
+const { width } = Dimensions.get("window");
 
 const EditScreen = () => {
   const { user, setUser } = useGlobalContext();
   const [isSaving, setIsSaving] = useState(false);
+  // Estado para controlar el foco de los inputs y cambiar el color del borde
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: user?.name || "",
     username: user?.username || "",
+    email: user?.email || "",
   });
 
   const pickImage = async () => {
@@ -55,103 +62,201 @@ const EditScreen = () => {
       Alert.alert("Error", "El usuario debe tener al menos 3 caracteres.");
       return;
     }
+    if (!formData.email.includes("@")) {
+      Alert.alert("Error", "Correo inválido.");
+      return;
+    }
 
     try {
       setIsSaving(true);
-      const updatedDoc = await updateProfile({
+
+      const updatedDoc = await updateProfile(user?.$id || "", {
         name: formData.name.trim(),
         username: formData.username.toLowerCase().trim(),
+        email: formData.email.trim(),
       });
 
       if (setUser) setUser(updatedDoc as unknown as User);
 
-      Alert.alert("Éxito", "Perfil actualizado correctamente.");
+      Alert.alert("Éxito", "Perfil actualizado.");
       router.back();
-    } catch (error) {
-      Alert.alert(
-        "Error",
-        "Es posible que el nombre de usuario ya esté tomado."
-      );
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Falló la actualización.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  return (
-    <SafeAreaView className="bg-black h-full">
-      <ScrollView
-        contentContainerStyle={{ alignItems: "center", paddingTop: 20 }}
-      >
-        <View className="relative w-[140px] h-[140px]">
-          <Image
-            source={
-              user?.pfp ? { uri: user.pfp } : require("@/assets/noPfp.jpg")
-            }
-            className="w-full h-full rounded-full border-2 border-primaryy"
-          />
-          <TouchableOpacity
-            activeOpacity={0.9}
-            className="bg-primaryy absolute bottom-0 right-0 p-2 rounded-full border-4 border-black"
-            onPress={pickImage}
-            disabled={isSaving}
-          >
-            {isSaving ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Ionicons name="camera" color="white" size={22} />
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <Text className="text-gray-400 mt-4 font-medium">
-          Toca el icono para cambiar la foto
+  // --- COMPONENTE DE INPUT REUTILIZABLE PARA MANTENER EL CÓDIGO LIMPIO ---
+  const InputField = ({
+    label,
+    value,
+    onChangeText,
+    icon,
+    placeholder,
+    type = "text",
+    editable = true,
+  }: any) => {
+    const isFocused = focusedInput === label;
+    return (
+      <View className="mb-6 w-full">
+        <Text className="text-zinc-400 text-xs font-bold mb-2 ml-1 uppercase tracking-wider">
+          {label}
         </Text>
+        <View
+          className={`flex-row items-center bg-zinc-900 border rounded-2xl px-4 h-[58px] transition-all ${
+            isFocused ? "border-[#5E17EB]" : "border-zinc-800"
+          } ${!editable ? "opacity-60" : ""}`}
+        >
+          <Feather
+            name={icon}
+            size={20}
+            color={isFocused ? "#5E17EB" : "#A1A1AA"}
+            style={{ marginRight: 12 }}
+          />
+          <TextInput
+            className="flex-1 text-white text-base font-medium h-full"
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor="#52525B"
+            autoCapitalize={
+              type === "email" || type === "username" ? "none" : "words"
+            }
+            keyboardType={type === "email" ? "email-address" : "default"}
+            onFocus={() => setFocusedInput(label)}
+            onBlur={() => setFocusedInput(null)}
+            editable={editable}
+          />
+        </View>
+      </View>
+    );
+  };
 
-        <View className="w-full px-10 mt-12 gap-y-6">
-          <View>
-            <Text className="text-gray-500 mb-1 ml-1 text-xs font-bold uppercase">
-              Nombre a mostrar
+  return (
+    <SafeAreaView className="bg-black flex-1" edges={["top"]}>
+      {/* Configuración del Header nativo */}
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          headerTitle: "Editar Perfil",
+          headerStyle: { backgroundColor: "black" },
+          headerTintColor: "white",
+          headerTitleStyle: { fontWeight: "bold" },
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              className="mr-4 p-2 bg-zinc-900 rounded-full"
+            >
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={{
+            alignItems: "center",
+            paddingVertical: 30,
+            paddingHorizontal: 24,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* --- SECCIÓN FOTO --- */}
+          <View className="items-center mb-10">
+            <View className="relative">
+              <View className="p-1 bg-black rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/20">
+                <Image
+                  source={
+                    user?.pfp
+                      ? { uri: user.pfp }
+                      : require("@/assets/noPfp.jpg")
+                  }
+                  className="w-36 h-36 rounded-full"
+                />
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                className="bg-[#5E17EB] absolute bottom-1 right-1 p-3 rounded-full border-4 border-black items-center justify-center"
+                onPress={pickImage}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Ionicons name="camera" color="white" size={22} />
+                )}
+              </TouchableOpacity>
+            </View>
+            <Text className="text-zinc-500 mt-4 font-medium text-sm">
+              Toca el icono para cambiar tu foto
             </Text>
-            <TextInput
-              className="bg-gray/20 p-4 rounded-xl border border-gray/10 text-white"
+          </View>
+
+          {/* --- FORMULARIO --- */}
+          <View className="w-full">
+            <InputField
+              label="Nombre Completo"
               value={formData.name}
-              // TIPADO AGREGADO (text: string)
               onChangeText={(text: string) =>
                 setFormData({ ...formData, name: text })
               }
+              icon="user"
+              placeholder="Ej: Eslender Cruz"
             />
-          </View>
 
-          <View>
-            <Text className="text-gray-500 mb-1 ml-1 text-xs font-bold uppercase">
-              Nombre de usuario
-            </Text>
-            <TextInput
-              className="bg-gray/20 p-4 rounded-xl border border-gray/10 text-white"
+            <InputField
+              label="Nombre de Usuario"
               value={formData.username}
-              // TIPADO AGREGADO (text: string)
               onChangeText={(text: string) =>
                 setFormData({ ...formData, username: text })
               }
-              autoCapitalize="none"
+              icon="at-sign"
+              placeholder="Ej: slenderc"
+              type="username"
+            />
+
+            <InputField
+              label="Correo Electrónico"
+              value={formData.email}
+              onChangeText={(text: string) =>
+                setFormData({ ...formData, email: text })
+              }
+              icon="mail"
+              placeholder="ejemplo@correo.com"
+              type="email"
+              // editable={false} // OPCIONAL: Si no quieres que cambien el email, descomenta esto.
             />
           </View>
-        </View>
 
-        <TouchableOpacity
-          className="w-[300px] mt-20 bg-primaryy h-[50px] items-center justify-center rounded-lg shadow-lg"
-          onPress={handleSave}
-          disabled={isSaving}
-        >
-          {isSaving ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text className="text-white font-bold text-lg">
-              GUARDAR CAMBIOS
-            </Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
+          {/* --- BOTÓN GUARDAR --- */}
+          <TouchableOpacity
+            className={`w-full mt-6 h-[58px] items-center justify-center rounded-2xl shadow-lg shadow-[#5E17EB]/30 flex-row ${
+              isSaving ? "bg-zinc-800" : "bg-[#5E17EB]"
+            }`}
+            onPress={handleSave}
+            disabled={isSaving}
+            activeOpacity={0.9}
+          >
+            {isSaving ? (
+              <>
+                <ActivityIndicator color="white" className="mr-2" />
+                <Text className="text-white font-bold text-lg">
+                  Guardando...
+                </Text>
+              </>
+            ) : (
+              <Text className="text-white font-bold text-lg tracking-wide">
+                GUARDAR CAMBIOS
+              </Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };

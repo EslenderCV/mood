@@ -15,11 +15,17 @@ import { router } from "expo-router";
 import { useAudioPlayer } from "expo-audio";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import TopBar from "@/components/TopBar";
-import { getAllPosts, toggleLikePost, getCurrentUser } from "@/lib/appwrite";
+import {
+  getFeedCandidates,
+  getFollowedUserIds,
+  toggleLikePost,
+  getCurrentUser,
+} from "@/lib/appwrite";
 import ShareModal from "@/components/ShareModal";
 
-// --- UTILIDAD: Formato de Tiempo Relativo ---
+// --- UTILIDAD: Formato de Tiempo ---
 const formatTimeAgo = (dateString: string) => {
+  if (!dateString) return "";
   const date = new Date(dateString);
   const now = new Date();
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
@@ -47,9 +53,48 @@ const parseSongData = (songDataString: string) => {
   }
 };
 
+// --- FUNCIÓN DEPURADA PARA ENCONTRAR AL USUARIO ---
+const getCreatorFromPost = (item: any) => {
+  // 1. Buscamos el objeto en todas las propiedades posibles
+  let userObj = item.creator || item.postedBy || item.users || item.user;
+
+  // 🔴 CORRECCIÓN CRÍTICA: Appwrite a veces devuelve las relaciones como ARRAYS
+  // Si es un array (lista), tomamos el primer elemento (el creador)
+  if (Array.isArray(userObj) && userObj.length > 0) {
+    userObj = userObj[0];
+  }
+
+  // 2. Si encontramos un objeto de usuario válido
+  if (userObj && typeof userObj === "object") {
+    return {
+      id: userObj.$id || userObj.accountId,
+      username: userObj.username || "anon",
+      name: userObj.name || "Usuario", // Si name está vacío, usa "Usuario"
+      avatar: userObj.avatar || userObj.pfp,
+    };
+  }
+
+  // 3. Si no hay objeto, buscamos propiedades planas en el post
+  if (item.username || item.creatorUsername) {
+    return {
+      id: item.creatorId || item.$id,
+      username: item.username || item.creatorUsername || "anon",
+      name: item.name || item.creatorName || "Usuario",
+      avatar: item.avatar || item.pfp || item.creatorAvatar,
+    };
+  }
+
+  return {
+    id: "unknown",
+    username: "anon",
+    name: "Usuario Desconocido",
+    avatar: null,
+  };
+};
+
 const Home = () => {
   const { user, loading, loggedIn } = useGlobalContext();
-  const [posts, setPosts] = useState<any[]>([]);
+  const [feedPosts, setFeedPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -87,16 +132,70 @@ const Home = () => {
     setCurrentSongUrl(previewUrl);
   };
 
+  // --- ALGORITMO DE RECOMENDACIÓN ---
+  const rankPosts = (posts: any[], followedIds: string[], myId: string) => {
+    const now = new Date().getTime();
+
+    const scoredPosts = posts.map((post) => {
+      let score = 0;
+
+      const creator = getCreatorFromPost(post);
+      const creatorId = creator.id;
+
+      // 1. Social
+      if (followedIds.includes(creatorId)) score += 50;
+      // 2. Popularidad
+      const likesCount = post.likedBy ? post.likedBy.length : 0;
+      score += likesCount * 2;
+      // 3. Tiempo
+      const postDate = new Date(post.$createdAt).getTime();
+      const hoursAgo = (now - postDate) / (1000 * 60 * 60);
+      score -= hoursAgo * 0.5;
+      // 4. Yo
+      if (creatorId === myId) score += 20;
+      // 5. Random
+      score += Math.random() * 5;
+
+      return { ...post, score };
+    });
+
+    return scoredPosts.sort((a, b) => b.score - a.score);
+  };
+
   const fetchData = async () => {
     try {
-      if (!currentUserId) {
+      let activeId = user?.$id;
+      if (!activeId) {
         const currentUserData = await getCurrentUser();
-        if (currentUserData) setCurrentUserId(currentUserData.$id);
+        if (currentUserData) {
+          activeId = currentUserData.$id;
+          setCurrentUserId(activeId);
+        }
+      } else {
+        setCurrentUserId(activeId);
       }
-      const result = await getAllPosts();
-      setPosts(result);
+
+      const rawPosts = await getFeedCandidates();
+
+      let followedIds: string[] = [];
+      if (activeId) {
+        followedIds = await getFollowedUserIds(activeId);
+      }
+
+      const rankedFeed = rankPosts(rawPosts, followedIds, activeId || "");
+      console.log("📊 --- REPORTE DEL ALGORITMO --- 📊");
+      rankedFeed.forEach((post, index) => {
+        const creator = post.postedBy || {};
+        console.log(
+          `#${index + 1} | Puntos: ${post.score.toFixed(2)} | Autor: ${
+            creator.name || "Anon"
+          } | Likes: ${post.likedBy?.length || 0}`
+        );
+      });
+      console.log("---------------------------------------");
+      setFeedPosts(rankedFeed);
     } catch (error) {
-      console.log("Error fetching posts:", error);
+      console.log("Error fetching feed:", error);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -105,7 +204,6 @@ const Home = () => {
 
   useEffect(() => {
     if (loading) return;
-    if (!user && !loggedIn) return;
     fetchData();
   }, [user, loading, loggedIn]);
 
@@ -130,15 +228,15 @@ const Home = () => {
       ? originalLikes.filter((id: string) => id !== userId)
       : [...originalLikes, userId];
 
-    const updatedPosts = posts.map((p) =>
+    const updatedPosts = feedPosts.map((p) =>
       p.$id === post.$id ? { ...p, likedBy: newLikes } : p
     );
-    setPosts(updatedPosts);
+    setFeedPosts(updatedPosts);
 
     try {
       await toggleLikePost(post.$id, userId, originalLikes);
     } catch (error) {
-      setPosts(posts);
+      setFeedPosts(feedPosts);
     }
   };
 
@@ -147,9 +245,13 @@ const Home = () => {
     setShareVisible(true);
   };
 
+  // --- RENDER ---
   const renderPost = ({ item, index }: { item: any; index: number }) => {
     const songData = parseSongData(item.songData);
-    const creator = item.postedBy || {};
+
+    // USAMOS LA FUNCIÓN CORREGIDA
+    const creator = getCreatorFromPost(item);
+
     if (!songData) return null;
 
     const isActive = playingPostId === item.$id;
@@ -159,21 +261,21 @@ const Home = () => {
     const likedBy = item.likedBy || [];
     const isLiked = userId ? likedBy.includes(userId) : false;
 
-    const isLastItem = index === posts.length - 1;
+    const isLastItem = index === feedPosts.length - 1;
     const hasCaption = item.comment && item.comment.trim() !== "";
 
     return (
       <View className="flex-row px-4">
-        {/* --- COLUMNA IZQUIERDA --- */}
+        {/* AVATAR */}
         <View className="items-center mr-3">
           <TouchableOpacity
             onPress={() =>
               router.push({
                 pathname: "/user/[id]",
                 params: {
-                  id: creator.$id || creator.accId,
+                  id: creator.id,
                   username: creator.username,
-                  avatar: creator.pfp,
+                  avatar: creator.avatar,
                   name: creator.name,
                 },
               })
@@ -181,7 +283,11 @@ const Home = () => {
             className="z-10"
           >
             <Image
-              source={{ uri: creator.pfp }}
+              source={
+                creator.avatar
+                  ? { uri: creator.avatar }
+                  : require("@/assets/noPfp.jpg")
+              }
               className="w-10 h-10 rounded-full bg-zinc-800 border border-black"
             />
           </TouchableOpacity>
@@ -189,7 +295,7 @@ const Home = () => {
           {!isLastItem && <View className="flex-1 w-[2px] bg-zinc-800 my-1" />}
         </View>
 
-        {/* --- COLUMNA DERECHA --- */}
+        {/* CONTENIDO */}
         <View className="flex-1 pb-6">
           {/* HEADER */}
           <View className="flex-row items-center justify-between mb-1">
@@ -213,8 +319,7 @@ const Home = () => {
             </Text>
           )}
 
-          {/* CARD MUSICA */}
-          {/* AQUI ESTA EL CAMBIO: Agregamos 'mt-2' si NO hay caption */}
+          {/* MUSICA */}
           <View
             className={`bg-[#1C1C1E] rounded-2xl p-3 flex-row items-center border border-zinc-800/50 mb-3 ${
               hasCaption ? "" : "mt-2"
@@ -307,7 +412,7 @@ const Home = () => {
         </View>
       ) : (
         <FlatList
-          data={posts}
+          data={feedPosts}
           keyExtractor={(item) => item.$id}
           renderItem={renderPost}
           contentContainerStyle={{ paddingBottom: 100, paddingTop: 10 }}

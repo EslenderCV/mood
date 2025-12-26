@@ -4,10 +4,10 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
-  Alert,
   ScrollView,
   RefreshControl,
   ActivityIndicator,
+  FlatList,
 } from "react-native";
 import React, { useState, useRef, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,54 +15,52 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { router, useFocusEffect } from "expo-router";
-// AGREGADO: Importamos getFollowCounts
-import { signOut, getUserPosts, getFollowCounts } from "@/lib/appwrite";
-
-// --- DATOS MOCK PARA LA PESTAÑA DE MÚSICA (TAB 2) ---
-const ALBUM_COVERS = [
-  "https://i.scdn.co/image/ab67616d0000b2731ea0c62b2339cbf493a999ad",
-  "https://i.scdn.co/image/ab67616d0000b2737b1fc51ff32b312d4363c288",
-  "https://i.scdn.co/image/ab67616d0000b273f5507e7d6928e190dc450422",
-];
-
-const MOCK_MUSIC = [
-  {
-    id: "1",
-    title: "Money Trees",
-    artist: "Kendrick Lamar",
-    cover: ALBUM_COVERS[0],
-  },
-  { id: "2", title: "MONACO", artist: "Bad Bunny", cover: ALBUM_COVERS[1] },
-  { id: "3", title: "Gogo Dance", artist: "El Alfa", cover: ALBUM_COVERS[2] },
-];
+import {
+  getUserPosts,
+  getFollowCounts,
+  getFeedCandidates,
+  getFollowedUserIds,
+} from "@/lib/appwrite";
 
 const { width } = Dimensions.get("window");
 const ITEM_SIZE = width / 3;
 
-// --- FUNCIÓN AUXILIAR CORREGIDA PARA TU JSON ---
-const getPostImage = (songDataString: string) => {
+// --- HELPERS ---
+const parseSongFromPost = (songDataString: string) => {
   try {
-    if (!songDataString) return "https://via.placeholder.com/300";
-
+    if (!songDataString) return null;
     const song = JSON.parse(songDataString);
-    const coverUrl = song.cover;
-
-    if (!coverUrl) return "https://via.placeholder.com/300";
-
-    const highResImage = coverUrl.replace("100x100bb", "600x600bb");
-
-    return highResImage;
+    if (song.cover && song.cover.includes("100x100bb")) {
+      song.cover = song.cover.replace("100x100bb", "600x600bb");
+    }
+    return song;
   } catch (error) {
-    console.log("Error parsing song data image", error);
-    return "https://via.placeholder.com/300";
+    return null;
   }
+};
+
+const getCreatorFromPost = (item: any) => {
+  let userObj = item.creator || item.postedBy || item.users || item.user;
+  if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
+
+  if (userObj && typeof userObj === "object") {
+    return {
+      id: userObj.$id || userObj.accountId,
+      username: userObj.username || "anon",
+      name: userObj.name || "Usuario",
+      avatar: userObj.avatar || userObj.pfp,
+    };
+  }
+  return { id: "unknown", username: "anon", name: "Usuario", avatar: null };
 };
 
 const Profile = () => {
   const { user } = useGlobalContext();
   const [activeTab, setActiveTab] = useState(0);
+
   const [posts, setPosts] = useState<any[]>([]);
-  // AGREGADO: Estado para los contadores
+  const [topSongs, setTopSongs] = useState<any[]>([]);
+  const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
   const [stats, setStats] = useState({ followersCount: 0, followingCount: 0 });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -71,17 +69,77 @@ const Profile = () => {
   const horizontalScrollRef = useRef<ScrollView>(null);
   const mainScrollRef = useRef<ScrollView>(null);
 
-  // --- LOGICA DE CARGA DE DATOS ---
+  // --- ALGORITMO DE RANKING ---
+  const rankPosts = (postsToSort: any[]) => {
+    const now = new Date().getTime();
+    return postsToSort
+      .map((post) => {
+        let score = 0;
+        const likesCount = post.likedBy ? post.likedBy.length : 0;
+        score += likesCount * 4;
+        const postDate = new Date(post.$createdAt).getTime();
+        const hoursAgo = (now - postDate) / (1000 * 60 * 60);
+        score -= hoursAgo * 0.2;
+        return { ...post, score };
+      })
+      .sort((a, b) => b.score - a.score);
+  };
+
   const fetchData = async () => {
     if (!user) return;
     try {
-      // 1. Cargar Posts
-      const response = await getUserPosts(user.$id);
-      setPosts(response);
+      const myId = user.$id;
 
-      // 2. Cargar Estadísticas Reales (AGREGADO)
-      const counts = await getFollowCounts(user.$id);
+      // A. Cargar MIS Posts
+      const rawMyPosts = await getUserPosts(myId);
+      const rankedMyPosts = rankPosts(rawMyPosts);
+      setPosts(rankedMyPosts);
+
+      // B. Top 3 Canciones
+      const sortedByLikes = [...rawMyPosts].sort((a, b) => {
+        const likesA = a.likedBy ? a.likedBy.length : 0;
+        const likesB = b.likedBy ? b.likedBy.length : 0;
+        return likesB - likesA;
+      });
+      const top3 = sortedByLikes
+        .filter((post) => post.likedBy && post.likedBy.length > 0)
+        .slice(0, 3)
+        .map((post) => {
+          const songData = parseSongFromPost(post.songData);
+          if (!songData) return null;
+          return {
+            ...songData,
+            postId: post.$id,
+            likes: post.likedBy ? post.likedBy.length : 0,
+          };
+        })
+        .filter((item) => item !== null);
+      setTopSongs(top3);
+
+      // C. Estadísticas
+      const counts = await getFollowCounts(myId);
       setStats(counts);
+
+      // D. RECOMENDACIONES
+      const feedCandidates = await getFeedCandidates();
+      const myFollows = await getFollowedUserIds(myId);
+
+      const uniqueUsersMap = new Map();
+
+      feedCandidates.forEach((post) => {
+        const creator = getCreatorFromPost(post);
+        if (
+          creator.id !== "unknown" &&
+          creator.id !== myId &&
+          !myFollows.includes(creator.id)
+        ) {
+          if (!uniqueUsersMap.has(creator.id)) {
+            uniqueUsersMap.set(creator.id, creator);
+          }
+        }
+      });
+
+      setSuggestedUsers(Array.from(uniqueUsersMap.values()).slice(0, 10));
     } catch (error) {
       console.log("Error cargando perfil:", error);
     } finally {
@@ -101,33 +159,23 @@ const Profile = () => {
     setRefreshing(false);
   };
 
-  const handleLogout = async () => {
-    Alert.alert("Cerrar Sesión", "¿Seguro?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Sí",
-        style: "destructive",
-        onPress: async () => {
-          await signOut();
-          router.replace("/signIn");
-        },
-      },
-    ]);
-  };
-
   const handleTabPress = (index: number) => {
     setActiveTab(index);
     horizontalScrollRef.current?.scrollTo({ x: index * width, animated: true });
   };
 
   const scrollToMoods = () => {
-    mainScrollRef.current?.scrollTo({ y: 380, animated: true });
+    mainScrollRef.current?.scrollTo({ y: 500, animated: true });
     handleTabPress(0);
   };
 
-  // --- RENDER ITEM: MOODS ---
+  // --- RENDERIZADO ---
+
   const renderMoodItem = (item: any) => {
-    const imageUrl = getPostImage(item.songData);
+    const songData = parseSongFromPost(item.songData);
+    const imageUrl = songData
+      ? songData.cover
+      : "https://via.placeholder.com/300";
 
     return (
       <TouchableOpacity
@@ -141,28 +189,88 @@ const Profile = () => {
           className="border-[0.5px] border-black/20 bg-zinc-900"
           resizeMode="cover"
         />
+        {item.likedBy && item.likedBy.length > 0 && (
+          <View className="absolute bottom-1 right-1 bg-black/60 px-1 rounded flex-row items-center">
+            <Ionicons name="heart" size={10} color="white" />
+            <Text className="text-white text-[10px] ml-1">
+              {item.likedBy.length}
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
 
-  // --- RENDER ITEM: MUSICA ---
-  const renderMusicItem = (item: any) => (
-    <View
-      key={item.id}
+  const renderMusicItem = (item: any, index: number) => (
+    <TouchableOpacity
+      key={item.postId || index}
+      onPress={() => router.push(`/post/${item.postId}` as any)}
       className="flex-row items-center px-6 py-3 border-b border-zinc-900/50 w-full"
     >
+      <Text className="text-[#5E17EB] font-bold text-lg mr-4 w-4 text-center">
+        {index + 1}
+      </Text>
       <Image
         source={{ uri: item.cover }}
         className="w-14 h-14 rounded-xl mr-4 bg-zinc-800"
       />
       <View className="flex-1">
-        <Text className="text-white font-bold text-base">{item.title}</Text>
-        <Text className="text-zinc-500 text-sm">{item.artist}</Text>
+        <Text className="text-white font-bold text-base" numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text className="text-zinc-500 text-sm" numberOfLines={1}>
+          {item.artist}
+        </Text>
       </View>
-      <TouchableOpacity className="bg-zinc-800 p-2 rounded-full">
-        <Ionicons name="play" size={16} color="white" />
-      </TouchableOpacity>
-    </View>
+      <View className="flex-row items-center bg-zinc-800/50 px-2 py-1 rounded-lg">
+        <Ionicons
+          name="heart"
+          size={12}
+          color="#EF4444"
+          style={{ marginRight: 4 }}
+        />
+        <Text className="text-white text-xs font-bold">{item.likes}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderSuggestedUser = ({ item }: { item: any }) => (
+    <TouchableOpacity
+      className="bg-zinc-900 mr-3 p-3 rounded-2xl border border-zinc-800 w-[110px] items-center"
+      onPress={() =>
+        router.push({
+          pathname: "/user/[id]",
+          params: {
+            id: item.id,
+            username: item.username,
+            avatar: item.avatar,
+            name: item.name,
+          },
+        })
+      }
+    >
+      <Image
+        source={
+          item.avatar ? { uri: item.avatar } : require("@/assets/noPfp.jpg")
+        }
+        className="w-14 h-14 rounded-full mb-2 bg-zinc-800"
+      />
+      <Text
+        className="text-white text-xs font-bold text-center mb-1"
+        numberOfLines={1}
+      >
+        {item.name}
+      </Text>
+      <Text
+        className="text-zinc-500 text-[10px] text-center mb-2"
+        numberOfLines={1}
+      >
+        @{item.username}
+      </Text>
+      <View className="bg-[#5E17EB]/20 w-full py-1 rounded-lg items-center">
+        <Text className="text-[#5E17EB] text-[10px] font-bold">Ver Perfil</Text>
+      </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -171,7 +279,7 @@ const Profile = () => {
       <ScrollView
         ref={mainScrollRef}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[3]}
+        stickyHeaderIndices={[4]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -190,16 +298,11 @@ const Profile = () => {
             >
               <Feather name="edit-2" size={20} color="white" />
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleLogout}
-              className="bg-red-500/10 p-3 rounded-2xl border border-red-500/20"
-            >
-              <Ionicons name="log-out-outline" size={22} color="#EF4444" />
-            </TouchableOpacity>
+            {/* BOTÓN CERRAR SESIÓN ELIMINADO AQUÍ */}
           </View>
         </View>
 
-        {/* INFO DE USUARIO */}
+        {/* INFO USUARIO */}
         <View className="items-center">
           <View className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/50">
             <Image
@@ -218,19 +321,16 @@ const Profile = () => {
         </View>
 
         {/* ESTADÍSTICAS */}
-        <View className="flex-row justify-between items-center bg-zinc-900 mx-4 h-[70px] mt-8 mb-3 px-2 rounded-3xl border border-zinc-800">
-          {/* BOTÓN SEGUIDORES */}
+        <View className="flex-row justify-between items-center bg-zinc-900 mx-4 h-[70px] mt-8 mb-6 px-2 rounded-3xl border border-zinc-800">
           <TouchableOpacity
             onPress={() =>
               router.push({
                 pathname: "/user-list",
-                // Enviamos userId y type correcto para ver la lista real
                 params: { userId: user?.$id, type: "followers" },
               })
             }
             className="flex-1 items-center py-4"
           >
-            {/* Dato Real */}
             <Text className="text-white text-xl font-bold">
               {stats.followersCount}
             </Text>
@@ -238,10 +338,7 @@ const Profile = () => {
               SEGUIDORES
             </Text>
           </TouchableOpacity>
-
           <View className="h-8 w-[1px] bg-zinc-700" />
-
-          {/* BOTÓN MOODS */}
           <TouchableOpacity
             onPress={scrollToMoods}
             className="flex-1 items-center py-4"
@@ -251,21 +348,16 @@ const Profile = () => {
               MOODS
             </Text>
           </TouchableOpacity>
-
           <View className="h-8 w-[1px] bg-zinc-700" />
-
-          {/* BOTÓN SEGUIDOS */}
           <TouchableOpacity
             onPress={() =>
               router.push({
                 pathname: "/user-list",
-                // Enviamos userId y type correcto
                 params: { userId: user?.$id, type: "following" },
               })
             }
             className="flex-1 items-center py-4"
           >
-            {/* Dato Real */}
             <Text className="text-white text-xl font-bold">
               {stats.followingCount}
             </Text>
@@ -275,8 +367,24 @@ const Profile = () => {
           </TouchableOpacity>
         </View>
 
+        {/* GENTE QUE PODRÍAS CONOCER */}
+        {suggestedUsers.length > 0 && (
+          <View className="mb-6 pl-4">
+            <Text className="text-white text-lg font-bold mb-3">
+              Gente que podrías conocer
+            </Text>
+            <FlatList
+              horizontal
+              data={suggestedUsers}
+              renderItem={renderSuggestedUser}
+              keyExtractor={(item) => item.id}
+              showsHorizontalScrollIndicator={false}
+            />
+          </View>
+        )}
+
         {/* TABS STICKY */}
-        <View className="bg-black pt-4">
+        <View className="bg-black pt-2 border-t border-zinc-900">
           <View className="flex-row px-4 mb-4 gap-4">
             <TouchableOpacity
               onPress={() => handleTabPress(0)}
@@ -315,13 +423,13 @@ const Profile = () => {
                   activeTab === 1 ? "text-white" : "text-zinc-500"
                 }`}
               >
-                MÚSICA
+                TOP HITS
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* CONTENIDO SWIPEABLE */}
+        {/* CONTENIDO TABS */}
         <ScrollView
           ref={horizontalScrollRef}
           horizontal
@@ -332,7 +440,7 @@ const Profile = () => {
           }
           scrollEventThrottle={16}
         >
-          {/* TAB 1: MOODS (DINÁMICO) */}
+          {/* TAB 1: MOODS */}
           <View style={{ width }} className="min-h-[200px]">
             {isLoading ? (
               <View className="flex-1 justify-center items-center py-10">
@@ -349,8 +457,25 @@ const Profile = () => {
             )}
           </View>
 
-          {/* TAB 2: MÚSICA (MOCK) */}
-          <View style={{ width }}>{MOCK_MUSIC.map(renderMusicItem)}</View>
+          {/* TAB 2: TOP HITS */}
+          <View style={{ width }} className="min-h-[200px]">
+            {isLoading ? (
+              <View className="flex-1 justify-center items-center py-10">
+                <ActivityIndicator size="large" color="#5E17EB" />
+              </View>
+            ) : topSongs.length === 0 ? (
+              <View className="flex-1 justify-center items-center py-10">
+                <Ionicons name="musical-note" size={40} color="#3f3f46" />
+                <Text className="text-zinc-500 mt-2">
+                  No hay canciones populares aún
+                </Text>
+              </View>
+            ) : (
+              <View>
+                {topSongs.map((song, index) => renderMusicItem(song, index))}
+              </View>
+            )}
+          </View>
         </ScrollView>
         <View style={{ height: 100 }} />
       </ScrollView>
