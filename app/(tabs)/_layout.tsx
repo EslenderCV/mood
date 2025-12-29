@@ -16,6 +16,7 @@ import { useModal } from "@/context/ModalContext";
 import PostModal from "@/components/PostModal";
 import { useColorScheme } from "nativewind";
 
+// --- MEJORA: Componente optimizado para alineación vertical ---
 const MenuOption = ({
   label,
   iconName,
@@ -28,17 +29,23 @@ const MenuOption = ({
     onPress={onPress}
     activeOpacity={0.7}
     className="flex-row items-center justify-between py-3.5"
+    style={{ minHeight: 48 }} // Altura mínima táctil estándar
   >
     <Text
       className="text-[15px] font-medium"
-      style={{ color: isDestructive ? "#EF4444" : textColor }}
+      style={{
+        color: isDestructive ? "#EF4444" : textColor,
+        includeFontPadding: false, // CLAVE: Evita desalineación en Android
+        textAlignVertical: "center",
+      }}
     >
       {label}
     </Text>
-    <View className="opacity-90">
+    {/* Contenedor fijo de 24px para el icono -> asegura centro perfecto */}
+    <View className="w-6 h-6 items-center justify-center opacity-90">
       <Ionicons
         name={iconName}
-        size={18}
+        size={20}
         color={isDestructive ? "#EF4444" : color}
       />
     </View>
@@ -86,7 +93,7 @@ const TabsLayout = () => {
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarStyle: { display: "none" }, // <--- OCULTAMOS BARRA NATIVA
+          tabBarStyle: { display: "none" },
         }}
       >
         <Tabs.Screen name="home" />
@@ -140,11 +147,13 @@ const TabsLayout = () => {
                     </Text>
                   </View>
                 </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={menuSubText}
-                />
+                <View className="w-6 h-6 items-center justify-center">
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={menuSubText}
+                  />
+                </View>
               </Pressable>
             </Link>
             <View className="p-5">
@@ -167,8 +176,48 @@ const TabsLayout = () => {
                     router.push("/notifications");
                   }}
                 />
-                {/* ... Resto de opciones ... */}
+                <MenuOption
+                  label="Privacy"
+                  iconName="lock-closed-outline"
+                  textColor={menuText}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    router.push("/privacy" as any);
+                  }}
+                />
+                <MenuOption
+                  label="Security"
+                  iconName="shield-checkmark-outline"
+                  textColor={menuText}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    router.push("/security" as any);
+                  }}
+                />
+                <MenuOption
+                  label="Settings"
+                  iconName="settings-outline"
+                  textColor={menuText}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    router.push("/settings" as any);
+                  }}
+                />
               </View>
+              <View
+                className="h-[1px] w-full my-4"
+                style={{ backgroundColor: menuBorder }}
+              />
+              <MenuOption
+                label="Help Center"
+                iconName="help-circle-outline"
+                color={menuSubText}
+                textColor={menuSubText}
+                onPress={() => {
+                  setMenuOpen(false);
+                  router.push("/help" as any);
+                }}
+              />
             </View>
           </Animated.View>
         </View>

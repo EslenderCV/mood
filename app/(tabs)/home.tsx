@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -124,7 +124,7 @@ const NavIcon = ({
 };
 
 // ==========================================
-// 1. FEED SCREEN (Tu Home original)
+// 1. FEED SCREEN
 // ==========================================
 const FeedScreen = () => {
   const { colorScheme } = useColorScheme();
@@ -202,7 +202,6 @@ const FeedScreen = () => {
         return !(!creator.id || creator.id === "unknown");
       });
 
-      // Orden básico por fecha (puedes mejorar esto)
       setFeedPosts(validPosts.reverse());
     } catch (error) {
       console.log(error);
@@ -255,7 +254,7 @@ const FeedScreen = () => {
     } catch (e) {}
   };
 
-  const renderPost = ({ item }: { item: any }) => {
+  const renderPost = ({ item, index }: { item: any; index: number }) => {
     const songData = parseSongData(item.songData);
     const creator = getCreatorFromPost(item);
     if (!songData) return null;
@@ -268,7 +267,10 @@ const FeedScreen = () => {
     return (
       <View className="flex-row px-4">
         <View className="items-center mr-3">
-          <TouchableOpacity className="z-10">
+          <TouchableOpacity
+            className="z-10"
+            onPress={() => router.push(`/user/${creator.id}` as any)}
+          >
             <Image
               source={
                 creator.avatar
@@ -363,7 +365,14 @@ const FeedScreen = () => {
           </View>
 
           <View className="flex-row justify-between items-center mt-1 pr-2">
-            <TouchableOpacity className="flex-row items-center py-1">
+            <TouchableOpacity
+              className="flex-row items-center py-1"
+              onPress={() => {
+                if (item.$id) {
+                  router.push(`/post/${item.$id}` as any);
+                }
+              }}
+            >
               <Ionicons name="chatbubble-outline" size={20} color={iconColor} />
               {(item.commentsCount || 0) > 0 && (
                 <Text
@@ -421,7 +430,11 @@ const FeedScreen = () => {
               className="flex-row items-center py-1"
             >
               <Ionicons
-                name="paper-plane-outline"
+                name={
+                  postToShare === item.$id
+                    ? "share-social"
+                    : "paper-plane-outline"
+                }
                 size={22}
                 color={iconColor}
                 style={{ transform: [{ rotate: "-10deg" }], marginTop: -2 }}
@@ -493,11 +506,8 @@ const HomePager = () => {
   const scrollOffset = useRef(new Animated.Value(0)).current;
   const [currentPage, setCurrentPage] = useState(0);
 
-  // --- CORRECCIÓN ERROR: Usamos función manual en lugar de Animated.event ---
   const handlePageScroll = (e: any) => {
     const { position, offset } = e.nativeEvent;
-    // Actualizamos el valor animado manualmente desde el evento
-    // Esto es mucho más seguro y evita el crash de "not a function"
     scrollOffset.setValue(position + offset);
   };
 
@@ -517,7 +527,7 @@ const HomePager = () => {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={0}
-        onPageScroll={handlePageScroll} // Función normal, segura
+        onPageScroll={handlePageScroll}
         onPageSelected={onPageSelected}
       >
         <View key="0">
@@ -531,13 +541,16 @@ const HomePager = () => {
         </View>
       </PagerView>
 
+      {/* --- BARRA DE NAVEGACIÓN CORREGIDA --- */}
       <View
-        className="flex-row items-center justify-between px-2 pb-5 pt-3 absolute bottom-0 w-full"
+        className="flex-row items-center justify-between px-2 absolute bottom-0 w-full"
         style={{
           backgroundColor: tabBarBg,
           borderTopColor: borderColor,
           borderTopWidth: 1,
-          paddingBottom: Platform.OS === "ios" ? 25 : 10,
+          // Paddings manuales para asegurar centro vertical perfecto
+          paddingTop: 15,
+          paddingBottom: Platform.OS === "ios" ? 35 : 15,
         }}
       >
         <TouchableOpacity

@@ -8,14 +8,16 @@ import {
   RefreshControl,
   ActivityIndicator,
   FlatList,
+  Platform,
 } from "react-native";
 import React, { useState, useRef, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { useGlobalContext } from "@/context/GlobalProvider";
+import { useModal } from "@/context/ModalContext";
 import { router, useFocusEffect } from "expo-router";
-import { useColorScheme } from "nativewind"; // <--- Importante
+import { useColorScheme } from "nativewind";
 import {
   getUserPosts,
   getFollowCounts,
@@ -24,7 +26,6 @@ import {
 } from "@/lib/appwrite";
 
 const { width } = Dimensions.get("window");
-const ITEM_SIZE = width / 3;
 
 // --- HELPERS ---
 const parseSongFromPost = (songDataString: string) => {
@@ -56,36 +57,35 @@ const getCreatorFromPost = (item: any) => {
 };
 
 const Profile = () => {
-  // --- TEMA BLINDADO ---
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+  const { user } = useGlobalContext();
+  const { setPostModalVisible } = useModal();
 
-  // Colores calculados
+  // Colores
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
-
-  // Elementos UI
   const cardBg = isDark ? "#18181B" : "#F4F4F5";
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
   const iconColor = isDark ? "#FFFFFF" : "#000000";
-  const statBorder = isDark ? "#3F3F46" : "#E4E4E7"; // Separador vertical
+  const statBorder = isDark ? "#3F3F46" : "#E4E4E7";
 
-  const { user } = useGlobalContext();
+  // Colores Barra Navegación
+  const tabBarBg = isDark ? "#121212" : "#FFFFFF";
+  const inactiveColor = isDark ? "#71717A" : "#9CA3AF";
+
   const [activeTab, setActiveTab] = useState(0);
-
   const [posts, setPosts] = useState<any[]>([]);
   const [topSongs, setTopSongs] = useState<any[]>([]);
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
   const [stats, setStats] = useState({ followersCount: 0, followingCount: 0 });
-
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const horizontalScrollRef = useRef<ScrollView>(null);
   const mainScrollRef = useRef<ScrollView>(null);
 
-  // --- ALGORITMO DE RANKING ---
   const rankPosts = (postsToSort: any[]) => {
     const now = new Date().getTime();
     return postsToSort
@@ -185,7 +185,7 @@ const Profile = () => {
     handleTabPress(0);
   };
 
-  // --- RENDERIZADO ADAPTATIVO ---
+  // --- RENDERIZADORES ---
 
   const renderMoodItem = (item: any) => {
     const songData = parseSongFromPost(item.songData);
@@ -198,17 +198,21 @@ const Profile = () => {
         key={item.$id}
         activeOpacity={0.8}
         onPress={() => router.push(`/post/${item.$id}` as any)}
+        // CORRECCIÓN AQUÍ: Usamos porcentaje y aspectRatio para grid perfecto
+        style={{
+          width: "33.3333%",
+          aspectRatio: 1,
+          padding: 0.5, // Pequeña separación opcional
+        }}
       >
         <Image
           source={{ uri: imageUrl }}
           style={{
-            width: ITEM_SIZE,
-            height: ITEM_SIZE,
+            width: "100%",
+            height: "100%",
             backgroundColor: cardBg,
           }}
-          className="border-[0.5px]"
-          // Borde dinámico manual si fuera necesario, pero la clase CSS suele bastar
-          // Aquí forzamos un borde muy sutil
+          className="border-[0.5px] border-black/10 dark:border-white/10"
           resizeMode="cover"
         />
         {item.likedBy && item.likedBy.length > 0 && (
@@ -286,7 +290,7 @@ const Profile = () => {
             avatar: item.avatar,
             name: item.name,
           },
-        })
+        } as any)
       }
     >
       <Image
@@ -317,7 +321,6 @@ const Profile = () => {
   );
 
   return (
-    // FONDO BLINDADO
     <SafeAreaView
       className="flex-1"
       edges={["top"]}
@@ -329,6 +332,7 @@ const Profile = () => {
         ref={mainScrollRef}
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[4]}
+        contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -344,7 +348,7 @@ const Profile = () => {
           </Text>
           <View className="flex-row gap-4">
             <TouchableOpacity
-              onPress={() => router.push("/editScreen")}
+              onPress={() => router.push("/editScreen" as any)}
               className="p-3 rounded-2xl"
               style={{ backgroundColor: cardBg }}
             >
@@ -385,7 +389,7 @@ const Profile = () => {
               router.push({
                 pathname: "/user-list",
                 params: { userId: user?.$id, type: "followers" },
-              })
+              } as any)
             }
             className="flex-1 items-center py-4"
           >
@@ -426,7 +430,7 @@ const Profile = () => {
               router.push({
                 pathname: "/user-list",
                 params: { userId: user?.$id, type: "following" },
-              })
+              } as any)
             }
             className="flex-1 items-center py-4"
           >
@@ -534,6 +538,7 @@ const Profile = () => {
                 </Text>
               </View>
             ) : (
+              // CONTENEDOR DE POSTS - GRID 3 COLUMNAS
               <View className="flex-row flex-wrap">
                 {posts.map(renderMoodItem)}
               </View>
@@ -566,6 +571,68 @@ const Profile = () => {
         </ScrollView>
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* --- BARRA DE NAVEGACIÓN PEGADA --- */}
+      <View
+        className="flex-row items-center justify-between px-2 pb-5 pt-3 absolute bottom-0 w-full"
+        style={{
+          backgroundColor: tabBarBg,
+          borderTopColor: borderColor,
+          borderTopWidth: 1,
+          paddingBottom: Platform.OS === "ios" ? 25 : 10,
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => router.push("/home")}
+          className="flex-1 items-center py-2"
+        >
+          <Ionicons name="home-outline" size={26} color={inactiveColor} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => router.push("/home")}
+          className="flex-1 items-center py-2"
+        >
+          <Ionicons name="compass-outline" size={30} color={inactiveColor} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setPostModalVisible(true)}
+          className="flex-1 items-center -mt-8"
+        >
+          <View
+            className="bg-[#5E17EB] p-3.5 rounded-full shadow-lg shadow-[#5E17EB]/40"
+            style={{ borderWidth: 4, borderColor: tabBarBg }}
+          >
+            <Image
+              source={require("@/assets/mood.png")}
+              resizeMode="contain"
+              style={{ width: 24, height: 24, tintColor: "white" }}
+            />
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => router.push("/home")}
+          className="flex-1 items-center py-2"
+        >
+          <Ionicons name="albums-outline" size={26} color={inactiveColor} />
+        </TouchableOpacity>
+
+        <TouchableOpacity className="flex-1 items-center py-2">
+          <View
+            className="rounded-full border-2"
+            style={{ borderColor: "#5E17EB" }}
+          >
+            <Image
+              source={
+                user?.pfp ? { uri: user.pfp } : require("@/assets/noPfp.jpg")
+              }
+              className="w-7 h-7 rounded-full"
+            />
+          </View>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
