@@ -6,6 +6,7 @@ import {
   Animated,
   Text,
   TouchableOpacity,
+  Platform,
 } from "react-native";
 import React, { useState, useRef, useEffect } from "react";
 import { Link, Tabs, router } from "expo-router";
@@ -14,34 +15,28 @@ import { useGlobalContext } from "@/context/GlobalProvider";
 import { useModal } from "@/context/ModalContext";
 import { useAudio } from "@/context/AudioContext";
 import PostModal from "@/components/PostModal";
+import { useColorScheme } from "nativewind";
 
-// --- COMPONENTE INTERNO PARA LAS OPCIONES (Icono a la derecha) ---
 const MenuOption = ({
   label,
   iconName,
   onPress,
   color = "#5E17EB",
+  textColor,
   isDestructive = false,
-}: {
-  label: string;
-  iconName: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-  color?: string;
-  isDestructive?: boolean;
-}) => (
+}: any) => (
   <TouchableOpacity
     onPress={onPress}
     activeOpacity={0.7}
     className="flex-row items-center justify-between py-3.5"
   >
     <Text
-      className={`text-[15px] font-medium ${
-        isDestructive ? "text-red-500" : "text-zinc-200"
-      }`}
+      className="text-[15px] font-medium"
+      style={{ color: isDestructive ? "#EF4444" : textColor }}
     >
       {label}
     </Text>
-    <View className="bg-zinc-800/50 p-1.5 rounded-lg">
+    <View className="opacity-90">
       <Ionicons
         name={iconName}
         size={18}
@@ -52,13 +47,26 @@ const MenuOption = ({
 );
 
 const TabsLayout = () => {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
+
+  // Colores pulidos
+  const bgColor = isDark ? "#000000" : "#FFFFFF";
+  const tabBarBg = isDark ? "#121212" : "#FFFFFF";
+  const borderColor = isDark ? "#27272A" : "#F4F4F5";
+  const inactiveColor = isDark ? "#71717A" : "#9CA3AF";
+
+  const menuBg = isDark ? "#18181B" : "#FFFFFF";
+  const menuText = isDark ? "#FFFFFF" : "#000000";
+  const menuSubText = isDark ? "#A1A1AA" : "#52525B";
+  const menuBorder = isDark ? "#27272A" : "#E4E4E7";
+  const menuHeader = isDark ? "rgba(39, 39, 42, 0.5)" : "#F4F4F5";
+
   const [menuOpen, setMenuOpen] = useState(false);
   const { user } = useGlobalContext();
   const { setPostModalVisible } = useModal();
-  const { currentSong } = useAudio();
+  const TAB_BAR_HEIGHT = Platform.OS === "ios" ? 85 : 70;
 
-  const TAB_ICON_SIZE = 26;
-  const TAB_BAR_HEIGHT = 85;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
@@ -82,22 +90,20 @@ const TabsLayout = () => {
   }, [menuOpen]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "black" }}>
+    <View style={{ flex: 1, backgroundColor: bgColor }}>
       <Tabs
         screenOptions={{
           tabBarStyle: {
-            backgroundColor: "#121212",
-            borderTopWidth: 0,
+            backgroundColor: tabBarBg,
+            borderTopColor: borderColor,
+            borderTopWidth: 1,
             height: TAB_BAR_HEIGHT,
-            width: "100%",
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            elevation: 0,
             paddingTop: 12,
+            elevation: 0,
+            shadowOpacity: 0,
           },
           tabBarActiveTintColor: "#5E17EB",
-          tabBarInactiveTintColor: "#71717a",
+          tabBarInactiveTintColor: inactiveColor,
           tabBarShowLabel: false,
         }}
       >
@@ -109,7 +115,7 @@ const TabsLayout = () => {
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "home" : "home-outline"}
-                size={TAB_ICON_SIZE}
+                size={26}
                 color={color}
               />
             ),
@@ -130,7 +136,6 @@ const TabsLayout = () => {
           }}
         />
 
-        {/* Botón Central (Mood) */}
         <Tabs.Screen
           name="mood"
           listeners={() => ({
@@ -143,9 +148,12 @@ const TabsLayout = () => {
             title: "",
             headerShown: false,
             tabBarIcon: () => (
-              <View className="bg-[#5E17EB] p-3 rounded-full shadow-lg shadow-[#5E17EB]/40 -mt-6 border-4 border-black">
+              <View
+                className="bg-[#5E17EB] p-3 rounded-full shadow-lg shadow-[#5E17EB]/40 -mt-6"
+                style={{ borderWidth: 4, borderColor: tabBarBg }} // Se fusiona con la barra
+              >
                 <Image
-                  source={require("../../assets/mood.png")}
+                  source={require("@/assets/mood.png")}
                   resizeMode="contain"
                   style={{ width: 24, height: 24, tintColor: "white" }}
                 />
@@ -162,13 +170,12 @@ const TabsLayout = () => {
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "albums" : "albums-outline"}
-                size={TAB_ICON_SIZE}
+                size={26}
                 color={color}
               />
             ),
           }}
         />
-
         <Tabs.Screen
           name="profile"
           listeners={() => ({
@@ -182,9 +189,8 @@ const TabsLayout = () => {
             headerShown: false,
             tabBarIcon: ({ focused }) => (
               <View
-                className={`rounded-full border-2 ${
-                  focused ? "border-[#5E17EB]" : "border-transparent"
-                }`}
+                className="rounded-full border-2"
+                style={{ borderColor: focused ? "#5E17EB" : "transparent" }}
               >
                 <Image
                   source={
@@ -200,26 +206,28 @@ const TabsLayout = () => {
         />
       </Tabs>
 
-      {/* --- MENÚ LATERAL REDISEÑADO --- */}
       {menuOpen && (
         <View style={StyleSheet.absoluteFill} className="z-[60]">
-          {/* Fondo oscuro para cerrar */}
           <Pressable
             style={StyleSheet.absoluteFill}
-            className="bg-black/60 backdrop-blur-sm"
+            className="bg-black/40 backdrop-blur-sm"
             onPress={() => setMenuOpen(false)}
           />
-
           <Animated.View
             style={{
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
+              backgroundColor: menuBg,
+              borderColor: menuBorder,
+              borderWidth: 1,
             }}
-            className="bg-[#121212] w-[300px] absolute right-4 bottom-[100px] rounded-[28px] border border-zinc-800 shadow-2xl shadow-black overflow-hidden"
+            className="w-[300px] absolute right-4 bottom-[100px] rounded-[28px] shadow-2xl overflow-hidden"
           >
-            {/* HEADER PERFIL */}
             <Link href="/profile" asChild onPress={() => setMenuOpen(false)}>
-              <Pressable className="p-5 bg-zinc-900/50 flex-row items-center justify-between border-b border-zinc-800">
+              <Pressable
+                className="p-5 flex-row items-center justify-between border-b"
+                style={{ backgroundColor: menuHeader, borderColor: menuBorder }}
+              >
                 <View className="flex-row items-center flex-1">
                   <Image
                     source={
@@ -227,12 +235,13 @@ const TabsLayout = () => {
                         ? { uri: user.pfp }
                         : require("@/assets/noPfp.jpg")
                     }
-                    className="w-12 h-12 rounded-full border-2 border-zinc-800"
+                    className="w-12 h-12 rounded-full border border-zinc-200 dark:border-zinc-800"
                   />
                   <View className="ml-3 flex-1">
                     <Text
-                      className="text-white font-bold text-[17px] leading-tight"
+                      className="font-bold text-[17px] leading-tight"
                       numberOfLines={1}
+                      style={{ color: menuText }}
                     >
                       {user?.name || "Usuario"}
                     </Text>
@@ -241,16 +250,19 @@ const TabsLayout = () => {
                     </Text>
                   </View>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#52525B" />
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={menuSubText}
+                />
               </Pressable>
             </Link>
-
-            {/* LISTA DE OPCIONES */}
             <View className="p-5">
               <View className="gap-y-1">
                 <MenuOption
                   label="Get Plus"
                   iconName="diamond"
+                  textColor={menuText}
                   onPress={() => {
                     setMenuOpen(false);
                     router.push("/plus");
@@ -259,6 +271,7 @@ const TabsLayout = () => {
                 <MenuOption
                   label="Notifications"
                   iconName="notifications-outline"
+                  textColor={menuText}
                   onPress={() => {
                     setMenuOpen(false);
                     router.push("/notifications");
@@ -267,6 +280,7 @@ const TabsLayout = () => {
                 <MenuOption
                   label="Privacy"
                   iconName="lock-closed-outline"
+                  textColor={menuText}
                   onPress={() => {
                     setMenuOpen(false);
                     router.push("/privacy" as any);
@@ -275,6 +289,7 @@ const TabsLayout = () => {
                 <MenuOption
                   label="Security"
                   iconName="shield-checkmark-outline"
+                  textColor={menuText}
                   onPress={() => {
                     setMenuOpen(false);
                     router.push("/security" as any);
@@ -283,19 +298,22 @@ const TabsLayout = () => {
                 <MenuOption
                   label="Settings"
                   iconName="settings-outline"
+                  textColor={menuText}
                   onPress={() => {
                     setMenuOpen(false);
                     router.push("/settings" as any);
                   }}
                 />
               </View>
-
-              <View className="h-[1px] w-full bg-zinc-800 my-4" />
-
+              <View
+                className="h-[1px] w-full my-4"
+                style={{ backgroundColor: menuBorder }}
+              />
               <MenuOption
                 label="Help Center"
                 iconName="help-circle-outline"
-                color="#A1A1AA"
+                color={menuSubText}
+                textColor={menuSubText}
                 onPress={() => {
                   setMenuOpen(false);
                   router.push("/help" as any);
@@ -305,8 +323,6 @@ const TabsLayout = () => {
           </Animated.View>
         </View>
       )}
-
-      {/* MODAL */}
       <PostModal />
     </View>
   );

@@ -15,6 +15,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useAudioPlayer } from "expo-audio";
+import { useColorScheme } from "nativewind"; // <--- Importante
 
 import {
   getLatestUsers,
@@ -65,10 +66,25 @@ const formatTimeAgo = (dateString: string) => {
   return `${Math.floor(diff / 24)}d`;
 };
 
-// 1. CAMBIO: Reemplazamos "Álbumes" por "Artistas"
 const CATEGORIES = ["Posts", "Música", "Artistas", "Perfiles"];
 
 const Explore = () => {
+  // --- TEMA DINÁMICO ---
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
+
+  // Paleta de Colores Calculada (Estilo Blindado)
+  const bgColor = isDark ? "#000000" : "#FFFFFF";
+  const textColor = isDark ? "#FFFFFF" : "#000000";
+  const subTextColor = isDark ? "#A1A1AA" : "#71717A"; // Zinc-400 vs Zinc-500
+
+  // Elementos de UI
+  const cardBg = isDark ? "#18181B" : "#F4F4F5"; // Zinc-900 vs Zinc-100
+  const inputBg = isDark ? "#18181B" : "#F4F4F5";
+  const borderColor = isDark ? "#27272A" : "#E4E4E7"; // Zinc-800 vs Zinc-200
+  const pillInactiveBg = isDark ? "#18181B" : "#F4F4F5";
+  const iconColor = isDark ? "#A1A1AA" : "#52525B";
+
   const { user } = useGlobalContext();
 
   const [activeCategory, setActiveCategory] = useState("Posts");
@@ -77,7 +93,7 @@ const Explore = () => {
   const [explorePosts, setExplorePosts] = useState<any[]>([]);
   const [rankedUsers, setRankedUsers] = useState<any[]>([]);
   const [topSongs, setTopSongs] = useState<any[]>([]);
-  const [topArtists, setTopArtists] = useState<any[]>([]); // 2. NUEVO ESTADO
+  const [topArtists, setTopArtists] = useState<any[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -112,7 +128,7 @@ const Explore = () => {
     setCurrentSongUrl(previewUrl);
   };
 
-  // --- ALGORITMOS DE RANKING ---
+  // --- LOGICA DE RANKING (Igual que antes) ---
   const rankExplorePosts = (posts: any[]) => {
     return posts
       .map((post) => {
@@ -188,8 +204,15 @@ const Explore = () => {
       ]);
       const safeFollows = Array.isArray(myFollowsList) ? myFollowsList : [];
 
+      const publicAndVisiblePosts = rawPosts.filter((post: any) => {
+        let userObj = post.creator || post.postedBy;
+        if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
+        const isPrivate = userObj?.isPrivate || false;
+        return !isPrivate;
+      });
+
       if (activeCategory === "Posts") {
-        const filteredPosts = rawPosts.filter((post: any) => {
+        const filteredPosts = publicAndVisiblePosts.filter((post: any) => {
           const creator = getCreatorFromPost(post);
           const isMe = creator.id === user?.$id;
           const isFollowing = safeFollows.includes(creator.id);
@@ -200,12 +223,13 @@ const Explore = () => {
 
       if (activeCategory === "Perfiles") {
         const latestUsers = await getLatestUsers();
-        setRankedUsers(calculateTopMooders(rawPosts, latestUsers, safeFollows));
+        setRankedUsers(
+          calculateTopMooders(publicAndVisiblePosts, latestUsers, safeFollows)
+        );
       }
 
-      // Lógica compartida para Música y Artistas (necesitan todos los posts)
       if (activeCategory === "Música" || activeCategory === "Artistas") {
-        const allPosts = await getAllPosts();
+        const allPosts = await getAllPosts(user?.$id || "");
 
         if (activeCategory === "Música") {
           const songMap = new Map();
@@ -235,39 +259,29 @@ const Explore = () => {
           setTopSongs(charts);
         }
 
-        // 3. NUEVA LÓGICA: ARTISTAS DEL MOMENTO
         if (activeCategory === "Artistas") {
           const artistMap = new Map();
-
           allPosts.forEach((post: any) => {
             const songData = parseSongFromPost(post.songData);
             if (!songData) return;
-
             const artistName = songData.artist;
-            // Contamos MENCIONES (cuántos posts usan a este artista)
-            // O podriamos contar likes totales. Vamos a contar Menciones para variar.
             const mentions = 1;
-
             if (artistMap.has(artistName)) {
               const data = artistMap.get(artistName);
               data.count += mentions;
-              // Actualizamos la imagen por si acaso (para tener variedad)
               if (Math.random() > 0.5) data.cover = songData.cover;
             } else {
               artistMap.set(artistName, {
                 id: artistName,
                 name: artistName,
-                cover: songData.cover, // Usamos la portada de una de sus canciones como foto
+                cover: songData.cover,
                 count: 1,
               });
             }
           });
-
-          // Ordenamos por cantidad de menciones
           const trendingArtists = Array.from(artistMap.values())
             .sort((a: any, b: any) => b.count - a.count)
-            .slice(0, 12); // Top 12 artistas
-
+            .slice(0, 12);
           setTopArtists(trendingArtists);
         }
       }
@@ -293,7 +307,7 @@ const Explore = () => {
       case "Música":
         return topSongs;
       case "Artistas":
-        return topArtists; // 4. CAMBIO
+        return topArtists;
       case "Perfiles":
         return rankedUsers;
       default:
@@ -301,7 +315,8 @@ const Explore = () => {
     }
   };
 
-  // --- RENDERIZADORES ---
+  // --- RENDERIZADORES ADAPTATIVOS ---
+
   const renderPostItem = ({ item, index }: { item: any; index: number }) => {
     const creator = getCreatorFromPost(item);
     const songData = parseSongFromPost(item.songData);
@@ -323,39 +338,70 @@ const Explore = () => {
                   ? { uri: creator.avatar }
                   : require("@/assets/noPfp.jpg")
               }
-              className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-900"
+              className="w-10 h-10 rounded-full"
+              style={{
+                backgroundColor: cardBg,
+                borderColor: borderColor,
+                borderWidth: 1,
+              }}
               resizeMode="cover"
             />
           </TouchableOpacity>
-          {!isLastItem && <View className="w-[2px] flex-1 bg-zinc-800 my-2" />}
+          {!isLastItem && (
+            <View
+              className="w-[2px] flex-1 my-2"
+              style={{ backgroundColor: borderColor }}
+            />
+          )}
         </View>
-        <View className="flex-1 pb-6 border-b border-zinc-900">
+        <View
+          className="flex-1 pb-6 border-b"
+          style={{ borderColor: borderColor }}
+        >
           <View className="flex-row items-center justify-between mb-1">
             <View className="flex-row items-center flex-wrap flex-1 mr-2">
-              <Text className="text-white font-bold mr-1 text-base">
+              <Text
+                className="font-bold mr-1 text-base"
+                style={{ color: textColor }}
+              >
                 {creator.name}
               </Text>
-              <Text className="text-zinc-500 text-sm">
+              <Text className="text-sm" style={{ color: subTextColor }}>
                 @{creator.username} · {formatTimeAgo(item.$createdAt)}
               </Text>
             </View>
-            <Ionicons name="ellipsis-horizontal" size={18} color="#71717A" />
+            <Ionicons name="ellipsis-horizontal" size={18} color={iconColor} />
           </View>
-          <Text className="text-white text-base mb-3 leading-5">
+          <Text
+            className="text-base mb-3 leading-5"
+            style={{ color: textColor }}
+          >
             {item.comment}
           </Text>
           {songData && (
-            <View className="bg-zinc-900 rounded-xl p-2 flex-row items-center mb-3 border border-zinc-800">
+            <View
+              className="rounded-xl p-2 flex-row items-center mb-3 border"
+              style={{ backgroundColor: cardBg, borderColor: borderColor }}
+            >
               <Image
                 source={{ uri: songData.cover }}
-                className="w-12 h-12 rounded-lg mr-3 bg-zinc-800"
+                className="w-12 h-12 rounded-lg mr-3"
+                style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
                 resizeMode="cover"
               />
               <View className="flex-1 justify-center mr-2">
-                <Text className="text-white font-bold" numberOfLines={1}>
+                <Text
+                  className="font-bold"
+                  numberOfLines={1}
+                  style={{ color: textColor }}
+                >
                   {songData.title}
                 </Text>
-                <Text className="text-zinc-500 text-xs" numberOfLines={1}>
+                <Text
+                  className="text-xs"
+                  numberOfLines={1}
+                  style={{ color: subTextColor }}
+                >
                   {songData.artist}
                 </Text>
               </View>
@@ -377,17 +423,19 @@ const Explore = () => {
               className="flex-row items-center"
               onPress={() => router.push(`/post/${item.$id}` as any)}
             >
-              <Ionicons name="chatbubble-outline" size={18} color="#71717A" />
-              <Text className="text-zinc-500 text-xs ml-1">
+              <Ionicons name="chatbubble-outline" size={18} color={iconColor} />
+              <Text className="text-xs ml-1" style={{ color: subTextColor }}>
                 {commentsCount}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity className="flex-row items-center">
-              <Ionicons name="heart-outline" size={18} color="#71717A" />
-              <Text className="text-zinc-500 text-xs ml-1">{likesCount}</Text>
+              <Ionicons name="heart-outline" size={18} color={iconColor} />
+              <Text className="text-xs ml-1" style={{ color: subTextColor }}>
+                {likesCount}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity>
-              <Ionicons name="share-outline" size={18} color="#71717A" />
+              <Ionicons name="share-outline" size={18} color={iconColor} />
             </TouchableOpacity>
           </View>
         </View>
@@ -398,20 +446,26 @@ const Explore = () => {
   const renderProfileItem = ({ item }: { item: any }) => {
     const isTrending = item.totalLikes >= 5;
     return (
-      <View className="flex-row items-center px-4 py-4 justify-between border-b border-zinc-900">
+      <View
+        className="flex-row items-center px-4 py-4 justify-between border-b"
+        style={{ borderColor: borderColor }}
+      >
         <View className="flex-row items-center flex-1">
           <Image
             source={
               item.avatar ? { uri: item.avatar } : require("@/assets/noPfp.jpg")
             }
-            className="w-14 h-14 rounded-full border border-zinc-800 bg-zinc-800"
+            className="w-14 h-14 rounded-full border"
+            style={{ borderColor: borderColor, backgroundColor: cardBg }}
             resizeMode="cover"
           />
           <View className="ml-3 flex-1 mr-2">
-            <Text className="text-white font-bold text-base">
+            <Text className="font-bold text-base" style={{ color: textColor }}>
               {item.name || "Usuario"}
             </Text>
-            <Text className="text-zinc-500 text-sm">@{item.username}</Text>
+            <Text className="text-sm" style={{ color: subTextColor }}>
+              @{item.username}
+            </Text>
             <View className="flex-row items-center mt-1">
               {isTrending ? (
                 <>
@@ -433,7 +487,7 @@ const Explore = () => {
         </View>
         <TouchableOpacity
           onPress={() => router.push(`/user/${item.id}` as any)}
-          className="px-4 py-2 rounded-full bg-[#5E17EB] border border-[#5E17EB]"
+          className="px-4 py-2 rounded-full bg-[#5E17EB]"
         >
           <Text className="font-bold text-sm text-white">Ver</Text>
         </TouchableOpacity>
@@ -448,30 +502,44 @@ const Explore = () => {
       <TouchableOpacity
         key={item.id}
         onPress={() => router.push(`/post/${item.postId}` as any)}
-        className="flex-row items-center px-4 py-3 mb-2 active:bg-zinc-900/50 rounded-xl mx-2"
+        className="flex-row items-center px-4 py-3 mb-2 rounded-xl mx-2"
+        // Estilo activo simulado o hover no es nativo, pero podemos poner fondo condicional si quisiéramos
       >
         <Text
           className={`text-xl font-bold w-8 text-center mr-2 ${
-            item.rank <= 3 ? "text-[#5E17EB]" : "text-white"
+            item.rank <= 3 ? "text-[#5E17EB]" : "text-zinc-500"
           }`}
+          style={item.rank > 3 ? { color: subTextColor } : {}}
         >
           {item.rank}
         </Text>
         <Image
           source={{ uri: item.cover }}
-          className="w-14 h-14 rounded-lg mr-4 bg-zinc-800"
+          className="w-14 h-14 rounded-lg mr-4"
+          style={{ backgroundColor: cardBg }}
           resizeMode="cover"
         />
         <View className="flex-1 justify-center">
-          <Text className="text-white font-bold text-base" numberOfLines={1}>
+          <Text
+            className="font-bold text-base"
+            numberOfLines={1}
+            style={{ color: textColor }}
+          >
             {item.title}
           </Text>
-          <Text className="text-zinc-400 text-sm" numberOfLines={1}>
+          <Text
+            className="text-sm"
+            numberOfLines={1}
+            style={{ color: subTextColor }}
+          >
             {item.artist}
           </Text>
           <View className="flex-row items-center mt-1">
             <Ionicons name="heart" size={12} color="#EF4444" />
-            <Text className="text-zinc-500 text-[10px] ml-1 uppercase font-bold">
+            <Text
+              className="text-[10px] ml-1 uppercase font-bold"
+              style={{ color: subTextColor }}
+            >
               {item.likes} Likes Globales
             </Text>
           </View>
@@ -486,17 +554,18 @@ const Explore = () => {
           <Ionicons
             name={showPause ? "pause-circle-outline" : "play-circle-outline"}
             size={32}
-            color={showPause ? "#5E17EB" : "white"}
+            color={showPause ? "#5E17EB" : textColor}
           />
         </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
-  // 5. NUEVO RENDER: ARTISTAS DEL MOMENTO (Diseño Cuadrícula)
   const renderArtistItem = ({ item, index }: { item: any; index: number }) => (
-    <View className="flex-1 m-2 bg-zinc-900 rounded-2xl p-3 border border-zinc-800 items-center shadow-sm">
-      {/* Badge de Ranking para el Top 3 */}
+    <View
+      className="flex-1 m-2 rounded-2xl p-3 border items-center shadow-sm"
+      style={{ backgroundColor: cardBg, borderColor: borderColor }}
+    >
       {index < 3 && (
         <View className="absolute top-2 right-2 bg-[#5E17EB] w-6 h-6 rounded-full items-center justify-center z-10">
           <Text className="text-white font-bold text-xs">#{index + 1}</Text>
@@ -505,20 +574,30 @@ const Explore = () => {
 
       <Image
         source={{ uri: item.cover }}
-        className="w-24 h-24 rounded-full mb-3 bg-zinc-800"
+        className="w-24 h-24 rounded-full mb-3"
+        style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
         resizeMode="cover"
       />
 
       <Text
-        className="text-white font-bold text-center text-sm mb-1"
+        className="font-bold text-center text-sm mb-1"
         numberOfLines={1}
+        style={{ color: textColor }}
       >
         {item.name}
       </Text>
 
-      <View className="flex-row items-center bg-black/40 px-2 py-1 rounded-lg">
-        <Ionicons name="musical-notes" size={10} color="#A1A1AA" />
-        <Text className="text-zinc-400 text-[10px] ml-1 font-medium">
+      <View
+        className="flex-row items-center px-2 py-1 rounded-lg"
+        style={{
+          backgroundColor: isDark ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0.05)",
+        }}
+      >
+        <Ionicons name="musical-notes" size={10} color={subTextColor} />
+        <Text
+          className="text-[10px] ml-1 font-medium"
+          style={{ color: subTextColor }}
+        >
           {item.count} {item.count === 1 ? "post" : "posts"}
         </Text>
       </View>
@@ -526,17 +605,24 @@ const Explore = () => {
   );
 
   const renderHeader = () => (
-    <View className="pb-2 pt-2 bg-black">
+    <View className="pb-2 pt-2" style={{ backgroundColor: bgColor }}>
       <View className="px-4">
-        <Text className="text-white text-3xl font-bold mb-4 mt-2">
+        <Text
+          className="text-3xl font-bold mb-4 mt-2"
+          style={{ color: textColor }}
+        >
           Explorar
         </Text>
-        <View className="flex-row items-center bg-zinc-900 h-12 rounded-2xl px-4 border border-zinc-800 mb-4">
-          <Ionicons name="search" size={20} color="#71717A" />
+        <View
+          className="flex-row items-center h-12 rounded-2xl px-4 border mb-4"
+          style={{ backgroundColor: inputBg, borderColor: borderColor }}
+        >
+          <Ionicons name="search" size={20} color={subTextColor} />
           <TextInput
             placeholder={`Buscar en ${activeCategory.toLowerCase()}...`}
-            placeholderTextColor="#71717A"
-            className="flex-1 ml-3 text-white text-base font-medium"
+            placeholderTextColor={subTextColor}
+            className="flex-1 ml-3 text-base font-medium"
+            style={{ color: textColor }}
             value={searchText}
             onChangeText={setSearchText}
           />
@@ -553,16 +639,12 @@ const Explore = () => {
           return (
             <TouchableOpacity
               onPress={() => setActiveCategory(item)}
-              className={`mr-2 px-4 py-[6px] rounded-full ${
-                isActive ? "bg-[#5E17EB]" : "bg-zinc-900"
-              }`}
+              className={`mr-2 px-4 py-[6px] rounded-full`}
+              style={{ backgroundColor: isActive ? "#5E17EB" : pillInactiveBg }}
             >
               <Text
-                className={`${
-                  isActive
-                    ? "text-white font-bold"
-                    : "text-zinc-400 font-medium"
-                } text-sm`}
+                className={`${isActive ? "font-bold" : "font-medium"} text-sm`}
+                style={{ color: isActive ? "white" : subTextColor }}
               >
                 {item}
               </Text>
@@ -570,9 +652,12 @@ const Explore = () => {
           );
         }}
       />
-      <View className="h-[1px] bg-zinc-900 w-full mt-3" />
+      <View
+        className="h-[1px] w-full mt-3"
+        style={{ backgroundColor: borderColor }}
+      />
       <View className="px-4 py-3 flex-row justify-between items-center">
-        <Text className="text-white font-bold text-lg">
+        <Text className="font-bold text-lg" style={{ color: textColor }}>
           {activeCategory === "Perfiles"
             ? "Top Mooders & Descubrir"
             : activeCategory === "Música"
@@ -587,11 +672,15 @@ const Explore = () => {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-black" edges={["top", "left", "right"]}>
-      <StatusBar style="light" />
+    // SafeAreaView "Blindado" con estilo en línea
+    <SafeAreaView
+      className="flex-1"
+      edges={["top", "left", "right"]}
+      style={{ backgroundColor: bgColor }}
+    >
+      <StatusBar style={isDark ? "light" : "dark"} />
       <FlatList
         data={getData()}
-        // 6. CAMBIO: NumColumns para la grilla de artistas
         key={activeCategory === "Artistas" ? "artists-grid" : "list"}
         numColumns={activeCategory === "Artistas" ? 2 : 1}
         columnWrapperStyle={
@@ -624,7 +713,7 @@ const Explore = () => {
         }
         ListEmptyComponent={
           !isLoading ? (
-            <Text className="text-zinc-500 text-center mt-10">
+            <Text className="text-center mt-10" style={{ color: subTextColor }}>
               No hay resultados.
             </Text>
           ) : null

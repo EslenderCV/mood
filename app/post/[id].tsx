@@ -6,107 +6,205 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  FlatList,
   ActivityIndicator,
-  Alert,
+  FlatList,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
-import React, { useEffect, useState } from "react";
-import { useLocalSearchParams, router, Stack } from "expo-router";
+import React, { useEffect, useState, useRef } from "react";
+import { useLocalSearchParams, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAudioPlayer } from "expo-audio";
-
+import { useGlobalContext } from "@/context/GlobalProvider";
 import {
-  getPostComments,
-  createComment as apiCreateComment,
-  getCurrentUser,
-  toggleLikePost,
   getPostById,
+  createComment,
+  getPostComments,
+  toggleLikePost,
+  toggleSavePost,
+  searchUsers, // <--- IMPORTANTE
+  sendTagNotification, // <--- IMPORTANTE
 } from "@/lib/appwrite";
+import CommentItem from "@/components/CommentItem";
+import { useColorScheme } from "nativewind";
 
-import ShareModal from "@/components/ShareModal";
+// --- HELPERS ---
+const formatTimeAgo = (dateString: string) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  const now = new Date();
+  const diff = (now.getTime() - date.getTime()) / 1000;
+  if (diff < 60) return "hace unos segundos";
+  const m = Math.floor(diff / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+};
 
-// Helper para parsear la canción
 const parseSongData = (songDataString: string) => {
   try {
-    return songDataString ? JSON.parse(songDataString) : null;
+    if (!songDataString) return null;
+    const song = JSON.parse(songDataString);
+    if (song.cover && song.cover.includes("100x100bb"))
+      song.cover = song.cover.replace("100x100bb", "600x600bb");
+    return song;
   } catch (e) {
     return null;
   }
 };
 
-const PostDetail = () => {
-  const params = useLocalSearchParams();
-  // Aseguramos que postId sea string
-  const postId = Array.isArray(params.id) ? params.id[0] : params.id;
+const PostDetails = () => {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
 
-  const [postData, setPostData] = useState<any>(null);
-  const [comments, setComments] = useState<any[]>([]);
-  const [newCommentText, setNewCommentText] = useState("");
+  // Colores
+  const bgColor = isDark ? "#000000" : "#FFFFFF";
+  const textColor = isDark ? "#FFFFFF" : "#000000";
+  const subTextColor = isDark ? "#A1A1AA" : "#71717A";
+  const borderColor = isDark ? "#27272A" : "#E4E4E7";
+  const cardBg = isDark ? "#1C1C1E" : "#F4F4F5";
+  const inputBg = isDark ? "#18181B" : "#F4F4F5";
+  const backIconColor = isDark ? "#FFFFFF" : "#000000";
+  const suggestionBg = isDark ? "#18181B" : "#FFFFFF"; // Fondo lista sugerencias
+
+  const { id } = useLocalSearchParams();
+  const { user } = useGlobalContext();
+  const postId = Array.isArray(id) ? id[0] : id;
+
+  const [post, setPost] = useState<any>(null);
+  const [allComments, setAllComments] = useState<any[]>([]);
+  const [rootComments, setRootComments] = useState<any[]>([]);
+
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [postLikedBy, setPostLikedBy] = useState<string[]>([]);
-  const [isShareVisible, setShareVisible] = useState(false);
+  const [sending, setSending] = useState(false);
 
-  // Audio
-  const [currentPreview, setCurrentPreview] = useState<string | null>(null);
-  const player = useAudioPlayer(currentPreview);
+  const [replyingTo, setReplyingTo] = useState<{
+    rootId: string;
+    username: string;
+  } | null>(null);
+
+  const [commentText, setCommentText] = useState("");
+
+  // --- ESTADOS PARA ETIQUETAS ---
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+
   const [isPlaying, setIsPlaying] = useState(false);
+  const player = useAudioPlayer(
+    post ? parseSongData(post.songData)?.preview : null
+  );
+
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
-    loadAllData();
+    fetchData();
   }, [postId]);
 
-  const loadAllData = async () => {
+  useEffect(() => {
+    if (allComments.length > 0) {
+      const roots = allComments.filter((c) => !c.parentId);
+      setRootComments(roots);
+    }
+  }, [allComments]);
+
+  const fetchData = async () => {
     try {
-      const user = await getCurrentUser();
-      setCurrentUser(user);
-
-      // 1. Cargar Post
-      // ⚠️ CORRECCIÓN CLAVE: Usamos 'any' para que acepte tanto el Documento de Appwrite como nuestro objeto manual
-      let post: any = await getPostById(postId);
-
-      // Fallback si venimos de la home y falla la carga (o para carga instantánea desde params)
-      if (!post && params.content) {
-        post = {
-          $id: postId,
-          comment: params.content as string, // Cast as string para evitar error TS
-          postedBy: {
-            name: params.name as string,
-            username: params.username as string,
-            pfp: params.avatar as string,
-          },
-          songData: JSON.stringify({
-            title: params.songTitle as string,
-            artist: params.songArtist as string,
-            cover: params.songCover as string,
-            preview: params.preview as string,
-          }),
-          $createdAt: params.createdAt as string,
-          likedBy: params.likedBy ? JSON.parse(params.likedBy as string) : [],
-        };
-      }
-
-      if (post) {
-        setPostData(post);
-        setPostLikedBy(post.likedBy || []);
-        const song = parseSongData(post.songData);
-        if (song && song.preview) setCurrentPreview(song.preview);
-      }
-
-      // 2. Cargar Comentarios
-      if (postId) {
-        const result = await getPostComments(postId);
-        setComments(result);
-      }
+      const [postData, commentsData] = await Promise.all([
+        getPostById(postId),
+        getPostComments(postId),
+      ]);
+      setPost(postData);
+      setAllComments(commentsData);
     } catch (error) {
-      console.error(error);
+      console.log(error);
     } finally {
       setLoading(false);
     }
   };
 
-  const togglePlayback = () => {
+  // --- LÓGICA ETIQUETAS ---
+  const handleTextChange = async (text: string) => {
+    setCommentText(text);
+
+    const words = text.split(" ");
+    const lastWord = words[words.length - 1];
+
+    // IMPORTANTE: Debes escribir al menos 1 letra después del @ (ej: "@a")
+    if (lastWord && lastWord.startsWith("@") && lastWord.length > 1) {
+      const query = lastWord.substring(1);
+      try {
+        const results = await searchUsers(query);
+        const filtered = results.filter((u) => u.$id !== user?.$id);
+        setSuggestions(filtered);
+        setShowSuggestions(filtered.length > 0);
+      } catch (error) {
+        console.log(error);
+      }
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSelectUser = (username: string) => {
+    const words = commentText.split(" ");
+    words.pop();
+    const newText = `${words.join(" ")} @${username} `;
+    setCommentText(newText);
+    setShowSuggestions(false);
+  };
+
+  const processMentions = async (content: string, postId: string) => {
+    if (!user) return;
+    const mentionRegex = /@(\w+)/g;
+    const matches = content.match(mentionRegex);
+    if (!matches) return;
+
+    const uniqueMentions = [...new Set(matches)];
+
+    uniqueMentions.forEach(async (mention) => {
+      const username = mention.substring(1);
+      const users = await searchUsers(username);
+      const targetUser = users.find((u) => u.username === username);
+      if (targetUser) {
+        await sendTagNotification(user.$id, targetUser.$id, postId);
+      }
+    });
+  };
+
+  // --- RESTO DE FUNCIONES ---
+  const handleLike = async () => {
+    if (!post || !user) return;
+    const originalLikes = post.likedBy || [];
+    const isLiked = originalLikes.includes(user.$id);
+    const newLikes = isLiked
+      ? originalLikes.filter((id: string) => id !== user.$id)
+      : [...originalLikes, user.$id];
+
+    setPost({ ...post, likedBy: newLikes });
+    try {
+      await toggleLikePost(post.$id, user.$id, originalLikes);
+    } catch (error) {
+      setPost(post);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!post || !user) return;
+    const originalSaved = post.savedBy || [];
+    const isSaved = originalSaved.includes(user.$id);
+    const newSaved = isSaved
+      ? originalSaved.filter((id: string) => id !== user.$id)
+      : [...originalSaved, user.$id];
+
+    setPost({ ...post, savedBy: newSaved });
+    try {
+      await toggleSavePost(post.$id, user.$id);
+    } catch (e) {}
+  };
+
+  const handlePlay = () => {
     if (isPlaying) {
       player.pause();
       setIsPlaying(false);
@@ -116,242 +214,348 @@ const PostDetail = () => {
     }
   };
 
-  const handleTogglePostLike = async () => {
-    if (!currentUser || !postData) return;
-    const userId = currentUser.$id;
-    const isLiked = postLikedBy.includes(userId);
+  const handleReply = (targetComment: any) => {
+    const rootId = targetComment.parentId
+      ? targetComment.parentId
+      : targetComment.$id;
+    const username = targetComment.username;
+    setReplyingTo({ rootId: rootId, username: username });
+    setCommentText(`@${username} `);
+    inputRef.current?.focus();
+  };
 
-    // Actualización optimista (instantánea)
-    let newLikes = isLiked
-      ? postLikedBy.filter((id) => id !== userId)
-      : [...postLikedBy, userId];
-    setPostLikedBy(newLikes);
+  const cancelReply = () => {
+    setReplyingTo(null);
+    setCommentText("");
+  };
+
+  const submitComment = async () => {
+    if (!commentText.trim()) return;
+    setSending(true);
 
     try {
-      await toggleLikePost(postData.$id, userId, postLikedBy);
+      const parentId = replyingTo ? replyingTo.rootId : null;
+      const newComment = await createComment(
+        postId,
+        {
+          content: commentText,
+          userId: user?.$id,
+          username: user?.username,
+          avatar: user?.pfp,
+        },
+        parentId
+      );
+
+      // Notificar etiquetas
+      await processMentions(commentText, postId);
+
+      setAllComments((prev) => [newComment, ...prev]);
+      setCommentText("");
+      setReplyingTo(null);
+      setShowSuggestions(false);
     } catch (error) {
-      setPostLikedBy(postLikedBy); // Revertir si falla
+      console.log("Error enviando:", error);
+    } finally {
+      setSending(false);
     }
   };
 
-  const handleSendComment = async () => {
-    if (!newCommentText.trim() || !currentUser || !postData) return;
+  const renderHeader = () => {
+    if (!post) return null;
+    const songData = parseSongData(post.songData);
+    const creator = post.postedBy || {};
+    const likedBy = post.likedBy || [];
+    const isLiked = user ? likedBy.includes(user.$id) : false;
+    const savedBy = post.savedBy || [];
+    const isSaved = user ? savedBy.includes(user.$id) : false;
 
-    // Crear comentario temporal para mostrarlo ya
-    const tempComment = {
-      $id: "temp-" + Date.now(),
-      content: newCommentText,
-      username: currentUser.username,
-      avatar: currentUser.pfp,
-      createdAt: new Date().toISOString(),
-    };
-
-    setComments([tempComment, ...comments]);
-    setNewCommentText("");
-
-    try {
-      await apiCreateComment(postData.$id, {
-        content: tempComment.content,
-        userId: currentUser.$id,
-        username: currentUser.username,
-        avatar: currentUser.pfp,
-      });
-    } catch (e) {
-      // Si falla, lo quitamos
-      setComments(comments.filter((c) => c.$id !== tempComment.$id));
-      Alert.alert("Error", "No se pudo enviar el comentario.");
-    }
-  };
-
-  if (loading)
     return (
-      <SafeAreaView className="flex-1 bg-black justify-center">
-        <ActivityIndicator color="#5E17EB" />
-      </SafeAreaView>
-    );
-  if (!postData) return null;
-
-  const songInfo = parseSongData(postData.songData);
-  const creator = postData.postedBy || {};
-  const isPostLiked = currentUser && postLikedBy.includes(currentUser?.$id);
-
-  const renderHeader = () => (
-    <View className="px-4 pt-2 pb-4 border-b border-zinc-900 bg-black">
-      {/* Info Usuario */}
-      <View className="flex-row items-center mb-4 mt-2">
-        <Image
-          source={{
-            uri:
-              creator.pfp ||
-              params.avatar ||
-              "https://cloud.appwrite.io/v1/avatars/initials?name=User",
+      <View
+        className="px-4 pt-2 pb-4 border-b mb-2"
+        style={{ borderColor: borderColor, backgroundColor: bgColor }}
+      >
+        <TouchableOpacity
+          className="flex-row items-center mb-3"
+          onPress={() => {
+            if (creator.$id) router.push(`/user/${creator.$id}` as any);
           }}
-          className="w-12 h-12 rounded-full bg-zinc-800"
-        />
-        <View className="ml-3">
-          <Text className="text-white font-bold text-[16px]">
-            {creator.name}
-          </Text>
-          <Text className="text-zinc-500 text-[14px]">@{creator.username}</Text>
-        </View>
-      </View>
-
-      {/* Texto del Post */}
-      <Text className="text-white text-[18px] leading-7 mb-4 font-normal">
-        {postData.comment}
-      </Text>
-
-      {/* Tarjeta de Canción */}
-      {songInfo && (
-        <View className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3 mb-4 flex-row items-center">
+        >
           <Image
-            source={{ uri: songInfo.cover }}
-            className="w-14 h-14 rounded-lg bg-zinc-800"
+            source={
+              creator.pfp ? { uri: creator.pfp } : require("@/assets/noPfp.jpg")
+            }
+            className="w-10 h-10 rounded-full border"
+            style={{ borderColor: borderColor, backgroundColor: cardBg }}
           />
-          <View className="flex-1 ml-3 mr-2 justify-center">
-            <Text
-              className="text-white font-bold text-[15px] mb-0.5"
-              numberOfLines={1}
-            >
-              {songInfo.title}
+          <View className="ml-3">
+            <Text className="font-bold text-base" style={{ color: textColor }}>
+              {creator.name}
             </Text>
-            <Text className="text-zinc-400 text-[13px]" numberOfLines={1}>
-              {songInfo.artist}
+            <Text className="text-sm" style={{ color: subTextColor }}>
+              @{creator.username} · {formatTimeAgo(post.$createdAt)}
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={togglePlayback}
-            className="w-10 h-10 rounded-full bg-[#5E17EB] items-center justify-center"
+        </TouchableOpacity>
+
+        {post.comment && (
+          <Text
+            className="text-[15px] mb-4 leading-6 px-1"
+            style={{ color: textColor }}
           >
+            {post.comment}
+          </Text>
+        )}
+
+        {songData && (
+          <View
+            className="rounded-2xl p-4 flex-row items-center border mb-4"
+            style={{ backgroundColor: cardBg, borderColor: borderColor }}
+          >
+            <Image
+              source={{ uri: songData.cover }}
+              className="w-16 h-16 rounded-xl"
+              style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
+            />
+            <View className="flex-1 ml-4 mr-2">
+              <Text
+                className="font-bold text-base"
+                numberOfLines={1}
+                style={{ color: textColor }}
+              >
+                {songData.title}
+              </Text>
+              <Text
+                className="text-sm mt-1"
+                numberOfLines={1}
+                style={{ color: subTextColor }}
+              >
+                {songData.artist}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handlePlay}
+              className="w-12 h-12 rounded-full bg-[#5E17EB] items-center justify-center shadow-lg"
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={isPlaying ? "pause" : "play"}
+                size={24}
+                color="white"
+                style={{ marginLeft: isPlaying ? 0 : 2 }}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View className="flex-row justify-between items-center mt-2 px-2">
+          <View className="flex-row gap-6">
+            <TouchableOpacity
+              onPress={handleLike}
+              className="flex-row items-center"
+            >
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={26}
+                color={isLiked ? "#EF4444" : "#A1A1AA"}
+              />
+              {likedBy.length > 0 && (
+                <Text
+                  className="ml-2 font-medium"
+                  style={{ color: isLiked ? "#EF4444" : subTextColor }}
+                >
+                  {likedBy.length}
+                </Text>
+              )}
+            </TouchableOpacity>
+            <View className="flex-row items-center">
+              <Ionicons name="chatbubble-outline" size={24} color="#A1A1AA" />
+              <Text
+                className="ml-2 font-medium"
+                style={{ color: subTextColor }}
+              >
+                {allComments.length}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity onPress={handleSave}>
             <Ionicons
-              name={isPlaying ? "pause" : "play"}
-              size={20}
-              color="white"
-              style={isPlaying ? {} : { marginLeft: 2 }}
+              name={isSaved ? "bookmark" : "bookmark-outline"}
+              size={24}
+              color={isSaved ? "#5E17EB" : "#A1A1AA"}
             />
           </TouchableOpacity>
         </View>
-      )}
-
-      {/* Botones de Acción */}
-      <View className="flex-row justify-around items-center pt-1 mt-2 border-t border-zinc-900/50">
-        <TouchableOpacity
-          onPress={handleTogglePostLike}
-          className="p-2 flex-row items-center gap-2"
-        >
-          <Ionicons
-            name={isPostLiked ? "heart" : "heart-outline"}
-            size={26}
-            color={isPostLiked ? "#EF4444" : "#A1A1AA"}
-          />
-          {postLikedBy.length > 0 && (
-            <Text className={isPostLiked ? "text-[#EF4444]" : "text-zinc-500"}>
-              {postLikedBy.length}
-            </Text>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity className="p-2 flex-row items-center gap-2">
-          <Ionicons name="chatbubble-outline" size={26} color="#A1A1AA" />
-          {comments.length > 0 && (
-            <Text className="text-zinc-500">{comments.length}</Text>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShareVisible(true)} className="p-2">
-          <Ionicons name="share-social-outline" size={26} color="#A1A1AA" />
-        </TouchableOpacity>
+        <View
+          className="h-[1px] w-full mt-6"
+          style={{ backgroundColor: borderColor }}
+        />
       </View>
-    </View>
-  );
+    );
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView
+        className="flex-1 justify-center items-center"
+        style={{ backgroundColor: bgColor }}
+      >
+        <ActivityIndicator color="#5E17EB" size="large" />
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView className="flex-1 bg-black" edges={["top"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      {/* Barra Superior */}
-      <View className="flex-row items-center px-2 h-[50px] border-b border-zinc-900 bg-black z-10">
-        <TouchableOpacity onPress={() => router.back()} className="p-2">
-          <Ionicons name="arrow-back" size={24} color="white" />
+    <SafeAreaView
+      className="flex-1"
+      edges={["top"]}
+      style={{ backgroundColor: bgColor }}
+    >
+      <View
+        className="flex-row items-center px-4 h-[50px] border-b z-10"
+        style={{ backgroundColor: bgColor, borderColor: borderColor }}
+      >
+        <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+          <Ionicons name="arrow-back" size={24} color={backIconColor} />
         </TouchableOpacity>
-        <Text className="text-white font-bold text-[18px] ml-4">Hilo</Text>
+        <Text className="font-bold text-lg ml-4" style={{ color: textColor }}>
+          Hilo
+        </Text>
       </View>
 
-      {/* Lista de Comentarios */}
       <FlatList
-        data={comments}
+        data={rootComments}
         keyExtractor={(item) => item.$id}
-        ListHeaderComponent={renderHeader}
         renderItem={({ item }) => (
-          <View className="px-4 py-4 border-b border-zinc-900 flex-row bg-black">
-            <Image
-              source={{
-                uri:
-                  item.avatar ||
-                  "https://cloud.appwrite.io/v1/avatars/initials?name=User",
-              }}
-              className="w-9 h-9 rounded-full bg-zinc-800 mr-3 mt-1"
-            />
-            <View className="flex-1">
-              <View className="flex-row justify-between mb-1">
-                <Text className="text-white font-bold text-[14px]">
-                  {item.username}
-                </Text>
-                <Text className="text-zinc-600 text-xs">
-                  {item.createdAt
-                    ? new Date(item.createdAt).toLocaleDateString()
-                    : ""}
-                </Text>
-              </View>
-              <Text className="text-zinc-300 text-[15px]">{item.content}</Text>
-            </View>
-          </View>
+          <CommentItem
+            item={item}
+            currentUserId={user?.$id || ""}
+            onReply={handleReply}
+            allComments={allComments}
+          />
         )}
-        // Espacio abajo para que el input no tape el último comentario
+        ListHeaderComponent={renderHeader}
         contentContainerStyle={{ paddingBottom: 100 }}
+        ListEmptyComponent={
+          <Text className="text-center mt-10" style={{ color: subTextColor }}>
+            Sé el primero en comentar.
+          </Text>
+        }
       />
 
-      {/* Input de Comentario */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-        className="absolute bottom-0 w-full bg-black border-t border-zinc-900"
+        className="absolute bottom-0 w-full border-t"
+        style={{ backgroundColor: bgColor, borderColor: borderColor }}
       >
-        <View className="px-4 py-3 flex-row items-end pb-5">
+        {/* LISTA DE SUGERENCIAS FLOTANTE */}
+        {showSuggestions && (
+          <View
+            className="w-full border-b"
+            style={{
+              backgroundColor: suggestionBg,
+              borderColor: borderColor,
+              maxHeight: 180,
+            }}
+          >
+            <FlatList
+              data={suggestions}
+              keyboardShouldPersistTaps="handled"
+              keyExtractor={(item) => item.$id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => handleSelectUser(item.username)}
+                  className="flex-row items-center px-4 py-3 border-b"
+                  style={{ borderColor: borderColor }}
+                >
+                  <Image
+                    source={{ uri: item.pfp }}
+                    className="w-8 h-8 rounded-full mr-3 bg-zinc-800"
+                  />
+                  <Text
+                    className="font-bold text-sm"
+                    style={{ color: textColor }}
+                  >
+                    {item.username}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        )}
+
+        {replyingTo && (
+          <View
+            className="flex-row items-center justify-between px-4 py-2"
+            style={{ backgroundColor: isDark ? "#18181B" : "#E4E4E7" }}
+          >
+            <Text className="text-xs" style={{ color: subTextColor }}>
+              Respondiendo a{" "}
+              <Text className="text-[#5E17EB] font-bold">
+                @{replyingTo.username}
+              </Text>
+            </Text>
+            <TouchableOpacity onPress={cancelReply}>
+              <Ionicons name="close" size={16} color={subTextColor} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View className="flex-row items-center px-4 py-3 pb-6">
           <Image
             source={{
               uri:
-                currentUser?.pfp ||
+                user?.pfp ||
                 "https://cloud.appwrite.io/v1/avatars/initials?name=Me",
             }}
-            className="w-8 h-8 rounded-full bg-zinc-800 mr-3 mb-2"
+            className="w-9 h-9 rounded-full mr-3"
+            style={{ backgroundColor: cardBg }}
           />
-          <View className="flex-1 bg-zinc-900 rounded-[22px] px-4 py-2 border border-zinc-800 flex-row items-center min-h-[44px]">
+          <View
+            className="flex-1 rounded-full flex-row items-center px-4 py-2 border"
+            style={{ backgroundColor: inputBg, borderColor: borderColor }}
+          >
             <TextInput
-              placeholder="Post your reply..."
-              placeholderTextColor="#71717A"
-              className="flex-1 text-white text-[16px] pt-1 pb-1 max-h-24"
+              ref={inputRef}
+              placeholder={
+                replyingTo
+                  ? `Responde a ${replyingTo.username}...`
+                  : "Agrega un comentario..."
+              }
+              placeholderTextColor={subTextColor}
+              className="flex-1 text-sm"
+              style={{ color: textColor, maxHeight: 80 }}
+              value={commentText}
+              onChangeText={handleTextChange} // <--- AQUI ESTÁ EL CAMBIO CLAVE
               multiline
-              value={newCommentText}
-              onChangeText={setNewCommentText}
             />
           </View>
-          {newCommentText.trim().length > 0 && (
-            <TouchableOpacity onPress={handleSendComment} className="ml-3 mb-1">
-              <Ionicons name="arrow-up-circle" size={38} color="#5E17EB" />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            onPress={submitComment}
+            disabled={!commentText.trim() || sending}
+            className={`ml-3 w-10 h-10 rounded-full items-center justify-center ${
+              commentText.trim() ? "bg-[#5E17EB]" : "bg-zinc-800"
+            }`}
+            style={
+              !commentText.trim()
+                ? { backgroundColor: isDark ? "#27272A" : "#E4E4E7" }
+                : {}
+            }
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Ionicons
+                name="arrow-up"
+                size={20}
+                color={commentText.trim() ? "white" : subTextColor}
+              />
+            )}
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-
-      {/* Modal de Compartir */}
-      {postData && (
-        <ShareModal
-          isVisible={isShareVisible}
-          onClose={() => setShareVisible(false)}
-          postId={postData.$id}
-        />
-      )}
     </SafeAreaView>
   );
 };
 
-export default PostDetail;
+export default PostDetails;

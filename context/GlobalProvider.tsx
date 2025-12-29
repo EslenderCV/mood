@@ -7,31 +7,38 @@ import {
   Dispatch,
   SetStateAction,
 } from "react";
-
 import { getCurrentUser } from "@/lib/appwrite";
 import { Models } from "react-native-appwrite";
+import { useColorScheme } from "nativewind"; // Importamos NativeWind
 
-// 1. Interfaz de Usuario
 export interface User extends Models.Document {
   name: string;
   username: string;
   email: string;
   pfp: string | null;
+  avatar: string;
+  accountId: string;
   followers: number;
   following: number;
+  bio?: string;
+  preferredPlatform?: string;
+  isPrivate?: boolean;
+  blockedUsers?: string[];
 }
 
 interface Props {
   children: ReactNode;
 }
 
-// 2. Definición del Contexto (Usando 'loggedIn' como pediste)
 interface GlobalContextType {
   loggedIn: boolean;
   setLoggedIn: Dispatch<SetStateAction<boolean>>;
   user: User | null;
   setUser: Dispatch<SetStateAction<User | null>>;
   loading: boolean;
+  isLogged: boolean;
+  setIsLogged: Dispatch<SetStateAction<boolean>>;
+  checkAuth: () => Promise<void>;
 }
 
 const GlobalContext = createContext<GlobalContextType>({
@@ -40,6 +47,9 @@ const GlobalContext = createContext<GlobalContextType>({
   user: null,
   setUser: () => {},
   loading: true,
+  isLogged: false,
+  setIsLogged: () => {},
+  checkAuth: async () => {},
 });
 
 export const useGlobalContext = () => useContext(GlobalContext);
@@ -49,29 +59,39 @@ const GlobalProvider = ({ children }: Props) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // --- CONTROL MAESTRO DEL TEMA ---
+  const { colorScheme, setColorScheme } = useColorScheme();
+
   useEffect(() => {
-    getCurrentUser()
-      .then((res) => {
-        if (res) {
-          setLoggedIn(true);
-          setUser(res as unknown as User);
-        } else {
-          setLoggedIn(false);
-          setUser(null);
-        }
-      })
-      .catch((error) => {
-        console.log("Error en GlobalProvider:", error);
-        // EN CASO DE ERROR, FORZAMOS EL ESTADO A 'NO LOGUEADO'
-        // Esto evita que la app se quede en un estado limbo
+    console.log("🎨 Tema actual al iniciar:", colorScheme);
+
+    // Forzamos MODO OSCURO si no está establecido
+    if (colorScheme !== "dark") {
+      console.log("🌑 Forzando Modo Oscuro...");
+      setColorScheme("dark");
+    }
+
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const res = await getCurrentUser();
+      if (res) {
+        setLoggedIn(true);
+        setUser(res as unknown as User);
+      } else {
         setLoggedIn(false);
         setUser(null);
-      })
-      .finally(() => {
-        // Solo aquí terminamos la carga
-        setLoading(false);
-      });
-  }, []);
+      }
+    } catch (error: any) {
+      console.log("Error verificando sesión:", error);
+      setLoggedIn(false);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <GlobalContext.Provider
@@ -81,6 +101,9 @@ const GlobalProvider = ({ children }: Props) => {
         user,
         setUser,
         loading,
+        isLogged: loggedIn,
+        setIsLogged: setLoggedIn,
+        checkAuth,
       }}
     >
       {children}

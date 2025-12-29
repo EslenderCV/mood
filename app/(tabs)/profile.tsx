@@ -15,6 +15,7 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { router, useFocusEffect } from "expo-router";
+import { useColorScheme } from "nativewind"; // <--- Importante
 import {
   getUserPosts,
   getFollowCounts,
@@ -55,6 +56,21 @@ const getCreatorFromPost = (item: any) => {
 };
 
 const Profile = () => {
+  // --- TEMA BLINDADO ---
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
+
+  // Colores calculados
+  const bgColor = isDark ? "#000000" : "#FFFFFF";
+  const textColor = isDark ? "#FFFFFF" : "#000000";
+  const subTextColor = isDark ? "#A1A1AA" : "#71717A";
+
+  // Elementos UI
+  const cardBg = isDark ? "#18181B" : "#F4F4F5";
+  const borderColor = isDark ? "#27272A" : "#E4E4E7";
+  const iconColor = isDark ? "#FFFFFF" : "#000000";
+  const statBorder = isDark ? "#3F3F46" : "#E4E4E7"; // Separador vertical
+
   const { user } = useGlobalContext();
   const [activeTab, setActiveTab] = useState(0);
 
@@ -169,7 +185,7 @@ const Profile = () => {
     handleTabPress(0);
   };
 
-  // --- RENDERIZADO ---
+  // --- RENDERIZADO ADAPTATIVO ---
 
   const renderMoodItem = (item: any) => {
     const songData = parseSongFromPost(item.songData);
@@ -185,8 +201,14 @@ const Profile = () => {
       >
         <Image
           source={{ uri: imageUrl }}
-          style={{ width: ITEM_SIZE, height: ITEM_SIZE }}
-          className="border-[0.5px] border-black/20 bg-zinc-900"
+          style={{
+            width: ITEM_SIZE,
+            height: ITEM_SIZE,
+            backgroundColor: cardBg,
+          }}
+          className="border-[0.5px]"
+          // Borde dinámico manual si fuera necesario, pero la clase CSS suele bastar
+          // Aquí forzamos un borde muy sutil
           resizeMode="cover"
         />
         {item.likedBy && item.likedBy.length > 0 && (
@@ -205,38 +227,56 @@ const Profile = () => {
     <TouchableOpacity
       key={item.postId || index}
       onPress={() => router.push(`/post/${item.postId}` as any)}
-      className="flex-row items-center px-6 py-3 border-b border-zinc-900/50 w-full"
+      className="flex-row items-center px-6 py-3 border-b w-full"
+      style={{ borderColor: borderColor }}
     >
       <Text className="text-[#5E17EB] font-bold text-lg mr-4 w-4 text-center">
         {index + 1}
       </Text>
       <Image
         source={{ uri: item.cover }}
-        className="w-14 h-14 rounded-xl mr-4 bg-zinc-800"
+        className="w-14 h-14 rounded-xl mr-4"
+        style={{ backgroundColor: cardBg }}
       />
       <View className="flex-1">
-        <Text className="text-white font-bold text-base" numberOfLines={1}>
+        <Text
+          className="font-bold text-base"
+          numberOfLines={1}
+          style={{ color: textColor }}
+        >
           {item.title}
         </Text>
-        <Text className="text-zinc-500 text-sm" numberOfLines={1}>
+        <Text
+          className="text-sm"
+          numberOfLines={1}
+          style={{ color: subTextColor }}
+        >
           {item.artist}
         </Text>
       </View>
-      <View className="flex-row items-center bg-zinc-800/50 px-2 py-1 rounded-lg">
+      <View
+        className="flex-row items-center px-2 py-1 rounded-lg"
+        style={{
+          backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "#F4F4F5",
+        }}
+      >
         <Ionicons
           name="heart"
           size={12}
           color="#EF4444"
           style={{ marginRight: 4 }}
         />
-        <Text className="text-white text-xs font-bold">{item.likes}</Text>
+        <Text className="text-xs font-bold" style={{ color: textColor }}>
+          {item.likes}
+        </Text>
       </View>
     </TouchableOpacity>
   );
 
   const renderSuggestedUser = ({ item }: { item: any }) => (
     <TouchableOpacity
-      className="bg-zinc-900 mr-3 p-3 rounded-2xl border border-zinc-800 w-[110px] items-center"
+      className="mr-3 p-3 rounded-2xl border w-[110px] items-center"
+      style={{ backgroundColor: cardBg, borderColor: borderColor }}
       onPress={() =>
         router.push({
           pathname: "/user/[id]",
@@ -253,29 +293,38 @@ const Profile = () => {
         source={
           item.avatar ? { uri: item.avatar } : require("@/assets/noPfp.jpg")
         }
-        className="w-14 h-14 rounded-full mb-2 bg-zinc-800"
+        className="w-14 h-14 rounded-full mb-2"
+        style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
       />
       <Text
-        className="text-white text-xs font-bold text-center mb-1"
+        className="text-xs font-bold text-center mb-1"
         numberOfLines={1}
+        style={{ color: textColor }}
       >
         {item.name}
       </Text>
       <Text
-        className="text-zinc-500 text-[10px] text-center mb-2"
+        className="text-[10px] text-center mb-2"
         numberOfLines={1}
+        style={{ color: subTextColor }}
       >
         @{item.username}
       </Text>
-      <View className="bg-[#5E17EB]/20 w-full py-1 rounded-lg items-center">
+      <View className="bg-[#5E17EB]/10 w-full py-1 rounded-lg items-center">
         <Text className="text-[#5E17EB] text-[10px] font-bold">Ver Perfil</Text>
       </View>
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-black" edges={["top"]}>
-      <StatusBar style="light" />
+    // FONDO BLINDADO
+    <SafeAreaView
+      className="flex-1"
+      edges={["top"]}
+      style={{ backgroundColor: bgColor }}
+    >
+      <StatusBar style={isDark ? "light" : "dark"} />
+
       <ScrollView
         ref={mainScrollRef}
         showsVerticalScrollIndicator={false}
@@ -284,21 +333,23 @@ const Profile = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#fff"
+            tintColor="#5E17EB"
           />
         }
       >
         {/* HEADER */}
         <View className="flex-row justify-between items-center px-6 py-2 mb-6">
-          <Text className="text-white text-3xl font-bold">Perfil</Text>
+          <Text className="text-3xl font-bold" style={{ color: textColor }}>
+            Perfil
+          </Text>
           <View className="flex-row gap-4">
             <TouchableOpacity
               onPress={() => router.push("/editScreen")}
-              className="bg-zinc-800 p-3 rounded-2xl"
+              className="p-3 rounded-2xl"
+              style={{ backgroundColor: cardBg }}
             >
-              <Feather name="edit-2" size={20} color="white" />
+              <Feather name="edit-2" size={20} color={iconColor} />
             </TouchableOpacity>
-            {/* BOTÓN CERRAR SESIÓN ELIMINADO AQUÍ */}
           </View>
         </View>
 
@@ -310,9 +361,13 @@ const Profile = () => {
                 user?.pfp ? { uri: user.pfp } : require("@/assets/noPfp.jpg")
               }
               className="w-32 h-32 rounded-full"
+              style={{ backgroundColor: cardBg }}
             />
           </View>
-          <Text className="text-white text-2xl font-bold mt-4">
+          <Text
+            className="text-2xl font-bold mt-4"
+            style={{ color: textColor }}
+          >
             {user?.name || "Usuario"}
           </Text>
           <Text className="text-[#5E17EB] font-medium mt-1">
@@ -321,7 +376,10 @@ const Profile = () => {
         </View>
 
         {/* ESTADÍSTICAS */}
-        <View className="flex-row justify-between items-center bg-zinc-900 mx-4 h-[70px] mt-8 mb-6 px-2 rounded-3xl border border-zinc-800">
+        <View
+          className="flex-row justify-between items-center mx-4 h-[70px] mt-8 mb-6 px-2 rounded-3xl border shadow-sm"
+          style={{ backgroundColor: cardBg, borderColor: borderColor }}
+        >
           <TouchableOpacity
             onPress={() =>
               router.push({
@@ -331,24 +389,38 @@ const Profile = () => {
             }
             className="flex-1 items-center py-4"
           >
-            <Text className="text-white text-xl font-bold">
+            <Text className="text-xl font-bold" style={{ color: textColor }}>
               {stats.followersCount}
             </Text>
-            <Text className="text-zinc-500 text-[10px] font-bold mt-1">
+            <Text
+              className="text-[10px] font-bold mt-1"
+              style={{ color: subTextColor }}
+            >
               SEGUIDORES
             </Text>
           </TouchableOpacity>
-          <View className="h-8 w-[1px] bg-zinc-700" />
+          <View
+            className="h-8 w-[1px]"
+            style={{ backgroundColor: statBorder }}
+          />
           <TouchableOpacity
             onPress={scrollToMoods}
             className="flex-1 items-center py-4"
           >
-            <Text className="text-white text-xl font-bold">{posts.length}</Text>
-            <Text className="text-zinc-500 text-[10px] font-bold mt-1">
+            <Text className="text-xl font-bold" style={{ color: textColor }}>
+              {posts.length}
+            </Text>
+            <Text
+              className="text-[10px] font-bold mt-1"
+              style={{ color: subTextColor }}
+            >
               MOODS
             </Text>
           </TouchableOpacity>
-          <View className="h-8 w-[1px] bg-zinc-700" />
+          <View
+            className="h-8 w-[1px]"
+            style={{ backgroundColor: statBorder }}
+          />
           <TouchableOpacity
             onPress={() =>
               router.push({
@@ -358,10 +430,13 @@ const Profile = () => {
             }
             className="flex-1 items-center py-4"
           >
-            <Text className="text-white text-xl font-bold">
+            <Text className="text-xl font-bold" style={{ color: textColor }}>
               {stats.followingCount}
             </Text>
-            <Text className="text-zinc-500 text-[10px] font-bold mt-1">
+            <Text
+              className="text-[10px] font-bold mt-1"
+              style={{ color: subTextColor }}
+            >
               SEGUIDOS
             </Text>
           </TouchableOpacity>
@@ -370,7 +445,10 @@ const Profile = () => {
         {/* GENTE QUE PODRÍAS CONOCER */}
         {suggestedUsers.length > 0 && (
           <View className="mb-6 pl-4">
-            <Text className="text-white text-lg font-bold mb-3">
+            <Text
+              className="text-lg font-bold mb-3"
+              style={{ color: textColor }}
+            >
               Gente que podrías conocer
             </Text>
             <FlatList
@@ -384,44 +462,47 @@ const Profile = () => {
         )}
 
         {/* TABS STICKY */}
-        <View className="bg-black pt-2 border-t border-zinc-900">
+        <View
+          className="pt-2 border-t"
+          style={{ backgroundColor: bgColor, borderColor: borderColor }}
+        >
           <View className="flex-row px-4 mb-4 gap-4">
             <TouchableOpacity
               onPress={() => handleTabPress(0)}
-              className={`flex-1 py-3 rounded-xl items-center justify-center flex-row ${
-                activeTab === 0 ? "bg-[#5E17EB]" : "bg-transparent"
-              }`}
+              className="flex-1 py-3 rounded-xl items-center justify-center flex-row"
+              style={{
+                backgroundColor: activeTab === 0 ? "#5E17EB" : "transparent",
+              }}
             >
               <Ionicons
                 name="grid"
                 size={18}
-                color={activeTab === 0 ? "white" : "#71717A"}
+                color={activeTab === 0 ? "white" : subTextColor}
                 style={{ marginRight: 8 }}
               />
               <Text
-                className={`font-bold ${
-                  activeTab === 0 ? "text-white" : "text-zinc-500"
-                }`}
+                className="font-bold"
+                style={{ color: activeTab === 0 ? "white" : subTextColor }}
               >
                 MOODS
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => handleTabPress(1)}
-              className={`flex-1 py-3 rounded-xl items-center justify-center flex-row ${
-                activeTab === 1 ? "bg-[#5E17EB]" : "bg-transparent"
-              }`}
+              className="flex-1 py-3 rounded-xl items-center justify-center flex-row"
+              style={{
+                backgroundColor: activeTab === 1 ? "#5E17EB" : "transparent",
+              }}
             >
               <Ionicons
                 name="musical-notes"
                 size={18}
-                color={activeTab === 1 ? "white" : "#71717A"}
+                color={activeTab === 1 ? "white" : subTextColor}
                 style={{ marginRight: 8 }}
               />
               <Text
-                className={`font-bold ${
-                  activeTab === 1 ? "text-white" : "text-zinc-500"
-                }`}
+                className="font-bold"
+                style={{ color: activeTab === 1 ? "white" : subTextColor }}
               >
                 TOP HITS
               </Text>
@@ -448,7 +529,9 @@ const Profile = () => {
               </View>
             ) : posts.length === 0 ? (
               <View className="flex-1 justify-center items-center py-10">
-                <Text className="text-zinc-500">No hay publicaciones aún</Text>
+                <Text style={{ color: subTextColor }}>
+                  No hay publicaciones aún
+                </Text>
               </View>
             ) : (
               <View className="flex-row flex-wrap">
@@ -465,8 +548,12 @@ const Profile = () => {
               </View>
             ) : topSongs.length === 0 ? (
               <View className="flex-1 justify-center items-center py-10">
-                <Ionicons name="musical-note" size={40} color="#3f3f46" />
-                <Text className="text-zinc-500 mt-2">
+                <Ionicons
+                  name="musical-note"
+                  size={40}
+                  color={isDark ? "#3f3f46" : "#E4E4E7"}
+                />
+                <Text className="mt-2" style={{ color: subTextColor }}>
                   No hay canciones populares aún
                 </Text>
               </View>

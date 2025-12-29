@@ -11,6 +11,8 @@ import React, { useState, useCallback, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useColorScheme } from "nativewind"; // <--- Importante
+
 import {
   getCurrentUser,
   getUserChats,
@@ -21,6 +23,20 @@ import {
 } from "@/lib/appwrite";
 
 const ChatsList = () => {
+  // --- TEMA BLINDADO ---
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
+
+  // Colores calculados
+  const bgColor = isDark ? "#000000" : "#FFFFFF";
+  const textColor = isDark ? "#FFFFFF" : "#000000";
+  const subTextColor = isDark ? "#A1A1AA" : "#71717A";
+  const borderColor = isDark ? "#27272A" : "#E4E4E7";
+  const inputBg = isDark ? "#18181B" : "#F4F4F5";
+  const iconColor = isDark ? "#A1A1AA" : "#52525B";
+  const backIconColor = isDark ? "#FFFFFF" : "#000000";
+  const unreadColor = "#5E17EB"; // Morado siempre
+
   const [chats, setChats] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -116,16 +132,18 @@ const ChatsList = () => {
 
   const renderChatItem = ({ item }: { item: any }) => {
     // LÓGICA DE NO LEÍDO:
-    // 1. El último mensaje no está leído.
-    // 2. Y ADEMÁS, el que lo envió NO soy yo (lastSenderId != mi ID).
     const isUnread =
       !item.lastMessageIsRead && item.lastSenderId !== currentUser?.$id;
+
+    // Fondo ligeramente diferente si no leído (opcional, aquí lo mantengo limpio)
+    const itemBg = bgColor;
 
     return (
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={() => handleOpenChat(item.otherUser?.$id, item.otherUser)}
-        className="flex-row items-center px-5 py-4 border-b border-zinc-900 bg-black"
+        className="flex-row items-center px-5 py-4 border-b"
+        style={{ backgroundColor: itemBg, borderColor: borderColor }}
       >
         <Image
           source={{
@@ -133,23 +151,26 @@ const ChatsList = () => {
               item.otherUser?.pfp ||
               "https://cloud.appwrite.io/v1/avatars/initials?name=User",
           }}
-          className="w-14 h-14 rounded-full bg-zinc-800"
+          className="w-14 h-14 rounded-full"
+          style={{ backgroundColor: inputBg }}
         />
         <View className="ml-4 flex-1 justify-center">
           <View className="flex-row justify-between items-center mb-1">
             <Text
-              className={`text-white text-[16px] ${
-                isUnread ? "font-bold" : "font-semibold"
-              }`}
+              className="text-[16px]"
+              style={{
+                color: textColor,
+                fontWeight: isUnread ? "bold" : "600",
+              }}
             >
               {item.otherUser?.username || "Usuario"}
             </Text>
             <Text
-              className={`text-xs ${
-                isUnread
-                  ? "text-[#5E17EB] font-bold"
-                  : "text-zinc-500 font-medium"
-              }`}
+              className="text-xs"
+              style={{
+                color: isUnread ? unreadColor : subTextColor,
+                fontWeight: isUnread ? "bold" : "500",
+              }}
             >
               {new Date(item.lastMessageAt).toLocaleTimeString([], {
                 hour: "2-digit",
@@ -160,21 +181,27 @@ const ChatsList = () => {
 
           <View className="flex-row items-center justify-between">
             <Text
-              className={`text-[14px] leading-5 flex-1 mr-2 ${
-                isUnread ? "text-white font-bold" : "text-zinc-400 font-normal"
-              }`}
+              className="text-[14px] leading-5 flex-1 mr-2"
+              style={{
+                color: isUnread ? textColor : subTextColor,
+                fontWeight: isUnread ? "bold" : "normal",
+              }}
               numberOfLines={1}
             >
-              {/* Si yo fui el último, pongo "Tú: " */}
               {item.lastSenderId === currentUser?.$id && (
-                <Text className="font-normal text-zinc-500">Tú: </Text>
+                <Text style={{ color: subTextColor, fontWeight: "normal" }}>
+                  Tú:{" "}
+                </Text>
               )}
               {item.lastMessage}
             </Text>
 
             {/* PUNTO AZUL SI NO LEÍDO */}
             {isUnread && (
-              <View className="w-2.5 h-2.5 rounded-full bg-[#5E17EB]" />
+              <View
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: unreadColor }}
+              />
             )}
           </View>
         </View>
@@ -186,44 +213,70 @@ const ChatsList = () => {
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={() => handleOpenChat(item.$id, item)}
-      className="flex-row items-center px-5 py-3 border-b border-zinc-900 bg-black"
+      className="flex-row items-center px-5 py-3 border-b"
+      style={{ backgroundColor: bgColor, borderColor: borderColor }}
     >
       <Image
         source={{ uri: item.pfp }}
-        className="w-12 h-12 rounded-full bg-zinc-800"
+        className="w-12 h-12 rounded-full"
+        style={{ backgroundColor: inputBg }}
       />
       <View className="ml-4 flex-1">
-        <Text className="text-white font-bold text-[16px]">{item.name}</Text>
-        <Text className="text-zinc-500 text-sm">@{item.username}</Text>
+        <Text className="font-bold text-[16px]" style={{ color: textColor }}>
+          {item.name}
+        </Text>
+        <Text className="text-sm" style={{ color: subTextColor }}>
+          @{item.username}
+        </Text>
       </View>
-      <View className="bg-[#5E17EB] p-2 rounded-full">
+      <View
+        className="p-2 rounded-full"
+        style={{ backgroundColor: unreadColor }}
+      >
         <Ionicons name="chatbubble-outline" size={18} color="white" />
       </View>
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-black" edges={["top"]}>
-      <View className="px-4 pt-2 pb-4 border-b border-zinc-900 bg-black z-10">
+    <SafeAreaView
+      className="flex-1"
+      edges={["top"]}
+      style={{ backgroundColor: bgColor }}
+    >
+      <View
+        className="px-4 pt-2 pb-4 border-b z-10"
+        style={{ backgroundColor: bgColor, borderColor: borderColor }}
+      >
         <View className="flex-row items-center mb-4">
           <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
-            <Ionicons name="arrow-back" size={26} color="white" />
+            <Ionicons name="arrow-back" size={26} color={backIconColor} />
           </TouchableOpacity>
-          <Text className="text-white font-bold text-3xl ml-2">Mensajes</Text>
+          <Text
+            className="font-bold text-3xl ml-2"
+            style={{ color: textColor }}
+          >
+            Mensajes
+          </Text>
         </View>
-        <View className="bg-zinc-900/80 rounded-2xl flex-row items-center px-4 py-3 border border-zinc-800">
-          <Ionicons name="search" size={20} color="#A1A1AA" />
+
+        <View
+          className="rounded-2xl flex-row items-center px-4 py-3 border"
+          style={{ backgroundColor: inputBg, borderColor: borderColor }}
+        >
+          <Ionicons name="search" size={20} color={iconColor} />
           <TextInput
             placeholder="Buscar personas..."
-            placeholderTextColor="#71717A"
-            className="flex-1 text-white ml-3 text-[16px] font-medium h-full"
+            placeholderTextColor={subTextColor}
+            className="flex-1 ml-3 text-[16px] font-medium h-full"
+            style={{ color: textColor }}
             value={searchQuery}
             onChangeText={handleSearch}
             autoCapitalize="none"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => handleSearch("")}>
-              <Ionicons name="close-circle" size={20} color="#71717A" />
+              <Ionicons name="close-circle" size={20} color={iconColor} />
             </TouchableOpacity>
           )}
         </View>
@@ -231,7 +284,10 @@ const ChatsList = () => {
 
       {isSearching ? (
         <View className="flex-1">
-          <Text className="text-zinc-500 text-xs font-bold uppercase tracking-widest px-5 py-4">
+          <Text
+            className="text-xs font-bold uppercase tracking-widest px-5 py-4"
+            style={{ color: subTextColor }}
+          >
             Resultados
           </Text>
           <FlatList
@@ -254,7 +310,13 @@ const ChatsList = () => {
           }
           ListEmptyComponent={
             <View className="flex-1 justify-center items-center mt-32 px-10">
-              <Text className="text-zinc-500 text-center">
+              <Ionicons
+                name="chatbubbles-outline"
+                size={48}
+                color={subTextColor}
+                style={{ opacity: 0.5, marginBottom: 10 }}
+              />
+              <Text className="text-center" style={{ color: subTextColor }}>
                 No tienes chats activos
               </Text>
             </View>

@@ -8,9 +8,10 @@ import {
   Platform,
   Image,
   ActivityIndicator,
+  Dimensions,
 } from "react-native";
 import React, { useEffect, useState, useRef } from "react";
-import { useLocalSearchParams, router } from "expo-router";
+import { useLocalSearchParams, router, Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -18,6 +19,8 @@ import {
   Swipeable,
 } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
+import { useColorScheme } from "nativewind";
+
 import {
   getCurrentUser,
   getChatMessages,
@@ -28,8 +31,20 @@ import {
   getPostById,
 } from "@/lib/appwrite";
 
-// --- COMPONENTE: TARJETA DE POST (Estilo Spotify/Card) ---
+const { width } = Dimensions.get("window");
+
+// --- COMPONENTE: TARJETA DE POST (ESTILO INSTAGRAM VERTICAL) ---
 const PostPreviewBubble = ({ postId }: { postId: string }) => {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
+
+  // Colores Premium
+  const cardBg = isDark ? "#262626" : "#FFFFFF";
+  const textColor = isDark ? "#FFFFFF" : "#000000";
+  const subTextColor = isDark ? "#A8A8A8" : "#737373";
+  const borderColor = isDark ? "#363636" : "#E5E5E5";
+  const footerBg = isDark ? "rgba(255,255,255,0.03)" : "#FAFAFA";
+
   const [post, setPost] = useState<any>(null);
 
   useEffect(() => {
@@ -44,7 +59,10 @@ const PostPreviewBubble = ({ postId }: { postId: string }) => {
 
   if (!post)
     return (
-      <View className="w-60 h-20 bg-zinc-900 rounded-2xl border border-zinc-800 justify-center items-center">
+      <View
+        className="w-60 h-64 rounded-[20px] justify-center items-center mb-1 border"
+        style={{ backgroundColor: cardBg, borderColor: borderColor }}
+      >
         <ActivityIndicator color="#5E17EB" size="small" />
       </View>
     );
@@ -55,34 +73,86 @@ const PostPreviewBubble = ({ postId }: { postId: string }) => {
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={() => router.push(`/post/${postId}`)}
-      className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden w-64 mt-1"
+      className="rounded-[22px] overflow-hidden mb-1 border shadow-sm"
+      style={{
+        backgroundColor: cardBg,
+        borderColor: borderColor,
+        width: 260,
+      }}
     >
-      <View className="flex-row p-3 items-center">
-        {song?.cover ? (
+      {/* 1. HEADER: USUARIO */}
+      {post.postedBy && (
+        <View className="flex-row items-center px-3 py-2.5 space-x-2 border-b border-black/5 dark:border-white/5">
           <Image
-            source={{ uri: song.cover }}
-            className="w-12 h-12 rounded-md mr-3 bg-zinc-800"
+            source={
+              post.postedBy.pfp
+                ? { uri: post.postedBy.pfp }
+                : require("@/assets/noPfp.jpg")
+            }
+            className="w-6 h-6 rounded-full bg-gray-200"
           />
-        ) : (
-          <View className="w-12 h-12 rounded-md mr-3 bg-zinc-800 items-center justify-center">
-            <Ionicons name="musical-note" color="gray" size={20} />
-          </View>
-        )}
-        <View className="flex-1 justify-center">
-          <Text className="text-white font-bold text-sm" numberOfLines={1}>
-            {song?.title || "Sin título"}
-          </Text>
-          <Text className="text-zinc-400 text-xs" numberOfLines={1}>
-            {song?.artist || "Desconocido"}
+          <Text
+            className="text-[13px] font-semibold"
+            style={{ color: textColor }}
+            numberOfLines={1}
+          >
+            {post.postedBy.username}
           </Text>
         </View>
-        <Ionicons name="play-circle" size={28} color="#5E17EB" />
+      )}
+
+      {/* 2. MEDIA: PORTADA GRANDE */}
+      <View className="w-full aspect-square bg-zinc-800 relative">
+        <Image
+          source={
+            song?.cover
+              ? { uri: song.cover }
+              : require("@/assets/images/icon.png")
+          }
+          className="w-full h-full"
+          resizeMode="cover"
+        />
+        <View className="absolute bottom-0 w-full h-10 bg-black/10" />
       </View>
-      <View className="bg-zinc-950 px-3 py-1.5 flex-row items-center border-t border-zinc-800">
-        <Ionicons name="share-social-outline" size={12} color="#71717A" />
-        <Text className="text-zinc-500 text-[10px] ml-1">
-          Compartido por {post.postedBy?.username}
-        </Text>
+
+      {/* 3. FOOTER */}
+      <View className="p-3" style={{ backgroundColor: footerBg }}>
+        <View className="flex-row items-center justify-between">
+          <View className="flex-1 mr-3">
+            <Text
+              className="font-bold text-[14px] leading-tight"
+              numberOfLines={1}
+              style={{ color: textColor }}
+            >
+              {song?.title || "Canción"}
+            </Text>
+            <Text
+              className="text-[12px] mt-0.5 font-medium"
+              numberOfLines={1}
+              style={{ color: subTextColor }}
+            >
+              {song?.artist || "Artista"}
+            </Text>
+          </View>
+          <View className="bg-[#5E17EB] w-8 h-8 rounded-full items-center justify-center shadow-sm">
+            <Ionicons
+              name="play"
+              size={14}
+              color="white"
+              style={{ marginLeft: 2 }}
+            />
+          </View>
+        </View>
+        {post.comment && (
+          <Text
+            className="text-[12px] mt-2.5 pt-2 border-t border-black/5 dark:border-white/5 leading-4"
+            numberOfLines={2}
+            style={{ color: textColor }}
+          >
+            <Text className="font-bold">{post.postedBy?.username}</Text>{" "}
+            {post.comment}
+          </Text>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -90,6 +160,23 @@ const PostPreviewBubble = ({ postId }: { postId: string }) => {
 
 // --- PANTALLA PRINCIPAL ---
 const ChatRoom = () => {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
+
+  // Colores
+  const bgColor = isDark ? "#000000" : "#FFFFFF";
+  const textColor = isDark ? "#FFFFFF" : "#000000";
+  const subTextColor = isDark ? "#A1A1AA" : "#71717A";
+  const borderColor = isDark ? "#27272A" : "#E4E4E7";
+  const inputBg = isDark ? "#18181B" : "#F4F4F5";
+  const headerBg = isDark ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.95)";
+  const backIconColor = isDark ? "#FFFFFF" : "#000000";
+  const iconColor = isDark ? "#A1A1AA" : "#52525B";
+
+  const myBubbleBg = "#5E17EB";
+  const otherBubbleBg = isDark ? "#27272A" : "#F3F4F6";
+  const otherBubbleText = isDark ? "#FFFFFF" : "#000000";
+
   const params = useLocalSearchParams();
   const chatId = params.id as string;
   const otherUserId = params.otherUserId as string;
@@ -98,38 +185,30 @@ const ChatRoom = () => {
   const [newMessage, setNewMessage] = useState("");
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [replyingTo, setReplyingTo] = useState<any>(null);
-  const [isOtherUserOnline, setIsOtherUserOnline] = useState(false); // Simulado por ahora
+  const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
+  const rowRefs = useRef(new Map()).current;
 
   useEffect(() => {
     loadData();
-
-    // SUSCRIPCIÓN REALTIME
     const unsubscribe = client.subscribe(
       `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`,
       (response) => {
         const payload = response.payload as any;
-
-        // Solo actuar si es de este chat
         if (payload.chatId === chatId) {
-          // 1. NUEVO MENSAJE
           if (
             response.events.includes(
               "databases.*.collections.*.documents.*.create"
             )
           ) {
             setMessages((prev) => [payload, ...prev]);
-
-            // Si el mensaje NO es mío, marcarlo como leído inmediatamente
             getCurrentUser().then((user) => {
               if (user && payload.senderId !== user.$id) {
                 markChatAsRead(chatId, user.$id);
               }
             });
           }
-
-          // 2. ACTUALIZACIÓN (Ej: Alguien leyó el mensaje -> isRead cambia a true)
           if (
             response.events.includes(
               "databases.*.collections.*.documents.*.update"
@@ -142,23 +221,16 @@ const ChatRoom = () => {
         }
       }
     );
-
     return () => unsubscribe();
   }, [chatId]);
 
   const loadData = async () => {
     try {
       const user = await getCurrentUser();
-      if (!user) {
-        // Redirigir si no hay usuario (protección extra)
-        return router.replace("/signIn");
-      }
+      if (!user) return router.replace("/signIn");
       setCurrentUser(user);
-
       const msgs = await getChatMessages(chatId);
       setMessages(msgs);
-
-      // Marcar como leídos al entrar
       markChatAsRead(chatId, user.$id);
     } catch (error) {
       console.log("Error loading chat:", error);
@@ -166,32 +238,26 @@ const ChatRoom = () => {
   };
 
   const onSwipeToReply = (message: any) => {
-    // Vibración suave estilo iOS
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setReplyingTo(message);
+    const ref = rowRefs.get(message.$id);
+    if (ref) ref.close();
   };
 
   const handleSend = async () => {
     if (!newMessage.trim() || !currentUser) return;
-
-    // Lógica de respuesta (Cita)
     let contentToSend = newMessage;
     if (replyingTo) {
       const replyPreview =
         replyingTo.content.length > 30
           ? replyingTo.content.substring(0, 30) + "..."
           : replyingTo.content;
-      // Añadimos metadata visual al texto (puedes mejorar esto guardándolo en un campo separado si prefieres)
       contentToSend = `Replying to: "${replyPreview}"\n\n${newMessage}`;
     }
-
     const tempContent = contentToSend;
     setNewMessage("");
     setReplyingTo(null);
-
     try {
-      // Usamos tu función sendMessage del lib/appwrite.ts
-      // Argumentos: chatId, senderId, receiverId, content, sharedPostId
       await sendMessage(
         chatId,
         currentUser.$id,
@@ -201,7 +267,7 @@ const ChatRoom = () => {
       );
     } catch (error) {
       console.log("Error sending:", error);
-      setNewMessage(tempContent); // Restaurar si falla
+      setNewMessage(tempContent);
     }
   };
 
@@ -215,12 +281,24 @@ const ChatRoom = () => {
 
     return (
       <Swipeable
-        renderRightActions={() => <View className="w-10" />} // Espacio vacío para permitir el gesto
+        ref={(ref) => {
+          if (ref && item.$id) rowRefs.set(item.$id, ref);
+        }}
+        // --- CAMBIO CLAVE: Usar renderRightActions (Deslizar a la Izquierda) ---
+        // Esto evita el conflicto con el gesto de navegación (Deslizar a la Derecha)
+        renderRightActions={() => (
+          <View className="justify-center items-end pr-4 w-20">
+            <Ionicons name="arrow-undo" size={24} color={iconColor} />
+          </View>
+        )}
         onSwipeableWillOpen={() => onSwipeToReply(item)}
+        // Umbral para activar el gesto (evita conflictos con scroll vertical)
+        activeOffsetX={[-20, 20]}
         friction={2}
+        overshootRight={false}
       >
         <View
-          className={`mb-2 flex-row ${
+          className={`mb-3 flex-row ${
             isMe ? "justify-end" : "justify-start"
           } px-4`}
         >
@@ -228,43 +306,60 @@ const ChatRoom = () => {
             <Image
               source={{ uri: params.otherUserAvatar as string }}
               className="w-8 h-8 rounded-full self-end mr-2 mb-1"
+              style={{ backgroundColor: inputBg }}
             />
           )}
-
-          <View className={`max-w-[80%] ${isMe ? "items-end" : "items-start"}`}>
+          <View className={`max-w-[85%] ${isMe ? "items-end" : "items-start"}`}>
             {item.sharedPostId ? (
-              // --- RENDERIZADO DE POST ---
               <PostPreviewBubble postId={item.sharedPostId} />
             ) : (
-              // --- RENDERIZADO DE TEXTO ---
               <View
-                className={`px-4 py-2 rounded-2xl ${
-                  isMe
-                    ? "bg-[#5E17EB] rounded-br-sm"
-                    : "bg-zinc-800 rounded-bl-sm border border-zinc-700"
+                className={`px-4 py-2.5 rounded-[20px] ${
+                  isMe ? "rounded-br-sm" : "rounded-bl-sm"
                 }`}
+                style={{
+                  backgroundColor: isMe ? myBubbleBg : otherBubbleBg,
+                  borderWidth: isMe ? 0 : 1,
+                  borderColor: isMe ? "transparent" : borderColor,
+                }}
               >
-                {/* Estilo especial para respuestas */}
                 {isReply && (
-                  <View className="mb-2 pl-2 border-l-2 border-white/30">
-                    <Text className="text-white/60 text-xs italic">
+                  <View
+                    className="mb-2 pl-2 border-l-2"
+                    style={{
+                      borderColor: isMe
+                        ? "rgba(255,255,255,0.3)"
+                        : subTextColor,
+                    }}
+                  >
+                    <Text
+                      className="text-xs italic"
+                      style={{
+                        color: isMe ? "rgba(255,255,255,0.8)" : subTextColor,
+                      }}
+                    >
                       {item.content.split("\n\n")[0]}
                     </Text>
                   </View>
                 )}
-
-                <Text className="text-white text-[15px] leading-5">
+                <Text
+                  className="text-[15px] leading-5"
+                  style={{ color: isMe ? "#FFFFFF" : otherBubbleText }}
+                >
                   {isReply ? item.content.split("\n\n")[1] : item.content}
                 </Text>
-
-                {/* Footer del mensaje: Hora + Visto */}
-                <View className="flex-row items-center justify-end mt-1 space-x-1">
-                  <Text className="text-[10px] text-white/50">{time}</Text>
+                <View className="flex-row items-center justify-end mt-1 space-x-1 opacity-70">
+                  <Text
+                    className="text-[10px]"
+                    style={{ color: isMe ? "#E0E7FF" : subTextColor }}
+                  >
+                    {time}
+                  </Text>
                   {isMe && (
                     <Ionicons
                       name="checkmark-done"
                       size={14}
-                      color={item.isRead ? "#38BDF8" : "rgba(255,255,255,0.3)"} // Azul si leido, gris si no
+                      color={item.isRead ? "#60A5FA" : "#E0E7FF"}
                     />
                   )}
                 </View>
@@ -278,59 +373,81 @@ const ChatRoom = () => {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView className="flex-1 bg-black" edges={["top"]}>
-        {/* --- HEADER --- */}
-        <View className="flex-row items-center px-2 py-2 border-b border-zinc-900 bg-black/90 blur-md z-10">
-          <TouchableOpacity onPress={() => router.back()} className="p-2">
-            <Ionicons name="chevron-back" size={28} color="white" />
-          </TouchableOpacity>
+      <SafeAreaView
+        className="flex-1"
+        edges={["top"]}
+        style={{ backgroundColor: bgColor }}
+      >
+        {/* NAVEGACIÓN Y GESTOS */}
+        <Stack.Screen
+          options={{
+            headerShown: false,
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            animation: "slide_from_right",
+          }}
+        />
 
+        {/* HEADER */}
+        <View
+          className="flex-row items-center px-2 py-2 border-b z-10"
+          style={{ backgroundColor: headerBg, borderColor: borderColor }}
+        >
+          <TouchableOpacity onPress={() => router.back()} className="p-2">
+            <Ionicons name="chevron-back" size={28} color={backIconColor} />
+          </TouchableOpacity>
           <Image
             source={{ uri: params.otherUserAvatar as string }}
-            className="w-10 h-10 rounded-full bg-zinc-800"
+            className="w-10 h-10 rounded-full"
+            style={{ backgroundColor: inputBg }}
           />
-
           <View className="ml-3 flex-1">
-            <Text className="text-white font-bold text-base" numberOfLines={1}>
+            <Text
+              className="font-bold text-base"
+              numberOfLines={1}
+              style={{ color: textColor }}
+            >
               {params.otherUserName}
             </Text>
-            {/* Lógica de "En Línea" */}
             <Text
-              className={`text-xs ${
-                isOtherUserOnline ? "text-emerald-400" : "text-zinc-500"
-              }`}
+              className="text-xs"
+              style={{ color: isOtherUserOnline ? "#34D399" : subTextColor }}
             >
               {isOtherUserOnline ? "En línea" : "Desconectado"}
             </Text>
           </View>
-
-          {/* Botón de videochat eliminado aquí */}
         </View>
 
-        {/* --- LISTA MENSAJES --- */}
+        {/* LISTA */}
         <FlatList
           ref={flatListRef}
           data={messages}
           keyExtractor={(item) => item.$id}
           renderItem={renderMessage}
-          inverted // Importante para chat
+          inverted
           contentContainerStyle={{ paddingVertical: 15 }}
           className="flex-1"
         />
 
-        {/* --- INPUT AREA --- */}
+        {/* INPUT */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
         >
-          {/* Barra de Respuesta */}
           {replyingTo && (
-            <View className="flex-row items-center justify-between px-4 py-2 bg-zinc-900 border-t border-zinc-800">
+            <View
+              className="flex-row items-center justify-between px-4 py-2 border-t"
+              style={{ backgroundColor: inputBg, borderColor: borderColor }}
+            >
               <View className="flex-1 border-l-4 border-[#5E17EB] pl-3 py-1">
                 <Text className="text-[#5E17EB] text-xs font-bold mb-0.5">
                   Respondiendo a
                 </Text>
-                <Text className="text-zinc-400 text-xs" numberOfLines={1}>
+                <Text
+                  className="text-xs"
+                  numberOfLines={1}
+                  style={{ color: subTextColor }}
+                >
                   {replyingTo.content}
                 </Text>
               </View>
@@ -338,35 +455,41 @@ const ChatRoom = () => {
                 onPress={() => setReplyingTo(null)}
                 className="p-2"
               >
-                <Ionicons name="close-circle" size={24} color="#52525B" />
+                <Ionicons name="close-circle" size={24} color={iconColor} />
               </TouchableOpacity>
             </View>
           )}
-
-          {/* Caja de Texto */}
-          <View className="flex-row items-end px-3 py-3 bg-black border-t border-zinc-900">
-            <View className="flex-1 flex-row items-center bg-zinc-900 rounded-3xl border border-zinc-800 px-4 min-h-[44px]">
+          <View
+            className="flex-row items-end px-3 py-3 border-t"
+            style={{ backgroundColor: bgColor, borderColor: borderColor }}
+          >
+            <View
+              className="flex-1 flex-row items-center rounded-3xl border px-4 min-h-[44px]"
+              style={{ backgroundColor: inputBg, borderColor: borderColor }}
+            >
               <TextInput
                 placeholder="Mensaje..."
-                placeholderTextColor="#71717A"
-                className="flex-1 text-white text-[15px] py-3 max-h-32"
+                placeholderTextColor={subTextColor}
+                className="flex-1 text-[15px] py-3 max-h-32"
+                style={{ color: textColor }}
                 multiline
                 value={newMessage}
                 onChangeText={setNewMessage}
               />
             </View>
-
             <TouchableOpacity
               onPress={handleSend}
-              className={`ml-2 w-11 h-11 rounded-full items-center justify-center ${
-                newMessage.trim() ? "bg-[#5E17EB]" : "bg-zinc-800"
-              }`}
+              className="ml-2 w-11 h-11 rounded-full items-center justify-center transition-all"
+              style={{
+                backgroundColor: newMessage.trim() ? "#5E17EB" : inputBg,
+                opacity: newMessage.trim() ? 1 : 0.7,
+              }}
               disabled={!newMessage.trim()}
             >
               <Ionicons
                 name="send"
                 size={20}
-                color={newMessage.trim() ? "white" : "#71717A"}
+                color={newMessage.trim() ? "white" : subTextColor}
               />
             </TouchableOpacity>
           </View>

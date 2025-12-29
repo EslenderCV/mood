@@ -10,5 +10,7 @@ module.exports = {
       },
     },
   },
+  // ESTA LÍNEA ES LA CLAVE PARA QUE EL MODO CLARO/OSCURO FUNCIONE
+  darkMode: "class",
   plugins: [],
 };

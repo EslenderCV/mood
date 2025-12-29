@@ -1,4 +1,3 @@
-import { ImagePickerAsset } from "expo-image-picker";
 import {
   Client,
   Account,
@@ -8,6 +7,8 @@ import {
   AppwriteException,
   Storage,
   ID,
+  Permission,
+  Role,
 } from "react-native-appwrite";
 
 // --- CONFIGURACIÓN ---
@@ -22,7 +23,6 @@ export const appwriteConfig = {
   followsCollectionId: "6949a7500026f2cf2850",
   commentsCollectionId: "6949afd6002150b37f0f",
   notificationsCollectionId: "6949b7490030640f0fb1",
-  // TUS IDs DE CHAT
   chatsCollectionId: "6949bf1f002f7ce268a2",
   messagesCollectionId: "6949c1b6000d070ff309",
 };
@@ -72,6 +72,10 @@ export const createUser = async (
         name,
         pfp: avatarUrl,
         username,
+        preferredPlatform: "spotify",
+        isPrivate: false,
+        allowTags: true, // Nuevo campo por defecto
+        blockedUsers: [],
       }
     );
     return newUser;
@@ -115,7 +119,6 @@ export const getCurrentUser = async () => {
   try {
     const currentAccount = await account.get();
 
-    // Si llegamos aquí, hay sesión. Buscamos el documento del usuario.
     const currentUser = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
@@ -125,12 +128,9 @@ export const getCurrentUser = async () => {
     if (!currentUser || currentUser.documents.length === 0) return null;
     return currentUser.documents[0];
   } catch (error: any) {
-    // CÓDIGO 401: Falta de autenticación (Invitado)
-    // Silenciamos el error porque es esperado al iniciar la app sin login
     if (error.code === 401 || error.message?.includes("missing scopes")) {
       return null;
     }
-
     console.log("Error getCurrentUser:", error);
     return null;
   }
@@ -150,40 +150,41 @@ export async function getUser(userId: string) {
 }
 
 // ==========================================
-//  2. IMÁGENES
+//  2. IMÁGENES (Subida)
 // ==========================================
 
-const uploadImageAsync = async (asset: ImagePickerAsset) => {
+export async function uploadFile(file: any) {
+  if (!file) return;
+
+  const asset = {
+    name: file.fileName || `image_${Date.now()}.jpg`,
+    type: file.mimeType || "image/jpeg",
+    size: file.fileSize || 0,
+    uri: file.uri,
+  };
+
   try {
-    const file = await prepareNativeFile(asset);
-    const response = await storage.createFile(
+    const uploadedFile = await storage.createFile(
       appwriteConfig.storageId,
       ID.unique(),
-      file
+      asset
     );
-    return `${appwriteConfig.endpoint}/storage/buckets/${appwriteConfig.storageId}/files/${response.$id}/view?project=${appwriteConfig.projectId}`;
-  } catch (err) {
-    console.error("Error subiendo imagen:", err);
-    throw err;
-  }
-};
 
-const prepareNativeFile = async (asset: ImagePickerAsset) => {
-  try {
-    return {
-      name: asset.fileName || `image_${Date.now()}.jpg`,
-      type: asset.mimeType || "image/jpeg",
-      size: asset.fileSize || 0,
-      uri: asset.uri,
-    };
-  } catch (err) {
-    console.error("Error preparing file:", err);
-    throw err;
+    const fileUrl = `${appwriteConfig.endpoint}/storage/buckets/${appwriteConfig.storageId}/files/${uploadedFile.$id}/view?project=${appwriteConfig.projectId}&mode=admin`;
+
+    return fileUrl;
+  } catch (error) {
+    console.error("Error uploadFile:", error);
+    throw new Error(String(error));
   }
-};
+}
+
+export async function updateImage(file: any) {
+  return await uploadFile(file);
+}
 
 // ==========================================
-//  3. POSTS
+//  3. POSTS & FEED
 // ==========================================
 
 export async function getPostById(postId: string) {
@@ -193,13 +194,10 @@ export async function getPostById(postId: string) {
       appwriteConfig.postsCollectionId,
       postId
     );
-
-    // Si postedBy es solo el ID, buscamos los datos del usuario
     if (post.postedBy && typeof post.postedBy === "string") {
       const user = await getUser(post.postedBy);
       return { ...post, postedBy: user };
     }
-
     return post;
   } catch (error) {
     console.log("Error getting post by ID:", error);
@@ -223,6 +221,7 @@ export const createPost = async (
         datePosted: new Date().toISOString(),
         postedBy: userId,
         likedBy: [],
+        savedBy: [],
       }
     );
   } catch (error) {
@@ -244,23 +243,35 @@ export const getUserPosts = async (userId: string) => {
   }
 };
 
-export async function getAllPosts() {
+export async function getAllPosts(currentUserId?: string) {
   try {
     const posts = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
       [Query.orderDesc("$createdAt")]
     );
-    const postsWithUserData = await Promise.all(
+
+    const postsWithData = await Promise.all(
       posts.documents.map(async (post) => {
-        if (post.postedBy && typeof post.postedBy === "string") {
-          const creator = await getUser(post.postedBy);
-          return { ...post, postedBy: creator || post.postedBy };
+        let creator: any = post.postedBy;
+        if (typeof creator === "string") {
+          creator = await getUser(creator);
         }
-        return post;
+
+        const comments = await databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.commentsCollectionId,
+          [Query.equal("postId", post.$id), Query.limit(1)]
+        );
+
+        return {
+          ...post,
+          postedBy: creator || post.postedBy,
+          commentsCount: comments.total,
+        };
       })
     );
-    return postsWithUserData;
+    return postsWithData;
   } catch (error: any) {
     if (error.code === 401 || error.message?.includes("authorized")) {
       return [];
@@ -284,8 +295,44 @@ export const getLatestUsers = async () => {
   }
 };
 
+export async function getFeedCandidates() {
+  try {
+    const posts = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.postsCollectionId,
+      [Query.orderDesc("$createdAt"), Query.limit(100)]
+    );
+
+    const populatedPosts = await Promise.all(
+      posts.documents.map(async (post) => {
+        let userData = post.postedBy;
+        if (post.postedBy && typeof post.postedBy === "string") {
+          try {
+            userData = await getUser(post.postedBy);
+          } catch (e) {}
+        }
+
+        const commentsData = await databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.commentsCollectionId,
+          [Query.equal("postId", post.$id), Query.limit(1)]
+        );
+
+        return {
+          ...post,
+          postedBy: userData,
+          commentsCount: commentsData.total,
+        };
+      })
+    );
+    return populatedPosts;
+  } catch (error: any) {
+    throw new Error(error.message || String(error));
+  }
+}
+
 // ==========================================
-//  4. LIKES (CON NOTIFICACIÓN)
+//  4. LIKES & GUARDADOS
 // ==========================================
 
 export async function toggleLikePost(
@@ -311,7 +358,6 @@ export async function toggleLikePost(
       { likedBy: updatedLikes }
     );
 
-    // Notificación
     if (isAddingLike) {
       try {
         const post = await databases.getDocument(
@@ -346,11 +392,75 @@ export async function toggleLikePost(
   }
 }
 
+export async function toggleSavePost(postId: string, userId: string) {
+  try {
+    const post = await databases.getDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.postsCollectionId,
+      postId
+    );
+
+    const savedBy = post.savedBy || [];
+    let newSavedBy = [...savedBy];
+
+    if (newSavedBy.includes(userId)) {
+      newSavedBy = newSavedBy.filter((id: string) => id !== userId);
+    } else {
+      newSavedBy.push(userId);
+    }
+
+    const updatedPost = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.postsCollectionId,
+      postId,
+      { savedBy: newSavedBy }
+    );
+
+    return updatedPost;
+  } catch (error: any) {
+    console.error("Error toggleSavePost:", error);
+    throw new Error(error.message);
+  }
+}
+
+export async function getSavedPosts(userId: string) {
+  try {
+    const posts = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.postsCollectionId,
+      [Query.search("savedBy", userId), Query.orderDesc("$createdAt")]
+    );
+
+    const populatedPosts = await Promise.all(
+      posts.documents.map(async (post) => {
+        if (post.postedBy && typeof post.postedBy === "string") {
+          try {
+            const userData = await getUser(post.postedBy);
+            return { ...post, postedBy: userData };
+          } catch (e) {
+            return post;
+          }
+        }
+        return post;
+      })
+    );
+
+    return populatedPosts;
+  } catch (error: any) {
+    console.error("Error getSavedPosts:", error);
+    return [];
+  }
+}
+
 // ==========================================
-//  5. COMENTARIOS (CON NOTIFICACIÓN)
+//  5. COMENTARIOS (Nivel Avanzado)
 // ==========================================
 
-export async function createComment(postId: string, commentData: any) {
+export async function createComment(
+  postId: string,
+  commentData: any,
+  parentId: string | null = null
+) {
   try {
     const newComment = await databases.createDocument(
       appwriteConfig.databaseId,
@@ -362,6 +472,8 @@ export async function createComment(postId: string, commentData: any) {
         userId: commentData.userId,
         username: commentData.username,
         avatar: commentData.avatar,
+        parentId: parentId,
+        likedBy: [],
       }
     );
 
@@ -375,24 +487,55 @@ export async function createComment(postId: string, commentData: any) {
       if (post.postedBy) {
         const ownerId =
           typeof post.postedBy === "object" ? post.postedBy.$id : post.postedBy;
-        await createNotification({
-          userId: ownerId,
-          type: "comment",
-          message: `comentó: "${commentData.content.substring(0, 20)}..."`,
-          senderId: commentData.userId,
-          senderName: commentData.username,
-          senderAvatar: commentData.avatar,
-          postId: postId,
-        });
+
+        if (ownerId !== commentData.userId) {
+          await createNotification({
+            userId: ownerId,
+            type: "comment",
+            message: `comentó: "${commentData.content.substring(0, 20)}..."`,
+            senderId: commentData.userId,
+            senderName: commentData.username,
+            senderAvatar: commentData.avatar,
+            postId: postId,
+          });
+        }
       }
     } catch (e) {
       console.log("Error noti comment", e);
     }
-
     return newComment;
   } catch (error: any) {
     console.error("Error creating comment:", error);
     throw new Error(error.message);
+  }
+}
+
+export async function toggleCommentLike(
+  commentId: string,
+  userId: string,
+  currentLikes: string[]
+) {
+  try {
+    let updatedLikes = [...currentLikes];
+    const index = updatedLikes.indexOf(userId);
+
+    if (index === -1) {
+      updatedLikes.push(userId);
+    } else {
+      updatedLikes.splice(index, 1);
+    }
+
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.commentsCollectionId,
+      commentId,
+      { likedBy: updatedLikes }
+    );
+
+    return updatedLikes;
+  } catch (error) {
+    console.log("Error like comentario", error);
+    throw error;
   }
 }
 
@@ -411,11 +554,66 @@ export async function getPostComments(postId: string) {
 }
 
 // ==========================================
-//  6. SEGUIDORES (CON NOTIFICACIÓN)
+//  6. SEGUIDORES & PRIVACIDAD
 // ==========================================
+
+export async function checkFollowStatus(
+  followerId: string,
+  followingId: string
+) {
+  try {
+    const response = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.followsCollectionId,
+      [
+        Query.equal("followerId", followerId),
+        Query.equal("followedId", followingId),
+      ]
+    );
+
+    if (response.documents.length > 0) {
+      return response.documents[0].status;
+    } else {
+      return null;
+    }
+  } catch (error) {
+    console.log("Error checkFollowStatus:", error);
+    return null;
+  }
+}
+
+export async function checkIsFollowing(followerId: string, followedId: string) {
+  try {
+    const status = await checkFollowStatus(followerId, followedId);
+    return status === "accepted";
+  } catch (error) {
+    return false;
+  }
+}
+
+export async function getFollowedUserIds(currentUserId: string) {
+  try {
+    const follows = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.followsCollectionId,
+      [
+        Query.equal("followerId", currentUserId),
+        Query.equal("status", "accepted"),
+      ]
+    );
+    return follows.documents.map((doc) => doc.followedId);
+  } catch (error) {
+    console.log("Error fetching followed users", error);
+    return [];
+  }
+}
 
 export async function followUser(followerId: string, followedId: string) {
   try {
+    const targetUser = await getUser(followedId);
+    const isPrivate = targetUser?.isPrivate || false;
+    const status = isPrivate ? "pending" : "accepted";
+
     const result = await databases.createDocument(
       appwriteConfig.databaseId,
       appwriteConfig.followsCollectionId,
@@ -423,18 +621,21 @@ export async function followUser(followerId: string, followedId: string) {
       {
         followerId: followerId,
         followedId: followedId,
+        status: status,
       }
     );
 
-    // --- NOTIFICACIÓN DE FOLLOW ---
     try {
       const followerUser = await getUser(followerId);
       if (followerUser) {
+        const notiType = isPrivate ? "follow_request" : "follow";
+        const notiMsg = isPrivate ? "quiere seguirte" : "comenzó a seguirte";
+
         await createNotification({
-          userId: followedId, // A quien siguieron
-          type: "follow",
-          message: "comenzó a seguirte",
-          senderId: followerId, // Quien siguió
+          userId: followedId,
+          type: notiType as any,
+          message: notiMsg,
+          senderId: followerId,
           senderName: followerUser.username || followerUser.name,
           senderAvatar: followerUser.pfp,
         });
@@ -442,7 +643,6 @@ export async function followUser(followerId: string, followedId: string) {
     } catch (e) {
       console.log("Error noti follow", e);
     }
-
     return result;
   } catch (error: any) {
     console.log("Error following user:", error);
@@ -460,7 +660,6 @@ export async function unfollowUser(followerId: string, followedId: string) {
         Query.equal("followedId", followedId),
       ]
     );
-
     if (records.documents.length > 0) {
       await databases.deleteDocument(
         appwriteConfig.databaseId,
@@ -476,33 +675,17 @@ export async function unfollowUser(followerId: string, followedId: string) {
   }
 }
 
-export async function checkIsFollowing(followerId: string, followedId: string) {
-  try {
-    const records = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.followsCollectionId,
-      [
-        Query.equal("followerId", followerId),
-        Query.equal("followedId", followedId),
-      ]
-    );
-    return records.documents.length > 0;
-  } catch (error) {
-    return false;
-  }
-}
-
 export async function getFollowCounts(userId: string) {
   try {
     const followers = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.followsCollectionId,
-      [Query.equal("followedId", userId)]
+      [Query.equal("followedId", userId), Query.equal("status", "accepted")]
     );
     const following = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.followsCollectionId,
-      [Query.equal("followerId", userId)]
+      [Query.equal("followerId", userId), Query.equal("status", "accepted")]
     );
     return { followersCount: followers.total, followingCount: following.total };
   } catch (error) {
@@ -516,7 +699,7 @@ export async function getUserFollowers(userId: string) {
     const follows = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.followsCollectionId,
-      [Query.equal("followedId", userId)]
+      [Query.equal("followedId", userId), Query.equal("status", "accepted")]
     );
     if (follows.documents.length === 0) return [];
     const followersDetails = await Promise.all(
@@ -537,7 +720,7 @@ export async function getUserFollowing(userId: string) {
     const follows = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.followsCollectionId,
-      [Query.equal("followerId", userId)]
+      [Query.equal("followerId", userId), Query.equal("status", "accepted")]
     );
     if (follows.documents.length === 0) return [];
     const followingDetails = await Promise.all(
@@ -553,12 +736,12 @@ export async function getUserFollowing(userId: string) {
 }
 
 // ==========================================
-//  7. SISTEMA DE NOTIFICACIONES (INTERNAL)
+//  7. NOTIFICACIONES
 // ==========================================
 
 export async function createNotification(data: {
   userId: string;
-  type: "like" | "comment" | "follow";
+  type: "like" | "comment" | "follow" | "follow_request" | "tag";
   message: string;
   senderId: string;
   senderName: string;
@@ -566,8 +749,7 @@ export async function createNotification(data: {
   postId?: string;
 }) {
   try {
-    if (data.userId === data.senderId) return; // No auto-notificar
-
+    if (data.userId === data.senderId) return;
     await databases.createDocument(
       appwriteConfig.databaseId,
       appwriteConfig.notificationsCollectionId,
@@ -584,7 +766,7 @@ export async function createNotification(data: {
       }
     );
   } catch (error) {
-    console.log("Error creando notificación (no crítico):", error);
+    console.log("Error creando notificación:", error);
   }
 }
 
@@ -607,10 +789,7 @@ export async function getUnreadNotificationCount(userId: string) {
     const result = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.notificationsCollectionId,
-      [
-        Query.equal("userId", userId),
-        Query.equal("isRead", false), // Solo las que isRead es falso
-      ]
+      [Query.equal("userId", userId), Query.equal("isRead", false)]
     );
     return result.total;
   } catch (error) {
@@ -625,98 +804,161 @@ export async function markNotificationAsRead(notificationId: string) {
       appwriteConfig.databaseId,
       appwriteConfig.notificationsCollectionId,
       notificationId,
-      {
-        isRead: true,
-      }
+      { isRead: true }
     );
   } catch (error) {
     console.log("Error marking as read:", error);
   }
 }
 
+export async function deleteNotification(notificationId: string) {
+  try {
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.notificationsCollectionId,
+      notificationId
+    );
+    return true;
+  } catch (error) {
+    console.log("Error borrando notificación:", error);
+    throw error;
+  }
+}
+
+export async function clearAllNotifications(userId: string) {
+  try {
+    const list = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.notificationsCollectionId,
+      [Query.equal("userId", userId)]
+    );
+    const promises = list.documents.map((doc) =>
+      databases.deleteDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.notificationsCollectionId,
+        doc.$id
+      )
+    );
+    await Promise.all(promises);
+    return true;
+  } catch (error) {
+    console.log("Error limpiando notificaciones:", error);
+    throw error;
+  }
+}
+
 // ==========================================
-//  8. SISTEMA DE CHAT (REALTIME) - CORREGIDO
+//  8. CHAT, PERFIL & BÚSQUEDA
 // ==========================================
 
-// A. Buscar Usuarios
+// --- ACTUALIZADO: BÚSQUEDA CON FILTRO DE ETIQUETAS ---
 export async function searchUsers(query: string) {
   try {
+    // 1. Buscamos SOLO por nombre de usuario (sin filtro de allowTags aquí)
     const users = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
-      [Query.search("username", query)]
+      [
+        Query.search("username", query),
+        Query.limit(5), // Limitamos a 5 para no saturar
+      ]
     );
-    return users.documents;
+
+    // 2. Filtramos manualmente en la app para evitar el error "Attribute not found"
+    // Si el usuario tiene allowTags en false, lo sacamos. Si no tiene el campo, lo dejamos pasar.
+    const filteredUsers = users.documents.filter((doc) => {
+      return doc.allowTags !== false;
+    });
+
+    return filteredUsers;
   } catch (error) {
-    console.log(error);
+    console.log("Error en searchUsers:", error);
     return [];
   }
 }
 
-// B. Obtener o Crear un Chat
+// --- NUEVO: NOTIFICACIÓN DE ETIQUETA ---
+export const sendTagNotification = async (
+  senderId: string,
+  receiverId: string,
+  postId: string
+) => {
+  try {
+    const receiver = await getUser(receiverId);
+    // Doble verificación de seguridad
+    if (!receiver || receiver.allowTags === false) return;
+
+    // Necesitamos datos del sender para la notificación
+    const sender = await getUser(senderId);
+    if (!sender) return;
+
+    await createNotification({
+      userId: receiverId,
+      senderId: senderId,
+      type: "tag",
+      message: "te ha etiquetado en una publicación.",
+      senderName: sender.username || sender.name,
+      senderAvatar: sender.pfp,
+      postId: postId,
+    });
+  } catch (error) {
+    console.log("Error enviando notificación de etiqueta:", error);
+  }
+};
+
 export async function getOrCreateChat(
   currentUserId: string,
   otherUserId: string
 ) {
   try {
-    // 1. Buscamos en el campo STRING 'search_params'
     const userChats = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.chatsCollectionId,
       [Query.search("search_params", currentUserId)]
     );
-
-    // 2. Filtramos manualmente en Javascript para encontrar la coincidencia exacta
     const existingChat = userChats.documents.find((doc) =>
       doc.participants.includes(otherUserId)
     );
-
     if (existingChat) return existingChat;
 
-    // 3. Si no existe, creamos uno nuevo llenando AMBOS campos
     const newChat = await databases.createDocument(
       appwriteConfig.databaseId,
       appwriteConfig.chatsCollectionId,
       ID.unique(),
       {
-        participants: [currentUserId, otherUserId], // Array para uso fácil en frontend
-        search_params: `${currentUserId} ${otherUserId}`, // String para indexar
+        participants: [currentUserId, otherUserId],
+        search_params: `${currentUserId} ${otherUserId}`,
         lastMessage: "Nuevo chat iniciado",
         lastMessageAt: new Date().toISOString(),
       }
     );
     return newChat;
   } catch (error: any) {
-    console.error("Error getOrCreateChat:", error);
     throw new Error(error.message);
   }
 }
 
-// C. Enviar Mensaje (CORREGIDO: Acepta 5 argumentos)
 export async function sendMessage(
   chatId: string,
   senderId: string,
   receiverId: string,
   content: string,
-  sharedPostId: string | null = null // <--- ¡AQUÍ ESTÁ LA CORRECCIÓN!
+  sharedPostId: string | null = null
 ) {
   try {
-    // A. Crear el mensaje
     const msg = await databases.createDocument(
       appwriteConfig.databaseId,
       appwriteConfig.messagesCollectionId,
       ID.unique(),
       {
-        chatId: chatId,
-        senderId: senderId,
-        receiverId: receiverId,
-        content: content,
+        chatId,
+        senderId,
+        receiverId,
+        content,
         isRead: false,
-        sharedPostId: sharedPostId, // Guardamos el ID del post si existe
+        sharedPostId,
       }
     );
-
-    // B. Actualizar el CHAT PADRE
     await databases.updateDocument(
       appwriteConfig.databaseId,
       appwriteConfig.chatsCollectionId,
@@ -724,19 +966,16 @@ export async function sendMessage(
       {
         lastMessage: sharedPostId ? "🎵 Post compartido" : content,
         lastMessageAt: new Date().toISOString(),
-        lastSenderId: senderId, // Quién escribió
-        lastMessageIsRead: false, // Se marca como NO leído
+        lastSenderId: senderId,
+        lastMessageIsRead: false,
       }
     );
-
     return msg;
   } catch (error) {
-    console.log(error);
     throw new Error("No se pudo enviar");
   }
 }
 
-// D. Obtener Mensajes
 export async function getChatMessages(chatId: string) {
   try {
     const msgs = await databases.listDocuments(
@@ -750,32 +989,24 @@ export async function getChatMessages(chatId: string) {
   }
 }
 
-// E. Obtener Lista de Chats
 export async function getUserChats(userId: string) {
   try {
-    // Buscamos usando el campo STRING
     const chats = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.chatsCollectionId,
       [Query.search("search_params", userId), Query.orderDesc("lastMessageAt")]
     );
-
     const chatsWithUserData = await Promise.all(
       chats.documents.map(async (chat) => {
         const otherUserId = chat.participants.find(
           (id: string) => id !== userId
         );
         const otherUser = await getUser(otherUserId);
-        return {
-          ...chat,
-          otherUser: otherUser,
-        };
+        return { ...chat, otherUser: otherUser };
       })
     );
-
     return chatsWithUserData;
   } catch (error) {
-    console.log(error);
     return [];
   }
 }
@@ -785,10 +1016,7 @@ export async function getUnreadMessagesCount(userId: string) {
     const result = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.messagesCollectionId,
-      [
-        Query.equal("receiverId", userId), // Mensajes para mí
-        Query.equal("isRead", false), // Que no he leído
-      ]
+      [Query.equal("receiverId", userId), Query.equal("isRead", false)]
     );
     return result.total;
   } catch (error) {
@@ -798,7 +1026,6 @@ export async function getUnreadMessagesCount(userId: string) {
 
 export async function markChatAsRead(chatId: string, userId: string) {
   try {
-    // A. Marcar mensajes individuales como leídos
     const unreadMsgs = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.messagesCollectionId,
@@ -808,7 +1035,6 @@ export async function markChatAsRead(chatId: string, userId: string) {
         Query.equal("isRead", false),
       ]
     );
-
     const promises = unreadMsgs.documents.map((msg) =>
       databases.updateDocument(
         appwriteConfig.databaseId,
@@ -818,176 +1044,274 @@ export async function markChatAsRead(chatId: string, userId: string) {
       )
     );
     await Promise.all(promises);
-
-    // B. Actualizar el CHAT PADRE (Solo si el último mensaje NO era mío)
-    const chatDoc = await databases.getDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.chatsCollectionId,
-      chatId
-    );
-
-    if (
-      chatDoc.lastSenderId !== userId &&
-      chatDoc.lastMessageIsRead === false
-    ) {
-      await databases.updateDocument(
-        appwriteConfig.databaseId,
-        appwriteConfig.chatsCollectionId,
-        chatId,
-        { lastMessageIsRead: true }
-      );
-    }
   } catch (error) {
     console.log("Error marking chat as read:", error);
   }
 }
 
-// Exportamos el cliente para las suscripciones Realtime
-export { client };
-
-// Agrega esto a tu lib/appwrite.ts
-
-// 1. Obtener lista de IDs de usuarios que sigo
-export async function getFollowedUserIds(currentUserId: string) {
-  try {
-    const follows = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.followsCollectionId, // Asegúrate de tener esta config
-      [Query.equal("followerId", currentUserId)]
-    );
-    // Retorna un array de IDs de la gente que sigo
-    return follows.documents.map((doc) => doc.followedId);
-  } catch (error) {
-    console.log("Error fetching followed users", error);
-    return [];
-  }
-}
-
-// 2. Traer candidatos (Mezcla de recientes y populares si es posible, por ahora recientes)
-// Traemos un limite más alto (ej. 100) para poder filtrar y ordenar en el cliente
-// Asegúrate de tener importado 'getUser' o la función que busca usuarios por ID
-// import { getUser } from ... (seguramente ya la tienes en este archivo)
-
-export async function getFeedCandidates() {
-  try {
-    const posts = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      // ⚠️ CORRECCIÓN IMAGEN 9: Usa el nombre real de tu colección
-      // Si antes usabas appwriteConfig.videoCollectionId y fallaba, prueba con:
-      appwriteConfig.postsCollectionId,
-      [Query.orderDesc("$createdAt"), Query.limit(100)]
-    );
-
-    // 🔥 SOLUCIÓN "USUARIO ANON": Hidratación manual
-    // Recorremos los posts. Si 'postedBy' es un ID (string), buscamos sus datos reales.
-    const populatedPosts = await Promise.all(
-      posts.documents.map(async (post) => {
-        if (post.postedBy && typeof post.postedBy === "string") {
-          try {
-            // Buscamos los datos del usuario usando su ID
-            const userData = await getUser(post.postedBy);
-            return {
-              ...post,
-              postedBy: userData, // Reemplazamos el ID con el Objeto Usuario
-            };
-          } catch (e) {
-            console.log("Error fetching creator for post:", post.$id);
-            return post;
-          }
-        }
-        return post;
-      })
-    );
-
-    return populatedPosts;
-  } catch (error: any) {
-    // ⚠️ CORRECCIÓN IMAGEN 9: Tipado del error
-    throw new Error(error.message || String(error));
-  }
-}
-
-// ====================================================
-// FUNCIONES DE EDICIÓN DE PERFIL (AGREGAR AL FINAL)
-// ====================================================
-
-// 1. Función para subir el archivo de imagen al Storage
-// IMPORTANTE: Asegúrate de tener 'account' importado en tus configs
-// import { account, databases, storage, appwriteConfig } from "./config"; (o donde lo tengas)
-
-// Interfaz SIN Bio y CON Email
 interface UpdateUserForm {
-  name: string;
-  username: string;
-  email: string;
+  name?: string;
+  username?: string;
+  email?: string;
   pfp?: any;
+  preferredPlatform?: string;
+  isPrivate?: boolean;
+  allowTags?: boolean;
 }
 
-// Función para subir archivo (se mantiene igual)
-export async function uploadFile(file: any) {
-  if (!file) return;
-  const { mimeType, ...rest } = file;
-  const asset = {
-    name: file.fileName,
-    type: file.mimeType,
-    size: file.fileSize,
-    uri: file.uri,
-  };
-  try {
-    const uploadedFile = await storage.createFile(
-      appwriteConfig.storageId,
-      ID.unique(),
-      asset
-    );
-    const fileUrl = await storage.getFileView(
-      appwriteConfig.storageId,
-      uploadedFile.$id
-    );
-    return fileUrl;
-  } catch (error) {
-    throw new Error(String(error));
-  }
-}
-
-// Alias para updateImage
-export async function updateImage(file: any) {
-  return await uploadFile(file);
-}
-
-// --- FUNCIÓN PRINCIPAL DE PERFIL ---
+// --- FUNCIÓN ACTUALIZADA PARA PERMITIR PARTIAL UPDATES ---
 export async function updateProfile(userId: string, form: UpdateUserForm) {
   try {
     const hasFile = form.pfp && typeof form.pfp !== "string";
     let imageUrl = form.pfp;
+    if (hasFile) imageUrl = await uploadFile(form.pfp);
 
-    // 1. Subir imagen si es nueva
-    if (hasFile) {
-      imageUrl = await uploadFile(form.pfp);
+    if (form.name) {
+      try {
+        await account.updateName(form.name);
+      } catch (e) {}
     }
 
-    // 2. Intentar actualizar el Nombre en AUTH
-    try {
-      await account.updateName(form.name);
-    } catch (e) {
-      console.log("No se pudo actualizar Auth Name:", e);
-    }
+    // Preparamos objeto de actualización solo con campos definidos
+    const updates: any = {};
+    if (form.name) updates.name = form.name;
+    if (form.username) updates.username = form.username;
+    if (form.email) updates.email = form.email;
+    if (form.preferredPlatform)
+      updates.preferredPlatform = form.preferredPlatform;
+    if (imageUrl) updates.pfp = imageUrl;
+    if (form.isPrivate !== undefined) updates.isPrivate = form.isPrivate;
+    if (form.allowTags !== undefined) updates.allowTags = form.allowTags;
 
-    // 3. Actualizar el documento en la BASE DE DATOS
-    // Aquí actualizamos el campo 'email' visible en el perfil público
     const updatedUser = await databases.updateDocument(
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
       userId,
-      {
-        name: form.name,
-        username: form.username,
-        email: form.email,
-        ...(imageUrl && { pfp: imageUrl }),
-      }
+      updates
     );
-
     return updatedUser;
   } catch (error) {
-    console.error("Error updating profile:", error);
     throw new Error(String(error));
+  }
+}
+
+export async function updatePrivacy(userId: string, isPrivate: boolean) {
+  try {
+    const updatedUser = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId,
+      { isPrivate: isPrivate }
+    );
+    return updatedUser;
+  } catch (error) {
+    throw new Error("No se pudo actualizar la privacidad");
+  }
+}
+
+export async function blockUser(currentUserId: string, userToBlockId: string) {
+  try {
+    const currentUser = await databases.getDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      currentUserId
+    );
+    const currentBlocked = currentUser.blockedUsers || [];
+    if (currentBlocked.includes(userToBlockId)) return;
+    const updatedBlockedList = [...currentBlocked, userToBlockId];
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      currentUserId,
+      { blockedUsers: updatedBlockedList }
+    );
+    await unfollowUser(currentUserId, userToBlockId);
+    await unfollowUser(userToBlockId, currentUserId);
+    return true;
+  } catch (error) {
+    throw new Error("Error al bloquear usuario");
+  }
+}
+
+export async function unblockUser(
+  currentUserId: string,
+  userToUnblockId: string
+) {
+  try {
+    const currentUser = await databases.getDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      currentUserId
+    );
+    const currentBlocked = currentUser.blockedUsers || [];
+    const updatedBlockedList = currentBlocked.filter(
+      (id: string) => id !== userToUnblockId
+    );
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      currentUserId,
+      { blockedUsers: updatedBlockedList }
+    );
+    return true;
+  } catch (error) {
+    throw new Error("Error al desbloquear usuario");
+  }
+}
+
+export async function updateUserPassword(
+  newPassword: string,
+  oldPassword: string
+) {
+  try {
+    await account.updatePassword(newPassword, oldPassword);
+    return true;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+}
+
+export async function getUserSessions() {
+  try {
+    const sessions = await account.listSessions();
+    return sessions.sessions;
+  } catch (error: any) {
+    return [];
+  }
+}
+export async function deleteSession(sessionId: string) {
+  try {
+    await account.deleteSession(sessionId);
+    return true;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+}
+export async function deleteAllSessions() {
+  try {
+    const sessions = await account.listSessions();
+    await Promise.all(
+      sessions.sessions.map((s) => account.deleteSession(s.$id))
+    );
+    return true;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+}
+
+export { client };
+
+export async function acceptFollowRequest(
+  followerId: string,
+  myUserId: string,
+  notificationId: string
+) {
+  try {
+    const records = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.followsCollectionId,
+      [
+        Query.equal("followerId", followerId),
+        Query.equal("followedId", myUserId),
+        Query.equal("status", "pending"),
+      ]
+    );
+    if (records.documents.length === 0) {
+      try {
+        await databases.deleteDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.notificationsCollectionId,
+          notificationId
+        );
+      } catch (e) {}
+      return true;
+    }
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.followsCollectionId,
+      records.documents[0].$id,
+      { status: "accepted" }
+    );
+    try {
+      await databases.deleteDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.notificationsCollectionId,
+        notificationId
+      );
+    } catch (e) {}
+    const followerUser = await getUser(followerId);
+    if (followerUser) {
+      await createNotification({
+        userId: myUserId,
+        type: "follow",
+        message: "comenzó a seguirte",
+        senderId: followerId,
+        senderName: followerUser.username || followerUser.name,
+        senderAvatar: followerUser.pfp,
+      });
+    }
+    const myUser = await getUser(myUserId);
+    if (myUser) {
+      await createNotification({
+        userId: followerId,
+        type: "follow",
+        message: "aceptó tu solicitud de seguimiento",
+        senderId: myUserId,
+        senderName: myUser.username || myUser.name,
+        senderAvatar: myUser.pfp,
+      });
+    }
+    return true;
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function deleteFollowRequest(
+  followerId: string,
+  myUserId: string
+) {
+  try {
+    const records = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.followsCollectionId,
+      [
+        Query.equal("followerId", followerId),
+        Query.equal("followedId", myUserId),
+        Query.equal("status", "pending"),
+      ]
+    );
+    if (records.documents.length > 0) {
+      await databases.deleteDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.followsCollectionId,
+        records.documents[0].$id
+      );
+    }
+    return true;
+  } catch (error) {
+    throw new Error();
+  }
+}
+
+export async function getBlockedUsersList(currentUserId: string) {
+  try {
+    const currentUser = await getUser(currentUserId);
+    if (
+      !currentUser ||
+      !currentUser.blockedUsers ||
+      currentUser.blockedUsers.length === 0
+    ) {
+      return [];
+    }
+
+    const blockedIds = currentUser.blockedUsers;
+    const promises = blockedIds.map((id: string) => getUser(id));
+    const users = await Promise.all(promises);
+
+    return users.filter((u) => u !== null);
+  } catch (error) {
+    console.log("Error fetching blocked users:", error);
+    return [];
   }
 }
