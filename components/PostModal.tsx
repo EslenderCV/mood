@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -20,7 +20,9 @@ import { useGlobalContext } from "@/context/GlobalProvider";
 import { createPost, searchUsers, sendTagNotification } from "@/lib/appwrite";
 import { useColorScheme } from "nativewind";
 
-// Interfaz para canciones de iTunes
+// --- AUDIO ---
+import { Audio } from "expo-av";
+
 interface Song {
   trackId: number;
   trackName: string;
@@ -28,6 +30,9 @@ interface Song {
   artworkUrl100: string;
   previewUrl: string;
 }
+
+// ⚠️ REEMPLAZA CON TU TOKEN REAL DE AUDD
+const AUDD_API_TOKEN = "TU_TOKEN_DE_AUDD_AQUI";
 
 export default function PostModal() {
   const { isPostModalVisible, setPostModalVisible } = useModal();
@@ -44,7 +49,6 @@ export default function PostModal() {
 
   // --- ESTADOS ---
   const [text, setText] = useState("");
-  const [isPublic, setIsPublic] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
   // Estados Música
@@ -54,6 +58,15 @@ export default function PostModal() {
   const [isSearchingMusic, setIsSearchingMusic] = useState(false);
   const [isLoadingSearch, setIsLoadingSearch] = useState(false);
 
+  // Estados Audio (Shazam)
+  const [isListening, setIsListening] = useState(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+
+  // Estados Reproducción (Preview)
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+
   // Estados Etiquetas
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -61,9 +74,22 @@ export default function PostModal() {
   // Limpiar al cerrar
   useEffect(() => {
     if (!isPostModalVisible) {
+      // Intentamos limpiar todo
       resetForm();
+      if (recordingRef.current) stopRecording();
+      // Forzar limpieza de audio sin estado
+      stopPreview();
     }
   }, [isPostModalVisible]);
+
+  // Limpiar sonido al desmontar el componente
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync().catch(() => {}); // Ignorar errores al desmontar
+      }
+    };
+  }, [sound]);
 
   const closeModal = () => {
     Keyboard.dismiss();
@@ -73,17 +99,197 @@ export default function PostModal() {
   const resetForm = () => {
     setText("");
     setLinkedSong(null);
-    setIsPublic(true);
     setSearchQuery("");
     setSearchResults([]);
     setIsSearchingMusic(false);
+    setIsListening(false);
     setShowSuggestions(false);
+    // No llamamos a stopPreview aquí para evitar bucles, se maneja en el useEffect o al cambiar canción
   };
 
-  // --- 1. LÓGICA DE ETIQUETAS (@) ---
+  // --- 0. LÓGICA PREVIEW (CORREGIDA Y BLINDADA) ---
+  const stopPreview = async () => {
+    if (sound) {
+      try {
+        // Intentamos detener y descargar. Si falla (porque no está cargado), no pasa nada.
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded) {
+          await sound.stopAsync();
+          await sound.unloadAsync();
+        }
+      } catch (error) {
+        console.log(
+          "Aviso: El sonido ya estaba descargado o hubo error al detener:",
+          error
+        );
+      }
+      setSound(null);
+    }
+    setIsPlayingPreview(false);
+  };
+
+  const togglePreview = async () => {
+    if (!linkedSong?.previewUrl) {
+      Alert.alert("Sin audio", "Esta canción no tiene preview disponible.");
+      return;
+    }
+
+    try {
+      if (sound) {
+        if (isPlayingPreview) {
+          await sound.pauseAsync();
+          setIsPlayingPreview(false);
+        } else {
+          await sound.playAsync();
+          setIsPlayingPreview(true);
+        }
+      } else {
+        setIsLoadingPreview(true);
+
+        // Configurar audio para reproducción
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+        });
+
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: linkedSong.previewUrl },
+          { shouldPlay: true }
+        );
+
+        setSound(newSound);
+        setIsPlayingPreview(true);
+
+        newSound.setOnPlaybackStatusUpdate((status: any) => {
+          if (status.didJustFinish) {
+            setIsPlayingPreview(false);
+            // No descargamos aquí para permitir replay, solo reseteamos posición
+            newSound.setPositionAsync(0).catch(() => {});
+          }
+        });
+      }
+    } catch (error) {
+      console.log("Error playing preview:", error);
+      Alert.alert("Error", "No se pudo reproducir el audio.");
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
+
+  // --- 1. LÓGICA DE AUDIO (SHAZAM) ---
+  const stopRecording = async () => {
+    try {
+      if (recordingRef.current) {
+        await recordingRef.current.stopAndUnloadAsync();
+        recordingRef.current = null;
+      }
+      setIsListening(false);
+    } catch (error) {
+      console.log("Error deteniendo:", error);
+    }
+  };
+
+  const handleShazam = async () => {
+    if (linkedSong) return;
+    await stopPreview(); // Aseguramos silencio antes de grabar
+
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (permission.status !== "granted") {
+        Alert.alert(
+          "Permiso requerido",
+          "Activa el micrófono en configuración para escuchar."
+        );
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      setIsListening(true);
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      recordingRef.current = recording;
+
+      setTimeout(async () => {
+        try {
+          if (!recordingRef.current) return;
+
+          await recordingRef.current.stopAndUnloadAsync();
+          const uri = recordingRef.current.getURI();
+          recordingRef.current = null;
+
+          if (!uri) throw new Error("No audio uri");
+
+          const formData = new FormData();
+          formData.append("api_token", AUDD_API_TOKEN);
+          formData.append("return", "apple_music,spotify");
+          formData.append("file", {
+            uri: uri,
+            name: "recording.m4a",
+            type: "audio/m4a",
+          } as any);
+
+          const response = await fetch("https://api.audd.io/", {
+            method: "POST",
+            body: formData,
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          });
+
+          const result = await response.json();
+
+          if (result.status === "success" && result.result) {
+            const track = result.result;
+            const appleData = track.apple_music ? track.apple_music : null;
+
+            const foundSong: Song = {
+              trackId: appleData
+                ? appleData.playParams.id
+                : Math.floor(Math.random() * 100000),
+              trackName: track.title,
+              artistName: track.artist,
+              artworkUrl100: appleData
+                ? appleData.artwork.url
+                    .replace("{w}", "300")
+                    .replace("{h}", "300")
+                : "https://via.placeholder.com/300",
+              previewUrl: appleData
+                ? appleData.previews[0].url
+                : track.preview_url || "",
+            };
+
+            setLinkedSong(foundSong);
+            Alert.alert(
+              "¡Encontrada!",
+              `Es "${track.title}" de ${track.artist}`
+            );
+          } else {
+            Alert.alert("No encontrada", "No pudimos reconocer la canción.");
+            setIsSearchingMusic(true);
+          }
+        } catch (err) {
+          console.log("Error procesando audio:", err);
+          Alert.alert("Error", "Falló el reconocimiento.");
+        } finally {
+          setIsListening(false);
+          Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        }
+      }, 5500);
+    } catch (err) {
+      console.log("Error iniciando grabación:", err);
+      setIsListening(false);
+    }
+  };
+
+  // --- 2. LÓGICA ETIQUETAS (@) ---
   const handleTextChange = async (inputText: string) => {
     setText(inputText);
-
     const words = inputText.split(" ");
     const lastWord = words[words.length - 1];
 
@@ -91,13 +297,11 @@ export default function PostModal() {
       const query = lastWord.substring(1);
       try {
         const results = await searchUsers(query);
-        // Filtrar usuarios: que permitan etiquetas y no sea yo mismo
-        const filtered = results.filter((u) => u.$id !== user?.$id); // Añadir filtro allowTags en backend si no se hizo
-
+        const filtered = results.filter((u) => u.$id !== user?.$id);
         setSuggestions(filtered);
         setShowSuggestions(filtered.length > 0);
       } catch (error) {
-        console.log("Error buscando usuarios:", error);
+        console.log(error);
       }
     } else {
       setShowSuggestions(false);
@@ -117,21 +321,19 @@ export default function PostModal() {
     const mentionRegex = /@(\w+)/g;
     const matches = content.match(mentionRegex);
     if (!matches) return;
-
     const uniqueMentions = [...new Set(matches)];
 
     uniqueMentions.forEach(async (mention) => {
       const username = mention.substring(1);
       const users = await searchUsers(username);
       const targetUser = users.find((u) => u.username === username);
-
       if (targetUser) {
         await sendTagNotification(user.$id, targetUser.$id, postId);
       }
     });
   };
 
-  // --- 2. LÓGICA DE BÚSQUEDA DE MÚSICA (iTunes) ---
+  // --- 3. BÚSQUEDA MANUAL (DEEZER) ---
   useEffect(() => {
     if (!searchQuery || searchQuery.length < 2) {
       setSearchResults([]);
@@ -142,29 +344,38 @@ export default function PostModal() {
     const delayDebounceFn = setTimeout(async () => {
       try {
         const response = await fetch(
-          `https://itunes.apple.com/search?term=${encodeURIComponent(
+          `https://api.deezer.com/search?q=${encodeURIComponent(
             searchQuery
-          )}&media=music&entity=song&limit=5`
+          )}&limit=10`
         );
         const data = await response.json();
-        setSearchResults(data.results);
+
+        const mappedResults: Song[] = data.data.map((item: any) => ({
+          trackId: item.id,
+          trackName: item.title,
+          artistName: item.artist.name,
+          artworkUrl100: item.album.cover_medium,
+          previewUrl: item.preview,
+        }));
+
+        setSearchResults(mappedResults);
       } catch (error) {
-        console.error(error);
+        console.error("Error Deezer Search:", error);
       } finally {
         setIsLoadingSearch(false);
       }
     }, 500);
-
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
 
-  const handleSelectSong = (song: Song) => {
+  const handleSelectSong = async (song: Song) => {
+    await stopPreview(); // Detener cualquier cosa que suene antes
     setLinkedSong(song);
     setIsSearchingMusic(false);
     setSearchQuery("");
   };
 
-  // --- 3. PUBLICAR ---
+  // --- 4. PUBLICAR ---
   const handlePost = async () => {
     if (!text.trim() && !linkedSong) {
       Alert.alert("Vacío", "Escribe algo o agrega una canción.");
@@ -172,10 +383,11 @@ export default function PostModal() {
     }
     if (!user) return;
 
-    setIsLoading(true);
+    // Detener preview de forma segura antes de subir
+    await stopPreview();
 
+    setIsLoading(true);
     try {
-      // Preparamos datos de la canción si existe
       const songDataString = linkedSong
         ? JSON.stringify({
             title: linkedSong.trackName,
@@ -183,17 +395,13 @@ export default function PostModal() {
             cover: linkedSong.artworkUrl100,
             preview: linkedSong.previewUrl,
           })
-        : JSON.stringify({}); // JSON vacío si no hay canción
+        : JSON.stringify({});
 
-      // Crear Post
       const newPost = await createPost(text, songDataString, user.$id);
-
-      // Enviar notificaciones de etiquetas
       await processMentions(text, newPost.$id);
 
-      Alert.alert("¡Éxito!", "Tu Mood ha sido publicado.");
-      resetForm();
-      closeModal();
+      Alert.alert("¡Éxito!", "Mood publicado.");
+      closeModal(); // Esto llamará al useEffect de limpieza
     } catch (error: any) {
       Alert.alert("Error", error.message);
     } finally {
@@ -201,7 +409,7 @@ export default function PostModal() {
     }
   };
 
-  // --- RENDERIZADO DE ITEMS ---
+  // --- RENDER ITEMS ---
   const renderSongItem = ({ item }: { item: Song }) => (
     <TouchableOpacity
       className="flex-row items-center p-3 border-b"
@@ -260,10 +468,10 @@ export default function PostModal() {
               className="w-full"
             >
               <View
-                className="w-full rounded-t-[30px] border-t p-5 pb-8 shadow-2xl"
+                className="w-full rounded-t-[30px] border-t p-5 pb-10 shadow-2xl"
                 style={{ backgroundColor: bgColor, borderColor: borderColor }}
               >
-                {/* HEADER MODAL */}
+                {/* HEADER */}
                 <View className="flex-row justify-between items-center mb-6 mt-2">
                   <TouchableOpacity onPress={closeModal} className="p-1">
                     <Text
@@ -293,7 +501,7 @@ export default function PostModal() {
                   )}
                 </View>
 
-                {/* CONTENIDO PRINCIPAL */}
+                {/* CONTENIDO (INPUT + AVATAR) */}
                 <View className="flex-row gap-4 mb-2">
                   <Image
                     source={
@@ -304,7 +512,6 @@ export default function PostModal() {
                     className="w-11 h-11 rounded-full border"
                     style={{ borderColor: borderColor }}
                   />
-
                   <View className="flex-1">
                     <TextInput
                       placeholder="¿Qué vibra musical traes?"
@@ -313,7 +520,7 @@ export default function PostModal() {
                       style={{
                         color: textColor,
                         fontSize: 18,
-                        minHeight: 50,
+                        minHeight: 60,
                         textAlignVertical: "top",
                       }}
                       value={text}
@@ -322,12 +529,12 @@ export default function PostModal() {
                   </View>
                 </View>
 
-                {/* AREA DINÁMICA (Sugerencias Usuarios O Búsqueda Música O Preview) */}
-                <View className="mt-2 min-h-[50px]">
-                  {/* A. LISTA DE USUARIOS (ETIQUETAS) */}
+                {/* ZONA DINÁMICA: Sugerencias, Buscador o Preview */}
+                <View className="mt-2 min-h-[10px]">
+                  {/* A. SUGERENCIAS @ */}
                   {showSuggestions && (
                     <View
-                      className="rounded-xl border overflow-hidden max-h-40"
+                      className="rounded-xl border overflow-hidden max-h-40 mb-4"
                       style={{
                         backgroundColor: inputBg,
                         borderColor: borderColor,
@@ -342,10 +549,10 @@ export default function PostModal() {
                     </View>
                   )}
 
-                  {/* B. BUSCADOR DE MÚSICA */}
+                  {/* B. BUSCADOR MANUAL */}
                   {!showSuggestions && isSearchingMusic && (
                     <View
-                      className="rounded-xl p-3 border shadow-sm"
+                      className="rounded-xl p-3 border shadow-sm mb-4"
                       style={{
                         backgroundColor: inputBg,
                         borderColor: borderColor,
@@ -396,7 +603,7 @@ export default function PostModal() {
                     </View>
                   )}
 
-                  {/* C. PREVIEW DE CANCIÓN SELECCIONADA */}
+                  {/* C. PREVIEW CANCIÓN SELECCIONADA CON PLAYER */}
                   {!showSuggestions && !isSearchingMusic && linkedSong && (
                     <View
                       className="flex-row items-center p-3 rounded-xl border mt-2"
@@ -405,26 +612,51 @@ export default function PostModal() {
                         borderColor: borderColor,
                       }}
                     >
-                      <Image
-                        source={{ uri: linkedSong.artworkUrl100 }}
-                        className="w-12 h-12 rounded-md bg-zinc-800 mr-3"
-                      />
+                      {/* FOTO + PLAY BUTTON */}
+                      <View className="relative mr-3">
+                        <Image
+                          source={{ uri: linkedSong.artworkUrl100 }}
+                          className="w-14 h-14 rounded-md bg-zinc-800 opacity-90"
+                        />
+                        <TouchableOpacity
+                          onPress={togglePreview}
+                          className="absolute inset-0 items-center justify-center bg-black/20 rounded-md"
+                        >
+                          {isLoadingPreview ? (
+                            <ActivityIndicator size="small" color="white" />
+                          ) : (
+                            <Ionicons
+                              name={isPlayingPreview ? "pause" : "play"}
+                              size={24}
+                              color="white"
+                            />
+                          )}
+                        </TouchableOpacity>
+                      </View>
+
                       <View className="flex-1">
                         <Text
                           className="font-bold text-sm"
                           style={{ color: textColor }}
+                          numberOfLines={1}
                         >
                           {linkedSong.trackName}
                         </Text>
                         <Text
                           className="text-xs"
                           style={{ color: subTextColor }}
+                          numberOfLines={1}
                         >
                           {linkedSong.artistName}
                         </Text>
                       </View>
+
+                      {/* BOTÓN QUITAR CANCIÓN */}
                       <TouchableOpacity
-                        onPress={() => setLinkedSong(null)}
+                        onPress={async () => {
+                          await stopPreview();
+                          setLinkedSong(null);
+                        }}
                         className="p-2"
                       >
                         <Ionicons
@@ -437,22 +669,19 @@ export default function PostModal() {
                   )}
                 </View>
 
-                {/* BOTONES INFERIORES */}
+                {/* BOTONES INFERIORES: SHAZAM Y MANUAL */}
                 {!showSuggestions && !isSearchingMusic && !linkedSong && (
                   <View
-                    className="mt-4 pt-4 border-t"
+                    className="mt-4 pt-4 border-t flex-row justify-between"
                     style={{ borderColor: borderColor }}
                   >
+                    {/* Botón 1: Buscar Manualmente */}
                     <TouchableOpacity
                       onPress={() => setIsSearchingMusic(true)}
-                      className="flex-row items-center py-3"
+                      className="flex-row items-center py-2 flex-1"
                     >
                       <View className="bg-[#5E17EB]/10 p-2 rounded-full mr-3">
-                        <Ionicons
-                          name="musical-notes"
-                          size={20}
-                          color="#5E17EB"
-                        />
+                        <Ionicons name="search" size={20} color="#5E17EB" />
                       </View>
                       <Text
                         className="font-bold text-base"
@@ -461,32 +690,38 @@ export default function PostModal() {
                         Agregar Música
                       </Text>
                     </TouchableOpacity>
+
+                    {/* Botón 2: Shazam (Micrófono) */}
+                    <TouchableOpacity
+                      onPress={handleShazam}
+                      disabled={isListening}
+                      className={`flex-row items-center px-4 py-2 rounded-full border ${
+                        isListening
+                          ? "bg-red-500 border-red-500"
+                          : "bg-transparent"
+                      }`}
+                      style={{
+                        borderColor: isListening ? "transparent" : borderColor,
+                      }}
+                    >
+                      {isListening ? (
+                        <ActivityIndicator size="small" color="white" />
+                      ) : (
+                        <Ionicons
+                          name="mic"
+                          size={20}
+                          color={isDark ? "white" : "black"}
+                        />
+                      )}
+                      <Text
+                        className="font-bold ml-2 text-sm"
+                        style={{ color: isListening ? "white" : textColor }}
+                      >
+                        {isListening ? "Escuchando..." : "¿Qué es?"}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 )}
-
-                {/* OPCIÓN PRIVACIDAD */}
-                <View className="mt-4 flex-row justify-end">
-                  <TouchableOpacity
-                    onPress={() => setIsPublic(!isPublic)}
-                    className="flex-row items-center px-3 py-1.5 rounded-full border"
-                    style={{
-                      backgroundColor: inputBg,
-                      borderColor: borderColor,
-                    }}
-                  >
-                    <Text
-                      className="text-xs font-medium mr-2"
-                      style={{ color: subTextColor }}
-                    >
-                      {isPublic ? "Público" : "Privado"}
-                    </Text>
-                    <Ionicons
-                      name={isPublic ? "earth" : "lock-closed"}
-                      size={12}
-                      color={subTextColor}
-                    />
-                  </TouchableOpacity>
-                </View>
               </View>
             </KeyboardAvoidingView>
           </TouchableWithoutFeedback>

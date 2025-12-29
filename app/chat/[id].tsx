@@ -9,6 +9,8 @@ import {
   Image,
   ActivityIndicator,
   Dimensions,
+  Alert,
+  AlertButton, // <--- Importante para corregir el error de TS
 } from "react-native";
 import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router, Stack } from "expo-router";
@@ -25,6 +27,8 @@ import {
   getCurrentUser,
   getChatMessages,
   sendMessage,
+  deleteMessage,
+  updateMessage,
   client,
   appwriteConfig,
   markChatAsRead,
@@ -33,12 +37,16 @@ import {
 
 const { width } = Dimensions.get("window");
 
-// --- COMPONENTE: TARJETA DE POST (ESTILO INSTAGRAM VERTICAL) ---
-const PostPreviewBubble = ({ postId }: { postId: string }) => {
+// --- COMPONENTE: TARJETA DE POST ---
+const PostPreviewBubble = ({
+  postId,
+  onLongPress,
+}: {
+  postId: string;
+  onLongPress?: () => void;
+}) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // Colores Premium
   const cardBg = isDark ? "#262626" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A8A8A8" : "#737373";
@@ -72,15 +80,12 @@ const PostPreviewBubble = ({ postId }: { postId: string }) => {
   return (
     <TouchableOpacity
       activeOpacity={0.9}
-      onPress={() => router.push(`/post/${postId}`)}
+      onPress={() => router.push(`/post/${postId}` as any)}
+      onLongPress={onLongPress}
+      delayLongPress={300}
       className="rounded-[22px] overflow-hidden mb-1 border shadow-sm"
-      style={{
-        backgroundColor: cardBg,
-        borderColor: borderColor,
-        width: 260,
-      }}
+      style={{ backgroundColor: cardBg, borderColor: borderColor, width: 260 }}
     >
-      {/* 1. HEADER: USUARIO */}
       {post.postedBy && (
         <View className="flex-row items-center px-3 py-2.5 space-x-2 border-b border-black/5 dark:border-white/5">
           <Image
@@ -100,8 +105,6 @@ const PostPreviewBubble = ({ postId }: { postId: string }) => {
           </Text>
         </View>
       )}
-
-      {/* 2. MEDIA: PORTADA GRANDE */}
       <View className="w-full aspect-square bg-zinc-800 relative">
         <Image
           source={
@@ -112,10 +115,7 @@ const PostPreviewBubble = ({ postId }: { postId: string }) => {
           className="w-full h-full"
           resizeMode="cover"
         />
-        <View className="absolute bottom-0 w-full h-10 bg-black/10" />
       </View>
-
-      {/* 3. FOOTER */}
       <View className="p-3" style={{ backgroundColor: footerBg }}>
         <View className="flex-row items-center justify-between">
           <View className="flex-1 mr-3">
@@ -173,9 +173,17 @@ const ChatRoom = () => {
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
 
+  // COLOR ORIGINAL RESTAURADO
   const myBubbleBg = "#5E17EB";
+  const myBubbleText = "#FFFFFF";
   const otherBubbleBg = isDark ? "#27272A" : "#F3F4F6";
   const otherBubbleText = isDark ? "#FFFFFF" : "#000000";
+
+  // Fondos de la caja de respuesta
+  const replyBoxMyBg = "rgba(0, 0, 0, 0.2)";
+  const replyBoxOtherBg = isDark
+    ? "rgba(255, 255, 255, 0.1)"
+    : "rgba(0, 0, 0, 0.05)";
 
   const params = useLocalSearchParams();
   const chatId = params.id as string;
@@ -184,10 +192,13 @@ const ChatRoom = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [currentUser, setCurrentUser] = useState<any>(null);
+
   const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [editingMessage, setEditingMessage] = useState<any>(null);
   const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
   const rowRefs = useRef(new Map()).current;
 
   useEffect(() => {
@@ -202,7 +213,10 @@ const ChatRoom = () => {
               "databases.*.collections.*.documents.*.create"
             )
           ) {
-            setMessages((prev) => [payload, ...prev]);
+            setMessages((prev) => {
+              const exists = prev.find((m) => m.$id === payload.$id);
+              return exists ? prev : [payload, ...prev];
+            });
             getCurrentUser().then((user) => {
               if (user && payload.senderId !== user.$id) {
                 markChatAsRead(chatId, user.$id);
@@ -216,6 +230,15 @@ const ChatRoom = () => {
           ) {
             setMessages((prev) =>
               prev.map((msg) => (msg.$id === payload.$id ? payload : msg))
+            );
+          }
+          if (
+            response.events.includes(
+              "databases.*.collections.*.documents.*.delete"
+            )
+          ) {
+            setMessages((prev) =>
+              prev.filter((msg) => msg.$id !== payload.$id)
             );
           }
         }
@@ -240,23 +263,164 @@ const ChatRoom = () => {
   const onSwipeToReply = (message: any) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setReplyingTo(message);
+    setEditingMessage(null);
     const ref = rowRefs.get(message.$id);
     if (ref) ref.close();
+    inputRef.current?.focus();
+  };
+
+  // --- LÓGICA DE OPCIONES ---
+  const handleLongPress = (item: any) => {
+    if (item.senderId !== currentUser?.$id) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // ERROR CORREGIDO: Especificamos el tipo AlertButton[]
+    const options: AlertButton[] = [{ text: "Cancelar", style: "cancel" }];
+
+    if (!item.sharedPostId) {
+      options.push({
+        text: "Editar",
+        onPress: () => startEditing(item),
+      });
+    }
+
+    options.push({
+      text: "Eliminar",
+      style: "destructive",
+      onPress: () => confirmDelete(item.$id),
+    });
+
+    Alert.alert("Opciones", "", options);
+  };
+
+  const startEditing = (item: any) => {
+    setReplyingTo(null);
+    let cleanContent = item.content;
+
+    // Limpieza robusta del contenido
+    if (item.content.includes(":::REPLY:::")) {
+      const parts = item.content.split(":::REPLY:::");
+      // parts[0] es la metadata (Nombre:::Snippet), parts[1] es el mensaje
+      if (parts.length > 1) cleanContent = parts[1];
+    } else if (item.content.startsWith("Replying to:")) {
+      // Soporte antiguo
+      const parts = item.content.split("\n\n");
+      if (parts.length > 1) cleanContent = parts.slice(1).join("\n\n");
+    }
+
+    setEditingMessage({ ...item, cleanContent });
+    setNewMessage(cleanContent);
+    inputRef.current?.focus();
+  };
+
+  const confirmDelete = (messageId: string) => {
+    Alert.alert("Eliminar mensaje", "¿Estás seguro? Se borrará para todos.", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Eliminar",
+        style: "destructive",
+        onPress: () => handleDelete(messageId),
+      },
+    ]);
+  };
+
+  const handleDelete = async (messageId: string) => {
+    try {
+      setMessages((prev) => prev.filter((m) => m.$id !== messageId));
+      await deleteMessage(messageId);
+    } catch (error) {
+      Alert.alert("Error", "No se pudo eliminar el mensaje");
+      loadData();
+    }
+  };
+
+  const scrollToOriginalMessage = (originalText: string) => {
+    // Buscamos el mensaje que contiene el snippet
+    const index = messages.findIndex((m) => {
+      // Limpiamos el mensaje candidato por si también es una respuesta
+      let contentToCheck = m.content;
+      if (m.content.includes(":::REPLY:::"))
+        contentToCheck = m.content.split(":::REPLY:::")[1];
+      else if (m.content.startsWith("Replying to:"))
+        contentToCheck = m.content.split("\n\n")[1];
+
+      return (
+        contentToCheck.includes(originalText) || contentToCheck === originalText
+      );
+    });
+
+    if (index !== -1 && flatListRef.current) {
+      flatListRef.current.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0.5,
+      });
+      // Haptic feedback para confirmar que se encontró
+      Haptics.selectionAsync();
+    } else {
+      // Opcional: Avisar si no se encontró (ej: mensajes muy antiguos no cargados)
+      // Alert.alert("No encontrado", "El mensaje original no está visible.");
+    }
   };
 
   const handleSend = async () => {
     if (!newMessage.trim() || !currentUser) return;
-    let contentToSend = newMessage;
-    if (replyingTo) {
-      const replyPreview =
-        replyingTo.content.length > 30
-          ? replyingTo.content.substring(0, 30) + "..."
-          : replyingTo.content;
-      contentToSend = `Replying to: "${replyPreview}"\n\n${newMessage}`;
+
+    // --- MODO EDICIÓN ---
+    if (editingMessage) {
+      const tempId = editingMessage.$id;
+      let finalContent = newMessage;
+
+      // Mantener la estructura de respuesta si existía
+      if (editingMessage.content.includes(":::REPLY:::")) {
+        const parts = editingMessage.content.split(":::REPLY:::");
+        finalContent = `${parts[0]}:::REPLY:::${newMessage}`;
+      }
+
+      setNewMessage("");
+      setEditingMessage(null);
+      try {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.$id === tempId ? { ...m, content: finalContent } : m
+          )
+        );
+        await updateMessage(tempId, finalContent);
+      } catch (error) {
+        Alert.alert("Error", "No se pudo editar");
+      }
+      return;
     }
+
+    // --- MODO ENVÍO NORMAL ---
+    let contentToSend = newMessage;
+
+    // FORMATO AVANZADO: "NombreUsuario:::Snippet:::REPLY:::Mensaje"
+    if (replyingTo) {
+      // Determinar el nombre a mostrar en la respuesta
+      const replyName =
+        replyingTo.senderId === currentUser.$id ? "Tú" : params.otherUserName;
+
+      // Limpiar el contenido original (para no anidar respuestas infinitas)
+      let rawContent = replyingTo.content;
+      if (replyingTo.content.includes(":::REPLY:::")) {
+        // Si respondo a una respuesta, tomo solo el mensaje real
+        rawContent = replyingTo.content.split(":::REPLY:::")[1];
+      } else if (replyingTo.content.startsWith("Replying to:")) {
+        rawContent = replyingTo.content.split("\n\n").slice(1).join("\n\n");
+      }
+
+      const snippet = rawContent.substring(0, 50).replace(/\n/g, " ");
+
+      // Construimos el string con metadatos
+      contentToSend = `${replyName}:::${snippet}:::REPLY:::${newMessage}`;
+    }
+
     const tempContent = contentToSend;
     setNewMessage("");
     setReplyingTo(null);
+
     try {
       await sendMessage(
         chatId,
@@ -266,10 +430,27 @@ const ChatRoom = () => {
         null
       );
     } catch (error) {
-      console.log("Error sending:", error);
       setNewMessage(tempContent);
     }
   };
+
+  // ACCIONES SWIPE
+  const renderReplyActionLeft = () => (
+    <View className="justify-center items-end pr-4 w-20">
+      <Ionicons name="arrow-undo" size={24} color={iconColor} />
+    </View>
+  );
+
+  const renderReplyActionRight = () => (
+    <View className="justify-center items-start pl-4 w-20">
+      <Ionicons
+        name="arrow-undo"
+        size={24}
+        color={iconColor}
+        style={{ transform: [{ scaleX: -1 }] }}
+      />
+    </View>
+  );
 
   const renderMessage = ({ item }: { item: any }) => {
     const isMe = item.senderId === currentUser?.$id;
@@ -277,96 +458,151 @@ const ChatRoom = () => {
       hour: "2-digit",
       minute: "2-digit",
     });
-    const isReply = item.content.startsWith("Replying to:");
+
+    // --- PARSEO DEL MENSAJE ---
+    let displayContent = item.content;
+    let replySnippet = null;
+    let replyName = null;
+
+    // 1. Formato Nuevo: "Nombre:::Snippet:::REPLY:::Mensaje"
+    if (item.content.includes(":::REPLY:::")) {
+      const parts = item.content.split(":::REPLY:::");
+      const metadata = parts[0].split(":::");
+
+      if (metadata.length >= 2) {
+        replyName = metadata[0];
+        replySnippet = metadata[1];
+      } else {
+        // Fallback si algo falló en el guardado
+        replyName = "Respuesta";
+        replySnippet = metadata[0];
+      }
+      displayContent = parts[1];
+    }
+    // 2. Formato Antiguo (Legacy): "Replying to:..."
+    else if (item.content.startsWith("Replying to:")) {
+      const parts = item.content.split("\n\n");
+      if (parts.length > 1) {
+        replyName = "Respuesta"; // No teníamos nombre antes
+        replySnippet = parts[0].replace("Replying to: ", "").replace(/"/g, "");
+        displayContent = parts.slice(1).join("\n\n");
+      }
+    }
 
     return (
       <Swipeable
         ref={(ref) => {
           if (ref && item.$id) rowRefs.set(item.$id, ref);
         }}
-        // --- CAMBIO CLAVE: Usar renderRightActions (Deslizar a la Izquierda) ---
-        // Esto evita el conflicto con el gesto de navegación (Deslizar a la Derecha)
-        renderRightActions={() => (
-          <View className="justify-center items-end pr-4 w-20">
-            <Ionicons name="arrow-undo" size={24} color={iconColor} />
-          </View>
-        )}
+        renderRightActions={isMe ? renderReplyActionLeft : undefined}
+        renderLeftActions={!isMe ? renderReplyActionRight : undefined}
         onSwipeableWillOpen={() => onSwipeToReply(item)}
-        // Umbral para activar el gesto (evita conflictos con scroll vertical)
-        activeOffsetX={[-20, 20]}
         friction={2}
         overshootRight={false}
+        overshootLeft={false}
+        activeOffsetX={isMe ? [-20, 9999] : [-9999, 35]}
       >
-        <View
-          className={`mb-3 flex-row ${
-            isMe ? "justify-end" : "justify-start"
-          } px-4`}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onLongPress={() => handleLongPress(item)}
+          delayLongPress={300}
         >
-          {!isMe && (
-            <Image
-              source={{ uri: params.otherUserAvatar as string }}
-              className="w-8 h-8 rounded-full self-end mr-2 mb-1"
-              style={{ backgroundColor: inputBg }}
-            />
-          )}
-          <View className={`max-w-[85%] ${isMe ? "items-end" : "items-start"}`}>
-            {item.sharedPostId ? (
-              <PostPreviewBubble postId={item.sharedPostId} />
-            ) : (
-              <View
-                className={`px-4 py-2.5 rounded-[20px] ${
-                  isMe ? "rounded-br-sm" : "rounded-bl-sm"
-                }`}
-                style={{
-                  backgroundColor: isMe ? myBubbleBg : otherBubbleBg,
-                  borderWidth: isMe ? 0 : 1,
-                  borderColor: isMe ? "transparent" : borderColor,
-                }}
-              >
-                {isReply && (
-                  <View
-                    className="mb-2 pl-2 border-l-2"
-                    style={{
-                      borderColor: isMe
-                        ? "rgba(255,255,255,0.3)"
-                        : subTextColor,
-                    }}
-                  >
-                    <Text
-                      className="text-xs italic"
+          <View
+            className={`mb-2 flex-row ${
+              isMe ? "justify-end" : "justify-start"
+            } px-4`}
+          >
+            {!isMe && (
+              <Image
+                source={{ uri: params.otherUserAvatar as string }}
+                className="w-7 h-7 rounded-full self-end mr-2 mb-1"
+                style={{ backgroundColor: inputBg }}
+              />
+            )}
+            <View
+              className={`max-w-[80%] ${isMe ? "items-end" : "items-start"}`}
+            >
+              {item.sharedPostId ? (
+                <PostPreviewBubble
+                  postId={item.sharedPostId}
+                  onLongPress={() => handleLongPress(item)}
+                />
+              ) : (
+                <View
+                  className={`px-3 py-2 rounded-[18px] ${
+                    isMe ? "rounded-tr-none" : "rounded-tl-none"
+                  }`}
+                  style={{
+                    backgroundColor: isMe ? myBubbleBg : otherBubbleBg,
+                    opacity: editingMessage?.$id === item.$id ? 0.5 : 1,
+                    minWidth: 100,
+                  }}
+                >
+                  {/* CAJA DE RESPUESTA (ESTILO WHATSAPP) */}
+                  {replySnippet && (
+                    <TouchableOpacity
+                      onPress={() =>
+                        scrollToOriginalMessage(replySnippet as string)
+                      }
+                      className="mb-1 rounded-md overflow-hidden border-l-4 p-1.5"
                       style={{
-                        color: isMe ? "rgba(255,255,255,0.8)" : subTextColor,
+                        backgroundColor: isMe ? replyBoxMyBg : replyBoxOtherBg,
+                        borderColor: isMe ? "rgba(255,255,255,0.7)" : "#5E17EB",
                       }}
                     >
-                      {item.content.split("\n\n")[0]}
-                    </Text>
-                  </View>
-                )}
-                <Text
-                  className="text-[15px] leading-5"
-                  style={{ color: isMe ? "#FFFFFF" : otherBubbleText }}
-                >
-                  {isReply ? item.content.split("\n\n")[1] : item.content}
-                </Text>
-                <View className="flex-row items-center justify-end mt-1 space-x-1 opacity-70">
-                  <Text
-                    className="text-[10px]"
-                    style={{ color: isMe ? "#E0E7FF" : subTextColor }}
-                  >
-                    {time}
-                  </Text>
-                  {isMe && (
-                    <Ionicons
-                      name="checkmark-done"
-                      size={14}
-                      color={item.isRead ? "#60A5FA" : "#E0E7FF"}
-                    />
+                      <Text
+                        className="text-[11px] font-bold mb-0.5"
+                        style={{
+                          color: isMe ? "rgba(255,255,255,0.9)" : "#5E17EB",
+                        }}
+                      >
+                        {replyName}
+                      </Text>
+                      <Text
+                        className="text-[12px]"
+                        numberOfLines={1}
+                        style={{
+                          color: isMe ? "rgba(255,255,255,0.7)" : subTextColor,
+                        }}
+                      >
+                        {replySnippet}
+                      </Text>
+                    </TouchableOpacity>
                   )}
+
+                  {/* TEXTO DEL MENSAJE */}
+                  <Text
+                    className="text-[15px] leading-5"
+                    style={{ color: isMe ? myBubbleText : otherBubbleText }}
+                  >
+                    {displayContent}
+                  </Text>
+
+                  {/* META (HORA + CHECK) */}
+                  <View className="flex-row items-center justify-end mt-1 space-x-1">
+                    <Text
+                      className="text-[10px]"
+                      style={{
+                        color: isMe ? "rgba(255,255,255,0.6)" : subTextColor,
+                      }}
+                    >
+                      {time}
+                    </Text>
+                    {isMe && (
+                      <Ionicons
+                        name="checkmark-done"
+                        size={14}
+                        color={
+                          item.isRead ? "#60A5FA" : "rgba(255,255,255,0.6)"
+                        }
+                      />
+                    )}
+                  </View>
                 </View>
-              </View>
-            )}
+              )}
+            </View>
           </View>
-        </View>
+        </TouchableOpacity>
       </Swipeable>
     );
   };
@@ -378,12 +614,11 @@ const ChatRoom = () => {
         edges={["top"]}
         style={{ backgroundColor: bgColor }}
       >
-        {/* NAVEGACIÓN Y GESTOS */}
         <Stack.Screen
           options={{
             headerShown: false,
             gestureEnabled: true,
-            fullScreenGestureEnabled: true,
+            gestureDirection: "horizontal",
             animation: "slide_from_right",
           }}
         />
@@ -398,7 +633,7 @@ const ChatRoom = () => {
           </TouchableOpacity>
           <Image
             source={{ uri: params.otherUserAvatar as string }}
-            className="w-10 h-10 rounded-full"
+            className="w-9 h-9 rounded-full"
             style={{ backgroundColor: inputBg }}
           />
           <View className="ml-3 flex-1">
@@ -409,16 +644,12 @@ const ChatRoom = () => {
             >
               {params.otherUserName}
             </Text>
-            <Text
-              className="text-xs"
-              style={{ color: isOtherUserOnline ? "#34D399" : subTextColor }}
-            >
-              {isOtherUserOnline ? "En línea" : "Desconectado"}
-            </Text>
+            {isOtherUserOnline && (
+              <Text className="text-xs text-green-500">En línea</Text>
+            )}
           </View>
         </View>
 
-        {/* LISTA */}
         <FlatList
           ref={flatListRef}
           data={messages}
@@ -427,6 +658,7 @@ const ChatRoom = () => {
           inverted
           contentContainerStyle={{ paddingVertical: 15 }}
           className="flex-1"
+          onScrollToIndexFailed={() => {}}
         />
 
         {/* INPUT */}
@@ -434,43 +666,75 @@ const ChatRoom = () => {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
         >
-          {replyingTo && (
+          {/* BARRA FLOTANTE DE RESPUESTA/EDICIÓN */}
+          {(replyingTo || editingMessage) && (
             <View
-              className="flex-row items-center justify-between px-4 py-2 border-t"
-              style={{ backgroundColor: inputBg, borderColor: borderColor }}
+              className="flex-row items-center justify-between px-3 py-2 m-2 rounded-xl border-l-4"
+              style={{
+                backgroundColor: inputBg,
+                borderColor: editingMessage ? "#EAB308" : "#5E17EB",
+                borderLeftWidth: 4,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                elevation: 2,
+              }}
             >
-              <View className="flex-1 border-l-4 border-[#5E17EB] pl-3 py-1">
-                <Text className="text-[#5E17EB] text-xs font-bold mb-0.5">
-                  Respondiendo a
+              <View className="flex-1 pl-2">
+                <Text
+                  className="text-xs font-bold mb-0.5"
+                  style={{ color: editingMessage ? "#EAB308" : "#5E17EB" }}
+                >
+                  {editingMessage
+                    ? "Editando mensaje"
+                    : `Respondiendo a ${
+                        replyingTo.senderId === currentUser?.$id
+                          ? "ti mismo"
+                          : params.otherUserName
+                      }`}
                 </Text>
                 <Text
                   className="text-xs"
                   numberOfLines={1}
                   style={{ color: subTextColor }}
                 >
-                  {replyingTo.content}
+                  {editingMessage
+                    ? editingMessage.content.includes(":::REPLY:::")
+                      ? editingMessage.content.split(":::REPLY:::")[1]
+                      : editingMessage.cleanContent
+                    : replyingTo.content.includes(":::REPLY:::")
+                    ? replyingTo.content.split(":::REPLY:::")[1]
+                    : replyingTo.content}
                 </Text>
               </View>
               <TouchableOpacity
-                onPress={() => setReplyingTo(null)}
+                onPress={() => {
+                  setReplyingTo(null);
+                  setEditingMessage(null);
+                  setNewMessage("");
+                }}
                 className="p-2"
               >
-                <Ionicons name="close-circle" size={24} color={iconColor} />
+                <Ionicons name="close" size={20} color={iconColor} />
               </TouchableOpacity>
             </View>
           )}
+
           <View
             className="flex-row items-end px-3 py-3 border-t"
             style={{ backgroundColor: bgColor, borderColor: borderColor }}
           >
             <View
-              className="flex-1 flex-row items-center rounded-3xl border px-4 min-h-[44px]"
+              className="flex-1 flex-row items-center rounded-3xl border px-4 min-h-[40px]"
               style={{ backgroundColor: inputBg, borderColor: borderColor }}
             >
               <TextInput
-                placeholder="Mensaje..."
+                ref={inputRef}
+                placeholder={
+                  editingMessage ? "Edita tu mensaje..." : "Mensaje..."
+                }
                 placeholderTextColor={subTextColor}
-                className="flex-1 text-[15px] py-3 max-h-32"
+                className="flex-1 text-[15px] py-2.5 max-h-28"
                 style={{ color: textColor }}
                 multiline
                 value={newMessage}
@@ -479,17 +743,27 @@ const ChatRoom = () => {
             </View>
             <TouchableOpacity
               onPress={handleSend}
-              className="ml-2 w-11 h-11 rounded-full items-center justify-center transition-all"
+              className="ml-2 w-10 h-10 rounded-full items-center justify-center transition-all"
               style={{
-                backgroundColor: newMessage.trim() ? "#5E17EB" : inputBg,
+                backgroundColor: newMessage.trim()
+                  ? editingMessage
+                    ? "#EAB308"
+                    : "#5E17EB"
+                  : inputBg,
                 opacity: newMessage.trim() ? 1 : 0.7,
               }}
               disabled={!newMessage.trim()}
             >
               <Ionicons
-                name="send"
-                size={20}
-                color={newMessage.trim() ? "white" : subTextColor}
+                name={editingMessage ? "checkmark" : "send"}
+                size={18}
+                color={
+                  newMessage.trim()
+                    ? editingMessage
+                      ? "black"
+                      : "white"
+                    : subTextColor
+                }
               />
             </TouchableOpacity>
           </View>

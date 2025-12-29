@@ -14,28 +14,30 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { useFocusEffect, router } from "expo-router";
-import { useColorScheme } from "nativewind"; // <--- Importante
+import { useColorScheme } from "nativewind";
+
+// --- GESTOS ---
+import {
+  GestureHandlerRootView,
+  FlingGestureHandler,
+  Directions,
+  State,
+} from "react-native-gesture-handler";
 
 import { getSavedPosts } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
 
 const Library = () => {
-  // --- TEMA DINÁMICO & BLINDADO ---
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // Paleta de Colores
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
-  const subTextColor = isDark ? "#A1A1AA" : "#71717A"; // Zinc-400 vs Zinc-500
-
-  // Tarjetas
-  const cardBg = isDark ? "#18181B" : "#F4F4F5"; // Zinc-900 vs Zinc-100
-  const borderColor = isDark ? "#27272A" : "#E4E4E7"; // Borde sutil
-
-  // Iconos
+  const subTextColor = isDark ? "#A1A1AA" : "#71717A";
+  const cardBg = isDark ? "#18181B" : "#F4F4F5";
+  const borderColor = isDark ? "#27272A" : "#E4E4E7";
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
-  const emptyIconColor = isDark ? "#27272A" : "#E4E4E7"; // Icono gigante de fondo
+  const emptyIconColor = isDark ? "#27272A" : "#E4E4E7";
 
   const { user } = useGlobalContext();
   const [activeTab, setActiveTab] = useState("Colección");
@@ -46,7 +48,6 @@ const Library = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // --- 1. CARGA DE DATOS ---
   const fetchLibrary = async () => {
     if (!user) return;
     try {
@@ -100,7 +101,14 @@ const Library = () => {
     setRefreshing(false);
   };
 
-  // --- 2. LÓGICA DE APERTURA DE MÚSICA ---
+  // --- NAVEGACIÓN POR GESTOS ---
+  // Deslizar a la DERECHA -> Ir a Explorar (Atrás)
+  const handleFlingRight = ({ nativeEvent }: any) => {
+    if (nativeEvent.state === State.ACTIVE) {
+      router.push("/explore");
+    }
+  };
+
   const openExternalMusic = async (song: any) => {
     const cleanTitle = song.title ? song.title.split("(")[0].trim() : "";
     const query = `${cleanTitle} ${song.artist}`;
@@ -136,12 +144,9 @@ const Library = () => {
     }
   };
 
-  // --- 3. RENDERIZADORES ADAPTADOS ---
-
   const renderCollectionItem = ({ item }: { item: any }) => {
     const platform = user?.preferredPlatform || "spotify";
     const iconName = platform === "apple" ? "apple" : "spotify";
-    // Botones de marca (se mantienen igual en ambos modos)
     const btnColor = platform === "apple" ? "bg-[#FA243C]" : "bg-[#1DB954]";
 
     return (
@@ -226,101 +231,125 @@ const Library = () => {
   );
 
   return (
-    // FONDO BLINDADO
-    <SafeAreaView
-      className="flex-1"
-      edges={["top"]}
-      style={{ backgroundColor: bgColor }}
-    >
-      <StatusBar style={isDark ? "light" : "dark"} />
-
-      {/* HEADER */}
-      <View className="px-6 pt-6 pb-4">
-        <Text className="text-3xl font-bold mb-1" style={{ color: textColor }}>
-          Tu Librería
-        </Text>
-        <Text className="text-sm" style={{ color: subTextColor }}>
-          Tus descubrimientos guardados.
-        </Text>
-      </View>
-
-      {/* TABS (Música / Posts) */}
-      <View
-        className="flex-row px-6 mt-4 mb-6 border-b pb-4"
-        style={{ borderColor: borderColor }}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      {/* FLING RIGHT = IR ATRÁS (EXPLORAR) */}
+      <FlingGestureHandler
+        direction={Directions.RIGHT}
+        onHandlerStateChange={handleFlingRight}
       >
-        <TouchableOpacity
-          onPress={() => setActiveTab("Colección")}
-          className={`mr-6 ${
-            activeTab === "Colección" ? "opacity-100" : "opacity-40"
-          }`}
-        >
-          <Text className="font-bold text-lg" style={{ color: textColor }}>
-            Música ({musicCollection.length})
-          </Text>
-          {activeTab === "Colección" && (
-            <View className="h-1 w-full bg-[#5E17EB] rounded-full mt-1" />
-          )}
-        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <SafeAreaView
+            className="flex-1"
+            edges={["top"]}
+            style={{ backgroundColor: bgColor }}
+          >
+            <StatusBar style={isDark ? "light" : "dark"} />
 
-        <TouchableOpacity
-          onPress={() => setActiveTab("Guardados")}
-          className={`mr-6 ${
-            activeTab === "Guardados" ? "opacity-100" : "opacity-40"
-          }`}
-        >
-          <Text className="font-bold text-lg" style={{ color: textColor }}>
-            Posts ({savedPosts.length})
-          </Text>
-          {activeTab === "Guardados" && (
-            <View className="h-1 w-full bg-[#5E17EB] rounded-full mt-1" />
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* LISTA */}
-      <FlatList
-        data={activeTab === "Colección" ? musicCollection : savedPosts}
-        keyExtractor={(item) => item.id || item.$id}
-        renderItem={
-          activeTab === "Colección" ? renderCollectionItem : renderSavedPost
-        }
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#5E17EB"
-          />
-        }
-        ListEmptyComponent={
-          !isLoading ? (
-            <View className="items-center justify-center py-20">
-              <Ionicons
-                name="bookmark-outline"
-                size={60}
-                color={emptyIconColor}
-              />
+            <View className="px-6 pt-6 pb-4">
               <Text
-                className="mt-4 font-bold text-lg text-center"
+                className="text-3xl font-bold mb-1"
                 style={{ color: textColor }}
               >
-                Nada por aquí
+                Tu Librería
               </Text>
-              <Text
-                className="text-center mt-2 px-6"
-                style={{ color: subTextColor }}
-              >
-                Usa el botón de Guardar en el Feed para agregar contenido.
+              <Text className="text-sm" style={{ color: subTextColor }}>
+                Tus descubrimientos guardados.
               </Text>
             </View>
-          ) : (
-            <ActivityIndicator color="#5E17EB" size="large" className="mt-10" />
-          )
-        }
-      />
-    </SafeAreaView>
+
+            <View
+              className="flex-row px-6 mt-4 mb-6 border-b pb-4"
+              style={{ borderColor: borderColor }}
+            >
+              <TouchableOpacity
+                onPress={() => setActiveTab("Colección")}
+                className={`mr-6 ${
+                  activeTab === "Colección" ? "opacity-100" : "opacity-40"
+                }`}
+              >
+                <Text
+                  className="font-bold text-lg"
+                  style={{ color: textColor }}
+                >
+                  Música ({musicCollection.length})
+                </Text>
+                {activeTab === "Colección" && (
+                  <View className="h-1 w-full bg-[#5E17EB] rounded-full mt-1" />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setActiveTab("Guardados")}
+                className={`mr-6 ${
+                  activeTab === "Guardados" ? "opacity-100" : "opacity-40"
+                }`}
+              >
+                <Text
+                  className="font-bold text-lg"
+                  style={{ color: textColor }}
+                >
+                  Posts ({savedPosts.length})
+                </Text>
+                {activeTab === "Guardados" && (
+                  <View className="h-1 w-full bg-[#5E17EB] rounded-full mt-1" />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={activeTab === "Colección" ? musicCollection : savedPosts}
+              keyExtractor={(item) => item.id || item.$id}
+              renderItem={
+                activeTab === "Colección"
+                  ? renderCollectionItem
+                  : renderSavedPost
+              }
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: 24,
+                paddingBottom: 100,
+              }}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor="#5E17EB"
+                />
+              }
+              ListEmptyComponent={
+                !isLoading ? (
+                  <View className="items-center justify-center py-20">
+                    <Ionicons
+                      name="bookmark-outline"
+                      size={60}
+                      color={emptyIconColor}
+                    />
+                    <Text
+                      className="mt-4 font-bold text-lg text-center"
+                      style={{ color: textColor }}
+                    >
+                      Nada por aquí
+                    </Text>
+                    <Text
+                      className="text-center mt-2 px-6"
+                      style={{ color: subTextColor }}
+                    >
+                      Usa el botón de Guardar en el Feed para agregar contenido.
+                    </Text>
+                  </View>
+                ) : (
+                  <ActivityIndicator
+                    color="#5E17EB"
+                    size="large"
+                    className="mt-10"
+                  />
+                )
+              }
+            />
+          </SafeAreaView>
+        </View>
+      </FlingGestureHandler>
+    </GestureHandlerRootView>
   );
 };
 

@@ -15,7 +15,15 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useAudioPlayer } from "expo-audio";
-import { useColorScheme } from "nativewind"; // <--- Importante
+import { useColorScheme } from "nativewind";
+
+// --- GESTOS ---
+import {
+  GestureHandlerRootView,
+  FlingGestureHandler,
+  Directions,
+  State,
+} from "react-native-gesture-handler";
 
 import {
   getLatestUsers,
@@ -69,19 +77,15 @@ const formatTimeAgo = (dateString: string) => {
 const CATEGORIES = ["Posts", "Música", "Artistas", "Perfiles"];
 
 const Explore = () => {
-  // --- TEMA DINÁMICO ---
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // Paleta de Colores Calculada (Estilo Blindado)
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
-  const subTextColor = isDark ? "#A1A1AA" : "#71717A"; // Zinc-400 vs Zinc-500
-
-  // Elementos de UI
-  const cardBg = isDark ? "#18181B" : "#F4F4F5"; // Zinc-900 vs Zinc-100
+  const subTextColor = isDark ? "#A1A1AA" : "#71717A";
+  const cardBg = isDark ? "#18181B" : "#F4F4F5";
   const inputBg = isDark ? "#18181B" : "#F4F4F5";
-  const borderColor = isDark ? "#27272A" : "#E4E4E7"; // Zinc-800 vs Zinc-200
+  const borderColor = isDark ? "#27272A" : "#E4E4E7";
   const pillInactiveBg = isDark ? "#18181B" : "#F4F4F5";
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
 
@@ -128,7 +132,23 @@ const Explore = () => {
     setCurrentSongUrl(previewUrl);
   };
 
-  // --- LOGICA DE RANKING (Igual que antes) ---
+  // --- NAVEGACIÓN POR GESTOS ---
+
+  // 1. Deslizar a la DERECHA -> Ir a Inicio (/home)
+  const handleFlingRight = ({ nativeEvent }: any) => {
+    if (nativeEvent.state === State.ACTIVE) {
+      router.push("/home");
+    }
+  };
+
+  // 2. Deslizar a la IZQUIERDA -> Ir a Librería (/library)
+  const handleFlingLeft = ({ nativeEvent }: any) => {
+    if (nativeEvent.state === State.ACTIVE) {
+      // AQUÍ ESTÁ LA CORRECCIÓN: Apunta a /library
+      router.push("/library" as any);
+    }
+  };
+
   const rankExplorePosts = (posts: any[]) => {
     return posts
       .map((post) => {
@@ -194,7 +214,6 @@ const Explore = () => {
       .slice(0, 50);
   };
 
-  // --- FETCH DATA ---
   const fetchCategoryData = async () => {
     setIsLoading(true);
     try {
@@ -314,8 +333,6 @@ const Explore = () => {
         return explorePosts;
     }
   };
-
-  // --- RENDERIZADORES ADAPTATIVOS ---
 
   const renderPostItem = ({ item, index }: { item: any; index: number }) => {
     const creator = getCreatorFromPost(item);
@@ -503,7 +520,6 @@ const Explore = () => {
         key={item.id}
         onPress={() => router.push(`/post/${item.postId}` as any)}
         className="flex-row items-center px-4 py-3 mb-2 rounded-xl mx-2"
-        // Estilo activo simulado o hover no es nativo, pero podemos poner fondo condicional si quisiéramos
       >
         <Text
           className={`text-xl font-bold w-8 text-center mr-2 ${
@@ -672,54 +688,72 @@ const Explore = () => {
   );
 
   return (
-    // SafeAreaView "Blindado" con estilo en línea
-    <SafeAreaView
-      className="flex-1"
-      edges={["top", "left", "right"]}
-      style={{ backgroundColor: bgColor }}
-    >
-      <StatusBar style={isDark ? "light" : "dark"} />
-      <FlatList
-        data={getData()}
-        key={activeCategory === "Artistas" ? "artists-grid" : "list"}
-        numColumns={activeCategory === "Artistas" ? 2 : 1}
-        columnWrapperStyle={
-          activeCategory === "Artistas"
-            ? { justifyContent: "space-between", paddingHorizontal: 10 }
-            : undefined
-        }
-        keyExtractor={(item) => item.id || item.$id || Math.random().toString()}
-        renderItem={({ item, index }) => {
-          switch (activeCategory) {
-            case "Música":
-              return renderMusicItem({ item });
-            case "Artistas":
-              return renderArtistItem({ item, index });
-            case "Perfiles":
-              return renderProfileItem({ item });
-            default:
-              return renderPostItem({ item, index });
-          }
-        }}
-        ListHeaderComponent={renderHeader}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#5E17EB"
-          />
-        }
-        ListEmptyComponent={
-          !isLoading ? (
-            <Text className="text-center mt-10" style={{ color: subTextColor }}>
-              No hay resultados.
-            </Text>
-          ) : null
-        }
-      />
-    </SafeAreaView>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <FlingGestureHandler
+        direction={Directions.RIGHT}
+        onHandlerStateChange={handleFlingRight}
+      >
+        <FlingGestureHandler
+          direction={Directions.LEFT}
+          onHandlerStateChange={handleFlingLeft}
+        >
+          <View style={{ flex: 1 }}>
+            <SafeAreaView
+              className="flex-1"
+              edges={["top", "left", "right"]}
+              style={{ backgroundColor: bgColor }}
+            >
+              <StatusBar style={isDark ? "light" : "dark"} />
+              <FlatList
+                data={getData()}
+                key={activeCategory === "Artistas" ? "artists-grid" : "list"}
+                numColumns={activeCategory === "Artistas" ? 2 : 1}
+                columnWrapperStyle={
+                  activeCategory === "Artistas"
+                    ? { justifyContent: "space-between", paddingHorizontal: 10 }
+                    : undefined
+                }
+                keyExtractor={(item) =>
+                  item.id || item.$id || Math.random().toString()
+                }
+                renderItem={({ item, index }) => {
+                  switch (activeCategory) {
+                    case "Música":
+                      return renderMusicItem({ item });
+                    case "Artistas":
+                      return renderArtistItem({ item, index });
+                    case "Perfiles":
+                      return renderProfileItem({ item });
+                    default:
+                      return renderPostItem({ item, index });
+                  }
+                }}
+                ListHeaderComponent={renderHeader}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    tintColor="#5E17EB"
+                  />
+                }
+                ListEmptyComponent={
+                  !isLoading ? (
+                    <Text
+                      className="text-center mt-10"
+                      style={{ color: subTextColor }}
+                    >
+                      No hay resultados.
+                    </Text>
+                  ) : null
+                }
+              />
+            </SafeAreaView>
+          </View>
+        </FlingGestureHandler>
+      </FlingGestureHandler>
+    </GestureHandlerRootView>
   );
 };
 

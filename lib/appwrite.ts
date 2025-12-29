@@ -74,7 +74,7 @@ export const createUser = async (
         username,
         preferredPlatform: "spotify",
         isPrivate: false,
-        allowTags: true, // Nuevo campo por defecto
+        allowTags: true,
         blockedUsers: [],
       }
     );
@@ -851,21 +851,14 @@ export async function clearAllNotifications(userId: string) {
 //  8. CHAT, PERFIL & BÚSQUEDA
 // ==========================================
 
-// --- ACTUALIZADO: BÚSQUEDA CON FILTRO DE ETIQUETAS ---
 export async function searchUsers(query: string) {
   try {
-    // 1. Buscamos SOLO por nombre de usuario (sin filtro de allowTags aquí)
     const users = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
-      [
-        Query.search("username", query),
-        Query.limit(5), // Limitamos a 5 para no saturar
-      ]
+      [Query.search("username", query), Query.limit(5)]
     );
 
-    // 2. Filtramos manualmente en la app para evitar el error "Attribute not found"
-    // Si el usuario tiene allowTags en false, lo sacamos. Si no tiene el campo, lo dejamos pasar.
     const filteredUsers = users.documents.filter((doc) => {
       return doc.allowTags !== false;
     });
@@ -877,7 +870,6 @@ export async function searchUsers(query: string) {
   }
 }
 
-// --- NUEVO: NOTIFICACIÓN DE ETIQUETA ---
 export const sendTagNotification = async (
   senderId: string,
   receiverId: string,
@@ -885,10 +877,8 @@ export const sendTagNotification = async (
 ) => {
   try {
     const receiver = await getUser(receiverId);
-    // Doble verificación de seguridad
     if (!receiver || receiver.allowTags === false) return;
 
-    // Necesitamos datos del sender para la notificación
     const sender = await getUser(senderId);
     if (!sender) return;
 
@@ -935,6 +925,20 @@ export async function getOrCreateChat(
     return newChat;
   } catch (error: any) {
     throw new Error(error.message);
+  }
+}
+
+export async function deleteChat(chatId: string) {
+  try {
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.chatsCollectionId,
+      chatId
+    );
+    return true;
+  } catch (error) {
+    console.log("Error borrando chat:", error);
+    throw error;
   }
 }
 
@@ -1059,7 +1063,6 @@ interface UpdateUserForm {
   allowTags?: boolean;
 }
 
-// --- FUNCIÓN ACTUALIZADA PARA PERMITIR PARTIAL UPDATES ---
 export async function updateProfile(userId: string, form: UpdateUserForm) {
   try {
     const hasFile = form.pfp && typeof form.pfp !== "string";
@@ -1072,7 +1075,6 @@ export async function updateProfile(userId: string, form: UpdateUserForm) {
       } catch (e) {}
     }
 
-    // Preparamos objeto de actualización solo con campos definidos
     const updates: any = {};
     if (form.name) updates.name = form.name;
     if (form.username) updates.username = form.username;
@@ -1199,7 +1201,7 @@ export async function deleteAllSessions() {
   }
 }
 
-export { client };
+export { client, databases };
 
 export async function acceptFollowRequest(
   followerId: string,
@@ -1313,5 +1315,34 @@ export async function getBlockedUsersList(currentUserId: string) {
   } catch (error) {
     console.log("Error fetching blocked users:", error);
     return [];
+  }
+}
+
+export async function deleteMessage(messageId: string) {
+  try {
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.messagesCollectionId,
+      messageId
+    );
+    return true;
+  } catch (error) {
+    console.log("Error deleting message:", error);
+    throw error;
+  }
+}
+
+export async function updateMessage(messageId: string, newContent: string) {
+  try {
+    const updated = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.messagesCollectionId,
+      messageId,
+      { content: newContent }
+    );
+    return updated;
+  } catch (error) {
+    console.log("Error updating message:", error);
+    throw error;
   }
 }

@@ -1,3 +1,4 @@
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -6,14 +7,18 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Animated,
+  Dimensions,
+  Platform,
+  StyleSheet,
 } from "react-native";
-import React, { useState, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAudioPlayer } from "expo-audio";
 import { useGlobalContext } from "@/context/GlobalProvider";
+import { useModal } from "@/context/ModalContext";
 import TopBar from "@/components/TopBar";
 import {
   getFeedCandidates,
@@ -24,7 +29,15 @@ import {
 } from "@/lib/appwrite";
 import ShareModal from "@/components/ShareModal";
 import { useColorScheme } from "nativewind";
+import PagerView from "react-native-pager-view";
 
+// --- IMPORTAR PANTALLAS ---
+import ExploreScreen from "./explore";
+import LibraryScreen from "./library";
+
+const { width } = Dimensions.get("window");
+
+// --- HELPERS ---
 const formatTimeAgo = (dateString: string) => {
   if (!dateString) return "";
   const date = new Date(dateString);
@@ -64,14 +77,6 @@ const getCreatorFromPost = (item: any) => {
       avatar: userObj.avatar || userObj.pfp,
     };
   }
-  if (item.username || item.creatorUsername) {
-    return {
-      id: item.creatorId || item.$id,
-      username: item.username || item.creatorUsername || "anon",
-      name: item.name || item.creatorName || "Usuario",
-      avatar: item.avatar || item.pfp || item.creatorAvatar,
-    };
-  }
   return {
     id: "unknown",
     username: "anon",
@@ -80,22 +85,57 @@ const getCreatorFromPost = (item: any) => {
   };
 };
 
-const Home = () => {
-  // --- TEMA PULIDO ---
+// --- ICONO ANIMADO (Corrección: Opacidad en vez de Color) ---
+const NavIcon = ({
+  name,
+  focusedName,
+  size = 26,
+  index,
+  scrollOffset,
+  activeColor = "#5E17EB",
+  inactiveColor,
+}: any) => {
+  const opacity = scrollOffset.interpolate({
+    inputRange: [index - 1, index, index + 1],
+    outputRange: [0, 1, 0],
+    extrapolate: "clamp",
+  });
+
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <Ionicons
+        name={name as any}
+        size={size}
+        color={inactiveColor}
+        style={StyleSheet.absoluteFill}
+      />
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity }]}>
+        <Ionicons name={focusedName as any} size={size} color={activeColor} />
+      </Animated.View>
+    </View>
+  );
+};
+
+// ==========================================
+// 1. FEED SCREEN (Tu Home original)
+// ==========================================
+const FeedScreen = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // Paleta de Colores
   const bgColor = isDark ? "#000000" : "#FFFFFF";
-  const textColor = isDark ? "#FFFFFF" : "#09090B"; // Negro suave
+  const textColor = isDark ? "#FFFFFF" : "#09090B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
-
-  // Tarjetas: En modo claro usamos un gris muy sutil para diferenciar, sin bordes duros
   const cardBg = isDark ? "#1C1C1E" : "#F4F4F5";
-  const cardBorder = isDark ? "#27272A" : "transparent"; // Sin borde en claro para limpieza
-
+  const cardBorder = isDark ? "#27272A" : "transparent";
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
-  const lineColor = isDark ? "#27272A" : "#E4E4E7"; // Línea conectora sutil
+  const lineColor = isDark ? "#27272A" : "#E4E4E7";
 
   const { user, loading, loggedIn } = useGlobalContext();
   const [feedPosts, setFeedPosts] = useState<any[]>([]);
@@ -108,6 +148,8 @@ const Home = () => {
   const [playingPostId, setPlayingPostId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const player = useAudioPlayer(currentSongUrl);
+
+  const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
     if (currentSongUrl && player) {
@@ -132,20 +174,6 @@ const Home = () => {
     setCurrentSongUrl(previewUrl);
   };
 
-  const rankPosts = (posts: any[], followedIds: string[], myId: string) => {
-    const now = new Date().getTime();
-    const scoredPosts = posts.map((post) => {
-      let score = 0;
-      const creator = getCreatorFromPost(post);
-      if (followedIds.includes(creator.id)) score += 50;
-      score += (post.likedBy ? post.likedBy.length : 0) * 2;
-      score -= ((now - new Date(post.$createdAt).getTime()) / 3600000) * 0.5;
-      if (creator.id === myId) score += 20;
-      return { ...post, score };
-    });
-    return scoredPosts.sort((a, b) => b.score - a.score);
-  };
-
   const fetchData = async () => {
     try {
       let activeId = user?.$id;
@@ -163,19 +191,19 @@ const Home = () => {
       } catch (e) {}
 
       let followedIds: string[] = [];
-      if (activeId)
+      if (activeId) {
         try {
           followedIds = await getFollowedUserIds(activeId);
         } catch (e) {}
+      }
 
       const validPosts = rawPosts.filter((post: any) => {
         let creator = getCreatorFromPost(post);
-        if (!creator.id || creator.id === "unknown") return false;
-        // Lógica simplificada para ejemplo
-        return true;
+        return !(!creator.id || creator.id === "unknown");
       });
 
-      setFeedPosts(rankPosts(validPosts, followedIds, activeId || ""));
+      // Orden básico por fecha (puedes mejorar esto)
+      setFeedPosts(validPosts.reverse());
     } catch (error) {
       console.log(error);
     } finally {
@@ -187,6 +215,7 @@ const Home = () => {
   useEffect(() => {
     if (!loading) fetchData();
   }, [user, loading, loggedIn]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     if (player) player.pause();
@@ -226,7 +255,7 @@ const Home = () => {
     } catch (e) {}
   };
 
-  const renderPost = ({ item, index }: { item: any; index: number }) => {
+  const renderPost = ({ item }: { item: any }) => {
     const songData = parseSongData(item.songData);
     const creator = getCreatorFromPost(item);
     if (!songData) return null;
@@ -235,21 +264,11 @@ const Home = () => {
     const uid = user?.$id || currentUserId;
     const isLiked = item.likedBy?.includes(uid);
     const isSaved = item.savedBy?.includes(uid);
-    const isLastItem = index === feedPosts.length - 1;
 
     return (
       <View className="flex-row px-4">
-        {/* LADO IZQUIERDO: AVATAR Y LÍNEA */}
         <View className="items-center mr-3">
-          <TouchableOpacity
-            onPress={() =>
-              router.push({
-                pathname: "/user/[id]",
-                params: { id: creator.id },
-              })
-            }
-            className="z-10"
-          >
+          <TouchableOpacity className="z-10">
             <Image
               source={
                 creator.avatar
@@ -259,21 +278,17 @@ const Home = () => {
               style={{
                 borderColor: isDark ? "#000" : "#F4F4F5",
                 borderWidth: 2,
-              }} // Borde sutil en claro
+              }}
               className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-800"
             />
           </TouchableOpacity>
-          {!isLastItem && (
-            <View
-              className="flex-1 w-[2px] my-1 rounded-full"
-              style={{ backgroundColor: lineColor }}
-            />
-          )}
+          <View
+            className="flex-1 w-[2px] my-1 rounded-full"
+            style={{ backgroundColor: lineColor }}
+          />
         </View>
 
-        {/* LADO DERECHO: CONTENIDO */}
         <View className="flex-1 pb-6">
-          {/* HEADER DEL POST */}
           <View className="flex-row items-center justify-between mb-1">
             <View className="flex-row items-center flex-1 flex-wrap">
               <Text
@@ -295,7 +310,6 @@ const Home = () => {
             </TouchableOpacity>
           </View>
 
-          {/* CAPTION */}
           {item.comment && item.comment.trim() !== "" && (
             <Text
               className="text-[15px] mb-3 leading-5"
@@ -305,12 +319,11 @@ const Home = () => {
             </Text>
           )}
 
-          {/* CARD MUSICAL (Diseño Pulido) */}
           <View
             className="rounded-2xl p-3 flex-row items-center mb-3"
             style={{
               backgroundColor: cardBg,
-              borderWidth: isDark ? 1 : 0, // Sin borde en modo claro para look moderno
+              borderWidth: isDark ? 1 : 0,
               borderColor: cardBorder,
               marginTop: item.comment ? 0 : 4,
             }}
@@ -349,17 +362,8 @@ const Home = () => {
             </TouchableOpacity>
           </View>
 
-          {/* ACCIONES (Iconos más limpios) */}
           <View className="flex-row justify-between items-center mt-1 pr-2">
-            <TouchableOpacity
-              onPress={() =>
-                router.push({
-                  pathname: "/post/[id]",
-                  params: { id: item.$id, content: item.comment },
-                })
-              }
-              className="flex-row items-center py-1"
-            >
+            <TouchableOpacity className="flex-row items-center py-1">
               <Ionicons name="chatbubble-outline" size={20} color={iconColor} />
               {(item.commentsCount || 0) > 0 && (
                 <Text
@@ -399,6 +403,14 @@ const Home = () => {
                 size={22}
                 color={isSaved ? "#5E17EB" : iconColor}
               />
+              {item.savedBy?.length > 0 && (
+                <Text
+                  className="text-xs ml-1.5 font-medium"
+                  style={{ color: isSaved ? "#5E17EB" : subTextColor }}
+                >
+                  {item.savedBy.length}
+                </Text>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -435,6 +447,7 @@ const Home = () => {
         </View>
       ) : (
         <FlatList
+          ref={flatListRef}
           data={feedPosts}
           keyExtractor={(item) => item.$id}
           renderItem={renderPost}
@@ -462,4 +475,146 @@ const Home = () => {
   );
 };
 
-export default Home;
+// ==========================================
+// 2. COMPONENTE PRINCIPAL (PAGER)
+// ==========================================
+const HomePager = () => {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
+  const { user } = useGlobalContext();
+  const { setPostModalVisible } = useModal();
+
+  const bgColor = isDark ? "#000000" : "#FFFFFF";
+  const tabBarBg = isDark ? "#121212" : "#FFFFFF";
+  const borderColor = isDark ? "#27272A" : "#F4F4F5";
+  const inactiveColor = isDark ? "#71717A" : "#9CA3AF";
+
+  const pagerRef = useRef<PagerView>(null);
+  const scrollOffset = useRef(new Animated.Value(0)).current;
+  const [currentPage, setCurrentPage] = useState(0);
+
+  // --- CORRECCIÓN ERROR: Usamos función manual en lugar de Animated.event ---
+  const handlePageScroll = (e: any) => {
+    const { position, offset } = e.nativeEvent;
+    // Actualizamos el valor animado manualmente desde el evento
+    // Esto es mucho más seguro y evita el crash de "not a function"
+    scrollOffset.setValue(position + offset);
+  };
+
+  const onPageSelected = (e: any) => {
+    setCurrentPage(e.nativeEvent.position);
+  };
+
+  const goToPage = (index: number) => {
+    pagerRef.current?.setPage(index);
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: bgColor }}>
+      <StatusBar style={isDark ? "light" : "dark"} />
+
+      <PagerView
+        ref={pagerRef}
+        style={{ flex: 1 }}
+        initialPage={0}
+        onPageScroll={handlePageScroll} // Función normal, segura
+        onPageSelected={onPageSelected}
+      >
+        <View key="0">
+          <FeedScreen />
+        </View>
+        <View key="1">
+          <ExploreScreen />
+        </View>
+        <View key="2">
+          <LibraryScreen />
+        </View>
+      </PagerView>
+
+      <View
+        className="flex-row items-center justify-between px-2 pb-5 pt-3 absolute bottom-0 w-full"
+        style={{
+          backgroundColor: tabBarBg,
+          borderTopColor: borderColor,
+          borderTopWidth: 1,
+          paddingBottom: Platform.OS === "ios" ? 25 : 10,
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => goToPage(0)}
+          className="flex-1 items-center py-2"
+        >
+          <NavIcon
+            name="home-outline"
+            focusedName="home"
+            index={0}
+            scrollOffset={scrollOffset}
+            inactiveColor={inactiveColor}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => goToPage(1)}
+          className="flex-1 items-center py-2"
+        >
+          <NavIcon
+            name="compass-outline"
+            focusedName="compass"
+            index={1}
+            scrollOffset={scrollOffset}
+            inactiveColor={inactiveColor}
+            size={30}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setPostModalVisible(true)}
+          className="flex-1 items-center -mt-8"
+        >
+          <View
+            className="bg-[#5E17EB] p-3.5 rounded-full shadow-lg shadow-[#5E17EB]/40"
+            style={{ borderWidth: 4, borderColor: tabBarBg }}
+          >
+            <Image
+              source={require("@/assets/mood.png")}
+              resizeMode="contain"
+              style={{ width: 24, height: 24, tintColor: "white" }}
+            />
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => goToPage(2)}
+          className="flex-1 items-center py-2"
+        >
+          <NavIcon
+            name="albums-outline"
+            focusedName="albums"
+            index={2}
+            scrollOffset={scrollOffset}
+            inactiveColor={inactiveColor}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => router.push("/profile")}
+          className="flex-1 items-center py-2"
+        >
+          <View
+            className="rounded-full border-2"
+            style={{ borderColor: "transparent" }}
+          >
+            <Image
+              source={
+                user?.pfp ? { uri: user.pfp } : require("@/assets/noPfp.jpg")
+              }
+              className="w-7 h-7 rounded-full"
+            />
+          </View>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+export default HomePager;
