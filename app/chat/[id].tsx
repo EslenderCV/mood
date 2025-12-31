@@ -8,9 +8,8 @@ import {
   Platform,
   Image,
   ActivityIndicator,
-  Dimensions,
   Alert,
-  AlertButton, // <--- Importante para corregir el error de TS
+  AlertButton,
 } from "react-native";
 import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router, Stack } from "expo-router";
@@ -35,9 +34,6 @@ import {
   getPostById,
 } from "@/lib/appwrite";
 
-const { width } = Dimensions.get("window");
-
-// --- COMPONENTE: TARJETA DE POST ---
 const PostPreviewBubble = ({
   postId,
   onLongPress,
@@ -158,12 +154,10 @@ const PostPreviewBubble = ({
   );
 };
 
-// --- PANTALLA PRINCIPAL ---
 const ChatRoom = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // Colores
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -173,13 +167,11 @@ const ChatRoom = () => {
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
 
-  // COLOR ORIGINAL RESTAURADO
   const myBubbleBg = "#5E17EB";
   const myBubbleText = "#FFFFFF";
   const otherBubbleBg = isDark ? "#27272A" : "#F3F4F6";
   const otherBubbleText = isDark ? "#FFFFFF" : "#000000";
 
-  // Fondos de la caja de respuesta
   const replyBoxMyBg = "rgba(0, 0, 0, 0.2)";
   const replyBoxOtherBg = isDark
     ? "rgba(255, 255, 255, 0.1)"
@@ -269,13 +261,11 @@ const ChatRoom = () => {
     inputRef.current?.focus();
   };
 
-  // --- LÓGICA DE OPCIONES ---
   const handleLongPress = (item: any) => {
     if (item.senderId !== currentUser?.$id) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // ERROR CORREGIDO: Especificamos el tipo AlertButton[]
     const options: AlertButton[] = [{ text: "Cancelar", style: "cancel" }];
 
     if (!item.sharedPostId) {
@@ -298,13 +288,10 @@ const ChatRoom = () => {
     setReplyingTo(null);
     let cleanContent = item.content;
 
-    // Limpieza robusta del contenido
     if (item.content.includes(":::REPLY:::")) {
       const parts = item.content.split(":::REPLY:::");
-      // parts[0] es la metadata (Nombre:::Snippet), parts[1] es el mensaje
       if (parts.length > 1) cleanContent = parts[1];
     } else if (item.content.startsWith("Replying to:")) {
-      // Soporte antiguo
       const parts = item.content.split("\n\n");
       if (parts.length > 1) cleanContent = parts.slice(1).join("\n\n");
     }
@@ -336,9 +323,7 @@ const ChatRoom = () => {
   };
 
   const scrollToOriginalMessage = (originalText: string) => {
-    // Buscamos el mensaje que contiene el snippet
     const index = messages.findIndex((m) => {
-      // Limpiamos el mensaje candidato por si también es una respuesta
       let contentToCheck = m.content;
       if (m.content.includes(":::REPLY:::"))
         contentToCheck = m.content.split(":::REPLY:::")[1];
@@ -356,23 +341,19 @@ const ChatRoom = () => {
         animated: true,
         viewPosition: 0.5,
       });
-      // Haptic feedback para confirmar que se encontró
       Haptics.selectionAsync();
     } else {
-      // Opcional: Avisar si no se encontró (ej: mensajes muy antiguos no cargados)
-      // Alert.alert("No encontrado", "El mensaje original no está visible.");
+      console.log("No se pudo encontrar el mensaje original.");
     }
   };
 
   const handleSend = async () => {
     if (!newMessage.trim() || !currentUser) return;
 
-    // --- MODO EDICIÓN ---
     if (editingMessage) {
       const tempId = editingMessage.$id;
       let finalContent = newMessage;
 
-      // Mantener la estructura de respuesta si existía
       if (editingMessage.content.includes(":::REPLY:::")) {
         const parts = editingMessage.content.split(":::REPLY:::");
         finalContent = `${parts[0]}:::REPLY:::${newMessage}`;
@@ -393,19 +374,14 @@ const ChatRoom = () => {
       return;
     }
 
-    // --- MODO ENVÍO NORMAL ---
     let contentToSend = newMessage;
 
-    // FORMATO AVANZADO: "NombreUsuario:::Snippet:::REPLY:::Mensaje"
     if (replyingTo) {
-      // Determinar el nombre a mostrar en la respuesta
       const replyName =
         replyingTo.senderId === currentUser.$id ? "Tú" : params.otherUserName;
 
-      // Limpiar el contenido original (para no anidar respuestas infinitas)
       let rawContent = replyingTo.content;
       if (replyingTo.content.includes(":::REPLY:::")) {
-        // Si respondo a una respuesta, tomo solo el mensaje real
         rawContent = replyingTo.content.split(":::REPLY:::")[1];
       } else if (replyingTo.content.startsWith("Replying to:")) {
         rawContent = replyingTo.content.split("\n\n").slice(1).join("\n\n");
@@ -413,7 +389,6 @@ const ChatRoom = () => {
 
       const snippet = rawContent.substring(0, 50).replace(/\n/g, " ");
 
-      // Construimos el string con metadatos
       contentToSend = `${replyName}:::${snippet}:::REPLY:::${newMessage}`;
     }
 
@@ -434,7 +409,6 @@ const ChatRoom = () => {
     }
   };
 
-  // ACCIONES SWIPE
   const renderReplyActionLeft = () => (
     <View className="justify-center items-end pr-4 w-20">
       <Ionicons name="arrow-undo" size={24} color={iconColor} />
@@ -459,12 +433,10 @@ const ChatRoom = () => {
       minute: "2-digit",
     });
 
-    // --- PARSEO DEL MENSAJE ---
     let displayContent = item.content;
     let replySnippet = null;
     let replyName = null;
 
-    // 1. Formato Nuevo: "Nombre:::Snippet:::REPLY:::Mensaje"
     if (item.content.includes(":::REPLY:::")) {
       const parts = item.content.split(":::REPLY:::");
       const metadata = parts[0].split(":::");
@@ -473,17 +445,14 @@ const ChatRoom = () => {
         replyName = metadata[0];
         replySnippet = metadata[1];
       } else {
-        // Fallback si algo falló en el guardado
         replyName = "Respuesta";
         replySnippet = metadata[0];
       }
       displayContent = parts[1];
-    }
-    // 2. Formato Antiguo (Legacy): "Replying to:..."
-    else if (item.content.startsWith("Replying to:")) {
+    } else if (item.content.startsWith("Replying to:")) {
       const parts = item.content.split("\n\n");
       if (parts.length > 1) {
-        replyName = "Respuesta"; // No teníamos nombre antes
+        replyName = "Respuesta";
         replySnippet = parts[0].replace("Replying to: ", "").replace(/"/g, "");
         displayContent = parts.slice(1).join("\n\n");
       }
@@ -538,7 +507,6 @@ const ChatRoom = () => {
                     minWidth: 100,
                   }}
                 >
-                  {/* CAJA DE RESPUESTA (ESTILO WHATSAPP) */}
                   {replySnippet && (
                     <TouchableOpacity
                       onPress={() =>
@@ -570,7 +538,6 @@ const ChatRoom = () => {
                     </TouchableOpacity>
                   )}
 
-                  {/* TEXTO DEL MENSAJE */}
                   <Text
                     className="text-[15px] leading-5"
                     style={{ color: isMe ? myBubbleText : otherBubbleText }}
@@ -578,7 +545,6 @@ const ChatRoom = () => {
                     {displayContent}
                   </Text>
 
-                  {/* META (HORA + CHECK) */}
                   <View className="flex-row items-center justify-end mt-1 space-x-1">
                     <Text
                       className="text-[10px]"
@@ -622,8 +588,6 @@ const ChatRoom = () => {
             animation: "slide_from_right",
           }}
         />
-
-        {/* HEADER */}
         <View
           className="flex-row items-center px-2 py-2 border-b z-10"
           style={{ backgroundColor: headerBg, borderColor: borderColor }}
@@ -649,7 +613,6 @@ const ChatRoom = () => {
             )}
           </View>
         </View>
-
         <FlatList
           ref={flatListRef}
           data={messages}
@@ -660,13 +623,10 @@ const ChatRoom = () => {
           className="flex-1"
           onScrollToIndexFailed={() => {}}
         />
-
-        {/* INPUT */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
         >
-          {/* BARRA FLOTANTE DE RESPUESTA/EDICIÓN */}
           {(replyingTo || editingMessage) && (
             <View
               className="flex-row items-center justify-between px-3 py-2 m-2 rounded-xl border-l-4"

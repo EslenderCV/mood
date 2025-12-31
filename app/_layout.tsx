@@ -13,34 +13,20 @@ const StackLayout = () => {
   useEffect(() => {
     if (loading) return;
 
-    // Convertimos segments a string[] para evitar el error de TypeScript
     const segmentsArray = segments as string[];
+    const inAuthGroup = segmentsArray[0] === "(auth)";
+    const inTabsGroup = segmentsArray[0] === "(tabs)";
+    const inChat = segmentsArray[0] === "chat";
+    const inOnboarding = segmentsArray.length === 0;
 
-    const inAuthGroup = segmentsArray[0] === "(auth)"; // Pantallas de Login/Registro
-    const inTabsGroup = segmentsArray[0] === "(tabs)"; // Pantallas Privadas (Home, Profile)
-    const inChat = segmentsArray[0] === "chat"; // Pantalla de Chat
-    const inOnboarding = segmentsArray.length === 0; // Raíz (app/index.tsx)
-
-    // --- ESCENARIO 1: USUARIO LOGUEADO ---
     if (loggedIn) {
-      // Si el usuario ya entró, no debe ver el Onboarding ni el Login.
-      // Lo mandamos directo al Home.
       if (inOnboarding || inAuthGroup) {
         router.replace("/home");
       }
-    }
-
-    // --- ESCENARIO 2: USUARIO NO LOGUEADO (INVITADO) ---
-    else {
-      // Si intenta entrar a zonas prohibidas (Tabs, Chat, Post),
-      // lo mandamos al ONBOARDING (index) en lugar del Login.
+    } else {
       if (inTabsGroup || inChat) {
-        router.replace("/"); // Redirige a app/index.tsx
+        router.replace("/");
       }
-
-      // NOTA IMPORTANTE:
-      // Si el usuario está en inOnboarding (/) o en inAuthGroup ((auth)),
-      // NO hacemos nada. Dejamos que la app muestre esa pantalla.
     }
   }, [loading, loggedIn, segments]);
 

@@ -10,28 +10,22 @@ import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useColorScheme } from "nativewind"; // Hook de NativeWind
+import { useColorScheme } from "nativewind";
 
 const Settings = () => {
-  // --- TEMA (LÓGICA BLINDADA) ---
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // Colores calculados (Igual que en Home)
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
-  const subTextColor = isDark ? "#A1A1AA" : "#6B7280"; // Zinc-400 / Gray-500
-  const iconBg = isDark ? "#18181B" : "#F3F4F6"; // Zinc-900 / Gray-100
-  const borderColor = isDark ? "#27272A" : "#E5E7EB"; // Zinc-800 / Gray-200
+  const subTextColor = isDark ? "#A1A1AA" : "#6B7280";
+  const iconBg = isDark ? "#18181B" : "#F3F4F6";
+  const borderColor = isDark ? "#27272A" : "#E5E7EB";
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
 
-  // Estados locales (Simulados)
   const [autoPlay, setAutoPlay] = useState(true);
   const [hapticFeedback, setHapticFeedback] = useState(true);
-  const [highQualityAudio, setHighQualityAudio] = useState(false);
   const [spotifyConnected, setSpotifyConnected] = useState(false);
 
-  // --- HANDLERS ---
   const handleSpotifyConnect = () => {
     if (spotifyConnected) {
       Alert.alert("Desconectar", "¿Desvincular cuenta?", [
@@ -53,7 +47,6 @@ const Settings = () => {
     Alert.alert("Limpieza", "Se han liberado 45MB de caché.");
   };
 
-  // --- COMPONENTES UI ---
   const SectionTitle = ({ title }: { title: string }) => (
     <Text
       className="text-xs font-bold uppercase mb-3 mt-6 tracking-widest px-2"
@@ -75,7 +68,6 @@ const Settings = () => {
       style={{ borderColor: borderColor }}
     >
       <View className="flex-row items-center flex-1 mr-4">
-        {/* Fondo del icono */}
         <View
           className="w-10 h-10 rounded-full items-center justify-center mr-4"
           style={{ backgroundColor: iconBg }}
@@ -101,9 +93,7 @@ const Settings = () => {
   );
 
   return (
-    // FONDO FORZADO (Nuclear Option)
     <SafeAreaView className="flex-1" style={{ backgroundColor: bgColor }}>
-      {/* HEADER */}
       <View
         className="px-6 py-4 flex-row items-center border-b"
         style={{ borderColor: borderColor }}
@@ -121,7 +111,6 @@ const Settings = () => {
       </View>
 
       <ScrollView className="px-4 pb-10">
-        {/* 1. PERSONALIZACIÓN */}
         <SectionTitle title="Personalización" />
 
         <SettingRow
@@ -133,14 +122,11 @@ const Settings = () => {
           <Switch
             trackColor={{ false: "#E5E7EB", true: "#5E17EB" }}
             thumbColor={"white"}
-            onValueChange={toggleColorScheme} // Acción real de NativeWind
-            value={isDark} // Estado real
+            onValueChange={toggleColorScheme}
+            value={isDark}
           />
         </SettingRow>
-
-        {/* 2. EXPERIENCIA */}
         <SectionTitle title="Experiencia" />
-
         <SettingRow
           icon="finger-print"
           title="Haptic Feedback"
@@ -154,7 +140,6 @@ const Settings = () => {
             value={hapticFeedback}
           />
         </SettingRow>
-
         <SettingRow
           icon="play-circle"
           title="Autoplay en Feed"
@@ -169,7 +154,6 @@ const Settings = () => {
           />
         </SettingRow>
 
-        {/* 3. INTEGRACIONES */}
         <SectionTitle title="Integraciones" />
 
         <TouchableOpacity onPress={handleSpotifyConnect} activeOpacity={0.8}>
@@ -204,7 +188,6 @@ const Settings = () => {
           </View>
         </TouchableOpacity>
 
-        {/* 4. DATOS */}
         <SectionTitle title="Datos" />
 
         <TouchableOpacity onPress={clearCache}>
@@ -227,11 +210,10 @@ const Settings = () => {
             </View>
           </SettingRow>
         </TouchableOpacity>
-
         <View className="mt-12 items-center mb-8">
           <Text
             className="font-bold text-lg"
-            style={{ color: isDark ? "#52525B" : "#9CA3AF" }} // Zinc-600 / Gray-400
+            style={{ color: isDark ? "#52525B" : "#9CA3AF" }}
           >
             MOOD
           </Text>

@@ -16,7 +16,6 @@ import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { useFocusEffect, router } from "expo-router";
 import { useColorScheme } from "nativewind";
 
-// --- GESTOS ---
 import {
   GestureHandlerRootView,
   FlingGestureHandler,
@@ -101,8 +100,6 @@ const Library = () => {
     setRefreshing(false);
   };
 
-  // --- NAVEGACIÓN POR GESTOS ---
-  // Deslizar a la DERECHA -> Ir a Explorar (Atrás)
   const handleFlingRight = ({ nativeEvent }: any) => {
     if (nativeEvent.state === State.ACTIVE) {
       router.push("/explore");
@@ -232,7 +229,6 @@ const Library = () => {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* FLING RIGHT = IR ATRÁS (EXPLORAR) */}
       <FlingGestureHandler
         direction={Directions.RIGHT}
         onHandlerStateChange={handleFlingRight}

@@ -61,7 +61,6 @@ const Playlists = () => {
           <TouchableOpacity
             activeOpacity={0.8}
             className="mb-6"
-            // CONEXIÓN A DETALLE
             onPress={() =>
               router.push({
                 pathname: "/playlist/[id]",

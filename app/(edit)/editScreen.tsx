@@ -9,23 +9,17 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
 } from "react-native";
 import React, { useState } from "react";
-
 import { useGlobalContext, User } from "@/context/GlobalProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, Feather, FontAwesome5 } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { ImagePickerAsset } from "expo-image-picker";
-
-import { updateImage, updateProfile } from "@/lib/appwrite";
+import { updateProfile } from "@/lib/appwrite";
 import { router, Stack } from "expo-router";
-import { useColorScheme } from "nativewind"; // <--- Importante
+import { useColorScheme } from "nativewind";
 
-const { width } = Dimensions.get("window");
-
-// Interfaz para el estado del formulario
 interface FormState {
   name: string;
   username: string;
@@ -35,11 +29,8 @@ interface FormState {
 }
 
 const EditScreen = () => {
-  // --- TEMA BLINDADO ---
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // Colores calculados
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -194,7 +185,6 @@ const EditScreen = () => {
           ),
         }}
       />
-
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -207,7 +197,6 @@ const EditScreen = () => {
           }}
           showsVerticalScrollIndicator={false}
         >
-          {/* --- FOTO --- */}
           <View className="items-center mb-10">
             <View className="relative">
               <View className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/20">
@@ -235,8 +224,6 @@ const EditScreen = () => {
               Toca para cambiar foto
             </Text>
           </View>
-
-          {/* --- FORMULARIO --- */}
           <View className="w-full">
             <InputField
               label="Nombre Completo"
@@ -269,8 +256,6 @@ const EditScreen = () => {
               placeholder="ejemplo@correo.com"
               type="email"
             />
-
-            {/* --- SELECCIÓN DE PLATAFORMA --- */}
             <View className="mb-6 w-full">
               <Text
                 className="text-xs font-bold mb-3 ml-1 uppercase tracking-wider"
@@ -317,7 +302,6 @@ const EditScreen = () => {
                     Spotify
                   </Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
                   onPress={() =>
                     setFormData({ ...formData, preferredPlatform: "apple" })
@@ -359,8 +343,6 @@ const EditScreen = () => {
               </View>
             </View>
           </View>
-
-          {/* --- BOTÓN GUARDAR --- */}
           <TouchableOpacity
             className={`w-full mt-2 h-[58px] items-center justify-center rounded-2xl shadow-lg flex-row`}
             style={{

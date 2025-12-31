@@ -1,10 +1,4 @@
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Image,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, TouchableOpacity, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAudioPlayer } from "expo-audio";
 
@@ -18,7 +12,6 @@ const SongPreview = ({
   const player = useAudioPlayer(song.previewUrl);
 
   const togglePlayback = () => {
-    // 1. DEBUG: Si no ves este mensaje en la consola, el botón está bloqueado visualmente
     console.log(
       "🎵 Botón presionado. Estado actual:",
       player.playing ? "Sonando" : "Pausado"
@@ -33,18 +26,14 @@ const SongPreview = ({
 
   return (
     <View className="bg-zinc-900/90 p-3 pr-4 rounded-2xl flex-row items-center border border-[#5E17EB]/50 relative overflow-hidden shadow-lg shadow-[#5E17EB]/20">
-      {/* IMAGEN DE FONDO (Ya no es un botón, solo visual) */}
       <View className="relative mr-3">
         <Image
           source={{ uri: song.artworkUrl100 }}
           className="w-16 h-16 rounded-xl bg-zinc-800"
         />
-
-        {/* BOTÓN REAL: Capa superior con Z-Index alto para asegurar el click */}
         <View className="absolute inset-0 justify-center items-center z-50">
           <TouchableOpacity
             onPress={togglePlayback}
-            // Agregamos un fondo semitransparente para ver exactamente qué estamos tocando
             className="w-10 h-10 bg-black/40 rounded-full items-center justify-center border border-white/20"
             activeOpacity={0.7}
           >
@@ -61,7 +50,6 @@ const SongPreview = ({
           </TouchableOpacity>
         </View>
       </View>
-
       <View className="flex-1">
         <Text className="text-white font-bold text-lg" numberOfLines={1}>
           {song.trackName}
@@ -73,7 +61,6 @@ const SongPreview = ({
           {player.playing ? "Reproduciendo..." : "Vista previa"}
         </Text>
       </View>
-
       <TouchableOpacity
         onPress={() => {
           player.pause();

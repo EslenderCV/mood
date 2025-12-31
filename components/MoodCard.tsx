@@ -2,20 +2,18 @@ import { View, Text, Image, TouchableOpacity } from "react-native";
 import React, { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useAudioPlayer } from "expo-audio";
-import { getCurrentUser, toggleLikePost } from "@/lib/appwrite";
+import { toggleLikePost } from "@/lib/appwrite";
 import { router } from "expo-router";
 
-// TIPOS: Agregamos onSharePress
 type MoodCardProps = {
   item: any;
   currentUser: any;
-  onSharePress: (postId: string) => void; // <--- NUEVO PROP
+  onSharePress: (postId: string) => void;
 };
 
 const MoodCard = ({ item, currentUser, onSharePress }: MoodCardProps) => {
   const [likes, setLikes] = useState<string[]>(item.likedBy || []);
 
-  // Parsear datos de la canción
   let songData = null;
   try {
     songData = JSON.parse(item.songData);
@@ -55,7 +53,6 @@ const MoodCard = ({ item, currentUser, onSharePress }: MoodCardProps) => {
       pathname: "/post/[id]",
       params: {
         id: item.$id,
-        // Pasamos datos para carga instantánea
         content: item.comment,
         name: item.postedBy?.name,
         username: item.postedBy?.username,
@@ -92,15 +89,11 @@ const MoodCard = ({ item, currentUser, onSharePress }: MoodCardProps) => {
               {new Date(item.$createdAt).toLocaleDateString()}
             </Text>
           </View>
-
-          {/* Contenido Clickable */}
           <TouchableOpacity onPress={goToDetail} activeOpacity={0.8}>
             <Text className="text-zinc-200 text-[15px] mt-1 mb-2 leading-5">
               {item.comment}
             </Text>
           </TouchableOpacity>
-
-          {/* Tarjeta de Música */}
           {songData && (
             <View className="bg-zinc-900 rounded-xl p-2 flex-row items-center border border-zinc-800/50 mt-1">
               <Image
@@ -131,8 +124,6 @@ const MoodCard = ({ item, currentUser, onSharePress }: MoodCardProps) => {
               </TouchableOpacity>
             </View>
           )}
-
-          {/* Acciones */}
           <View className="flex-row justify-between mt-3 pr-4">
             <TouchableOpacity
               onPress={handleLike}
@@ -153,15 +144,12 @@ const MoodCard = ({ item, currentUser, onSharePress }: MoodCardProps) => {
                 </Text>
               )}
             </TouchableOpacity>
-
             <TouchableOpacity
               onPress={goToDetail}
               className="flex-row items-center gap-1"
             >
               <Ionicons name="chatbubble-outline" size={20} color="#71717A" />
             </TouchableOpacity>
-
-            {/* BOTÓN COMPARTIR CONECTADO */}
             <TouchableOpacity
               onPress={() => onSharePress(item.$id)}
               className="flex-row items-center gap-1"

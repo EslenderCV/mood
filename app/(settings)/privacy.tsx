@@ -7,12 +7,11 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useColorScheme } from "nativewind";
-
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { updateProfile } from "@/lib/appwrite";
 
@@ -20,8 +19,6 @@ const Privacy = () => {
   const { user, setUser } = useGlobalContext();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // --- COLORES BLINDADOS ---
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -30,12 +27,9 @@ const Privacy = () => {
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
   const infoBg = isDark ? "#18181B" : "#F0F9FF";
   const infoText = isDark ? "#A1A1AA" : "#0369A1";
-
-  // --- ESTADOS ---
   const [isPrivate, setIsPrivate] = useState((user as any)?.isPrivate || false);
   const [allowTags, setAllowTags] = useState((user as any)?.allowTags ?? true);
 
-  // --- MANEJADORES ---
   const handleTogglePrivate = async (value: boolean) => {
     if (!user) return;
     setIsPrivate(value);
@@ -62,9 +56,6 @@ const Privacy = () => {
     }
   };
 
-  // --- COMPONENTES AUXILIARES ---
-
-  // 1. Fila con Interruptor (Switch)
   const PrivacySwitch = ({
     icon,
     title,
@@ -110,7 +101,6 @@ const Privacy = () => {
     </View>
   );
 
-  // 2. Fila con Navegación (Link)
   const PrivacyLink = ({
     icon,
     title,
@@ -165,7 +155,6 @@ const Privacy = () => {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: bgColor }}>
-      {/* HEADER */}
       <View
         className="px-6 py-4 flex-row items-center border-b"
         style={{ borderColor: borderColor }}
@@ -181,19 +170,16 @@ const Privacy = () => {
           Privacidad
         </Text>
       </View>
-
       <ScrollView
         className="flex-1 px-6 mt-4"
         showsVerticalScrollIndicator={false}
       >
-        {/* SECCIÓN CUENTA */}
         <Text
           className="text-xs font-bold uppercase mb-2 tracking-widest pl-1"
           style={{ color: subTextColor }}
         >
           Privacidad de la Cuenta
         </Text>
-
         <PrivacySwitch
           icon="lock-closed-outline"
           title="Cuenta Privada"
@@ -201,15 +187,12 @@ const Privacy = () => {
           value={isPrivate}
           onValueChange={handleTogglePrivate}
         />
-
-        {/* SECCIÓN INTERACCIONES */}
         <Text
           className="text-xs font-bold uppercase mb-2 mt-8 tracking-widest pl-1"
           style={{ color: subTextColor }}
         >
           Interacciones
         </Text>
-
         <PrivacySwitch
           icon="at-outline"
           title="Permitir Etiquetas"
@@ -217,14 +200,12 @@ const Privacy = () => {
           value={allowTags}
           onValueChange={handleToggleTags}
         />
-
         <PrivacyLink
           icon="ban-outline"
           title="Usuarios Bloqueados"
           subtitle="Gestionar las cuentas que has bloqueado."
           onPress={() => router.push("/blocked-users")}
         />
-
         <PrivacySwitch
           icon="eye-off-outline"
           title="Estado en Línea"
@@ -232,8 +213,6 @@ const Privacy = () => {
           value={true}
           onValueChange={() => {}}
         />
-
-        {/* CAJA DE INFORMACIÓN */}
         <View
           className="mt-6 p-4 rounded-xl border"
           style={{
@@ -259,7 +238,6 @@ const Privacy = () => {
             </Text>
           </View>
         </View>
-
         <View className="h-20" />
       </ScrollView>
     </SafeAreaView>

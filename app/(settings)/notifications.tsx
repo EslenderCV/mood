@@ -4,7 +4,6 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
-  ActivityIndicator,
   RefreshControl,
   Alert,
   Animated,
@@ -17,8 +16,7 @@ import {
   Swipeable,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import { useColorScheme } from "nativewind"; // <--- Importante
-
+import { useColorScheme } from "nativewind";
 import {
   client,
   appwriteConfig,
@@ -31,7 +29,6 @@ import {
   clearAllNotifications,
 } from "@/lib/appwrite";
 
-// --- FUNCIÓN HELPER PARA EL TIEMPO ---
 const formatTimeAgo = (dateString: string) => {
   const date = new Date(dateString);
   const now = new Date();
@@ -50,20 +47,15 @@ const formatTimeAgo = (dateString: string) => {
 };
 
 const NotificationsScreen = () => {
-  // --- TEMA BLINDADO ---
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // Colores calculados
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
-
-  // Fondos específicos
-  // Leído: Transparente/Fondo base. No leído: Un tono sutilmente diferente.
-  const unreadBg = isDark ? "rgba(39, 39, 42, 0.4)" : "#F3F4F6"; // Zinc-900/40 vs Gray-100
-  const iconBg = isDark ? "#27272A" : "#E4E4E7"; // Fondo del avatar/iconos
+  const unreadBg = isDark ? "rgba(39, 39, 42, 0.4)" : "#F3F4F6";
+  const iconBg = isDark ? "#27272A" : "#E4E4E7";
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
 
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -71,12 +63,10 @@ const NotificationsScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // 1. Carga Inicial
   useEffect(() => {
     fetchNotifications();
   }, []);
 
-  // 2. Realtime
   useEffect(() => {
     if (!currentUser) return;
     const channel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.notificationsCollectionId}.documents`;
@@ -140,7 +130,6 @@ const NotificationsScreen = () => {
     }
   };
 
-  // --- ACCIONES DE SOLICITUD ---
   const handleAcceptRequest = async (notification: any) => {
     try {
       setNotifications((prev) =>
@@ -169,7 +158,6 @@ const NotificationsScreen = () => {
     }
   };
 
-  // --- ACCIÓN DE BORRADO INDIVIDUAL (SWIPE) ---
   const handleDeleteSingle = async (item: any) => {
     try {
       setNotifications((prev) => prev.filter((n) => n.$id !== item.$id));
@@ -195,7 +183,6 @@ const NotificationsScreen = () => {
     ]);
   };
 
-  // --- COMPONENTE DE ACCIÓN DERECHA (SWIPE) ---
   const renderRightActions = (progress: any, dragX: any, item: any) => {
     if (item.type === "follow_request") return null;
 
@@ -219,9 +206,8 @@ const NotificationsScreen = () => {
 
   const renderItem = ({ item }: { item: any }) => {
     let icon = "notifications";
-    let color = "bg-zinc-800"; // Default para dark
+    let color = "bg-zinc-800";
 
-    // Ajustamos colores de iconos para que se vean bien
     if (item.type === "like") {
       icon = "heart";
       color = "bg-red-500";
@@ -243,7 +229,6 @@ const NotificationsScreen = () => {
       color = isDark ? "bg-zinc-600" : "bg-zinc-500";
     }
 
-    // Fondo dinámico según estado
     const rowBg = !item.isRead ? unreadBg : bgColor;
 
     return (
@@ -259,7 +244,6 @@ const NotificationsScreen = () => {
           className="flex-row px-4 py-4 border-b"
           style={{ backgroundColor: rowBg, borderColor: borderColor }}
         >
-          {/* Avatar + Icono */}
           <View className="mr-3 relative">
             <Image
               source={{ uri: item.senderAvatar }}
@@ -268,13 +252,11 @@ const NotificationsScreen = () => {
             />
             <View
               className={`absolute -bottom-1 -right-1 ${color} w-5 h-5 rounded-full items-center justify-center border`}
-              style={{ borderColor: bgColor }} // El borde se funde con el fondo
+              style={{ borderColor: bgColor }}
             >
               <Ionicons name={icon as any} size={10} color="white" />
             </View>
           </View>
-
-          {/* Contenido */}
           <View className="flex-1 justify-center">
             <Text className="text-[15px]" style={{ color: textColor }}>
               <Text className="font-bold">{item.senderName}</Text>{" "}
@@ -310,8 +292,6 @@ const NotificationsScreen = () => {
               </Text>
             )}
           </View>
-
-          {/* Indicador de No Leído (Punto Azul) */}
           <View className="items-center justify-center pl-2">
             {!item.isRead && item.type !== "follow_request" && (
               <View className="w-2 h-2 bg-[#5E17EB] rounded-full" />
@@ -329,7 +309,6 @@ const NotificationsScreen = () => {
         edges={["top"]}
         style={{ backgroundColor: bgColor }}
       >
-        {/* HEADER */}
         <View
           className="flex-row items-center justify-between px-4 h-[50px] border-b"
           style={{ borderColor: borderColor }}
@@ -355,8 +334,6 @@ const NotificationsScreen = () => {
             </TouchableOpacity>
           )}
         </View>
-
-        {/* LISTA */}
         <FlatList
           data={notifications}
           renderItem={renderItem}

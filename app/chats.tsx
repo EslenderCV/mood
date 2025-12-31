@@ -14,7 +14,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
-// 1. IMPORTACIONES DE GESTURE HANDLER
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 
@@ -32,7 +31,6 @@ const ChatsList = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // Colores
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -51,7 +49,6 @@ const ChatsList = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Referencias para cerrar filas
   let row: Array<Swipeable | null> = [];
   let prevOpenedRow: Swipeable | null;
 
@@ -311,7 +308,6 @@ const ChatsList = () => {
   );
 
   return (
-    // 2. ENVOLVER TODO EN GestureHandlerRootView con flex: 1
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView
         className="flex-1"

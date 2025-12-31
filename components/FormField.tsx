@@ -9,7 +9,6 @@ interface FormFieldProps {
   otherStyles?: string;
   secureTextEntry?: boolean;
   keyboardType?: "default" | "email-address" | "numeric" | "phone-pad";
-  // AGREGADO: Propiedad para controlar mayúsculas
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
 }
 
@@ -20,7 +19,7 @@ const FormField = ({
   otherStyles,
   secureTextEntry,
   keyboardType = "default",
-  autoCapitalize = "none", // Por defecto 'none' para evitar errores en emails/passwords
+  autoCapitalize = "none",
 }: FormFieldProps) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -42,7 +41,7 @@ const FormField = ({
           onChangeText={handleChangeText}
           secureTextEntry={secureTextEntry && !showPassword}
           keyboardType={keyboardType}
-          autoCapitalize={autoCapitalize} // AQUÍ SE APLICA
+          autoCapitalize={autoCapitalize}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
         />

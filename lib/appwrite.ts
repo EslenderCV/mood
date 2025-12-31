@@ -7,11 +7,8 @@ import {
   AppwriteException,
   Storage,
   ID,
-  Permission,
-  Role,
 } from "react-native-appwrite";
 
-// --- CONFIGURACIÓN ---
 export const appwriteConfig = {
   endpoint: "https://cloud.appwrite.io/v1",
   platform: "com.gammes.mood",
@@ -27,7 +24,6 @@ export const appwriteConfig = {
   messagesCollectionId: "6949c1b6000d070ff309",
 };
 
-// --- INICIALIZACIÓN ---
 const client = new Client();
 
 client
@@ -39,10 +35,6 @@ const account = new Account(client);
 const avatars = new Avatars(client);
 const databases = new Databases(client);
 const storage = new Storage(client);
-
-// ==========================================
-//  1. FUNCIONES DE AUTENTICACIÓN
-// ==========================================
 
 export const createUser = async (
   email: string,
@@ -149,10 +141,6 @@ export async function getUser(userId: string) {
   }
 }
 
-// ==========================================
-//  2. IMÁGENES (Subida)
-// ==========================================
-
 export async function uploadFile(file: any) {
   if (!file) return;
 
@@ -182,10 +170,6 @@ export async function uploadFile(file: any) {
 export async function updateImage(file: any) {
   return await uploadFile(file);
 }
-
-// ==========================================
-//  3. POSTS & FEED
-// ==========================================
 
 export async function getPostById(postId: string) {
   try {
@@ -331,10 +315,6 @@ export async function getFeedCandidates() {
   }
 }
 
-// ==========================================
-//  4. LIKES & GUARDADOS
-// ==========================================
-
 export async function toggleLikePost(
   postId: string,
   userId: string,
@@ -452,10 +432,6 @@ export async function getSavedPosts(userId: string) {
   }
 }
 
-// ==========================================
-//  5. COMENTARIOS (Nivel Avanzado)
-// ==========================================
-
 export async function createComment(
   postId: string,
   commentData: any,
@@ -477,7 +453,6 @@ export async function createComment(
       }
     );
 
-    // Notificación
     try {
       const post = await databases.getDocument(
         appwriteConfig.databaseId,
@@ -552,10 +527,6 @@ export async function getPostComments(postId: string) {
     return [];
   }
 }
-
-// ==========================================
-//  6. SEGUIDORES & PRIVACIDAD
-// ==========================================
 
 export async function checkFollowStatus(
   followerId: string,
@@ -735,10 +706,6 @@ export async function getUserFollowing(userId: string) {
   }
 }
 
-// ==========================================
-//  7. NOTIFICACIONES
-// ==========================================
-
 export async function createNotification(data: {
   userId: string;
   type: "like" | "comment" | "follow" | "follow_request" | "tag";
@@ -846,10 +813,6 @@ export async function clearAllNotifications(userId: string) {
     throw error;
   }
 }
-
-// ==========================================
-//  8. CHAT, PERFIL & BÚSQUEDA
-// ==========================================
 
 export async function searchUsers(query: string) {
   try {

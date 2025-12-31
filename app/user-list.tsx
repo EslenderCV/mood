@@ -22,12 +22,9 @@ const UserItem = ({ user }: { user: any }) => (
       className="w-12 h-12 rounded-full bg-zinc-800"
     />
     <View className="ml-4">
-      {/* 1. Nombre Real (o usuario si no tiene nombre) */}
       <Text className="text-white font-bold text-base">
         {user.name || user.username}
       </Text>
-
-      {/* 2. Usuario con @ (En lugar del email) */}
       <Text className="text-zinc-500 text-sm">@{user.username}</Text>
     </View>
   </TouchableOpacity>
@@ -35,20 +32,16 @@ const UserItem = ({ user }: { user: any }) => (
 
 const UserList = () => {
   const { userId, type } = useLocalSearchParams();
-  // type puede ser "followers" o "following"
-
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
-      // PROTECCIÓN: Si userId aún no carga, no hacemos nada para evitar el error
       if (!userId) return;
 
       setLoading(true);
       try {
         let result = [];
-        // Nos aseguramos de tener un string limpio
         const idString = Array.isArray(userId) ? userId[0] : userId;
 
         if (type === "followers") {
@@ -68,7 +61,6 @@ const UserList = () => {
 
   return (
     <SafeAreaView className="flex-1 bg-black">
-      {/* Header */}
       <View className="flex-row items-center px-4 py-2 border-b border-zinc-900 mb-2">
         <TouchableOpacity onPress={() => router.back()} className="p-2">
           <Ionicons name="arrow-back" size={24} color="white" />

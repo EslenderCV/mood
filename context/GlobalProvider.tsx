@@ -9,7 +9,7 @@ import {
 } from "react";
 import { getCurrentUser } from "@/lib/appwrite";
 import { Models } from "react-native-appwrite";
-import { useColorScheme } from "nativewind"; // Importamos NativeWind
+import { useColorScheme } from "nativewind";
 
 export interface User extends Models.Document {
   name: string;
@@ -59,13 +59,11 @@ const GlobalProvider = ({ children }: Props) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // --- CONTROL MAESTRO DEL TEMA ---
   const { colorScheme, setColorScheme } = useColorScheme();
 
   useEffect(() => {
     console.log("🎨 Tema actual al iniciar:", colorScheme);
 
-    // Forzamos MODO OSCURO si no está establecido
     if (colorScheme !== "dark") {
       console.log("🌑 Forzando Modo Oscuro...");
       setColorScheme("dark");

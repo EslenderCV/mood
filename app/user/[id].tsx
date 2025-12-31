@@ -15,7 +15,6 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
-
 import {
   getUser,
   getUserPosts,
@@ -25,7 +24,6 @@ import {
   checkFollowStatus,
   getFollowCounts,
   blockUser,
-  getOrCreateChat, // Agregado para el botón de mensaje si quisieras usarlo
 } from "@/lib/appwrite";
 
 const { width } = Dimensions.get("window");
@@ -45,11 +43,8 @@ const parseSongFromPost = (songDataString: string) => {
 };
 
 const UserProfile = () => {
-  // --- TEMA BLINDADO (GARANTÍA DE MODO OSCURO) ---
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // Definición de colores infalible
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -57,24 +52,19 @@ const UserProfile = () => {
   const cardBg = isDark ? "#18181B" : "#F4F4F5";
   const activeColor = "#5E17EB";
   const iconColor = isDark ? "#FFFFFF" : "#000000";
-
   const params = useLocalSearchParams();
   const paramId = params.id || params.query;
   const userId = Array.isArray(paramId) ? paramId[0] : paramId;
-
   const [visitedUser, setVisitedUser] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [topSongs, setTopSongs] = useState<any[]>([]);
-
   const [activeTab, setActiveTab] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [followStatus, setFollowStatus] = useState<string | null>(null);
-
   const [stats, setStats] = useState({ followersCount: 0, followingCount: 0 });
   const [followLoading, setFollowLoading] = useState(false);
-
   const horizontalScrollRef = useRef<ScrollView>(null);
   const mainScrollRef = useRef<ScrollView>(null);
 
@@ -96,7 +86,6 @@ const UserProfile = () => {
       const counts = await getFollowCounts(userId);
       setStats(counts);
 
-      // Bloqueo
       const iBlockedThem = myUser?.blockedUsers?.includes(userData?.$id);
       const theyBlockedMe = userData?.blockedUsers?.includes(myUser?.$id);
 
@@ -106,7 +95,6 @@ const UserProfile = () => {
         return;
       }
 
-      // Privacidad
       const isMe = myUser?.$id === userData?.$id;
       const isPublic = !userData?.isPrivate;
       const isFollower = currentStatus === "accepted";
@@ -400,7 +388,6 @@ const UserProfile = () => {
       style={{ backgroundColor: bgColor }}
     >
       <StatusBar style={isDark ? "light" : "dark"} />
-
       <ScrollView
         ref={mainScrollRef}
         showsVerticalScrollIndicator={false}
@@ -413,7 +400,6 @@ const UserProfile = () => {
           />
         }
       >
-        {/* 0. HEADER */}
         <View className="flex-row justify-between items-center px-6 py-2 mb-6">
           <TouchableOpacity
             onPress={() => router.back()}
@@ -429,8 +415,6 @@ const UserProfile = () => {
             <Ionicons name="ellipsis-horizontal" size={24} color={iconColor} />
           </TouchableOpacity>
         </View>
-
-        {/* 1. INFO USUARIO */}
         <View className="items-center">
           <View className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/30">
             <Image
@@ -453,8 +437,6 @@ const UserProfile = () => {
             @{visitedUser?.username || "usuario"}
           </Text>
         </View>
-
-        {/* 2. BOTÓN SEGUIR */}
         <View className="px-6 mt-6 min-h-[50px] justify-center">
           {currentUser && currentUser.$id !== visitedUser.$id && (
             <TouchableOpacity
@@ -486,8 +468,6 @@ const UserProfile = () => {
             </TouchableOpacity>
           )}
         </View>
-
-        {/* 3. ESTADÍSTICAS */}
         <View
           className="flex-row justify-between items-center mx-4 h-[70px] mt-6 mb-3 px-2 rounded-3xl border shadow-sm"
           style={{
@@ -515,12 +495,10 @@ const UserProfile = () => {
               SEGUIDORES
             </Text>
           </TouchableOpacity>
-
           <View
             className="h-8 w-[1px]"
             style={{ backgroundColor: borderColor }}
           />
-
           <TouchableOpacity
             onPress={scrollToMoods}
             disabled={!showContent}
@@ -541,7 +519,6 @@ const UserProfile = () => {
             className="h-8 w-[1px]"
             style={{ backgroundColor: borderColor }}
           />
-
           <TouchableOpacity
             className="flex-1 items-center py-4"
             disabled={!showContent}
@@ -563,8 +540,6 @@ const UserProfile = () => {
             </Text>
           </TouchableOpacity>
         </View>
-
-        {/* 4. TABS */}
         <View
           className="pt-4"
           style={{
@@ -616,8 +591,6 @@ const UserProfile = () => {
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* 5. CONTENIDO O CANDADO */}
         {!showContent ? (
           <View className="items-center justify-center py-20 px-6">
             <View
@@ -648,7 +621,6 @@ const UserProfile = () => {
             }
             scrollEventThrottle={16}
           >
-            {/* TAB 1: MOODS */}
             <View style={{ width }} className="min-h-[200px]">
               {posts.length === 0 ? (
                 <View className="flex-1 justify-center items-center py-20">
@@ -667,8 +639,6 @@ const UserProfile = () => {
                 </View>
               )}
             </View>
-
-            {/* TAB 2: TOP HITS */}
             <View style={{ width }} className="min-h-[200px]">
               {topSongs.length === 0 ? (
                 <View className="flex-1 justify-center items-center py-10">

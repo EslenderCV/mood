@@ -16,9 +16,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as Device from "expo-device";
-import { useColorScheme } from "nativewind"; // <--- Importante
-
-// Importamos las funciones
+import { useColorScheme } from "nativewind";
 import {
   updateUserPassword,
   getUserSessions,
@@ -28,26 +26,20 @@ import {
 import { useGlobalContext } from "@/context/GlobalProvider";
 
 const Security = () => {
-  // --- TEMA BLINDADO ---
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // Colores calculados
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
-  const cardBg = isDark ? "#18181B" : "#FFFFFF"; // Tarjetas blancas en modo claro para contraste limpio
+  const cardBg = isDark ? "#18181B" : "#FFFFFF";
   const cardBorder = isDark ? "#27272A" : "#E4E4E7";
   const iconBg = isDark ? "#27272A" : "#F4F4F5";
   const dangerBg = isDark ? "rgba(239, 68, 68, 0.1)" : "#FEF2F2";
   const modalBg = isDark ? "#18181B" : "#FFFFFF";
   const inputBg = isDark ? "#27272A" : "#F4F4F5";
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
-
   const { setUser, setIsLogged } = useGlobalContext();
-
-  // Estados
   const [biometrics, setBiometrics] = useState(false);
   const [isBiometricSupported, setIsBiometricSupported] = useState(false);
   const [sessions, setSessions] = useState<any[]>([]);
@@ -59,7 +51,6 @@ const Security = () => {
   const [passForm, setPassForm] = useState({ old: "", new: "", confirm: "" });
   const [isUpdatingPass, setIsUpdatingPass] = useState(false);
 
-  // --- 1. INICIALIZACIÓN ---
   useEffect(() => {
     checkBiometrics();
     fetchSessions();
@@ -83,7 +74,6 @@ const Security = () => {
     setIsLoadingSessions(false);
   };
 
-  // --- 2. MANEJADORES ---
   const handleBiometricToggle = async () => {
     if (!biometrics) {
       const result = await LocalAuthentication.authenticateAsync({
@@ -165,8 +155,6 @@ const Security = () => {
       ]
     );
   };
-
-  // --- RENDERIZADORES ---
   const SecurityRow = ({
     icon,
     title,
@@ -224,7 +212,6 @@ const Security = () => {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: bgColor }}>
-      {/* HEADER */}
       <View
         className="px-6 py-4 flex-row items-center border-b"
         style={{ borderColor: borderColor }}
@@ -240,16 +227,14 @@ const Security = () => {
           Seguridad
         </Text>
       </View>
-
       <ScrollView
         className="flex-1 px-6 mt-4"
         showsVerticalScrollIndicator={false}
       >
-        {/* ESTADO DE SEGURIDAD */}
         <View
           className="p-4 rounded-2xl flex-row items-center mb-8 border"
           style={{
-            backgroundColor: isDark ? "rgba(16, 185, 129, 0.1)" : "#ECFDF5", // Emerald tint
+            backgroundColor: isDark ? "rgba(16, 185, 129, 0.1)" : "#ECFDF5",
             borderColor: isDark ? "rgba(16, 185, 129, 0.2)" : "#D1FAE5",
           }}
         >
@@ -270,15 +255,12 @@ const Security = () => {
             </Text>
           </View>
         </View>
-
-        {/* SECCIÓN ACCESO */}
         <Text
           className="text-xs font-bold uppercase mb-2 tracking-widest pl-1"
           style={{ color: subTextColor }}
         >
           Acceso y Autenticación
         </Text>
-
         <SecurityRow
           icon="key-outline"
           title="Cambiar Contraseña"
@@ -297,7 +279,6 @@ const Security = () => {
           />
         )}
 
-        {/* SECCIÓN DISPOSITIVOS */}
         <View className="flex-row justify-between items-center mt-8 mb-2 pl-1">
           <Text
             className="text-xs font-bold uppercase tracking-widest"
@@ -391,8 +372,6 @@ const Security = () => {
             ))}
           </View>
         )}
-
-        {/* SECCIÓN PELIGRO */}
         <Text
           className="text-xs font-bold uppercase mb-2 mt-2 tracking-widest pl-1"
           style={{ color: subTextColor }}
@@ -418,11 +397,8 @@ const Security = () => {
             )
           }
         />
-
         <View className="h-20" />
       </ScrollView>
-
-      {/* --- MODAL CAMBIO DE CONTRASEÑA --- */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -438,7 +414,6 @@ const Security = () => {
               className="w-12 h-1 rounded-full self-center mb-6"
               style={{ backgroundColor: borderColor }}
             />
-
             <Text
               className="text-2xl font-bold mb-2"
               style={{ color: textColor }}
@@ -448,7 +423,6 @@ const Security = () => {
             <Text className="text-sm mb-8" style={{ color: subTextColor }}>
               La nueva contraseña debe tener al menos 8 caracteres.
             </Text>
-
             <View className="gap-y-4">
               <View>
                 <Text
@@ -471,7 +445,6 @@ const Security = () => {
                   onChangeText={(t) => setPassForm({ ...passForm, old: t })}
                 />
               </View>
-
               <View>
                 <Text
                   className="text-xs font-bold uppercase mb-2 ml-1"
@@ -493,7 +466,6 @@ const Security = () => {
                   onChangeText={(t) => setPassForm({ ...passForm, new: t })}
                 />
               </View>
-
               <View>
                 <Text
                   className="text-xs font-bold uppercase mb-2 ml-1"
@@ -516,7 +488,6 @@ const Security = () => {
                 />
               </View>
             </View>
-
             <View className="flex-1 justify-end gap-y-3">
               <TouchableOpacity
                 onPress={handleChangePassword}
@@ -531,7 +502,6 @@ const Security = () => {
                   </Text>
                 )}
               </TouchableOpacity>
-
               <TouchableOpacity
                 onPress={() => setShowPasswordModal(false)}
                 className="h-[56px] rounded-xl items-center justify-center"

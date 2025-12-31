@@ -35,7 +35,6 @@ const GetPlus = () => {
   return (
     <SafeAreaView className="flex-1 bg-black">
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Header con botón de cierre */}
         <View className="px-6 py-4">
           <TouchableOpacity
             onPress={() => router.back()}
@@ -44,8 +43,6 @@ const GetPlus = () => {
             <Ionicons name="close" size={24} color="white" />
           </TouchableOpacity>
         </View>
-
-        {/* Hero Section */}
         <View className="items-center px-6 mt-2">
           <View className="w-20 h-20 bg-[#5E17EB]/20 rounded-full items-center justify-center mb-6 border border-[#5E17EB]/50 shadow-[0_0_30px_#5E17EB]">
             <Ionicons name="diamond" size={40} color="#5E17EB" />
@@ -58,8 +55,6 @@ const GetPlus = () => {
             total.
           </Text>
         </View>
-
-        {/* Beneficios */}
         <View className="mt-10 px-6 gap-y-6">
           {features.map((item) => (
             <View
@@ -84,8 +79,6 @@ const GetPlus = () => {
             </View>
           ))}
         </View>
-
-        {/* Pricing Card */}
         <View className="mx-6 mt-8 p-6 bg-gradient-to-r from-zinc-900 to-black rounded-3xl border border-[#5E17EB]/30 relative overflow-hidden">
           <View className="absolute top-0 right-0 bg-[#5E17EB] px-3 py-1 rounded-bl-xl">
             <Text className="text-white text-xs font-bold">MEJOR VALOR</Text>
@@ -100,8 +93,6 @@ const GetPlus = () => {
           </Text>
         </View>
       </ScrollView>
-
-      {/* Sticky Bottom Button */}
       <View className="absolute bottom-10 w-full px-6">
         <TouchableOpacity className="w-full bg-[#5E17EB] py-4 rounded-full items-center shadow-lg shadow-[#5E17EB]/40 active:scale-95 transition-transform">
           <Text className="text-white font-bold text-lg">

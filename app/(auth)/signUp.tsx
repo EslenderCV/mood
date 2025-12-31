@@ -12,13 +12,9 @@ import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Link, router } from "expo-router";
-
-// Componentes y Contexto
 import CustomButtom from "@/components/CustomButtom";
 import FormField from "@/components/FormField";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
-
-// Appwrite
 import { createUser } from "@/lib/appwrite";
 import { AppwriteException } from "react-native-appwrite";
 
@@ -53,7 +49,6 @@ const SignUp = () => {
         form.username
       );
 
-      // Actualizar contexto global
       if (setUser) {
         setUser(result as unknown as User);
         setLoggedIn(true);
@@ -72,14 +67,12 @@ const SignUp = () => {
 
   return (
     <SafeAreaView className="bg-black flex-1">
-      {/* KeyboardAvoidingView para mejorar la experiencia al escribir */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
           <View className="w-full px-6 justify-center min-h-[85vh] py-10">
-            {/* --- HEADER --- */}
             <View className="items-center mb-8">
               <Image
                 source={require("@/assets/fullLogo.png")}
@@ -94,8 +87,6 @@ const SignUp = () => {
                 antes.
               </Text>
             </View>
-
-            {/* --- FORMULARIO --- */}
             <View className="space-y-4">
               <FormField
                 placeholder="Nombre completo"
@@ -103,15 +94,13 @@ const SignUp = () => {
                 handleChangeText={(e) => setForm({ ...form, name: e })}
                 otherStyles="mt-2"
               />
-
               <FormField
                 placeholder="Nombre de usuario"
                 value={form.username}
                 handleChangeText={(e) => setForm({ ...form, username: e })}
                 otherStyles="mt-4"
-                autoCapitalize="none" // Importante para usernames
+                autoCapitalize="none"
               />
-
               <FormField
                 placeholder="Correo electrónico"
                 value={form.email}
@@ -119,7 +108,6 @@ const SignUp = () => {
                 otherStyles="mt-4"
                 keyboardType="email-address"
               />
-
               <FormField
                 placeholder="Contraseña"
                 value={form.password}
@@ -127,8 +115,6 @@ const SignUp = () => {
                 otherStyles="mt-4"
                 secureTextEntry
               />
-
-              {/* Botón Principal */}
               <CustomButtom
                 text="CREAR CUENTA"
                 handlePress={submit}
@@ -137,8 +123,6 @@ const SignUp = () => {
                 loading={isLoading}
               />
             </View>
-
-            {/* --- SEPARADOR --- */}
             <View className="flex-row justify-center items-center w-full gap-4 mt-10 mb-8">
               <View className="bg-zinc-800 flex-1 h-[1px]"></View>
               <Text className="text-zinc-500 text-xs font-semibold uppercase tracking-widest">
@@ -146,8 +130,6 @@ const SignUp = () => {
               </Text>
               <View className="bg-zinc-800 flex-1 h-[1px]"></View>
             </View>
-
-            {/* --- SOCIALS (Estilo Consistente con Login) --- */}
             <View className="flex-row justify-center gap-6">
               <TouchableOpacity className="bg-zinc-900 border border-zinc-800 w-16 h-16 rounded-2xl items-center justify-center">
                 <Image
@@ -156,7 +138,6 @@ const SignUp = () => {
                   resizeMode="contain"
                 />
               </TouchableOpacity>
-
               <TouchableOpacity className="bg-zinc-900 border border-zinc-800 w-16 h-16 rounded-2xl items-center justify-center">
                 <Image
                   source={require("@/assets/apple-icon.png")}
@@ -166,8 +147,6 @@ const SignUp = () => {
                 />
               </TouchableOpacity>
             </View>
-
-            {/* --- FOOTER --- */}
             <View className="mt-10 flex-row items-center justify-center">
               <Text className="text-zinc-400 text-base">
                 ¿Ya tienes cuenta?{" "}

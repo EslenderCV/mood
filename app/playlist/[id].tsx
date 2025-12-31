@@ -1,26 +1,9 @@
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  FlatList,
-  Dimensions,
-  ScrollView,
-} from "react-native";
+import { View, Text, Image, TouchableOpacity, ScrollView } from "react-native";
 import React from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { useAudio } from "@/context/AudioContext";
-import { LinearGradient } from "expo-linear-gradient"; // Necesitas instalar esto: npx expo install expo-linear-gradient
 
-// Si no quieres instalar linear-gradient, puedes usar un View con bg-color normal,
-// pero el gradiente le da el toque "Spotify".
-// Si da error, cambia <LinearGradient> por <View className="bg-zinc-900 ...">
-
-const { width } = Dimensions.get("window");
-
-// Mock Songs para la playlist
 const PLAYLIST_SONGS = [
   {
     id: "1",
@@ -70,7 +53,7 @@ const PlaylistDetail = () => {
       params.cover ||
       "https://i.scdn.co/image/ab67616d0000b273ba5db46f4b838ef6027e6f96",
     count: params.count || "24 canciones",
-    author: "Angel Diaz", // Simulando que tú eres el creador
+    author: "Angel Diaz",
   };
 
   const renderSong = ({ item, index }: { item: any; index: number }) => (
@@ -101,24 +84,19 @@ const PlaylistDetail = () => {
 
   return (
     <View className="flex-1 bg-black">
-      {/* Usamos ScrollView principal */}
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header Grande con Imagen */}
         <View className="relative items-center pt-14 pb-6 bg-zinc-900">
-          {/* Botón atrás flotante */}
           <TouchableOpacity
             onPress={() => router.back()}
             className="absolute top-12 left-6 z-10 bg-black/40 p-2 rounded-full"
           >
             <Ionicons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
-
           <Image
             source={{ uri: playlist.cover as string }}
             style={{ width: 220, height: 220 }}
             className="rounded-2xl shadow-2xl shadow-black/80"
           />
-
           <Text className="text-white text-2xl font-bold mt-4 text-center px-6">
             {playlist.name}
           </Text>
@@ -127,8 +105,6 @@ const PlaylistDetail = () => {
             <Text className="text-white font-bold">{playlist.author}</Text> •{" "}
             {playlist.count}
           </Text>
-
-          {/* Botones de Acción */}
           <View className="flex-row items-center gap-4 mt-6">
             <TouchableOpacity className="w-12 h-12 rounded-full border border-zinc-600 items-center justify-center">
               <Ionicons name="heart-outline" size={24} color="white" />
@@ -137,7 +113,6 @@ const PlaylistDetail = () => {
             <TouchableOpacity className="w-12 h-12 rounded-full border border-zinc-600 items-center justify-center">
               <Feather name="download" size={24} color="white" />
             </TouchableOpacity>
-
             <TouchableOpacity className="w-16 h-16 bg-[#5E17EB] rounded-full items-center justify-center shadow-lg shadow-[#5E17EB]/50">
               <Ionicons
                 name="play"
@@ -148,8 +123,6 @@ const PlaylistDetail = () => {
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Lista de Canciones */}
         <View className="px-2 pt-6 pb-24 bg-black">
           {PLAYLIST_SONGS.map((song, index) => (
             <View key={song.id}>{renderSong({ item: song, index })}</View>

@@ -17,7 +17,6 @@ import { router } from "expo-router";
 import { useAudioPlayer } from "expo-audio";
 import { useColorScheme } from "nativewind";
 
-// --- GESTOS ---
 import {
   GestureHandlerRootView,
   FlingGestureHandler,
@@ -132,19 +131,14 @@ const Explore = () => {
     setCurrentSongUrl(previewUrl);
   };
 
-  // --- NAVEGACIÓN POR GESTOS ---
-
-  // 1. Deslizar a la DERECHA -> Ir a Inicio (/home)
   const handleFlingRight = ({ nativeEvent }: any) => {
     if (nativeEvent.state === State.ACTIVE) {
       router.push("/home");
     }
   };
 
-  // 2. Deslizar a la IZQUIERDA -> Ir a Librería (/library)
   const handleFlingLeft = ({ nativeEvent }: any) => {
     if (nativeEvent.state === State.ACTIVE) {
-      // AQUÍ ESTÁ LA CORRECCIÓN: Apunta a /library
       router.push("/library" as any);
     }
   };

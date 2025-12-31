@@ -26,7 +26,6 @@ const BlockedUsers = () => {
   }, [user]);
 
   const fetchBlockedUsers = async () => {
-    // Verificación de seguridad: si no hay usuario, no hacemos nada
     if (!user?.$id) return;
 
     try {
@@ -50,20 +49,15 @@ const BlockedUsers = () => {
           text: "Desbloquear",
           style: "destructive",
           onPress: async () => {
-            // 1. Verificación de seguridad CRÍTICA para TypeScript
             if (!user) return;
 
-            // 2. Optimistic Update (Visual)
             setBlockedList((prev) =>
               prev.filter((u) => u.$id !== blockedUser.$id)
             );
 
             try {
-              // Llamada a la base de datos
               await unblockUser(user.$id, blockedUser.$id);
 
-              // 3. Actualizar Contexto Global de forma segura
-              // Usamos (user.blockedUsers || []) para asegurar que sea un array
               const currentBlocked = user.blockedUsers || [];
               const updatedBlocked = currentBlocked.filter(
                 (id: string) => id !== blockedUser.$id
@@ -72,7 +66,7 @@ const BlockedUsers = () => {
               setUser({ ...user, blockedUsers: updatedBlocked });
             } catch (error) {
               Alert.alert("Error", "No se pudo desbloquear");
-              fetchBlockedUsers(); // Revertimos si falla
+              fetchBlockedUsers();
             }
           },
         },

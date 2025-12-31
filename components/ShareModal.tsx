@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import React, { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur"; // Opcional: para efecto borroso de fondo
 import {
   getCurrentUser,
   getUserChats,
@@ -20,12 +19,12 @@ import {
 type ShareModalProps = {
   isVisible: boolean;
   onClose: () => void;
-  postId: string; // El post que vamos a compartir
+  postId: string;
 };
 
 const ShareModal = ({ isVisible, onClose, postId }: ShareModalProps) => {
   const [chats, setChats] = useState<any[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]); // IDs de usuarios seleccionados
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -33,7 +32,7 @@ const ShareModal = ({ isVisible, onClose, postId }: ShareModalProps) => {
   useEffect(() => {
     if (isVisible) {
       loadContacts();
-      setSelectedUsers([]); // Limpiar selección al abrir
+      setSelectedUsers([]);
     }
   }, [isVisible]);
 
@@ -42,7 +41,6 @@ const ShareModal = ({ isVisible, onClose, postId }: ShareModalProps) => {
       const user = await getCurrentUser();
       setCurrentUser(user);
       if (user) {
-        // Cargamos chats recientes como "Sugeridos"
         const res = await getUserChats(user.$id);
         setChats(res);
       }
@@ -66,23 +64,20 @@ const ShareModal = ({ isVisible, onClose, postId }: ShareModalProps) => {
     setSending(true);
 
     try {
-      // Enviamos el mensaje a cada usuario seleccionado
       const promises = selectedUsers.map(async (otherUserId) => {
-        // 1. Asegurar que existe el chat
         const chatDoc = await getOrCreateChat(currentUser.$id, otherUserId);
 
-        // 2. Enviar el mensaje con el sharedPostId
         await sendMessage(
           chatDoc.$id,
           currentUser.$id,
           otherUserId,
-          "🎵 Post compartido", // Texto fallback
-          postId // <--- Aquí va la magia
+          "🎵 Post compartido",
+          postId
         );
       });
 
       await Promise.all(promises);
-      onClose(); // Cerrar modal al terminar
+      onClose();
     } catch (error) {
       console.log("Error compartiendo:", error);
     } finally {
@@ -110,8 +105,6 @@ const ShareModal = ({ isVisible, onClose, postId }: ShareModalProps) => {
             </Text>
           </View>
         </View>
-
-        {/* Checkbox estilo Instagram */}
         <View
           className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
             isSelected ? "bg-[#5E17EB] border-[#5E17EB]" : "border-zinc-600"
@@ -132,7 +125,6 @@ const ShareModal = ({ isVisible, onClose, postId }: ShareModalProps) => {
     >
       <View className="flex-1 justify-end bg-black/50">
         <View className="bg-[#18181B] rounded-t-[30px] h-[70%] w-full px-5 pt-2 pb-10 shadow-2xl">
-          {/* Barrita superior para deslizar */}
           <View className="items-center py-2">
             <View className="w-12 h-1.5 bg-zinc-600 rounded-full" />
           </View>
@@ -140,8 +132,6 @@ const ShareModal = ({ isVisible, onClose, postId }: ShareModalProps) => {
           <Text className="text-white font-bold text-center text-lg mb-4 mt-2">
             Enviar a...
           </Text>
-
-          {/* Lista */}
           {loading ? (
             <ActivityIndicator color="#5E17EB" />
           ) : (
@@ -152,8 +142,6 @@ const ShareModal = ({ isVisible, onClose, postId }: ShareModalProps) => {
               contentContainerStyle={{ paddingBottom: 20 }}
             />
           )}
-
-          {/* Botón Enviar */}
           <TouchableOpacity
             onPress={handleSendToAll}
             disabled={selectedUsers.length === 0 || sending}
@@ -174,7 +162,6 @@ const ShareModal = ({ isVisible, onClose, postId }: ShareModalProps) => {
               </Text>
             )}
           </TouchableOpacity>
-
           <TouchableOpacity
             onPress={onClose}
             className="mt-2 py-3 items-center"

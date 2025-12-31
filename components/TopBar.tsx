@@ -12,17 +12,14 @@ import {
 } from "@/lib/appwrite";
 
 const TopBar = () => {
-  // --- TEMA DINÁMICO ---
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // Colores calculados
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const borderColor = isDark ? "#27272A" : "#F4F4F5";
   const btnBg = isDark ? "#18181B" : "#F4F4F5";
   const iconColor = isDark ? "#5E17EB" : "#000000";
 
-  // --- ESTADOS DE LÓGICA ---
   const [hasUnreadNotifs, setHasUnreadNotifs] = useState(false);
   const [hasUnreadChats, setHasUnreadChats] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -96,20 +93,14 @@ const TopBar = () => {
         borderBottomWidth: isDark ? 1 : 0,
       }}
     >
-      {/* LOGO ADAPTATIVO */}
       <View className="h-[45px] w-[80px] justify-center">
         <Image
           source={require("@/assets/fullLogo.png")}
           resizeMode="contain"
           className="w-full h-full"
-          // AQUÍ ESTÁ EL TRUCO:
-          // Si es oscuro: undefined (usa colores originales: icono morado + texto blanco).
-          // Si es claro: "#5E17EB" (pinta TODO el logo de morado para que el texto se lea).
           style={{ tintColor: isDark ? undefined : "#5E17EB" }}
         />
       </View>
-
-      {/* ICONOS */}
       <View className="flex-row items-center gap-x-3">
         <TouchableOpacity
           activeOpacity={0.7}

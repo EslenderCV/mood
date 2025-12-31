@@ -37,9 +37,7 @@ const HelpCenter = () => {
         </TouchableOpacity>
         <Text className="text-white text-2xl font-bold">Ayuda</Text>
       </View>
-
       <ScrollView className="px-6">
-        {/* Search Bar Visual */}
         <View className="bg-zinc-900 rounded-xl flex-row items-center px-4 py-3 mt-4 border border-zinc-800">
           <Ionicons name="search" size={20} color="#71717A" />
           <TextInput
@@ -48,8 +46,6 @@ const HelpCenter = () => {
             className="ml-3 flex-1 text-white"
           />
         </View>
-
-        {/* Quick Actions */}
         <View className="flex-row gap-4 mt-8">
           <TouchableOpacity className="flex-1 bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 items-center">
             <Ionicons name="chatbubbles-outline" size={28} color="#5E17EB" />
@@ -60,8 +56,6 @@ const HelpCenter = () => {
             <Text className="text-white font-bold mt-2">Email</Text>
           </TouchableOpacity>
         </View>
-
-        {/* FAQ Section */}
         <Text className="text-white text-xl font-bold mt-10 mb-4">
           Preguntas Frecuentes
         </Text>
@@ -78,8 +72,6 @@ const HelpCenter = () => {
             </View>
           ))}
         </View>
-
-        {/* Footer Links */}
         <View className="mt-10 mb-10 gap-y-4">
           <TouchableOpacity>
             <Text className="text-[#5E17EB] text-center font-medium">

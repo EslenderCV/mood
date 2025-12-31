@@ -1,7 +1,7 @@
 import { View, Text, Image, TouchableOpacity, Alert } from "react-native";
 import React, { useState, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { toggleCommentLike, searchUsers } from "@/lib/appwrite"; // <--- Agregamos searchUsers
+import { toggleCommentLike, searchUsers } from "@/lib/appwrite";
 import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
 
@@ -59,16 +59,12 @@ const CommentItem = ({
     }
   };
 
-  // --- LÓGICA DE NAVEGACIÓN A PERFIL ---
   const handleMentionPress = async (username: string) => {
     try {
-      // 1. Buscamos al usuario por su username
       const users = await searchUsers(username);
-      // 2. Filtramos para encontrar la coincidencia exacta
       const targetUser = users.find((u) => u.username === username);
 
       if (targetUser) {
-        // 3. Navegamos usando su ID real
         router.push(`/user/${targetUser.$id}` as any);
       } else {
         Alert.alert(
@@ -94,7 +90,7 @@ const CommentItem = ({
           <Text
             key={index}
             className="text-[#5E17EB] font-bold"
-            onPress={() => handleMentionPress(username)} // <--- Conectado aquí
+            onPress={() => handleMentionPress(username)}
           >
             {word}
           </Text>
@@ -110,7 +106,7 @@ const CommentItem = ({
   };
 
   return (
-    <View className={`mb-4 w-full ${depth > 0 ? "mt-3" : ""}`}>
+    <View className={`mb-4 w-full ${depth > 0 ? "mt-3" : ""} px-4`}>
       <View className="flex-row">
         <TouchableOpacity
           onPress={() => router.push(`/user/${item.userId}` as any)}

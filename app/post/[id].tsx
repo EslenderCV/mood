@@ -271,8 +271,8 @@ const PostDetails = () => {
 
     return (
       <View
-        className="px-4 pt-2 pb-4 border-b mb-2"
-        style={{ borderColor: borderColor, backgroundColor: bgColor }}
+        className="px-4 pt-2 pb-4 mb-2"
+        style={{ backgroundColor: bgColor }}
       >
         <TouchableOpacity
           className="flex-row items-center mb-3"
@@ -421,7 +421,6 @@ const PostDetails = () => {
           Hilo
         </Text>
       </View>
-
       <FlatList
         data={rootComments}
         keyExtractor={(item) => item.$id}

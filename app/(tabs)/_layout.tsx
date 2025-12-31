@@ -16,7 +16,6 @@ import { useModal } from "@/context/ModalContext";
 import PostModal from "@/components/PostModal";
 import { useColorScheme } from "nativewind";
 
-// --- MEJORA: Componente optimizado para alineación vertical ---
 const MenuOption = ({
   label,
   iconName,
@@ -29,19 +28,18 @@ const MenuOption = ({
     onPress={onPress}
     activeOpacity={0.7}
     className="flex-row items-center justify-between py-3.5"
-    style={{ minHeight: 48 }} // Altura mínima táctil estándar
+    style={{ minHeight: 48 }}
   >
     <Text
       className="text-[15px] font-medium"
       style={{
         color: isDestructive ? "#EF4444" : textColor,
-        includeFontPadding: false, // CLAVE: Evita desalineación en Android
+        includeFontPadding: false,
         textAlignVertical: "center",
       }}
     >
       {label}
     </Text>
-    {/* Contenedor fijo de 24px para el icono -> asegura centro perfecto */}
     <View className="w-6 h-6 items-center justify-center opacity-90">
       <Ionicons
         name={iconName}
@@ -57,6 +55,9 @@ const TabsLayout = () => {
   const isDark = colorScheme === "dark";
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
+  const tabBarBg = isDark ? "#121212" : "#FFFFFF";
+  const borderColor = isDark ? "#27272A" : "#F4F4F5";
+
   const menuBg = isDark ? "#18181B" : "#FFFFFF";
   const menuText = isDark ? "#FFFFFF" : "#000000";
   const menuSubText = isDark ? "#A1A1AA" : "#52525B";
@@ -65,6 +66,7 @@ const TabsLayout = () => {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const { user } = useGlobalContext();
+  const { setPostModalVisible } = useModal();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -93,14 +95,119 @@ const TabsLayout = () => {
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarStyle: { display: "none" },
+          tabBarShowLabel: false,
+          tabBarStyle: {
+            backgroundColor: tabBarBg,
+            borderTopColor: borderColor,
+            borderTopWidth: 1,
+            height: Platform.OS === "ios" ? 85 : 60,
+            paddingTop: 5,
+          },
+          tabBarActiveTintColor: "#5E17EB",
+          tabBarInactiveTintColor: isDark ? "#71717A" : "#9CA3AF",
         }}
       >
-        <Tabs.Screen name="home" />
-        <Tabs.Screen name="explore" />
-        <Tabs.Screen name="mood" />
-        <Tabs.Screen name="library" />
-        <Tabs.Screen name="profile" />
+        <Tabs.Screen
+          name="home"
+          options={{
+            title: "Inicio",
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? "home" : "home-outline"}
+                size={26}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="explore"
+          options={{
+            title: "Explorar",
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? "compass" : "compass-outline"}
+                size={30}
+                color={color}
+              />
+            ),
+          }}
+        />
+
+        <Tabs.Screen
+          name="mood"
+          listeners={() => ({
+            tabPress: (e) => {
+              e.preventDefault();
+              setPostModalVisible(true);
+            },
+          })}
+          options={{
+            title: "",
+            tabBarIcon: () => (
+              <View
+                className="bg-[#5E17EB] p-3 rounded-full shadow-lg shadow-[#5E17EB]/40"
+                style={{
+                  marginBottom: 20,
+                  borderWidth: 4,
+                  borderColor: tabBarBg,
+                }}
+              >
+                <Image
+                  source={require("@/assets/mood.png")}
+                  resizeMode="contain"
+                  style={{ width: 24, height: 24, tintColor: "white" }}
+                />
+              </View>
+            ),
+          }}
+        />
+
+        <Tabs.Screen
+          name="library"
+          options={{
+            title: "Biblioteca",
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? "albums" : "albums-outline"}
+                size={26}
+                color={color}
+              />
+            ),
+          }}
+        />
+
+        <Tabs.Screen
+          name="profile"
+          listeners={() => ({
+            tabPress: (e) => {
+              e.preventDefault();
+              setMenuOpen(!menuOpen);
+            },
+          })}
+          options={{
+            title: "Perfil",
+            tabBarIcon: ({ focused }) => (
+              <View
+                style={{
+                  borderWidth: 2,
+                  borderColor: focused ? "#5E17EB" : "transparent",
+                  borderRadius: 9999,
+                  padding: 1,
+                }}
+              >
+                <Image
+                  source={
+                    user?.pfp
+                      ? { uri: user.pfp }
+                      : require("@/assets/noPfp.jpg")
+                  }
+                  className="w-7 h-7 rounded-full"
+                />
+              </View>
+            ),
+          }}
+        />
       </Tabs>
 
       {menuOpen && (

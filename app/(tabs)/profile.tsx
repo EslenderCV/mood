@@ -8,7 +8,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   FlatList,
-  Platform,
 } from "react-native";
 import React, { useState, useRef, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -27,7 +26,6 @@ import {
 
 const { width } = Dimensions.get("window");
 
-// --- HELPERS ---
 const parseSongFromPost = (songDataString: string) => {
   try {
     if (!songDataString) return null;
@@ -60,9 +58,6 @@ const Profile = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { user } = useGlobalContext();
-  const { setPostModalVisible } = useModal();
-
-  // Colores
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -70,11 +65,6 @@ const Profile = () => {
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
   const iconColor = isDark ? "#FFFFFF" : "#000000";
   const statBorder = isDark ? "#3F3F46" : "#E4E4E7";
-
-  // Colores Barra Navegación
-  const tabBarBg = isDark ? "#121212" : "#FFFFFF";
-  const inactiveColor = isDark ? "#71717A" : "#9CA3AF";
-
   const [activeTab, setActiveTab] = useState(0);
   const [posts, setPosts] = useState<any[]>([]);
   const [topSongs, setTopSongs] = useState<any[]>([]);
@@ -82,7 +72,6 @@ const Profile = () => {
   const [stats, setStats] = useState({ followersCount: 0, followingCount: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
   const horizontalScrollRef = useRef<ScrollView>(null);
   const mainScrollRef = useRef<ScrollView>(null);
 
@@ -106,12 +95,10 @@ const Profile = () => {
     try {
       const myId = user.$id;
 
-      // A. Cargar MIS Posts
       const rawMyPosts = await getUserPosts(myId);
       const rankedMyPosts = rankPosts(rawMyPosts);
       setPosts(rankedMyPosts);
 
-      // B. Top 3 Canciones
       const sortedByLikes = [...rawMyPosts].sort((a, b) => {
         const likesA = a.likedBy ? a.likedBy.length : 0;
         const likesB = b.likedBy ? b.likedBy.length : 0;
@@ -132,11 +119,9 @@ const Profile = () => {
         .filter((item) => item !== null);
       setTopSongs(top3);
 
-      // C. Estadísticas
       const counts = await getFollowCounts(myId);
       setStats(counts);
 
-      // D. RECOMENDACIONES
       const feedCandidates = await getFeedCandidates();
       const myFollows = await getFollowedUserIds(myId);
 
@@ -185,8 +170,6 @@ const Profile = () => {
     handleTabPress(0);
   };
 
-  // --- RENDERIZADORES ---
-
   const renderMoodItem = (item: any) => {
     const songData = parseSongFromPost(item.songData);
     const imageUrl = songData
@@ -198,11 +181,10 @@ const Profile = () => {
         key={item.$id}
         activeOpacity={0.8}
         onPress={() => router.push(`/post/${item.$id}` as any)}
-        // CORRECCIÓN AQUÍ: Usamos porcentaje y aspectRatio para grid perfecto
         style={{
           width: "33.3333%",
           aspectRatio: 1,
-          padding: 0.5, // Pequeña separación opcional
+          padding: 0.5,
         }}
       >
         <Image
@@ -341,7 +323,6 @@ const Profile = () => {
           />
         }
       >
-        {/* HEADER */}
         <View className="flex-row justify-between items-center px-6 py-2 mb-6">
           <Text className="text-3xl font-bold" style={{ color: textColor }}>
             Perfil
@@ -357,7 +338,6 @@ const Profile = () => {
           </View>
         </View>
 
-        {/* INFO USUARIO */}
         <View className="items-center">
           <View className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/50">
             <Image
@@ -379,7 +359,6 @@ const Profile = () => {
           </Text>
         </View>
 
-        {/* ESTADÍSTICAS */}
         <View
           className="flex-row justify-between items-center mx-4 h-[70px] mt-8 mb-6 px-2 rounded-3xl border shadow-sm"
           style={{ backgroundColor: cardBg, borderColor: borderColor }}
@@ -446,7 +425,6 @@ const Profile = () => {
           </TouchableOpacity>
         </View>
 
-        {/* GENTE QUE PODRÍAS CONOCER */}
         {suggestedUsers.length > 0 && (
           <View className="mb-6 pl-4">
             <Text
@@ -465,7 +443,6 @@ const Profile = () => {
           </View>
         )}
 
-        {/* TABS STICKY */}
         <View
           className="pt-2 border-t"
           style={{ backgroundColor: bgColor, borderColor: borderColor }}
@@ -514,7 +491,6 @@ const Profile = () => {
           </View>
         </View>
 
-        {/* CONTENIDO TABS */}
         <ScrollView
           ref={horizontalScrollRef}
           horizontal
@@ -525,7 +501,6 @@ const Profile = () => {
           }
           scrollEventThrottle={16}
         >
-          {/* TAB 1: MOODS */}
           <View style={{ width }} className="min-h-[200px]">
             {isLoading ? (
               <View className="flex-1 justify-center items-center py-10">
@@ -538,14 +513,12 @@ const Profile = () => {
                 </Text>
               </View>
             ) : (
-              // CONTENEDOR DE POSTS - GRID 3 COLUMNAS
               <View className="flex-row flex-wrap">
                 {posts.map(renderMoodItem)}
               </View>
             )}
           </View>
 
-          {/* TAB 2: TOP HITS */}
           <View style={{ width }} className="min-h-[200px]">
             {isLoading ? (
               <View className="flex-1 justify-center items-center py-10">
@@ -571,68 +544,6 @@ const Profile = () => {
         </ScrollView>
         <View style={{ height: 100 }} />
       </ScrollView>
-
-      {/* --- BARRA DE NAVEGACIÓN PEGADA --- */}
-      <View
-        className="flex-row items-center justify-between px-2 pb-5 pt-3 absolute bottom-0 w-full"
-        style={{
-          backgroundColor: tabBarBg,
-          borderTopColor: borderColor,
-          borderTopWidth: 1,
-          paddingBottom: Platform.OS === "ios" ? 25 : 10,
-        }}
-      >
-        <TouchableOpacity
-          onPress={() => router.push("/home")}
-          className="flex-1 items-center py-2"
-        >
-          <Ionicons name="home-outline" size={26} color={inactiveColor} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => router.push("/home")}
-          className="flex-1 items-center py-2"
-        >
-          <Ionicons name="compass-outline" size={30} color={inactiveColor} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setPostModalVisible(true)}
-          className="flex-1 items-center -mt-8"
-        >
-          <View
-            className="bg-[#5E17EB] p-3.5 rounded-full shadow-lg shadow-[#5E17EB]/40"
-            style={{ borderWidth: 4, borderColor: tabBarBg }}
-          >
-            <Image
-              source={require("@/assets/mood.png")}
-              resizeMode="contain"
-              style={{ width: 24, height: 24, tintColor: "white" }}
-            />
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => router.push("/home")}
-          className="flex-1 items-center py-2"
-        >
-          <Ionicons name="albums-outline" size={26} color={inactiveColor} />
-        </TouchableOpacity>
-
-        <TouchableOpacity className="flex-1 items-center py-2">
-          <View
-            className="rounded-full border-2"
-            style={{ borderColor: "#5E17EB" }}
-          >
-            <Image
-              source={
-                user?.pfp ? { uri: user.pfp } : require("@/assets/noPfp.jpg")
-              }
-              className="w-7 h-7 rounded-full"
-            />
-          </View>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 };
