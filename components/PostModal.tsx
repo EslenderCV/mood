@@ -51,9 +51,6 @@ export default function PostModal() {
   const [isLoading, setIsLoading] = useState(false);
   const [linkedSong, setLinkedSong] = useState<Song | null>(null);
 
-  // NUEVO: Estado para privacidad
-  const [isPrivate, setIsPrivate] = useState(false);
-
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [isSearchingMusic, setIsSearchingMusic] = useState(false);
@@ -105,7 +102,6 @@ export default function PostModal() {
     setIsSearchingMusic(false);
     setShowSuggestions(false);
     setPreviewTrackUrl(null);
-    setIsPrivate(false); // Resetear privacidad
   };
 
   const closeModal = () => {
@@ -299,8 +295,7 @@ export default function PostModal() {
             spotifyId: linkedSong.trackId,
           })
         : JSON.stringify({});
-      // Pasamos 'isPrivate' a la función
-      await createPost(text, songDataString, user.$id, isPrivate);
+      await createPost(text, songDataString, user.$id);
       Alert.alert(t("post.alerts.successTitle"), t("post.alerts.successMsg"));
       closeModal();
     } catch (error: any) {
@@ -633,33 +628,6 @@ export default function PostModal() {
                           {t("post.addMusic")}
                         </Text>
                       </TouchableOpacity>
-
-                      {/* --- NUEVO: Toggle de Privacidad --- */}
-                      <TouchableOpacity
-                        onPress={() => setIsPrivate(!isPrivate)}
-                        className="flex-row items-center py-2 mr-4"
-                      >
-                        <View
-                          className={`p-2 rounded-full mr-2 ${
-                            isPrivate ? "bg-zinc-700" : "bg-blue-500/10"
-                          }`}
-                        >
-                          <Ionicons
-                            name={isPrivate ? "lock-closed" : "earth"}
-                            size={20}
-                            color={isPrivate ? "#A1A1AA" : "#3B82F6"}
-                          />
-                        </View>
-                        <Text
-                          className="text-sm font-bold"
-                          style={{
-                            color: isPrivate ? subTextColor : "#3B82F6",
-                          }}
-                        >
-                          {isPrivate ? "Privado" : "Público"}
-                        </Text>
-                      </TouchableOpacity>
-                      {/* ---------------------------------- */}
                     </View>
 
                     <TouchableOpacity

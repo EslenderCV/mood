@@ -71,7 +71,6 @@ export const createUser = async (
         pfp: avatarUrl,
         username,
         preferredPlatform: "spotify",
-        isPrivate: false,
         allowTags: true,
         blockedUsers: [],
       }
@@ -263,8 +262,7 @@ export async function getPostById(postId: string) {
 export const createPost = async (
   comment: string,
   songData: string,
-  userId: string,
-  isPrivate: boolean = false
+  userId: string
 ) => {
   try {
     return await databases.createDocument(
@@ -278,7 +276,6 @@ export const createPost = async (
         postedBy: userId,
         likedBy: [],
         savedBy: [],
-        isPrivate: isPrivate,
       }
     );
   } catch (error) {
