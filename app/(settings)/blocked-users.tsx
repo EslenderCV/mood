@@ -14,9 +14,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { getBlockedUsersList, unblockUser } from "@/lib/appwrite";
+// 1. IMPORTAR CONTEXTO
+import { useLanguage } from "@/context/LanguageContext";
 
 const BlockedUsers = () => {
   const { user, setUser } = useGlobalContext();
+
+  // 2. USAR HOOK
+  const { t } = useLanguage();
+
   const [blockedList, setBlockedList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,12 +47,12 @@ const BlockedUsers = () => {
 
   const handleUnblock = async (blockedUser: any) => {
     Alert.alert(
-      "Desbloquear usuario",
-      `¿Quieres desbloquear a ${blockedUser.name}?`,
+      t("blockedUsersPage.unblockTitle"),
+      `${t("blockedUsersPage.unblockMsg")} ${blockedUser.name}?`,
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("blockedUsersPage.cancel"), style: "cancel" },
         {
-          text: "Desbloquear",
+          text: t("blockedUsersPage.unblockConfirm"),
           style: "destructive",
           onPress: async () => {
             if (!user) return;
@@ -65,7 +71,10 @@ const BlockedUsers = () => {
 
               setUser({ ...user, blockedUsers: updatedBlocked });
             } catch (error) {
-              Alert.alert("Error", "No se pudo desbloquear");
+              Alert.alert(
+                t("blockedUsersPage.errorTitle"),
+                t("blockedUsersPage.errorMsg")
+              );
               fetchBlockedUsers();
             }
           },
@@ -91,7 +100,9 @@ const BlockedUsers = () => {
         onPress={() => handleUnblock(item)}
         className="bg-zinc-800 px-4 py-2 rounded-lg"
       >
-        <Text className="text-white font-bold text-xs">Desbloquear</Text>
+        <Text className="text-white font-bold text-xs">
+          {t("blockedUsersPage.unblockBtn")}
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -103,7 +114,7 @@ const BlockedUsers = () => {
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
         <Text className="text-white font-bold text-lg ml-2">
-          Cuentas Bloqueadas
+          {t("blockedUsersPage.title")}
         </Text>
       </View>
 
@@ -134,7 +145,7 @@ const BlockedUsers = () => {
                 color="#3f3f46"
               />
               <Text className="text-zinc-500 text-center mt-4">
-                No has bloqueado a nadie.
+                {t("blockedUsersPage.empty")}
               </Text>
             </View>
           }

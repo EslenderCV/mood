@@ -5,171 +5,200 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
+  TextInput,
   ActivityIndicator,
+  Alert,
 } from "react-native";
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { useGlobalContext } from "@/context/GlobalProvider";
 import {
-  getCurrentUser,
-  getUserChats,
+  getFollowedUserIds,
+  getUser,
   sendMessage,
   getOrCreateChat,
+  searchUsers,
 } from "@/lib/appwrite";
+import { useColorScheme } from "nativewind";
 
-type ShareModalProps = {
-  isVisible: boolean;
-  onClose: () => void;
-  postId: string;
-};
+const ShareModal = ({ isVisible, onClose, postId }: any) => {
+  const { user } = useGlobalContext();
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
 
-const ShareModal = ({ isVisible, onClose, postId }: ShareModalProps) => {
-  const [chats, setChats] = useState<any[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [sendingMap, setSendingMap] = useState<{ [key: string]: boolean }>({});
+
+  const bgColor = isDark ? "#18181B" : "#FFFFFF";
+  const textColor = isDark ? "#FFFFFF" : "#000000";
+  const subTextColor = isDark ? "#A1A1AA" : "#71717A";
+  const inputBg = isDark ? "#27272A" : "#F4F4F5";
 
   useEffect(() => {
-    if (isVisible) {
-      loadContacts();
-      setSelectedUsers([]);
-    }
+    if (isVisible) loadInitialUsers();
   }, [isVisible]);
 
-  const loadContacts = async () => {
+  const loadInitialUsers = async () => {
+    setLoading(true);
     try {
-      const user = await getCurrentUser();
-      setCurrentUser(user);
       if (user) {
-        const res = await getUserChats(user.$id);
-        setChats(res);
+        const followedIds = await getFollowedUserIds(user.$id);
+        const userData = await Promise.all(
+          followedIds.map((id) => getUser(id))
+        );
+        setUsers(userData.filter((u) => u !== null));
       }
-    } catch (error) {
-      console.log(error);
+    } catch (e) {
+      console.log(e);
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleSelection = (userId: string) => {
-    if (selectedUsers.includes(userId)) {
-      setSelectedUsers(selectedUsers.filter((id) => id !== userId));
-    } else {
-      setSelectedUsers([...selectedUsers, userId]);
+  const handleSearch = async (text: string) => {
+    setSearchQuery(text);
+    if (text.length > 2) {
+      const results = await searchUsers(text);
+      setUsers(results);
+    } else if (text.length === 0) {
+      loadInitialUsers();
     }
   };
 
-  const handleSendToAll = async () => {
-    if (!currentUser || selectedUsers.length === 0) return;
-    setSending(true);
+  const handleSend = async (targetUser: any) => {
+    if (!user) return;
+
+    // Marcar este usuario específico como "Enviando..."
+    setSendingMap((prev) => ({ ...prev, [targetUser.$id]: true }));
 
     try {
-      const promises = selectedUsers.map(async (otherUserId) => {
-        const chatDoc = await getOrCreateChat(currentUser.$id, otherUserId);
+      // 1. Obtener o crear el chat
+      const chat = await getOrCreateChat(user.$id, targetUser.$id);
 
-        await sendMessage(
-          chatDoc.$id,
-          currentUser.$id,
-          otherUserId,
-          "🎵 Post compartido",
-          postId
-        );
-      });
+      // 2. LÓGICA DE DETECCIÓN: ¿Es Playlist o Post?
+      let finalPostId = null;
+      let finalPlaylistId = null;
 
-      await Promise.all(promises);
-      onClose();
+      // Verificamos si el ID tiene el prefijo que pusimos en playlist/[id].tsx
+      if (
+        postId &&
+        typeof postId === "string" &&
+        postId.startsWith("playlist:")
+      ) {
+        finalPlaylistId = postId.replace("playlist:", ""); // Quitamos el prefijo
+      } else {
+        finalPostId = postId; // Es un post normal
+      }
+
+      // 3. Enviar mensaje con los parámetros correctos
+      // sendMessage(chatId, senderId, receiverId, content, sharedPostId, sharedPlaylistId)
+      await sendMessage(
+        chat.$id,
+        user.$id,
+        targetUser.$id,
+        "", // Contenido vacío para que solo salga la tarjeta
+        finalPostId,
+        finalPlaylistId
+      );
+
+      Alert.alert("Enviado", `Compartido con ${targetUser.username}`);
     } catch (error) {
-      console.log("Error compartiendo:", error);
+      Alert.alert("Error", "No se pudo enviar el mensaje.");
     } finally {
-      setSending(false);
+      setSendingMap((prev) => ({ ...prev, [targetUser.$id]: false }));
     }
-  };
-
-  const renderItem = ({ item }: { item: any }) => {
-    const isSelected = selectedUsers.includes(item.otherUser.$id);
-
-    return (
-      <TouchableOpacity
-        onPress={() => toggleSelection(item.otherUser.$id)}
-        className="flex-row items-center justify-between py-3 border-b border-zinc-800"
-      >
-        <View className="flex-row items-center">
-          <Image
-            source={{ uri: item.otherUser.pfp }}
-            className="w-12 h-12 rounded-full bg-zinc-800"
-          />
-          <View className="ml-3">
-            <Text className="text-white font-bold">{item.otherUser.name}</Text>
-            <Text className="text-zinc-500 text-xs">
-              @{item.otherUser.username}
-            </Text>
-          </View>
-        </View>
-        <View
-          className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
-            isSelected ? "bg-[#5E17EB] border-[#5E17EB]" : "border-zinc-600"
-          }`}
-        >
-          {isSelected && <Ionicons name="checkmark" size={16} color="white" />}
-        </View>
-      </TouchableOpacity>
-    );
   };
 
   return (
     <Modal
       animationType="slide"
-      transparent={true}
+      transparent
       visible={isVisible}
       onRequestClose={onClose}
     >
-      <View className="flex-1 justify-end bg-black/50">
-        <View className="bg-[#18181B] rounded-t-[30px] h-[70%] w-full px-5 pt-2 pb-10 shadow-2xl">
-          <View className="items-center py-2">
-            <View className="w-12 h-1.5 bg-zinc-600 rounded-full" />
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={onClose}
+        className="flex-1 justify-end bg-black/60"
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          className="rounded-t-3xl h-[70%] p-6"
+          style={{ backgroundColor: bgColor }}
+        >
+          <View className="flex-row justify-between items-center mb-6">
+            <Text className="text-xl font-bold" style={{ color: textColor }}>
+              Enviar a...
+            </Text>
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close" size={24} color={subTextColor} />
+            </TouchableOpacity>
           </View>
 
-          <Text className="text-white font-bold text-center text-lg mb-4 mt-2">
-            Enviar a...
-          </Text>
+          <TextInput
+            className="p-4 rounded-xl mb-4"
+            style={{ backgroundColor: inputBg, color: textColor }}
+            placeholder="Buscar usuarios..."
+            placeholderTextColor={subTextColor}
+            value={searchQuery}
+            onChangeText={handleSearch}
+          />
+
           {loading ? (
-            <ActivityIndicator color="#5E17EB" />
+            <ActivityIndicator size="large" color="#5E17EB" className="mt-10" />
           ) : (
             <FlatList
-              data={chats}
+              data={users}
               keyExtractor={(item) => item.$id}
-              renderItem={renderItem}
-              contentContainerStyle={{ paddingBottom: 20 }}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <View
+                  className="flex-row items-center justify-between p-3 border-b"
+                  style={{ borderColor: isDark ? "#27272A" : "#F4F4F5" }}
+                >
+                  <View className="flex-row items-center">
+                    <Image
+                      source={
+                        item.pfp
+                          ? { uri: item.pfp }
+                          : require("@/assets/noPfp.jpg")
+                      }
+                      className="w-10 h-10 rounded-full bg-zinc-700"
+                    />
+                    <Text
+                      className="ml-3 font-bold text-base"
+                      style={{ color: textColor }}
+                    >
+                      {item.username}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => handleSend(item)}
+                    disabled={sendingMap[item.$id]}
+                    className={`px-5 py-2 rounded-full ${
+                      sendingMap[item.$id] ? "bg-zinc-500" : "bg-[#5E17EB]"
+                    }`}
+                  >
+                    <Text className="text-white font-bold text-sm">
+                      {sendingMap[item.$id] ? "..." : "Enviar"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              ListEmptyComponent={
+                <Text
+                  className="text-center mt-10"
+                  style={{ color: subTextColor }}
+                >
+                  No se encontraron usuarios.
+                </Text>
+              }
             />
           )}
-          <TouchableOpacity
-            onPress={handleSendToAll}
-            disabled={selectedUsers.length === 0 || sending}
-            className={`mt-4 py-4 rounded-full items-center ${
-              selectedUsers.length > 0 ? "bg-[#5E17EB]" : "bg-zinc-800"
-            }`}
-          >
-            {sending ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text
-                className={`font-bold text-lg ${
-                  selectedUsers.length > 0 ? "text-white" : "text-zinc-500"
-                }`}
-              >
-                Enviar{" "}
-                {selectedUsers.length > 0 ? `(${selectedUsers.length})` : ""}
-              </Text>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onClose}
-            className="mt-2 py-3 items-center"
-          >
-            <Text className="text-white">Cancelar</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 };

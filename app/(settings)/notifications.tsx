@@ -23,32 +23,35 @@ import {
   getCurrentUser,
   getUserNotifications,
   markNotificationAsRead,
+  markAllNotificationsAsRead, // <--- IMPORTANTE: Importar la nueva función
   acceptFollowRequest,
   deleteFollowRequest,
   deleteNotification,
   clearAllNotifications,
 } from "@/lib/appwrite";
+import { useLanguage } from "@/context/LanguageContext";
 
-const formatTimeAgo = (dateString: string) => {
+const formatTimeAgo = (dateString: string, t: (key: string) => string) => {
   const date = new Date(dateString);
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-  if (diffInSeconds < 60) return "hace unos segundos";
+  if (diffInSeconds < 60) return t("notifications.time.justNow");
 
   const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) return `${diffInMinutes}m`;
+  if (diffInMinutes < 60) return `${diffInMinutes}${t("notifications.time.m")}`;
 
   const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return `${diffInHours}h`;
+  if (diffInHours < 24) return `${diffInHours}${t("notifications.time.h")}`;
 
   const diffInDays = Math.floor(diffInHours / 24);
-  return `${diffInDays}d`;
+  return `${diffInDays}${t("notifications.time.d")}`;
 };
 
 const NotificationsScreen = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+  const { t } = useLanguage();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
@@ -62,6 +65,9 @@ const NotificationsScreen = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Calculamos si hay alguna sin leer para mostrar/ocultar el botón
+  const hasUnread = notifications.some((n) => !n.isRead);
 
   useEffect(() => {
     fetchNotifications();
@@ -82,6 +88,13 @@ const NotificationsScreen = () => {
         const deletedPayload = response.payload as any;
         setNotifications((prev) =>
           prev.filter((n) => n.$id !== deletedPayload.$id)
+        );
+      }
+      // Escuchar actualizaciones (por si marcas como leído en otro dispositivo)
+      if (response.events.includes("databases.*.documents.*.update")) {
+        const updatedPayload = response.payload as any;
+        setNotifications((prev) =>
+          prev.map((n) => (n.$id === updatedPayload.$id ? updatedPayload : n))
         );
       }
     });
@@ -106,14 +119,34 @@ const NotificationsScreen = () => {
     }
   };
 
+  // --- NUEVA LÓGICA: MARCAR TODO COMO LEÍDO ---
+  const handleMarkAllRead = async () => {
+    // 1. Actualización Optimista (UI instantánea)
+    const previousState = [...notifications];
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+
+    try {
+      // 2. Llamada al servidor
+      await markAllNotificationsAsRead(currentUser.$id);
+    } catch (error) {
+      // Si falla, revertimos
+      setNotifications(previousState);
+      Alert.alert("Error", "No se pudieron marcar como leídas.");
+    }
+  };
+  // ---------------------------------------------
+
   const handlePressNotification = async (item: any) => {
     if (item.type === "follow_request") return;
 
-    markNotificationAsRead(item.$id);
-    const updated = notifications.map((n) =>
-      n.$id === item.$id ? { ...n, isRead: true } : n
-    );
-    setNotifications(updated);
+    // Solo llamamos a la API si no estaba leída
+    if (!item.isRead) {
+      markNotificationAsRead(item.$id);
+      const updated = notifications.map((n) =>
+        n.$id === item.$id ? { ...n, isRead: true } : n
+      );
+      setNotifications(updated);
+    }
 
     if (item.postId) {
       router.push({ pathname: "/post/[id]", params: { id: item.postId } });
@@ -126,7 +159,7 @@ const NotificationsScreen = () => {
           name: item.senderName,
           avatar: item.senderAvatar,
         },
-      });
+      } as any);
     }
   };
 
@@ -141,7 +174,10 @@ const NotificationsScreen = () => {
         notification.$id
       );
     } catch (error) {
-      Alert.alert("Error", "No se pudo aceptar.");
+      Alert.alert(
+        t("notifications.errorTitle"),
+        t("notifications.errorAccept")
+      );
       fetchNotifications();
     }
   };
@@ -154,7 +190,10 @@ const NotificationsScreen = () => {
       await deleteFollowRequest(notification.senderId, currentUser.$id);
       await markNotificationAsRead(notification.$id);
     } catch (error) {
-      Alert.alert("Error", "No se pudo eliminar.");
+      Alert.alert(
+        t("notifications.errorTitle"),
+        t("notifications.errorDelete")
+      );
     }
   };
 
@@ -168,10 +207,10 @@ const NotificationsScreen = () => {
   };
 
   const handleClearAll = () => {
-    Alert.alert("Limpiar Notificaciones", "¿Estás seguro de borrar todo?", [
-      { text: "Cancelar", style: "cancel" },
+    Alert.alert(t("notifications.clearTitle"), t("notifications.clearMsg"), [
+      { text: t("notifications.cancel"), style: "cancel" },
       {
-        text: "Borrar",
+        text: t("notifications.clearOption"),
         style: "destructive",
         onPress: async () => {
           setIsLoading(true);
@@ -270,7 +309,7 @@ const NotificationsScreen = () => {
                   className="bg-[#5E17EB] px-4 py-1.5 rounded-lg flex-1 items-center"
                 >
                   <Text className="text-white font-bold text-xs">
-                    Confirmar
+                    {t("notifications.confirm")}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -282,13 +321,13 @@ const NotificationsScreen = () => {
                     className="font-bold text-xs"
                     style={{ color: textColor }}
                   >
-                    Eliminar
+                    {t("notifications.delete")}
                   </Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <Text className="text-xs mt-1" style={{ color: subTextColor }}>
-                {formatTimeAgo(item.$createdAt)}
+                {formatTimeAgo(item.$createdAt, t)}
               </Text>
             )}
           </View>
@@ -324,16 +363,36 @@ const NotificationsScreen = () => {
               className="font-bold text-lg ml-2"
               style={{ color: textColor }}
             >
-              Notificaciones
+              {t("notifications.title")}
             </Text>
           </View>
 
-          {notifications.length > 0 && (
-            <TouchableOpacity onPress={handleClearAll} className="p-2">
-              <Ionicons name="trash-outline" size={22} color="#EF4444" />
-            </TouchableOpacity>
-          )}
+          {/* BOTONES DE ACCIÓN (MARCAR LEÍDO Y BORRAR TODO) */}
+          <View className="flex-row items-center">
+            {/* Botón Marcar todo como leído (Solo aparece si hay algo sin leer) */}
+            {hasUnread && (
+              <TouchableOpacity
+                onPress={handleMarkAllRead}
+                className="p-2 mr-1"
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="checkmark-done-outline"
+                  size={24}
+                  color={textColor} // O puedes usar "#5E17EB" si quieres resaltarlo
+                />
+              </TouchableOpacity>
+            )}
+
+            {/* Botón Borrar todo (Ya existente) */}
+            {notifications.length > 0 && (
+              <TouchableOpacity onPress={handleClearAll} className="p-2">
+                <Ionicons name="trash-outline" size={22} color="#EF4444" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
+
         <FlatList
           data={notifications}
           renderItem={renderItem}
@@ -356,7 +415,9 @@ const NotificationsScreen = () => {
                 color={subTextColor}
                 style={{ opacity: 0.5, marginBottom: 10 }}
               />
-              <Text style={{ color: subTextColor }}>Sin notificaciones</Text>
+              <Text style={{ color: subTextColor }}>
+                {t("notifications.empty")}
+              </Text>
             </View>
           }
         />

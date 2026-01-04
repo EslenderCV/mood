@@ -14,11 +14,17 @@ import { router } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { updateProfile } from "@/lib/appwrite";
+// 1. IMPORTAR CONTEXTO
+import { useLanguage } from "@/context/LanguageContext";
 
 const Privacy = () => {
   const { user, setUser } = useGlobalContext();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+
+  // 2. USAR HOOK
+  const { t } = useLanguage();
+
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -38,7 +44,10 @@ const Privacy = () => {
       const updatedUser = { ...user, isPrivate: value };
       if (setUser) setUser(updatedUser as any);
     } catch (error) {
-      Alert.alert("Error", "No se pudo actualizar la privacidad.");
+      Alert.alert(
+        t("privacy.alerts.errorTitle"),
+        t("privacy.alerts.errorPrivacy")
+      );
       setIsPrivate(!value);
     }
   };
@@ -51,7 +60,10 @@ const Privacy = () => {
       const updatedUser = { ...user, allowTags: value };
       if (setUser) setUser(updatedUser as any);
     } catch (error) {
-      Alert.alert("Error", "No se pudo actualizar la configuración.");
+      Alert.alert(
+        t("privacy.alerts.errorTitle"),
+        t("privacy.alerts.errorConfig")
+      );
       setAllowTags(!value);
     }
   };
@@ -167,7 +179,7 @@ const Privacy = () => {
           <Ionicons name="arrow-back" size={22} color={backIconColor} />
         </TouchableOpacity>
         <Text className="text-2xl font-bold" style={{ color: textColor }}>
-          Privacidad
+          {t("privacy.title")}
         </Text>
       </View>
       <ScrollView
@@ -178,12 +190,12 @@ const Privacy = () => {
           className="text-xs font-bold uppercase mb-2 tracking-widest pl-1"
           style={{ color: subTextColor }}
         >
-          Privacidad de la Cuenta
+          {t("privacy.headers.account")}
         </Text>
         <PrivacySwitch
           icon="lock-closed-outline"
-          title="Cuenta Privada"
-          subtitle="Solo tus seguidores podrán ver tus fotos y videos."
+          title={t("privacy.privateAccount.title")}
+          subtitle={t("privacy.privateAccount.subtitle")}
           value={isPrivate}
           onValueChange={handleTogglePrivate}
         />
@@ -191,25 +203,25 @@ const Privacy = () => {
           className="text-xs font-bold uppercase mb-2 mt-8 tracking-widest pl-1"
           style={{ color: subTextColor }}
         >
-          Interacciones
+          {t("privacy.headers.interactions")}
         </Text>
         <PrivacySwitch
           icon="at-outline"
-          title="Permitir Etiquetas"
-          subtitle="Permitir que otros te mencionen (@usuario)."
+          title={t("privacy.allowTags.title")}
+          subtitle={t("privacy.allowTags.subtitle")}
           value={allowTags}
           onValueChange={handleToggleTags}
         />
         <PrivacyLink
           icon="ban-outline"
-          title="Usuarios Bloqueados"
-          subtitle="Gestionar las cuentas que has bloqueado."
+          title={t("privacy.blockedUsers.title")}
+          subtitle={t("privacy.blockedUsers.subtitle")}
           onPress={() => router.push("/blocked-users")}
         />
         <PrivacySwitch
           icon="eye-off-outline"
-          title="Estado en Línea"
-          subtitle="Mostrar cuando estás activo en el chat."
+          title={t("privacy.onlineStatus.title")}
+          subtitle={t("privacy.onlineStatus.subtitle")}
           value={true}
           onValueChange={() => {}}
         />
@@ -231,10 +243,7 @@ const Privacy = () => {
               className="ml-2 text-xs flex-1 leading-5"
               style={{ color: infoText }}
             >
-              Cuando "Permitir Etiquetas" está desactivado, tu perfil no
-              aparecerá en las sugerencias de búsqueda al redactar comentarios,
-              y nadie podrá crear un enlace directo a tu perfil mediante una
-              mención.
+              {t("privacy.info")}
             </Text>
           </View>
         </View>

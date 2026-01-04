@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  Alert,
 } from "react-native";
 import React, { useState, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,8 +30,18 @@ import {
   getAllPosts,
   getFeedCandidates,
   getFollowedUserIds,
+  toggleLikePost, // Agregado
+  deletePost, // Agregado
+  togglePostPrivacy, // Agregado
+  reportPost, // Agregado
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
+
+// IMPORTACIONES NUEVAS
+import { useLanguage } from "@/context/LanguageContext";
+import { getRelativeTime } from "@/lib/dateUtils";
+import ShareModal from "@/components/ShareModal";
+import OptionsModal from "@/components/OptionsModal";
 
 const { width } = Dimensions.get("window");
 
@@ -60,24 +71,16 @@ const getCreatorFromPost = (item: any) => {
       avatar: userObj.avatar || userObj.pfp,
     };
   }
-  return { id: "unknown", username: "anon", name: "Usuario", avatar: null };
+  return { id: "unknown", username: "anon", name: "unknown", avatar: null };
 };
 
-const formatTimeAgo = (dateString: string) => {
-  if (!dateString) return "";
-  const date = new Date(dateString);
-  const now = new Date();
-  const diff = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-  if (diff < 1) return "Reciente";
-  if (diff < 24) return `${Math.floor(diff)}h`;
-  return `${Math.floor(diff / 24)}d`;
-};
-
-const CATEGORIES = ["Posts", "Música", "Artistas", "Perfiles"];
+// CATEGORÍAS INTERNAS
+const INTERNAL_CATEGORIES = ["posts", "music", "artists", "profiles"];
 
 const Explore = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+  const { t, language } = useLanguage();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
@@ -90,7 +93,7 @@ const Explore = () => {
 
   const { user } = useGlobalContext();
 
-  const [activeCategory, setActiveCategory] = useState("Posts");
+  const [activeCategory, setActiveCategory] = useState("posts");
   const [searchText, setSearchText] = useState("");
 
   const [explorePosts, setExplorePosts] = useState<any[]>([]);
@@ -101,11 +104,17 @@ const Explore = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Estados para Modales
+  const [isShareVisible, setShareVisible] = useState(false);
+  const [postToShare, setPostToShare] = useState<string>("");
+  const [isOptionsVisible, setOptionsVisible] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<any>(null);
+
   const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  const player = useAudioPlayer(currentSongUrl);
+  const player = useAudioPlayer(currentSongUrl || "");
 
   useEffect(() => {
     if (currentSongUrl && player) {
@@ -224,7 +233,7 @@ const Explore = () => {
         return !isPrivate;
       });
 
-      if (activeCategory === "Posts") {
+      if (activeCategory === "posts") {
         const filteredPosts = publicAndVisiblePosts.filter((post: any) => {
           const creator = getCreatorFromPost(post);
           const isMe = creator.id === user?.$id;
@@ -234,17 +243,17 @@ const Explore = () => {
         setExplorePosts(rankExplorePosts(filteredPosts));
       }
 
-      if (activeCategory === "Perfiles") {
+      if (activeCategory === "profiles") {
         const latestUsers = await getLatestUsers();
         setRankedUsers(
           calculateTopMooders(publicAndVisiblePosts, latestUsers, safeFollows)
         );
       }
 
-      if (activeCategory === "Música" || activeCategory === "Artistas") {
+      if (activeCategory === "music" || activeCategory === "artists") {
         const allPosts = await getAllPosts(user?.$id || "");
 
-        if (activeCategory === "Música") {
+        if (activeCategory === "music") {
           const songMap = new Map();
           allPosts.forEach((post: any) => {
             const songData = parseSongFromPost(post.songData);
@@ -272,16 +281,15 @@ const Explore = () => {
           setTopSongs(charts);
         }
 
-        if (activeCategory === "Artistas") {
+        if (activeCategory === "artists") {
           const artistMap = new Map();
           allPosts.forEach((post: any) => {
             const songData = parseSongFromPost(post.songData);
             if (!songData) return;
             const artistName = songData.artist;
-            const mentions = 1;
             if (artistMap.has(artistName)) {
               const data = artistMap.get(artistName);
-              data.count += mentions;
+              data.count += 1;
               if (Math.random() > 0.5) data.cover = songData.cover;
             } else {
               artistMap.set(artistName, {
@@ -315,24 +323,156 @@ const Explore = () => {
     fetchCategoryData();
   };
 
+  // --- NUEVAS FUNCIONES DE ACCIÓN ---
+
+  const handleLike = async (post: any) => {
+    if (!user) return;
+    const originalLikes = post.likedBy || [];
+    const isLiked = originalLikes.includes(user.$id);
+    const newLikes = isLiked
+      ? originalLikes.filter((id: string) => id !== user.$id)
+      : [...originalLikes, user.$id];
+
+    // Actualización optimista del estado local
+    setExplorePosts((prev) =>
+      prev.map((p) => (p.$id === post.$id ? { ...p, likedBy: newLikes } : p))
+    );
+
+    try {
+      await toggleLikePost(post.$id, user.$id, originalLikes);
+    } catch (error) {
+      // Revertir si falla
+      setExplorePosts((prev) =>
+        prev.map((p) =>
+          p.$id === post.$id ? { ...p, likedBy: originalLikes } : p
+        )
+      );
+    }
+  };
+
+  const handleOpenOptions = (post: any) => {
+    setSelectedPost(post);
+    setOptionsVisible(true);
+  };
+
+  const handleShare = (postId: string) => {
+    setPostToShare(postId);
+    setShareVisible(true);
+  };
+
+  // --- ACCIONES MODAL OPCIONES ---
+  const handleTogglePrivacyAction = async () => {
+    if (!selectedPost) return;
+    setOptionsVisible(false);
+    // En explorar, si lo haces privado, probablemente debería desaparecer,
+    // pero aquí solo actualizamos el estado o recargamos.
+    try {
+      await togglePostPrivacy(
+        selectedPost.$id,
+        selectedPost.isPrivate || false
+      );
+      onRefresh(); // Recargar lista
+    } catch (e) {
+      Alert.alert("Error", "No se pudo actualizar");
+    }
+  };
+
+  const handleDeleteAction = () => {
+    if (!selectedPost) return;
+    setOptionsVisible(false);
+    Alert.alert("¿Eliminar?", "Esta acción es irreversible.", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Eliminar",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setExplorePosts((prev) =>
+              prev.filter((p) => p.$id !== selectedPost.$id)
+            );
+            await deletePost(selectedPost.$id);
+          } catch (e) {
+            Alert.alert("Error", "No se pudo eliminar");
+            onRefresh();
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleReportAction = () => {
+    setOptionsVisible(false);
+    Alert.alert("Reportar", "Selecciona una razón:", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Spam/Inapropiado", onPress: () => submitReport("spam") },
+      { text: "Otro", onPress: () => submitReport("other") },
+    ]);
+  };
+
+  const submitReport = async (reason: string) => {
+    if (!user || !selectedPost) return;
+    try {
+      await reportPost(selectedPost.$id, user.$id, reason);
+      Alert.alert("Reporte enviado", "Gracias por ayudarnos.");
+    } catch (e) {
+      Alert.alert("Error", "Inténtalo más tarde.");
+    }
+  };
+
+  // --- RENDERS ---
+
   const getData = () => {
     switch (activeCategory) {
-      case "Música":
+      case "music":
         return topSongs;
-      case "Artistas":
+      case "artists":
         return topArtists;
-      case "Perfiles":
+      case "profiles":
         return rankedUsers;
       default:
         return explorePosts;
     }
   };
 
+  const getCategoryLabel = (key: string) => {
+    switch (key) {
+      case "posts":
+        return t("explore.categories.posts");
+      case "music":
+        return t("explore.categories.music");
+      case "artists":
+        return t("explore.categories.artists");
+      case "profiles":
+        return t("explore.categories.profiles");
+      default:
+        return key;
+    }
+  };
+
+  const getSectionTitle = () => {
+    switch (activeCategory) {
+      case "profiles":
+        return t("explore.headers.topMooders");
+      case "music":
+        return t("explore.headers.topGlobal");
+      case "artists":
+        return t("explore.headers.topArtists");
+      default:
+        return t("explore.headers.trending");
+    }
+  };
+
   const renderPostItem = ({ item, index }: { item: any; index: number }) => {
     const creator = getCreatorFromPost(item);
     const songData = parseSongFromPost(item.songData);
+
+    // Calcular datos reales
     const likesCount = item.likedBy ? item.likedBy.length : 0;
-    const commentsCount = item.comments ? item.comments.length : 0;
+    const isLiked =
+      user && item.likedBy ? item.likedBy.includes(user.$id) : false;
+    const commentsCount =
+      item.commentsCount || (item.comments ? item.comments.length : 0);
+
     const isThisPlaying = playingId === item.$id;
     const showPause = isThisPlaying && isPlaying;
     const isLastItem = index === explorePosts.length - 1;
@@ -375,20 +515,36 @@ const Explore = () => {
                 className="font-bold mr-1 text-base"
                 style={{ color: textColor }}
               >
-                {creator.name}
+                {creator.name === "unknown"
+                  ? t("feed.unknownUser")
+                  : creator.name}
               </Text>
               <Text className="text-sm" style={{ color: subTextColor }}>
-                @{creator.username} · {formatTimeAgo(item.$createdAt)}
+                @{creator.username} ·{" "}
+                {getRelativeTime(item.$createdAt, language)}
               </Text>
             </View>
-            <Ionicons name="ellipsis-horizontal" size={18} color={iconColor} />
+
+            {/* BOTÓN 3 PUNTOS FUNCIONAL */}
+            <TouchableOpacity
+              onPress={() => handleOpenOptions(item)}
+              className="p-1 -mr-2"
+            >
+              <Ionicons
+                name="ellipsis-horizontal"
+                size={18}
+                color={iconColor}
+              />
+            </TouchableOpacity>
           </View>
+
           <Text
             className="text-base mb-3 leading-5"
             style={{ color: textColor }}
           >
             {item.comment}
           </Text>
+
           {songData && (
             <View
               className="rounded-xl p-2 flex-row items-center mb-3 border"
@@ -429,24 +585,44 @@ const Explore = () => {
               </TouchableOpacity>
             </View>
           )}
+
           <View className="flex-row items-center justify-between pr-8 mt-1">
+            {/* BOTÓN COMENTARIOS */}
             <TouchableOpacity
               className="flex-row items-center"
               onPress={() => router.push(`/post/${item.$id}` as any)}
             >
-              <Ionicons name="chatbubble-outline" size={18} color={iconColor} />
-              <Text className="text-xs ml-1" style={{ color: subTextColor }}>
+              <Ionicons name="chatbubble-outline" size={20} color={iconColor} />
+              <Text className="text-xs ml-1.5" style={{ color: subTextColor }}>
                 {commentsCount}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity className="flex-row items-center">
-              <Ionicons name="heart-outline" size={18} color={iconColor} />
-              <Text className="text-xs ml-1" style={{ color: subTextColor }}>
+
+            {/* BOTÓN LIKES FUNCIONAL */}
+            <TouchableOpacity
+              className="flex-row items-center"
+              onPress={() => handleLike(item)}
+            >
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={22}
+                color={isLiked ? "#EF4444" : iconColor}
+              />
+              <Text
+                className="text-xs ml-1.5"
+                style={{ color: isLiked ? "#EF4444" : subTextColor }}
+              >
                 {likesCount}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity>
-              <Ionicons name="share-outline" size={18} color={iconColor} />
+
+            {/* BOTÓN COMPARTIR FUNCIONAL */}
+            <TouchableOpacity onPress={() => handleShare(item.$id)}>
+              <Ionicons
+                name="share-social-outline"
+                size={22}
+                color={iconColor}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -454,6 +630,7 @@ const Explore = () => {
     );
   };
 
+  // ... (Resto de renderProfileItem, renderMusicItem, renderArtistItem, renderHeader IGUAL QUE ANTES) ...
   const renderProfileItem = ({ item }: { item: any }) => {
     const isTrending = item.totalLikes >= 5;
     return (
@@ -482,14 +659,14 @@ const Explore = () => {
                 <>
                   <Ionicons name="flame" size={12} color="#EF4444" />
                   <Text className="text-[#EF4444] text-xs ml-1 font-bold">
-                    Trending • {item.totalLikes} Likes
+                    {t("explore.labels.trending")} • {item.totalLikes} Likes
                   </Text>
                 </>
               ) : (
                 <>
                   <Ionicons name="sparkles" size={10} color="#5E17EB" />
                   <Text className="text-[#5E17EB] text-xs ml-1">
-                    Nuevo en Mood
+                    {t("explore.labels.new")}
                   </Text>
                 </>
               )}
@@ -500,7 +677,9 @@ const Explore = () => {
           onPress={() => router.push(`/user/${item.id}` as any)}
           className="px-4 py-2 rounded-full bg-[#5E17EB]"
         >
-          <Text className="font-bold text-sm text-white">Ver</Text>
+          <Text className="font-bold text-sm text-white">
+            {t("explore.labels.view")}
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -550,7 +729,7 @@ const Explore = () => {
               className="text-[10px] ml-1 uppercase font-bold"
               style={{ color: subTextColor }}
             >
-              {item.likes} Likes Globales
+              {item.likes} {t("explore.labels.globalLikes")}
             </Text>
           </View>
         </View>
@@ -581,14 +760,12 @@ const Explore = () => {
           <Text className="text-white font-bold text-xs">#{index + 1}</Text>
         </View>
       )}
-
       <Image
         source={{ uri: item.cover }}
         className="w-24 h-24 rounded-full mb-3"
         style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
         resizeMode="cover"
       />
-
       <Text
         className="font-bold text-center text-sm mb-1"
         numberOfLines={1}
@@ -596,7 +773,6 @@ const Explore = () => {
       >
         {item.name}
       </Text>
-
       <View
         className="flex-row items-center px-2 py-1 rounded-lg"
         style={{
@@ -608,7 +784,10 @@ const Explore = () => {
           className="text-[10px] ml-1 font-medium"
           style={{ color: subTextColor }}
         >
-          {item.count} {item.count === 1 ? "post" : "posts"}
+          {item.count}{" "}
+          {item.count === 1
+            ? t("explore.labels.post")
+            : t("explore.labels.posts")}
         </Text>
       </View>
     </View>
@@ -621,7 +800,7 @@ const Explore = () => {
           className="text-3xl font-bold mb-4 mt-2"
           style={{ color: textColor }}
         >
-          Explorar
+          {t("explore.title")}
         </Text>
         <View
           className="flex-row items-center h-12 rounded-2xl px-4 border mb-4"
@@ -629,7 +808,9 @@ const Explore = () => {
         >
           <Ionicons name="search" size={20} color={subTextColor} />
           <TextInput
-            placeholder={`Buscar en ${activeCategory.toLowerCase()}...`}
+            placeholder={`${t("explore.searchPlaceholder")} ${getCategoryLabel(
+              activeCategory
+            ).toLowerCase()}...`}
             placeholderTextColor={subTextColor}
             className="flex-1 ml-3 text-base font-medium"
             style={{ color: textColor }}
@@ -640,7 +821,7 @@ const Explore = () => {
       </View>
       <FlatList
         horizontal
-        data={CATEGORIES}
+        data={INTERNAL_CATEGORIES}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16 }}
         keyExtractor={(item) => item}
@@ -656,7 +837,7 @@ const Explore = () => {
                 className={`${isActive ? "font-bold" : "font-medium"} text-sm`}
                 style={{ color: isActive ? "white" : subTextColor }}
               >
-                {item}
+                {getCategoryLabel(item)}
               </Text>
             </TouchableOpacity>
           );
@@ -668,13 +849,7 @@ const Explore = () => {
       />
       <View className="px-4 py-3 flex-row justify-between items-center">
         <Text className="font-bold text-lg" style={{ color: textColor }}>
-          {activeCategory === "Perfiles"
-            ? "Top Mooders & Descubrir"
-            : activeCategory === "Música"
-            ? "Top 10 Global"
-            : activeCategory === "Artistas"
-            ? "Artistas del Momento"
-            : "Tendencias para ti"}
+          {getSectionTitle()}
         </Text>
         {isLoading && <ActivityIndicator size="small" color="#5E17EB" />}
       </View>
@@ -700,10 +875,10 @@ const Explore = () => {
               <StatusBar style={isDark ? "light" : "dark"} />
               <FlatList
                 data={getData()}
-                key={activeCategory === "Artistas" ? "artists-grid" : "list"}
-                numColumns={activeCategory === "Artistas" ? 2 : 1}
+                key={activeCategory === "artists" ? "artists-grid" : "list"}
+                numColumns={activeCategory === "artists" ? 2 : 1}
                 columnWrapperStyle={
-                  activeCategory === "Artistas"
+                  activeCategory === "artists"
                     ? { justifyContent: "space-between", paddingHorizontal: 10 }
                     : undefined
                 }
@@ -712,11 +887,11 @@ const Explore = () => {
                 }
                 renderItem={({ item, index }) => {
                   switch (activeCategory) {
-                    case "Música":
+                    case "music":
                       return renderMusicItem({ item });
-                    case "Artistas":
+                    case "artists":
                       return renderArtistItem({ item, index });
-                    case "Perfiles":
+                    case "profiles":
                       return renderProfileItem({ item });
                     default:
                       return renderPostItem({ item, index });
@@ -738,9 +913,33 @@ const Explore = () => {
                       className="text-center mt-10"
                       style={{ color: subTextColor }}
                     >
-                      No hay resultados.
+                      {t("explore.noResults")}
                     </Text>
                   ) : null
+                }
+              />
+
+              {/* MODALES AGREGADOS */}
+              <ShareModal
+                isVisible={isShareVisible}
+                onClose={() => setShareVisible(false)}
+                postId={postToShare}
+              />
+
+              <OptionsModal
+                isVisible={isOptionsVisible}
+                onClose={() => setOptionsVisible(false)}
+                onDelete={handleDeleteAction}
+                onTogglePrivacy={handleTogglePrivacyAction}
+                onReport={handleReportAction}
+                isPrivate={selectedPost?.isPrivate || false}
+                // Validamos si soy el dueño (creator.id o postedBy.$id)
+                isOwner={
+                  user?.$id && selectedPost
+                    ? (selectedPost.postedBy?.$id ||
+                        selectedPost.creator?.id ||
+                        getCreatorFromPost(selectedPost).id) === user.$id
+                    : false
                 }
               />
             </SafeAreaView>

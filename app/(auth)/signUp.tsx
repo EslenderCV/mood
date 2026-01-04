@@ -17,9 +17,15 @@ import FormField from "@/components/FormField";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
 import { createUser } from "@/lib/appwrite";
 import { AppwriteException } from "react-native-appwrite";
+// 1. IMPORTAR CONTEXTO
+import { useLanguage } from "@/context/LanguageContext";
 
 const SignUp = () => {
   const { setUser, setLoggedIn } = useGlobalContext();
+
+  // 2. USAR HOOK
+  const { t } = useLanguage();
+
   const [isLoading, setIsLoading] = useState(false);
 
   const [form, setForm] = useState({
@@ -36,7 +42,7 @@ const SignUp = () => {
       !form.name.trim() ||
       !form.username.trim()
     ) {
-      Alert.alert("Campos vacíos", "Por favor completa todos los campos.");
+      Alert.alert(t("auth.alerts.emptyTitle"), t("auth.alerts.emptyMsg"));
       return;
     }
 
@@ -57,8 +63,8 @@ const SignUp = () => {
     } catch (error) {
       const appwriteError = error as AppwriteException;
       Alert.alert(
-        "Error",
-        appwriteError.message || "No se pudo crear la cuenta."
+        t("auth.alerts.errorTitle"),
+        appwriteError.message || t("auth.alerts.createError")
       );
     } finally {
       setIsLoading(false);
@@ -80,43 +86,42 @@ const SignUp = () => {
                 resizeMode="contain"
               />
               <Text className="text-white text-3xl font-bold tracking-tight text-center">
-                Únete a Mood
+                {t("auth.joinMood")}
               </Text>
               <Text className="text-zinc-400 text-base mt-2 text-center px-4">
-                Crea una cuenta para descubrir y compartir música como nunca
-                antes.
+                {t("auth.subtitleSignUp")}
               </Text>
             </View>
             <View className="space-y-4">
               <FormField
-                placeholder="Nombre completo"
+                placeholder={t("auth.namePlaceholder")}
                 value={form.name}
                 handleChangeText={(e) => setForm({ ...form, name: e })}
                 otherStyles="mt-2"
               />
               <FormField
-                placeholder="Nombre de usuario"
+                placeholder={t("auth.usernamePlaceholder")}
                 value={form.username}
                 handleChangeText={(e) => setForm({ ...form, username: e })}
                 otherStyles="mt-4"
                 autoCapitalize="none"
               />
               <FormField
-                placeholder="Correo electrónico"
+                placeholder={t("auth.emailPlaceholder")}
                 value={form.email}
                 handleChangeText={(e) => setForm({ ...form, email: e })}
                 otherStyles="mt-4"
                 keyboardType="email-address"
               />
               <FormField
-                placeholder="Contraseña"
+                placeholder={t("auth.passwordPlaceholder")}
                 value={form.password}
                 handleChangeText={(e) => setForm({ ...form, password: e })}
                 otherStyles="mt-4"
                 secureTextEntry
               />
               <CustomButtom
-                text="CREAR CUENTA"
+                text={t("auth.signUpButton")}
                 handlePress={submit}
                 containerStyles="w-full mt-8 bg-[#5E17EB] rounded-2xl py-4 shadow-lg shadow-[#5E17EB]/40"
                 textStyles="text-white font-bold text-lg"
@@ -126,7 +131,7 @@ const SignUp = () => {
             <View className="flex-row justify-center items-center w-full gap-4 mt-10 mb-8">
               <View className="bg-zinc-800 flex-1 h-[1px]"></View>
               <Text className="text-zinc-500 text-xs font-semibold uppercase tracking-widest">
-                O regístrate con
+                {t("auth.orRegister")}
               </Text>
               <View className="bg-zinc-800 flex-1 h-[1px]"></View>
             </View>
@@ -149,12 +154,12 @@ const SignUp = () => {
             </View>
             <View className="mt-10 flex-row items-center justify-center">
               <Text className="text-zinc-400 text-base">
-                ¿Ya tienes cuenta?{" "}
+                {t("auth.hasAccount")}{" "}
               </Text>
               <Link href="/signIn" asChild>
                 <TouchableOpacity>
                   <Text className="text-[#5E17EB] font-bold text-base">
-                    Inicia sesión
+                    {t("auth.signInLink")}
                   </Text>
                 </TouchableOpacity>
               </Link>

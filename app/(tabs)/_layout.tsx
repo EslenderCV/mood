@@ -15,6 +15,8 @@ import { useGlobalContext } from "@/context/GlobalProvider";
 import { useModal } from "@/context/ModalContext";
 import PostModal from "@/components/PostModal";
 import { useColorScheme } from "nativewind";
+// 1. IMPORTAR CONTEXTO DE IDIOMA
+import { useLanguage } from "@/context/LanguageContext";
 
 const MenuOption = ({
   label,
@@ -53,6 +55,9 @@ const MenuOption = ({
 const TabsLayout = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+
+  // 2. USAR EL HOOK DE TRADUCCIÓN
+  const { t } = useLanguage();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const tabBarBg = isDark ? "#121212" : "#FFFFFF";
@@ -110,7 +115,7 @@ const TabsLayout = () => {
         <Tabs.Screen
           name="home"
           options={{
-            title: "Inicio",
+            title: t("tabs.home"), // TRADUCIDO
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "home" : "home-outline"}
@@ -123,7 +128,7 @@ const TabsLayout = () => {
         <Tabs.Screen
           name="explore"
           options={{
-            title: "Explorar",
+            title: t("tabs.search"), // TRADUCIDO
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "compass" : "compass-outline"}
@@ -166,7 +171,7 @@ const TabsLayout = () => {
         <Tabs.Screen
           name="library"
           options={{
-            title: "Biblioteca",
+            title: t("tabs.library"), // TRADUCIDO
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "albums" : "albums-outline"}
@@ -186,7 +191,7 @@ const TabsLayout = () => {
             },
           })}
           options={{
-            title: "Perfil",
+            title: t("tabs.profile"), // TRADUCIDO
             tabBarIcon: ({ focused }) => (
               <View
                 style={{
@@ -250,7 +255,7 @@ const TabsLayout = () => {
                       {user?.name || "Usuario"}
                     </Text>
                     <Text className="text-[#5E17EB] text-xs font-medium mt-0.5">
-                      Ver Perfil
+                      {t("menu.viewProfile")}
                     </Text>
                   </View>
                 </View>
@@ -266,7 +271,7 @@ const TabsLayout = () => {
             <View className="p-5">
               <View className="gap-y-1">
                 <MenuOption
-                  label="Get Plus"
+                  label={t("menu.plus")}
                   iconName="diamond"
                   textColor={menuText}
                   onPress={() => {
@@ -275,7 +280,7 @@ const TabsLayout = () => {
                   }}
                 />
                 <MenuOption
-                  label="Notifications"
+                  label={t("menu.notifications")}
                   iconName="notifications-outline"
                   textColor={menuText}
                   onPress={() => {
@@ -284,7 +289,7 @@ const TabsLayout = () => {
                   }}
                 />
                 <MenuOption
-                  label="Privacy"
+                  label={t("menu.privacy")}
                   iconName="lock-closed-outline"
                   textColor={menuText}
                   onPress={() => {
@@ -293,7 +298,7 @@ const TabsLayout = () => {
                   }}
                 />
                 <MenuOption
-                  label="Security"
+                  label={t("menu.security")}
                   iconName="shield-checkmark-outline"
                   textColor={menuText}
                   onPress={() => {
@@ -302,7 +307,7 @@ const TabsLayout = () => {
                   }}
                 />
                 <MenuOption
-                  label="Settings"
+                  label={t("settings.title")}
                   iconName="settings-outline"
                   textColor={menuText}
                   onPress={() => {
@@ -316,7 +321,7 @@ const TabsLayout = () => {
                 style={{ backgroundColor: menuBorder }}
               />
               <MenuOption
-                label="Help Center"
+                label={t("menu.help")}
                 iconName="help-circle-outline"
                 color={menuSubText}
                 textColor={menuSubText}

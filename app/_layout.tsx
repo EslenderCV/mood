@@ -4,6 +4,7 @@ import { View, ActivityIndicator } from "react-native";
 import { AudioProvider } from "@/context/AudioContext";
 import GlobalProvider, { useGlobalContext } from "@/context/GlobalProvider";
 import { ModalProvider } from "@/context/ModalContext";
+import { LanguageProvider } from "@/context/LanguageContext";
 
 const StackLayout = () => {
   const { loggedIn, loading } = useGlobalContext();
@@ -60,11 +61,13 @@ const StackLayout = () => {
 const RootLayout = () => {
   return (
     <GlobalProvider>
-      <AudioProvider>
-        <ModalProvider>
-          <StackLayout />
-        </ModalProvider>
-      </AudioProvider>
+      <LanguageProvider>
+        <AudioProvider>
+          <ModalProvider>
+            <StackLayout />
+          </ModalProvider>
+        </AudioProvider>
+      </LanguageProvider>
     </GlobalProvider>
   );
 };

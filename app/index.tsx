@@ -6,11 +6,16 @@ import { Redirect, router } from "expo-router";
 import CustomButtom from "@/components/CustomButtom";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import * as Animatable from "react-native-animatable";
+// 1. IMPORTAR CONTEXTO
+import { useLanguage } from "@/context/LanguageContext";
 
 const AnimatableView = Animatable.View as any;
 
 const Index = () => {
   const { loading, loggedIn } = useGlobalContext();
+
+  // 2. USAR HOOK
+  const { t } = useLanguage();
 
   if (loading)
     return (
@@ -55,19 +60,20 @@ const Index = () => {
               <View className="w-full mb-10">
                 <AnimatableView animation="fadeInUp" delay={500} duration={500}>
                   <Text className="text-5xl text-white font-bold text-center tracking-tighter leading-[1.1]">
-                    Vibe {"\n"}
-                    <Text className="text-[#5E17EB]">Together.</Text>
+                    {t("onboarding.titleLine1")} {"\n"}
+                    <Text className="text-[#5E17EB]">
+                      {t("onboarding.titleLine2")}
+                    </Text>
                   </Text>
                 </AnimatableView>
                 <AnimatableView animation="fadeIn" delay={700} duration={500}>
                   <Text className="text-zinc-300 text-center text-base font-medium mt-5 px-2 leading-6">
-                    La música no es solo para escuchar, es para sentirla y
-                    compartirla con los tuyos.
+                    {t("onboarding.subtitle")}
                   </Text>
                 </AnimatableView>
                 <AnimatableView animation="bounceIn" delay={700} duration={800}>
                   <CustomButtom
-                    text="Comenzar Ahora"
+                    text={t("onboarding.startButton")}
                     containerStyles="w-full mt-10 bg-[#5E17EB] rounded-2xl py-4 border border-white/10 shadow-xl shadow-[#5E17EB]/50"
                     textStyles="text-white font-bold text-lg tracking-wider"
                     handlePress={() => router.push("/signIn")}
@@ -76,7 +82,7 @@ const Index = () => {
                 </AnimatableView>
                 <AnimatableView animation="fadeIn" delay={2000}>
                   <Text className="text-zinc-500 text-[10px] mt-8 text-center uppercase tracking-widest opacity-60">
-                    Mood App © 2024
+                    {t("onboarding.footer")}
                   </Text>
                 </AnimatableView>
               </View>

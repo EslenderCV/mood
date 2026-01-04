@@ -10,6 +10,8 @@ import {
   FlatList,
   TouchableWithoutFeedback,
   Keyboard,
+  Alert,
+  ScrollView,
 } from "react-native";
 import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router } from "expo-router";
@@ -23,24 +25,32 @@ import {
   getPostComments,
   toggleLikePost,
   toggleSavePost,
-  searchUsers, // <--- IMPORTANTE
-  sendTagNotification, // <--- IMPORTANTE
+  searchUsers,
+  sendTagNotification,
+  deletePost, // Importado
+  togglePostPrivacy, // Importado
+  reportPost, // Importado
 } from "@/lib/appwrite";
 import CommentItem from "@/components/CommentItem";
 import { useColorScheme } from "nativewind";
+import { useLanguage } from "@/context/LanguageContext";
+
+// --- IMPORTAR MODALES ---
+import ShareModal from "@/components/ShareModal";
+import OptionsModal from "@/components/OptionsModal";
 
 // --- HELPERS ---
-const formatTimeAgo = (dateString: string) => {
+const formatTimeAgo = (dateString: string, t: (key: string) => string) => {
   if (!dateString) return "";
   const date = new Date(dateString);
   const now = new Date();
   const diff = (now.getTime() - date.getTime()) / 1000;
-  if (diff < 60) return "hace unos segundos";
+  if (diff < 60) return t("postDetails.time.seconds");
   const m = Math.floor(diff / 60);
-  if (m < 60) return `${m}m`;
+  if (m < 60) return `${m}${t("postDetails.time.m")}`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  return `${Math.floor(h / 24)}d`;
+  if (h < 24) return `${h}${t("postDetails.time.h")}`;
+  return `${Math.floor(h / 24)}${t("postDetails.time.d")}`;
 };
 
 const parseSongData = (songDataString: string) => {
@@ -58,6 +68,7 @@ const parseSongData = (songDataString: string) => {
 const PostDetails = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+  const { t } = useLanguage();
 
   // Colores
   const bgColor = isDark ? "#000000" : "#FFFFFF";
@@ -67,7 +78,8 @@ const PostDetails = () => {
   const cardBg = isDark ? "#1C1C1E" : "#F4F4F5";
   const inputBg = isDark ? "#18181B" : "#F4F4F5";
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
-  const suggestionBg = isDark ? "#18181B" : "#FFFFFF"; // Fondo lista sugerencias
+  const suggestionBg = isDark ? "#18181B" : "#FFFFFF";
+  const iconColor = isDark ? "#A1A1AA" : "#52525B"; // Color para iconos de acción
 
   const { id } = useLocalSearchParams();
   const { user } = useGlobalContext();
@@ -80,6 +92,10 @@ const PostDetails = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
+  // --- ESTADOS PARA MODALES ---
+  const [isOptionsVisible, setOptionsVisible] = useState(false);
+  const [isShareVisible, setShareVisible] = useState(false);
+
   const [replyingTo, setReplyingTo] = useState<{
     rootId: string;
     username: string;
@@ -87,7 +103,7 @@ const PostDetails = () => {
 
   const [commentText, setCommentText] = useState("");
 
-  // --- ESTADOS PARA ETIQUETAS ---
+  // Estados Etiquetas
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
 
@@ -119,19 +135,74 @@ const PostDetails = () => {
       setAllComments(commentsData);
     } catch (error) {
       console.log(error);
+      Alert.alert("Error", "No se pudo cargar el post");
+      router.back();
     } finally {
       setLoading(false);
     }
   };
 
-  // --- LÓGICA ETIQUETAS ---
+  // --- GESTIÓN DE OPCIONES (3 PUNTOS) ---
+  const handleTogglePrivacyAction = async () => {
+    setOptionsVisible(false);
+    try {
+      const newStatus = !post.isPrivate;
+      setPost({ ...post, isPrivate: newStatus }); // UI inmediata
+      await togglePostPrivacy(post.$id, post.isPrivate);
+      Alert.alert(
+        "Éxito",
+        `Post ahora es ${newStatus ? "Privado" : "Público"}`
+      );
+    } catch (error) {
+      fetchData(); // Revertir si falla
+      Alert.alert("Error", "No se pudo actualizar");
+    }
+  };
+
+  const handleDeleteAction = () => {
+    setOptionsVisible(false);
+    Alert.alert("¿Eliminar?", "Esta acción es irreversible.", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Eliminar",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deletePost(post.$id);
+            router.back(); // Volver atrás si se borra
+          } catch (e) {
+            Alert.alert("Error", "No se pudo eliminar");
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleReportAction = () => {
+    setOptionsVisible(false);
+    Alert.alert("Reportar", "Selecciona una razón:", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Spam/Inapropiado", onPress: () => submitReport("spam") },
+      { text: "Otro", onPress: () => submitReport("other") },
+    ]);
+  };
+
+  const submitReport = async (reason: string) => {
+    if (!user) return;
+    try {
+      await reportPost(post.$id, user.$id, reason);
+      Alert.alert("Reporte enviado", "Gracias por ayudarnos.");
+    } catch (e) {
+      Alert.alert("Error", "Inténtalo más tarde.");
+    }
+  };
+
+  // --- LÓGICA ETIQUETAS Y COMENTARIOS ---
   const handleTextChange = async (text: string) => {
     setCommentText(text);
-
     const words = text.split(" ");
     const lastWord = words[words.length - 1];
 
-    // IMPORTANTE: Debes escribir al menos 1 letra después del @ (ej: "@a")
     if (lastWord && lastWord.startsWith("@") && lastWord.length > 1) {
       const query = lastWord.substring(1);
       try {
@@ -173,7 +244,52 @@ const PostDetails = () => {
     });
   };
 
-  // --- RESTO DE FUNCIONES ---
+  const handleReply = (targetComment: any) => {
+    const rootId = targetComment.parentId
+      ? targetComment.parentId
+      : targetComment.$id;
+    const username = targetComment.username;
+    setReplyingTo({ rootId: rootId, username: username });
+    setCommentText(`@${username} `);
+    inputRef.current?.focus();
+  };
+
+  const cancelReply = () => {
+    setReplyingTo(null);
+    setCommentText("");
+  };
+
+  const submitComment = async () => {
+    if (!commentText.trim()) return;
+    setSending(true);
+
+    try {
+      const parentId = replyingTo ? replyingTo.rootId : null;
+      const newComment = await createComment(
+        postId,
+        {
+          content: commentText,
+          userId: user?.$id,
+          username: user?.username,
+          avatar: user?.pfp,
+        },
+        parentId
+      );
+
+      await processMentions(commentText, postId);
+
+      setAllComments((prev) => [newComment, ...prev]);
+      setCommentText("");
+      setReplyingTo(null);
+      setShowSuggestions(false);
+    } catch (error) {
+      console.log("Error enviando:", error);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // --- ACCIONES POST (Like, Save, Play) ---
   const handleLike = async () => {
     if (!post || !user) return;
     const originalLikes = post.likedBy || [];
@@ -214,52 +330,6 @@ const PostDetails = () => {
     }
   };
 
-  const handleReply = (targetComment: any) => {
-    const rootId = targetComment.parentId
-      ? targetComment.parentId
-      : targetComment.$id;
-    const username = targetComment.username;
-    setReplyingTo({ rootId: rootId, username: username });
-    setCommentText(`@${username} `);
-    inputRef.current?.focus();
-  };
-
-  const cancelReply = () => {
-    setReplyingTo(null);
-    setCommentText("");
-  };
-
-  const submitComment = async () => {
-    if (!commentText.trim()) return;
-    setSending(true);
-
-    try {
-      const parentId = replyingTo ? replyingTo.rootId : null;
-      const newComment = await createComment(
-        postId,
-        {
-          content: commentText,
-          userId: user?.$id,
-          username: user?.username,
-          avatar: user?.pfp,
-        },
-        parentId
-      );
-
-      // Notificar etiquetas
-      await processMentions(commentText, postId);
-
-      setAllComments((prev) => [newComment, ...prev]);
-      setCommentText("");
-      setReplyingTo(null);
-      setShowSuggestions(false);
-    } catch (error) {
-      console.log("Error enviando:", error);
-    } finally {
-      setSending(false);
-    }
-  };
-
   const renderHeader = () => {
     if (!post) return null;
     const songData = parseSongData(post.songData);
@@ -287,14 +357,21 @@ const PostDetails = () => {
             className="w-10 h-10 rounded-full border"
             style={{ borderColor: borderColor, backgroundColor: cardBg }}
           />
-          <View className="ml-3">
+          <View className="ml-3 flex-1">
             <Text className="font-bold text-base" style={{ color: textColor }}>
               {creator.name}
             </Text>
             <Text className="text-sm" style={{ color: subTextColor }}>
-              @{creator.username} · {formatTimeAgo(post.$createdAt)}
+              @{creator.username} · {formatTimeAgo(post.$createdAt, t)}
             </Text>
           </View>
+
+          {/* Icono de Privado si aplica */}
+          {post.isPrivate && (
+            <View className="bg-zinc-800 p-1.5 rounded-md mr-1">
+              <Ionicons name="lock-closed" size={12} color="#A1A1AA" />
+            </View>
+          )}
         </TouchableOpacity>
 
         {post.comment && (
@@ -347,6 +424,7 @@ const PostDetails = () => {
           </View>
         )}
 
+        {/* BARRA DE ACCIONES PRINCIPAL */}
         <View className="flex-row justify-between items-center mt-2 px-2">
           <View className="flex-row gap-6">
             <TouchableOpacity
@@ -367,6 +445,7 @@ const PostDetails = () => {
                 </Text>
               )}
             </TouchableOpacity>
+
             <View className="flex-row items-center">
               <Ionicons name="chatbubble-outline" size={24} color="#A1A1AA" />
               <Text
@@ -376,7 +455,13 @@ const PostDetails = () => {
                 {allComments.length}
               </Text>
             </View>
+
+            {/* BOTÓN DE COMPARTIR */}
+            <TouchableOpacity onPress={() => setShareVisible(true)}>
+              <Ionicons name="share-social-outline" size={24} color="#A1A1AA" />
+            </TouchableOpacity>
           </View>
+
           <TouchableOpacity onPress={handleSave}>
             <Ionicons
               name={isSaved ? "bookmark" : "bookmark-outline"}
@@ -404,23 +489,38 @@ const PostDetails = () => {
     );
   }
 
+  // Verificar propiedad para el modal de opciones
+  const isOwner = user?.$id === (post?.postedBy?.$id || post?.creator?.$id);
+
   return (
     <SafeAreaView
       className="flex-1"
       edges={["top"]}
       style={{ backgroundColor: bgColor }}
     >
+      {/* HEADER DE LA PANTALLA */}
       <View
-        className="flex-row items-center px-4 h-[50px] border-b z-10"
+        className="flex-row items-center justify-between px-4 h-[50px] border-b z-10"
         style={{ backgroundColor: bgColor, borderColor: borderColor }}
       >
-        <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
-          <Ionicons name="arrow-back" size={24} color={backIconColor} />
+        <View className="flex-row items-center">
+          <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+            <Ionicons name="arrow-back" size={24} color={backIconColor} />
+          </TouchableOpacity>
+          <Text className="font-bold text-lg ml-4" style={{ color: textColor }}>
+            {t("postDetails.headerTitle")}
+          </Text>
+        </View>
+
+        {/* BOTÓN DE 3 PUNTOS */}
+        <TouchableOpacity
+          onPress={() => setOptionsVisible(true)}
+          className="p-2 -mr-2"
+        >
+          <Ionicons name="ellipsis-horizontal" size={24} color={textColor} />
         </TouchableOpacity>
-        <Text className="font-bold text-lg ml-4" style={{ color: textColor }}>
-          Hilo
-        </Text>
       </View>
+
       <FlatList
         data={rootComments}
         keyExtractor={(item) => item.$id}
@@ -436,11 +536,12 @@ const PostDetails = () => {
         contentContainerStyle={{ paddingBottom: 100 }}
         ListEmptyComponent={
           <Text className="text-center mt-10" style={{ color: subTextColor }}>
-            Sé el primero en comentar.
+            {t("postDetails.emptyComments")}
           </Text>
         }
       />
 
+      {/* INPUT DE COMENTARIOS */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
@@ -489,7 +590,7 @@ const PostDetails = () => {
             style={{ backgroundColor: isDark ? "#18181B" : "#E4E4E7" }}
           >
             <Text className="text-xs" style={{ color: subTextColor }}>
-              Respondiendo a{" "}
+              {t("postDetails.replyingTo")}{" "}
               <Text className="text-[#5E17EB] font-bold">
                 @{replyingTo.username}
               </Text>
@@ -518,14 +619,16 @@ const PostDetails = () => {
               ref={inputRef}
               placeholder={
                 replyingTo
-                  ? `Responde a ${replyingTo.username}...`
-                  : "Agrega un comentario..."
+                  ? `${t("postDetails.replyPlaceholder")} ${
+                      replyingTo.username
+                    }...`
+                  : t("postDetails.commentPlaceholder")
               }
               placeholderTextColor={subTextColor}
               className="flex-1 text-sm"
               style={{ color: textColor, maxHeight: 80 }}
               value={commentText}
-              onChangeText={handleTextChange} // <--- AQUI ESTÁ EL CAMBIO CLAVE
+              onChangeText={handleTextChange}
               multiline
             />
           </View>
@@ -553,6 +656,26 @@ const PostDetails = () => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* --- MODALES --- */}
+
+      {/* Modal de 3 puntos */}
+      <OptionsModal
+        isVisible={isOptionsVisible}
+        onClose={() => setOptionsVisible(false)}
+        onDelete={handleDeleteAction}
+        onTogglePrivacy={handleTogglePrivacyAction}
+        onReport={handleReportAction}
+        isPrivate={post?.isPrivate || false}
+        isOwner={isOwner}
+      />
+
+      {/* Modal de Compartir */}
+      <ShareModal
+        isVisible={isShareVisible}
+        onClose={() => setShareVisible(false)}
+        postId={post?.$id || ""}
+      />
     </SafeAreaView>
   );
 };

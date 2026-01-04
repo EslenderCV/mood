@@ -22,6 +22,8 @@ export const appwriteConfig = {
   notificationsCollectionId: "6949b7490030640f0fb1",
   chatsCollectionId: "6949bf1f002f7ce268a2",
   messagesCollectionId: "6949c1b6000d070ff309",
+  reportsCollectionId: "6959a194002105f44c03",
+  playlistsCollectionId: "6959a8460009615dfbcb", // ID de colección de Playlists
 };
 
 const client = new Client();
@@ -35,6 +37,10 @@ const account = new Account(client);
 const avatars = new Avatars(client);
 const databases = new Databases(client);
 const storage = new Storage(client);
+
+// ==========================================
+// AUTH & USER
+// ==========================================
 
 export const createUser = async (
   email: string,
@@ -141,6 +147,67 @@ export async function getUser(userId: string) {
   }
 }
 
+export async function updateProfile(userId: string, form: any) {
+  try {
+    const hasFile = form.pfp && typeof form.pfp !== "string";
+    let imageUrl = form.pfp;
+    if (hasFile) imageUrl = await uploadFile(form.pfp);
+
+    if (form.name) {
+      try {
+        await account.updateName(form.name);
+      } catch (e) {}
+    }
+
+    const updates: any = {};
+    if (form.name) updates.name = form.name;
+    if (form.username) updates.username = form.username;
+    if (form.email) updates.email = form.email;
+    if (form.preferredPlatform)
+      updates.preferredPlatform = form.preferredPlatform;
+    if (imageUrl) updates.pfp = imageUrl;
+    if (form.isPrivate !== undefined) updates.isPrivate = form.isPrivate;
+    if (form.allowTags !== undefined) updates.allowTags = form.allowTags;
+
+    const updatedUser = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId,
+      updates
+    );
+    return updatedUser;
+  } catch (error) {
+    throw new Error(String(error));
+  }
+}
+
+export async function updatePrivacy(userId: string, isPrivate: boolean) {
+  try {
+    const updatedUser = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId,
+      { isPrivate: isPrivate }
+    );
+    return updatedUser;
+  } catch (error) {
+    throw new Error("No se pudo actualizar la privacidad");
+  }
+}
+
+export async function updateUserPassword(newPass: string, oldPass: string) {
+  try {
+    await account.updatePassword(newPass, oldPass);
+    return true;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+}
+
+// ==========================================
+// FILES & STORAGE
+// ==========================================
+
 export async function uploadFile(file: any) {
   if (!file) return;
 
@@ -171,6 +238,10 @@ export async function updateImage(file: any) {
   return await uploadFile(file);
 }
 
+// ==========================================
+// POSTS
+// ==========================================
+
 export async function getPostById(postId: string) {
   try {
     const post = await databases.getDocument(
@@ -192,7 +263,8 @@ export async function getPostById(postId: string) {
 export const createPost = async (
   comment: string,
   songData: string,
-  userId: string
+  userId: string,
+  isPrivate: boolean = false
 ) => {
   try {
     return await databases.createDocument(
@@ -206,6 +278,7 @@ export const createPost = async (
         postedBy: userId,
         likedBy: [],
         savedBy: [],
+        isPrivate: isPrivate,
       }
     );
   } catch (error) {
@@ -213,6 +286,40 @@ export const createPost = async (
     throw new Error((error as AppwriteException).message);
   }
 };
+
+export async function deletePost(postId: string) {
+  try {
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.postsCollectionId,
+      postId
+    );
+    return true;
+  } catch (error: any) {
+    console.error("Error al eliminar post:", error);
+    throw new Error(error.message);
+  }
+}
+
+export async function togglePostPrivacy(
+  postId: string,
+  currentStatus: boolean
+) {
+  try {
+    const updatedPost = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.postsCollectionId,
+      postId,
+      {
+        isPrivate: !currentStatus,
+      }
+    );
+    return updatedPost;
+  } catch (error: any) {
+    console.error("Error al cambiar privacidad:", error);
+    throw new Error(error.message);
+  }
+}
 
 export const getUserPosts = async (userId: string) => {
   try {
@@ -232,7 +339,7 @@ export async function getAllPosts(currentUserId?: string) {
     const posts = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
-      [Query.orderDesc("$createdAt")]
+      [Query.orderDesc("$createdAt"), Query.equal("isPrivate", false)]
     );
 
     const postsWithData = await Promise.all(
@@ -432,6 +539,10 @@ export async function getSavedPosts(userId: string) {
   }
 }
 
+// ==========================================
+// COMMENTS
+// ==========================================
+
 export async function createComment(
   postId: string,
   commentData: any,
@@ -527,6 +638,10 @@ export async function getPostComments(postId: string) {
     return [];
   }
 }
+
+// ==========================================
+// FOLLOWS
+// ==========================================
 
 export async function checkFollowStatus(
   followerId: string,
@@ -706,466 +821,6 @@ export async function getUserFollowing(userId: string) {
   }
 }
 
-export async function createNotification(data: {
-  userId: string;
-  type: "like" | "comment" | "follow" | "follow_request" | "tag";
-  message: string;
-  senderId: string;
-  senderName: string;
-  senderAvatar: string;
-  postId?: string;
-}) {
-  try {
-    if (data.userId === data.senderId) return;
-    await databases.createDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.notificationsCollectionId,
-      ID.unique(),
-      {
-        userId: data.userId,
-        type: data.type,
-        message: data.message,
-        senderId: data.senderId,
-        senderName: data.senderName,
-        senderAvatar: data.senderAvatar,
-        postId: data.postId,
-        isRead: false,
-      }
-    );
-  } catch (error) {
-    console.log("Error creando notificación:", error);
-  }
-}
-
-export async function getUserNotifications(userId: string) {
-  try {
-    const result = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.notificationsCollectionId,
-      [Query.equal("userId", userId), Query.orderDesc("$createdAt")]
-    );
-    return result.documents;
-  } catch (error) {
-    console.log("Error fetching notifications:", error);
-    return [];
-  }
-}
-
-export async function getUnreadNotificationCount(userId: string) {
-  try {
-    const result = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.notificationsCollectionId,
-      [Query.equal("userId", userId), Query.equal("isRead", false)]
-    );
-    return result.total;
-  } catch (error) {
-    console.log("Error counting notifications:", error);
-    return 0;
-  }
-}
-
-export async function markNotificationAsRead(notificationId: string) {
-  try {
-    await databases.updateDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.notificationsCollectionId,
-      notificationId,
-      { isRead: true }
-    );
-  } catch (error) {
-    console.log("Error marking as read:", error);
-  }
-}
-
-export async function deleteNotification(notificationId: string) {
-  try {
-    await databases.deleteDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.notificationsCollectionId,
-      notificationId
-    );
-    return true;
-  } catch (error) {
-    console.log("Error borrando notificación:", error);
-    throw error;
-  }
-}
-
-export async function clearAllNotifications(userId: string) {
-  try {
-    const list = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.notificationsCollectionId,
-      [Query.equal("userId", userId)]
-    );
-    const promises = list.documents.map((doc) =>
-      databases.deleteDocument(
-        appwriteConfig.databaseId,
-        appwriteConfig.notificationsCollectionId,
-        doc.$id
-      )
-    );
-    await Promise.all(promises);
-    return true;
-  } catch (error) {
-    console.log("Error limpiando notificaciones:", error);
-    throw error;
-  }
-}
-
-export async function searchUsers(query: string) {
-  try {
-    const users = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      [Query.search("username", query), Query.limit(5)]
-    );
-
-    const filteredUsers = users.documents.filter((doc) => {
-      return doc.allowTags !== false;
-    });
-
-    return filteredUsers;
-  } catch (error) {
-    console.log("Error en searchUsers:", error);
-    return [];
-  }
-}
-
-export const sendTagNotification = async (
-  senderId: string,
-  receiverId: string,
-  postId: string
-) => {
-  try {
-    const receiver = await getUser(receiverId);
-    if (!receiver || receiver.allowTags === false) return;
-
-    const sender = await getUser(senderId);
-    if (!sender) return;
-
-    await createNotification({
-      userId: receiverId,
-      senderId: senderId,
-      type: "tag",
-      message: "te ha etiquetado en una publicación.",
-      senderName: sender.username || sender.name,
-      senderAvatar: sender.pfp,
-      postId: postId,
-    });
-  } catch (error) {
-    console.log("Error enviando notificación de etiqueta:", error);
-  }
-};
-
-export async function getOrCreateChat(
-  currentUserId: string,
-  otherUserId: string
-) {
-  try {
-    const userChats = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.chatsCollectionId,
-      [Query.search("search_params", currentUserId)]
-    );
-    const existingChat = userChats.documents.find((doc) =>
-      doc.participants.includes(otherUserId)
-    );
-    if (existingChat) return existingChat;
-
-    const newChat = await databases.createDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.chatsCollectionId,
-      ID.unique(),
-      {
-        participants: [currentUserId, otherUserId],
-        search_params: `${currentUserId} ${otherUserId}`,
-        lastMessage: "Nuevo chat iniciado",
-        lastMessageAt: new Date().toISOString(),
-      }
-    );
-    return newChat;
-  } catch (error: any) {
-    throw new Error(error.message);
-  }
-}
-
-export async function deleteChat(chatId: string) {
-  try {
-    await databases.deleteDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.chatsCollectionId,
-      chatId
-    );
-    return true;
-  } catch (error) {
-    console.log("Error borrando chat:", error);
-    throw error;
-  }
-}
-
-export async function sendMessage(
-  chatId: string,
-  senderId: string,
-  receiverId: string,
-  content: string,
-  sharedPostId: string | null = null
-) {
-  try {
-    const msg = await databases.createDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.messagesCollectionId,
-      ID.unique(),
-      {
-        chatId,
-        senderId,
-        receiverId,
-        content,
-        isRead: false,
-        sharedPostId,
-      }
-    );
-    await databases.updateDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.chatsCollectionId,
-      chatId,
-      {
-        lastMessage: sharedPostId ? "🎵 Post compartido" : content,
-        lastMessageAt: new Date().toISOString(),
-        lastSenderId: senderId,
-        lastMessageIsRead: false,
-      }
-    );
-    return msg;
-  } catch (error) {
-    throw new Error("No se pudo enviar");
-  }
-}
-
-export async function getChatMessages(chatId: string) {
-  try {
-    const msgs = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.messagesCollectionId,
-      [Query.equal("chatId", chatId), Query.orderDesc("$createdAt")]
-    );
-    return msgs.documents;
-  } catch (error) {
-    return [];
-  }
-}
-
-export async function getUserChats(userId: string) {
-  try {
-    const chats = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.chatsCollectionId,
-      [Query.search("search_params", userId), Query.orderDesc("lastMessageAt")]
-    );
-    const chatsWithUserData = await Promise.all(
-      chats.documents.map(async (chat) => {
-        const otherUserId = chat.participants.find(
-          (id: string) => id !== userId
-        );
-        const otherUser = await getUser(otherUserId);
-        return { ...chat, otherUser: otherUser };
-      })
-    );
-    return chatsWithUserData;
-  } catch (error) {
-    return [];
-  }
-}
-
-export async function getUnreadMessagesCount(userId: string) {
-  try {
-    const result = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.messagesCollectionId,
-      [Query.equal("receiverId", userId), Query.equal("isRead", false)]
-    );
-    return result.total;
-  } catch (error) {
-    return 0;
-  }
-}
-
-export async function markChatAsRead(chatId: string, userId: string) {
-  try {
-    const unreadMsgs = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.messagesCollectionId,
-      [
-        Query.equal("chatId", chatId),
-        Query.equal("receiverId", userId),
-        Query.equal("isRead", false),
-      ]
-    );
-    const promises = unreadMsgs.documents.map((msg) =>
-      databases.updateDocument(
-        appwriteConfig.databaseId,
-        appwriteConfig.messagesCollectionId,
-        msg.$id,
-        { isRead: true }
-      )
-    );
-    await Promise.all(promises);
-  } catch (error) {
-    console.log("Error marking chat as read:", error);
-  }
-}
-
-interface UpdateUserForm {
-  name?: string;
-  username?: string;
-  email?: string;
-  pfp?: any;
-  preferredPlatform?: string;
-  isPrivate?: boolean;
-  allowTags?: boolean;
-}
-
-export async function updateProfile(userId: string, form: UpdateUserForm) {
-  try {
-    const hasFile = form.pfp && typeof form.pfp !== "string";
-    let imageUrl = form.pfp;
-    if (hasFile) imageUrl = await uploadFile(form.pfp);
-
-    if (form.name) {
-      try {
-        await account.updateName(form.name);
-      } catch (e) {}
-    }
-
-    const updates: any = {};
-    if (form.name) updates.name = form.name;
-    if (form.username) updates.username = form.username;
-    if (form.email) updates.email = form.email;
-    if (form.preferredPlatform)
-      updates.preferredPlatform = form.preferredPlatform;
-    if (imageUrl) updates.pfp = imageUrl;
-    if (form.isPrivate !== undefined) updates.isPrivate = form.isPrivate;
-    if (form.allowTags !== undefined) updates.allowTags = form.allowTags;
-
-    const updatedUser = await databases.updateDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      userId,
-      updates
-    );
-    return updatedUser;
-  } catch (error) {
-    throw new Error(String(error));
-  }
-}
-
-export async function updatePrivacy(userId: string, isPrivate: boolean) {
-  try {
-    const updatedUser = await databases.updateDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      userId,
-      { isPrivate: isPrivate }
-    );
-    return updatedUser;
-  } catch (error) {
-    throw new Error("No se pudo actualizar la privacidad");
-  }
-}
-
-export async function blockUser(currentUserId: string, userToBlockId: string) {
-  try {
-    const currentUser = await databases.getDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      currentUserId
-    );
-    const currentBlocked = currentUser.blockedUsers || [];
-    if (currentBlocked.includes(userToBlockId)) return;
-    const updatedBlockedList = [...currentBlocked, userToBlockId];
-    await databases.updateDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      currentUserId,
-      { blockedUsers: updatedBlockedList }
-    );
-    await unfollowUser(currentUserId, userToBlockId);
-    await unfollowUser(userToBlockId, currentUserId);
-    return true;
-  } catch (error) {
-    throw new Error("Error al bloquear usuario");
-  }
-}
-
-export async function unblockUser(
-  currentUserId: string,
-  userToUnblockId: string
-) {
-  try {
-    const currentUser = await databases.getDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      currentUserId
-    );
-    const currentBlocked = currentUser.blockedUsers || [];
-    const updatedBlockedList = currentBlocked.filter(
-      (id: string) => id !== userToUnblockId
-    );
-    await databases.updateDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      currentUserId,
-      { blockedUsers: updatedBlockedList }
-    );
-    return true;
-  } catch (error) {
-    throw new Error("Error al desbloquear usuario");
-  }
-}
-
-export async function updateUserPassword(
-  newPassword: string,
-  oldPassword: string
-) {
-  try {
-    await account.updatePassword(newPassword, oldPassword);
-    return true;
-  } catch (error: any) {
-    throw new Error(error.message);
-  }
-}
-
-export async function getUserSessions() {
-  try {
-    const sessions = await account.listSessions();
-    return sessions.sessions;
-  } catch (error: any) {
-    return [];
-  }
-}
-export async function deleteSession(sessionId: string) {
-  try {
-    await account.deleteSession(sessionId);
-    return true;
-  } catch (error: any) {
-    throw new Error(error.message);
-  }
-}
-export async function deleteAllSessions() {
-  try {
-    const sessions = await account.listSessions();
-    await Promise.all(
-      sessions.sessions.map((s) => account.deleteSession(s.$id))
-    );
-    return true;
-  } catch (error: any) {
-    throw new Error(error.message);
-  }
-}
-
-export { client, databases };
-
 export async function acceptFollowRequest(
   followerId: string,
   myUserId: string,
@@ -1259,6 +914,445 @@ export async function deleteFollowRequest(
   }
 }
 
+// ==========================================
+// NOTIFICATIONS
+// ==========================================
+
+export async function createNotification(data: {
+  userId: string;
+  type: "like" | "comment" | "follow" | "follow_request" | "tag";
+  message: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  postId?: string;
+}) {
+  try {
+    if (data.userId === data.senderId) return;
+    await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.notificationsCollectionId,
+      ID.unique(),
+      {
+        userId: data.userId,
+        type: data.type,
+        message: data.message,
+        senderId: data.senderId,
+        senderName: data.senderName,
+        senderAvatar: data.senderAvatar,
+        postId: data.postId,
+        isRead: false,
+      }
+    );
+  } catch (error) {
+    console.log("Error creando notificación:", error);
+  }
+}
+
+export async function getUserNotifications(userId: string) {
+  try {
+    const result = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.notificationsCollectionId,
+      [Query.equal("userId", userId), Query.orderDesc("$createdAt")]
+    );
+    return result.documents;
+  } catch (error) {
+    console.log("Error fetching notifications:", error);
+    return [];
+  }
+}
+
+export async function getUnreadNotificationCount(userId: string) {
+  try {
+    const result = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.notificationsCollectionId,
+      [Query.equal("userId", userId), Query.equal("isRead", false)]
+    );
+    return result.total;
+  } catch (error) {
+    console.log("Error counting notifications:", error);
+    return 0;
+  }
+}
+
+export async function markNotificationAsRead(notificationId: string) {
+  try {
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.notificationsCollectionId,
+      notificationId,
+      { isRead: true }
+    );
+  } catch (error) {
+    console.log("Error marking as read:", error);
+  }
+}
+
+export async function markAllNotificationsAsRead(userId: string) {
+  try {
+    const unreadList = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.notificationsCollectionId,
+      [Query.equal("userId", userId), Query.equal("isRead", false)]
+    );
+
+    if (unreadList.total === 0) return true;
+
+    const promises = unreadList.documents.map((doc) =>
+      databases.updateDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.notificationsCollectionId,
+        doc.$id,
+        { isRead: true }
+      )
+    );
+
+    await Promise.all(promises);
+    return true;
+  } catch (error) {
+    console.log("Error marking all as read:", error);
+    throw error;
+  }
+}
+
+export async function deleteNotification(notificationId: string) {
+  try {
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.notificationsCollectionId,
+      notificationId
+    );
+    return true;
+  } catch (error) {
+    console.log("Error borrando notificación:", error);
+    throw error;
+  }
+}
+
+export async function clearAllNotifications(userId: string) {
+  try {
+    const list = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.notificationsCollectionId,
+      [Query.equal("userId", userId)]
+    );
+    const promises = list.documents.map((doc) =>
+      databases.deleteDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.notificationsCollectionId,
+        doc.$id
+      )
+    );
+    await Promise.all(promises);
+    return true;
+  } catch (error) {
+    console.log("Error limpiando notificaciones:", error);
+    throw error;
+  }
+}
+
+// ==========================================
+// SEARCH & TAGS
+// ==========================================
+
+export async function searchUsers(query: string) {
+  try {
+    const users = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      [Query.search("username", query), Query.limit(5)]
+    );
+
+    const filteredUsers = users.documents.filter((doc) => {
+      return doc.allowTags !== false;
+    });
+
+    return filteredUsers;
+  } catch (error) {
+    console.log("Error en searchUsers:", error);
+    return [];
+  }
+}
+
+export const sendTagNotification = async (
+  senderId: string,
+  receiverId: string,
+  postId: string
+) => {
+  try {
+    const receiver = await getUser(receiverId);
+    if (!receiver || receiver.allowTags === false) return;
+
+    const sender = await getUser(senderId);
+    if (!sender) return;
+
+    await createNotification({
+      userId: receiverId,
+      senderId: senderId,
+      type: "tag",
+      message: "te ha etiquetado en una publicación.",
+      senderName: sender.username || sender.name,
+      senderAvatar: sender.pfp,
+      postId: postId,
+    });
+  } catch (error) {
+    console.log("Error enviando notificación de etiqueta:", error);
+  }
+};
+
+// ==========================================
+// CHATS
+// ==========================================
+
+export async function getOrCreateChat(
+  currentUserId: string,
+  otherUserId: string
+) {
+  try {
+    const userChats = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.chatsCollectionId,
+      [Query.search("search_params", currentUserId)]
+    );
+    const existingChat = userChats.documents.find((doc) =>
+      doc.participants.includes(otherUserId)
+    );
+    if (existingChat) return existingChat;
+
+    const newChat = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.chatsCollectionId,
+      ID.unique(),
+      {
+        participants: [currentUserId, otherUserId],
+        search_params: `${currentUserId} ${otherUserId}`,
+        lastMessage: "Nuevo chat iniciado",
+        lastMessageAt: new Date().toISOString(),
+      }
+    );
+    return newChat;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+}
+
+export async function deleteChat(chatId: string) {
+  try {
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.chatsCollectionId,
+      chatId
+    );
+    return true;
+  } catch (error) {
+    console.log("Error borrando chat:", error);
+    throw error;
+  }
+}
+
+export async function sendMessage(
+  chatId: string,
+  senderId: string,
+  receiverId: string,
+  content: string,
+  sharedPostId: string | null = null,
+  sharedPlaylistId: string | null = null
+) {
+  try {
+    const msg = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.messagesCollectionId,
+      ID.unique(),
+      {
+        chatId,
+        senderId,
+        receiverId,
+        content,
+        isRead: false,
+        sharedPostId,
+        sharedPlaylistId,
+      }
+    );
+
+    let lastMsgContent = content;
+    if (sharedPostId) lastMsgContent = "🎵 Post compartido";
+    if (sharedPlaylistId) lastMsgContent = "💿 Playlist compartida";
+
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.chatsCollectionId,
+      chatId,
+      {
+        lastMessage: lastMsgContent,
+        lastMessageAt: new Date().toISOString(),
+        lastSenderId: senderId,
+        lastMessageIsRead: false,
+      }
+    );
+    return msg;
+  } catch (error) {
+    throw new Error("No se pudo enviar");
+  }
+}
+
+export async function getChatMessages(chatId: string) {
+  try {
+    const msgs = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.messagesCollectionId,
+      [Query.equal("chatId", chatId), Query.orderDesc("$createdAt")]
+    );
+    return msgs.documents;
+  } catch (error) {
+    return [];
+  }
+}
+
+export async function getUserChats(userId: string) {
+  try {
+    const chats = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.chatsCollectionId,
+      [Query.search("search_params", userId), Query.orderDesc("lastMessageAt")]
+    );
+    const chatsWithUserData = await Promise.all(
+      chats.documents.map(async (chat) => {
+        const otherUserId = chat.participants.find(
+          (id: string) => id !== userId
+        );
+        const otherUser = await getUser(otherUserId);
+        return { ...chat, otherUser: otherUser };
+      })
+    );
+    return chatsWithUserData;
+  } catch (error) {
+    return [];
+  }
+}
+
+export async function getUnreadMessagesCount(userId: string) {
+  try {
+    const result = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.messagesCollectionId,
+      [Query.equal("receiverId", userId), Query.equal("isRead", false)]
+    );
+    return result.total;
+  } catch (error) {
+    return 0;
+  }
+}
+
+export async function markChatAsRead(chatId: string, userId: string) {
+  try {
+    const unreadMsgs = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.messagesCollectionId,
+      [
+        Query.equal("chatId", chatId),
+        Query.equal("receiverId", userId),
+        Query.equal("isRead", false),
+      ]
+    );
+    const promises = unreadMsgs.documents.map((msg) =>
+      databases.updateDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.messagesCollectionId,
+        msg.$id,
+        { isRead: true }
+      )
+    );
+    await Promise.all(promises);
+  } catch (error) {
+    console.log("Error marking chat as read:", error);
+  }
+}
+
+export async function deleteMessage(messageId: string) {
+  try {
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.messagesCollectionId,
+      messageId
+    );
+    return true;
+  } catch (error) {
+    console.log("Error deleting message:", error);
+    throw error;
+  }
+}
+
+export async function updateMessage(messageId: string, newContent: string) {
+  try {
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.messagesCollectionId,
+      messageId,
+      { content: newContent }
+    );
+    return true;
+  } catch (error) {
+    console.log("Error updating message:", error);
+    throw error;
+  }
+}
+
+// ==========================================
+// BLOCKING
+// ==========================================
+
+export async function blockUser(currentUserId: string, userToBlockId: string) {
+  try {
+    const currentUser = await databases.getDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      currentUserId
+    );
+    const currentBlocked = currentUser.blockedUsers || [];
+    if (currentBlocked.includes(userToBlockId)) return;
+    const updatedBlockedList = [...currentBlocked, userToBlockId];
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      currentUserId,
+      { blockedUsers: updatedBlockedList }
+    );
+    await unfollowUser(currentUserId, userToBlockId);
+    await unfollowUser(userToBlockId, currentUserId);
+    return true;
+  } catch (error) {
+    throw new Error("Error al bloquear usuario");
+  }
+}
+
+export async function unblockUser(
+  currentUserId: string,
+  userToUnblockId: string
+) {
+  try {
+    const currentUser = await databases.getDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      currentUserId
+    );
+    const currentBlocked = currentUser.blockedUsers || [];
+    const updatedBlockedList = currentBlocked.filter(
+      (id: string) => id !== userToUnblockId
+    );
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      currentUserId,
+      { blockedUsers: updatedBlockedList }
+    );
+    return true;
+  } catch (error) {
+    throw new Error("Error al desbloquear usuario");
+  }
+}
+
 export async function getBlockedUsersList(currentUserId: string) {
   try {
     const currentUser = await getUser(currentUserId);
@@ -1281,31 +1375,252 @@ export async function getBlockedUsersList(currentUserId: string) {
   }
 }
 
-export async function deleteMessage(messageId: string) {
+export async function getUserSessions() {
   try {
-    await databases.deleteDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.messagesCollectionId,
-      messageId
+    const sessions = await account.listSessions();
+    return sessions.sessions;
+  } catch (error: any) {
+    return [];
+  }
+}
+export async function deleteSession(sessionId: string) {
+  try {
+    await account.deleteSession(sessionId);
+    return true;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+}
+export async function deleteAllSessions() {
+  try {
+    const sessions = await account.listSessions();
+    await Promise.all(
+      sessions.sessions.map((s) => account.deleteSession(s.$id))
     );
     return true;
-  } catch (error) {
-    console.log("Error deleting message:", error);
-    throw error;
+  } catch (error: any) {
+    throw new Error(error.message);
   }
 }
 
-export async function updateMessage(messageId: string, newContent: string) {
+// ==========================================
+// REPORTS
+// ==========================================
+
+export async function reportPost(
+  postId: string,
+  reporterId: string,
+  reason: string
+) {
+  try {
+    await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.reportsCollectionId,
+      ID.unique(),
+      {
+        postId: postId,
+        reporterId: reporterId,
+        reason: reason,
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      }
+    );
+    return true;
+  } catch (error: any) {
+    console.error("Error al reportar:", error);
+    throw new Error("No se pudo enviar el reporte");
+  }
+}
+
+// ==========================================
+// SPOTIFY & PLATFORM AUTH
+// ==========================================
+
+export async function saveSpotifyTokens(
+  userId: string,
+  accessToken: string,
+  refreshToken: string,
+  expiration: string
+) {
+  try {
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId,
+      {
+        spotifyAccessToken: accessToken,
+        spotifyRefreshToken: refreshToken,
+        spotifyTokenExpiration: expiration,
+        preferredPlatform: "spotify",
+      }
+    );
+    return true;
+  } catch (error: any) {
+    console.error("Error guardando tokens:", error);
+    throw new Error("No se pudo conectar con Spotify");
+  }
+}
+
+export async function setPreferredPlatform(
+  userId: string,
+  platform: "spotify" | "apple" | "mood"
+) {
+  try {
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId,
+      { preferredPlatform: platform }
+    );
+    return true;
+  } catch (error) {
+    throw new Error("No se pudo cambiar la preferencia");
+  }
+}
+
+// ==========================================
+// PLAYLISTS
+// ==========================================
+
+export async function createPlaylist(
+  name: string,
+  userId: string,
+  platform: string = "mood"
+) {
+  try {
+    const coverUrl = `${
+      appwriteConfig.endpoint
+    }/avatars/initials?name=${encodeURIComponent(name)}&project=${
+      appwriteConfig.projectId
+    }`;
+
+    const newPlaylist = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.playlistsCollectionId,
+      ID.unique(),
+      {
+        name: name,
+        ownerId: userId,
+        songs: [],
+        cover: coverUrl,
+        platform: platform,
+        externalId: null,
+      }
+    );
+    return newPlaylist;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+}
+
+export async function getUserPlaylists(userId: string) {
+  try {
+    const playlists = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.playlistsCollectionId,
+      [Query.equal("ownerId", userId), Query.orderDesc("$createdAt")]
+    );
+    return playlists.documents;
+  } catch (error) {
+    console.log("Error getting playlists:", error);
+    return [];
+  }
+}
+
+export async function addSongToPlaylist(playlistId: string, songData: any) {
+  try {
+    const playlist = await databases.getDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.playlistsCollectionId,
+      playlistId
+    );
+
+    const songString = JSON.stringify(songData);
+
+    if (playlist.songs.includes(songString)) return playlist;
+
+    const updatedSongs = [...playlist.songs, songString];
+
+    const updated = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.playlistsCollectionId,
+      playlistId,
+      { songs: updatedSongs }
+    );
+
+    return updated;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+}
+
+export async function removeSongFromPlaylist(
+  playlistId: string,
+  songStringToRemove: string
+) {
+  try {
+    const playlist = await databases.getDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.playlistsCollectionId,
+      playlistId
+    );
+
+    const updatedSongs = playlist.songs.filter(
+      (s: string) => s !== songStringToRemove
+    );
+
+    const updated = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.playlistsCollectionId,
+      playlistId,
+      { songs: updatedSongs }
+    );
+
+    return updated;
+  } catch (error: any) {
+    throw new Error("No se pudo eliminar la canción");
+  }
+}
+
+export async function deletePlaylist(playlistId: string) {
+  try {
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.playlistsCollectionId,
+      playlistId
+    );
+    return true;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+}
+
+export async function renamePlaylist(playlistId: string, newName: string) {
   try {
     const updated = await databases.updateDocument(
       appwriteConfig.databaseId,
-      appwriteConfig.messagesCollectionId,
-      messageId,
-      { content: newContent }
+      appwriteConfig.playlistsCollectionId,
+      playlistId,
+      { name: newName }
     );
     return updated;
-  } catch (error) {
-    console.log("Error updating message:", error);
-    throw error;
+  } catch (error: any) {
+    throw new Error(error.message);
   }
 }
+
+export async function getPlaylistById(playlistId: string) {
+  try {
+    const playlist = await databases.getDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.playlistsCollectionId,
+      playlistId
+    );
+    return playlist;
+  } catch (error) {
+    console.log("Error getPlaylistById", error);
+    return null;
+  }
+}
+
+export { client, databases };

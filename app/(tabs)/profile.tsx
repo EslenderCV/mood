@@ -23,6 +23,8 @@ import {
   getFeedCandidates,
   getFollowedUserIds,
 } from "@/lib/appwrite";
+// 1. IMPORTAR CONTEXTO DE IDIOMA
+import { useLanguage } from "@/context/LanguageContext";
 
 const { width } = Dimensions.get("window");
 
@@ -57,6 +59,10 @@ const getCreatorFromPost = (item: any) => {
 const Profile = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+
+  // 2. USAR EL HOOK
+  const { t } = useLanguage();
+
   const { user } = useGlobalContext();
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
@@ -297,7 +303,9 @@ const Profile = () => {
         @{item.username}
       </Text>
       <View className="bg-[#5E17EB]/10 w-full py-1 rounded-lg items-center">
-        <Text className="text-[#5E17EB] text-[10px] font-bold">Ver Perfil</Text>
+        <Text className="text-[#5E17EB] text-[10px] font-bold">
+          {t("profile.viewProfile")}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -325,7 +333,7 @@ const Profile = () => {
       >
         <View className="flex-row justify-between items-center px-6 py-2 mb-6">
           <Text className="text-3xl font-bold" style={{ color: textColor }}>
-            Perfil
+            {t("profile.title")}
           </Text>
           <View className="flex-row gap-4">
             <TouchableOpacity
@@ -379,7 +387,7 @@ const Profile = () => {
               className="text-[10px] font-bold mt-1"
               style={{ color: subTextColor }}
             >
-              SEGUIDORES
+              {t("profile.stats.followers")}
             </Text>
           </TouchableOpacity>
           <View
@@ -397,7 +405,7 @@ const Profile = () => {
               className="text-[10px] font-bold mt-1"
               style={{ color: subTextColor }}
             >
-              MOODS
+              {t("profile.stats.moods")}
             </Text>
           </TouchableOpacity>
           <View
@@ -420,7 +428,7 @@ const Profile = () => {
               className="text-[10px] font-bold mt-1"
               style={{ color: subTextColor }}
             >
-              SEGUIDOS
+              {t("profile.stats.following")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -431,7 +439,7 @@ const Profile = () => {
               className="text-lg font-bold mb-3"
               style={{ color: textColor }}
             >
-              Gente que podrías conocer
+              {t("profile.suggested")}
             </Text>
             <FlatList
               horizontal
@@ -465,7 +473,7 @@ const Profile = () => {
                 className="font-bold"
                 style={{ color: activeTab === 0 ? "white" : subTextColor }}
               >
-                MOODS
+                {t("profile.tabs.moods")}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -485,7 +493,7 @@ const Profile = () => {
                 className="font-bold"
                 style={{ color: activeTab === 1 ? "white" : subTextColor }}
               >
-                TOP HITS
+                {t("profile.tabs.topHits")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -509,7 +517,7 @@ const Profile = () => {
             ) : posts.length === 0 ? (
               <View className="flex-1 justify-center items-center py-10">
                 <Text style={{ color: subTextColor }}>
-                  No hay publicaciones aún
+                  {t("profile.empty.posts")}
                 </Text>
               </View>
             ) : (
@@ -532,7 +540,7 @@ const Profile = () => {
                   color={isDark ? "#3f3f46" : "#E4E4E7"}
                 />
                 <Text className="mt-2" style={{ color: subTextColor }}>
-                  No hay canciones populares aún
+                  {t("profile.empty.songs")}
                 </Text>
               </View>
             ) : (

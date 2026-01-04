@@ -25,6 +25,8 @@ import {
   getFollowCounts,
   blockUser,
 } from "@/lib/appwrite";
+// 1. IMPORTAR CONTEXTO
+import { useLanguage } from "@/context/LanguageContext";
 
 const { width } = Dimensions.get("window");
 const ITEM_SIZE = width / 3;
@@ -45,6 +47,10 @@ const parseSongFromPost = (songDataString: string) => {
 const UserProfile = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+
+  // 2. USAR HOOK
+  const { t } = useLanguage();
+
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -147,22 +153,25 @@ const UserProfile = () => {
 
   const handleBlockUser = async () => {
     Alert.alert(
-      "Bloquear usuario",
-      "No podrán ver tu perfil, posts ni enviarte mensajes. ¿Estás seguro?",
+      t("userProfile.alerts.blockTitle"),
+      t("userProfile.alerts.blockMsg"),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("userProfile.actions.cancel"), style: "cancel" },
         {
-          text: "Bloquear",
+          text: t("userProfile.actions.confirmBlock"),
           style: "destructive",
           onPress: async () => {
             try {
               if (!currentUser || !visitedUser) return;
               await blockUser(currentUser.$id, visitedUser.$id);
-              Alert.alert("Usuario bloqueado", "", [
+              Alert.alert(t("userProfile.alerts.blockSuccess"), "", [
                 { text: "OK", onPress: () => router.back() },
               ]);
             } catch (error) {
-              Alert.alert("Error", "No se pudo bloquear al usuario.");
+              Alert.alert(
+                t("userProfile.alerts.errorGeneric"),
+                t("userProfile.alerts.errorBlock")
+              );
             }
           },
         },
@@ -176,10 +185,10 @@ const UserProfile = () => {
       router.push("/(settings)/privacy" as any);
       return;
     }
-    Alert.alert("Opciones", "", [
-      { text: "Cancelar", style: "cancel" },
+    Alert.alert(t("userProfile.actions.options") || "Opciones", "", [
+      { text: t("userProfile.actions.cancel"), style: "cancel" },
       {
-        text: "Bloquear Usuario",
+        text: t("userProfile.actions.block"),
         style: "destructive",
         onPress: handleBlockUser,
       },
@@ -324,7 +333,7 @@ const UserProfile = () => {
         className="flex-1 justify-center items-center"
         style={{ backgroundColor: bgColor }}
       >
-        <Text style={{ color: textColor }}>Usuario no encontrado</Text>
+        <Text style={{ color: textColor }}>{t("userProfile.notFound")}</Text>
       </SafeAreaView>
     );
   }
@@ -348,7 +357,7 @@ const UserProfile = () => {
             <Ionicons name="arrow-back" size={24} color={iconColor} />
           </TouchableOpacity>
           <Text className="text-xl font-bold" style={{ color: textColor }}>
-            Perfil
+            {t("userProfile.title")}
           </Text>
           <TouchableOpacity onPress={handleOptions} className="p-2">
             <Ionicons name="ellipsis-horizontal" size={24} color={iconColor} />
@@ -365,12 +374,12 @@ const UserProfile = () => {
             className="font-bold text-xl text-center"
             style={{ color: textColor }}
           >
-            Perfil no disponible
+            {t("userProfile.unavailableTitle")}
           </Text>
           <Text className="text-center mt-2" style={{ color: subTextColor }}>
             {iBlockedThem
-              ? "Has bloqueado a este usuario."
-              : "No se puede mostrar la información de este perfil."}
+              ? t("userProfile.blockedMsg")
+              : t("userProfile.unavailableMsg")}
           </Text>
         </View>
       </SafeAreaView>
@@ -409,7 +418,7 @@ const UserProfile = () => {
             <Ionicons name="arrow-back" size={24} color={iconColor} />
           </TouchableOpacity>
           <Text className="text-xl font-bold" style={{ color: textColor }}>
-            Perfil
+            {t("userProfile.title")}
           </Text>
           <TouchableOpacity onPress={handleOptions} className="p-2">
             <Ionicons name="ellipsis-horizontal" size={24} color={iconColor} />
@@ -459,10 +468,10 @@ const UserProfile = () => {
                   style={{ color: followStatus ? subTextColor : "white" }}
                 >
                   {followStatus === "accepted"
-                    ? "Siguiendo"
+                    ? t("userProfile.actions.following")
                     : followStatus === "pending"
-                    ? "Solicitado"
-                    : "Seguir"}
+                    ? t("userProfile.actions.requested")
+                    : t("userProfile.actions.follow")}
                 </Text>
               )}
             </TouchableOpacity>
@@ -482,7 +491,7 @@ const UserProfile = () => {
               router.push({
                 pathname: "/user-list",
                 params: { userId: visitedUser.$id, type: "followers" },
-              })
+              } as any)
             }
           >
             <Text className="text-xl font-bold" style={{ color: textColor }}>
@@ -492,7 +501,7 @@ const UserProfile = () => {
               className="text-[10px] font-bold mt-1"
               style={{ color: subTextColor }}
             >
-              SEGUIDORES
+              {t("profile.stats.followers")}
             </Text>
           </TouchableOpacity>
           <View
@@ -511,7 +520,7 @@ const UserProfile = () => {
               className="text-[10px] font-bold mt-1"
               style={{ color: subTextColor }}
             >
-              MOODS
+              {t("profile.stats.moods")}
             </Text>
           </TouchableOpacity>
 
@@ -526,7 +535,7 @@ const UserProfile = () => {
               router.push({
                 pathname: "/user-list",
                 params: { userId: visitedUser.$id, type: "following" },
-              })
+              } as any)
             }
           >
             <Text className="text-xl font-bold" style={{ color: textColor }}>
@@ -536,7 +545,7 @@ const UserProfile = () => {
               className="text-[10px] font-bold mt-1"
               style={{ color: subTextColor }}
             >
-              SEGUIDOS
+              {t("profile.stats.following")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -565,7 +574,7 @@ const UserProfile = () => {
                 className="font-bold"
                 style={{ color: activeTab === 0 ? "white" : subTextColor }}
               >
-                MOODS
+                {t("profile.tabs.moods")}
               </Text>
             </TouchableOpacity>
 
@@ -586,7 +595,7 @@ const UserProfile = () => {
                 className="font-bold"
                 style={{ color: activeTab === 1 ? "white" : subTextColor }}
               >
-                TOP HITS
+                {t("profile.tabs.topHits")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -604,10 +613,10 @@ const UserProfile = () => {
               />
             </View>
             <Text className="font-bold text-lg" style={{ color: textColor }}>
-              Esta cuenta es privada
+              {t("userProfile.privateTitle")}
             </Text>
             <Text className="text-center mt-2" style={{ color: subTextColor }}>
-              Sigue a esta cuenta para ver sus moods y playlists.
+              {t("userProfile.privateMsg")}
             </Text>
           </View>
         ) : (
@@ -630,7 +639,7 @@ const UserProfile = () => {
                     color={subTextColor}
                   />
                   <Text className="mt-4" style={{ color: subTextColor }}>
-                    No hay publicaciones aún
+                    {t("profile.empty.posts")}
                   </Text>
                 </View>
               ) : (
@@ -648,7 +657,7 @@ const UserProfile = () => {
                     color={subTextColor}
                   />
                   <Text className="mt-2" style={{ color: subTextColor }}>
-                    No hay canciones populares aún
+                    {t("profile.empty.songs")}
                   </Text>
                 </View>
               ) : (

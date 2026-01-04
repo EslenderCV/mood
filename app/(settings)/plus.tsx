@@ -3,31 +3,37 @@ import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
+// 1. IMPORTAR CONTEXTO
+import { useLanguage } from "@/context/LanguageContext";
 
 const GetPlus = () => {
+  // 2. USAR HOOK
+  const { t } = useLanguage();
+
+  // Generamos las características dinámicamente usando las traducciones
   const features = [
     {
       id: 1,
-      title: "Audio Lossless (Hi-Fi)",
-      desc: "Escucha cada detalle como el artista lo imaginó.",
+      title: t("plus.features.f1Title"),
+      desc: t("plus.features.f1Desc"),
       icon: "waveform",
     },
     {
       id: 2,
-      title: "Sin Anuncios",
-      desc: "Música y moods ininterrumpidos, siempre.",
+      title: t("plus.features.f2Title"),
+      desc: t("plus.features.f2Desc"),
       icon: "block-helper",
     },
     {
       id: 3,
-      title: "Badge de Verificado",
-      desc: "Destaca en los comentarios y el feed.",
+      title: t("plus.features.f3Title"),
+      desc: t("plus.features.f3Desc"),
       icon: "check-decagram",
     },
     {
       id: 4,
-      title: "Subidas Ilimitadas",
-      desc: "Comparte tu música sin restricciones de espacio.",
+      title: t("plus.features.f4Title"),
+      desc: t("plus.features.f4Desc"),
       icon: "cloud-upload",
     },
   ];
@@ -48,11 +54,10 @@ const GetPlus = () => {
             <Ionicons name="diamond" size={40} color="#5E17EB" />
           </View>
           <Text className="text-white text-4xl font-black tracking-tighter">
-            MOOD<Text className="text-[#5E17EB]">PLUS</Text>
+            MOOD<Text className="text-[#5E17EB]">{t("plus.title")}</Text>
           </Text>
           <Text className="text-zinc-400 text-center mt-3 text-base px-4 leading-6">
-            Desbloquea la experiencia definitiva. Calidad de estudio y libertad
-            total.
+            {t("plus.subtitle")}
           </Text>
         </View>
         <View className="mt-10 px-6 gap-y-6">
@@ -81,22 +86,30 @@ const GetPlus = () => {
         </View>
         <View className="mx-6 mt-8 p-6 bg-gradient-to-r from-zinc-900 to-black rounded-3xl border border-[#5E17EB]/30 relative overflow-hidden">
           <View className="absolute top-0 right-0 bg-[#5E17EB] px-3 py-1 rounded-bl-xl">
-            <Text className="text-white text-xs font-bold">MEJOR VALOR</Text>
+            <Text className="text-white text-xs font-bold">
+              {t("plus.plan.badge")}
+            </Text>
           </View>
-          <Text className="text-zinc-400 font-medium">Plan Mensual</Text>
+          <Text className="text-zinc-400 font-medium">
+            {t("plus.plan.title")}
+          </Text>
           <View className="flex-row items-end mt-2">
-            <Text className="text-white text-4xl font-bold">$4.99</Text>
-            <Text className="text-zinc-500 mb-1 ml-1">/ mes</Text>
+            <Text className="text-white text-4xl font-bold">
+              {t("plus.plan.price")}
+            </Text>
+            <Text className="text-zinc-500 mb-1 ml-1">
+              {t("plus.plan.period")}
+            </Text>
           </View>
           <Text className="text-zinc-500 text-xs mt-2">
-            Cancela cuando quieras.
+            {t("plus.plan.cancel")}
           </Text>
         </View>
       </ScrollView>
       <View className="absolute bottom-10 w-full px-6">
         <TouchableOpacity className="w-full bg-[#5E17EB] py-4 rounded-full items-center shadow-lg shadow-[#5E17EB]/40 active:scale-95 transition-transform">
           <Text className="text-white font-bold text-lg">
-            Obtener Mood Plus
+            {t("plus.button")}
           </Text>
         </TouchableOpacity>
       </View>

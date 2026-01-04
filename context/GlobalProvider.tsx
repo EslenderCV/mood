@@ -62,8 +62,6 @@ const GlobalProvider = ({ children }: Props) => {
   const { colorScheme, setColorScheme } = useColorScheme();
 
   useEffect(() => {
-    console.log("🎨 Tema actual al iniciar:", colorScheme);
-
     if (colorScheme !== "dark") {
       console.log("🌑 Forzando Modo Oscuro...");
       setColorScheme("dark");

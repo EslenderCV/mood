@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -21,25 +22,16 @@ import {
   toggleLikePost,
   toggleSavePost,
   getCurrentUser,
+  deletePost,
+  togglePostPrivacy,
+  reportPost,
 } from "@/lib/appwrite";
 import ShareModal from "@/components/ShareModal";
+import OptionsModal from "@/components/OptionsModal"; // Tu nuevo modal bonito
 import { useColorScheme } from "nativewind";
 
-const formatTimeAgo = (dateString: string) => {
-  if (!dateString) return "";
-  const date = new Date(dateString);
-  const now = new Date();
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  if (seconds < 60) return "hace unos segundos";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days === 1) return "Ayer";
-  if (days < 7) return `${days}d`;
-  return date.toLocaleDateString();
-};
+import { useLanguage } from "@/context/LanguageContext";
+import { getRelativeTime } from "@/lib/dateUtils";
 
 const parseSongData = (songDataString: string) => {
   try {
@@ -67,7 +59,7 @@ const getCreatorFromPost = (item: any) => {
   return {
     id: "unknown",
     username: "anon",
-    name: "Usuario Desconocido",
+    name: "unknown",
     avatar: null,
   };
 };
@@ -83,19 +75,27 @@ const Home = () => {
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
   const lineColor = isDark ? "#27272A" : "#E4E4E7";
 
+  const { t, language } = useLanguage();
+
   const { user, loading, loggedIn } = useGlobalContext();
   const [feedPosts, setFeedPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Estados para Modales
   const [isShareVisible, setShareVisible] = useState(false);
   const [postToShare, setPostToShare] = useState<string>("");
+
+  // --- ESTADOS PARA EL MODAL DE OPCIONES ---
+  const [isOptionsVisible, setOptionsVisible] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<any>(null);
+
   const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
   const [playingPostId, setPlayingPostId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const player = useAudioPlayer(currentSongUrl || "");
-
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -153,9 +153,9 @@ const Home = () => {
 
       const timelinePosts = rawPosts.filter((post: any) => {
         const creator = getCreatorFromPost(post);
-
         if (!creator.id || creator.id === "unknown") return false;
 
+        // Mostrar posts propios y de seguidos
         const isMine = creator.id === activeId;
         const isFollowed = followedIds.includes(creator.id);
 
@@ -222,6 +222,108 @@ const Home = () => {
     } catch (e) {}
   };
 
+  // --- LÓGICA DE MODAL DE OPCIONES ---
+
+  const openOptions = (post: any) => {
+    setSelectedPost(post);
+    setOptionsVisible(true);
+  };
+
+  // Acción: Cambiar Privacidad (Solo dueño)
+  const handleTogglePrivacyAction = async () => {
+    if (!selectedPost) return;
+    const post = selectedPost;
+
+    setOptionsVisible(false); // Cerrar modal
+
+    try {
+      // Actualización optimista
+      setFeedPosts((prev) =>
+        prev.map((p) =>
+          p.$id === post.$id ? { ...p, isPrivate: !p.isPrivate } : p
+        )
+      );
+      await togglePostPrivacy(post.$id, post.isPrivate);
+    } catch (e) {
+      Alert.alert("Error", "No se pudo actualizar la privacidad");
+      onRefresh(); // Revertir si falla
+    }
+  };
+
+  // Acción: Eliminar (Solo dueño)
+  const handleDeleteAction = () => {
+    if (!selectedPost) return;
+    const post = selectedPost;
+
+    setOptionsVisible(false); // Cerrar modal
+
+    // Confirmación nativa de seguridad
+    Alert.alert(
+      "¿Eliminar definitivamente?",
+      "Esta acción no se puede deshacer.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Borrado optimista de la lista
+              setFeedPosts((prev) => prev.filter((p) => p.$id !== post.$id));
+              await deletePost(post.$id);
+            } catch (e) {
+              Alert.alert("Error", "No se pudo eliminar el post");
+              onRefresh();
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Acción: Reportar (Solo otros usuarios)
+  const handleReportAction = () => {
+    if (!selectedPost || !user?.$id) return;
+
+    setOptionsVisible(false); // Cerrar modal
+
+    Alert.alert(
+      "Reportar Publicación",
+      "¿Por qué quieres reportar este contenido?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Contenido Inapropiado",
+          onPress: () => submitReport("inappropriate"),
+        },
+        {
+          text: "Spam",
+          onPress: () => submitReport("spam"),
+        },
+        {
+          text: "Otro",
+          onPress: () => submitReport("other"),
+        },
+      ]
+    );
+  };
+
+  const submitReport = async (reason: string) => {
+    // CORRECCIÓN: Verificamos que el usuario exista antes de continuar
+    if (!user) {
+      Alert.alert("Error", "Debes iniciar sesión para reportar.");
+      return;
+    }
+
+    try {
+      // Ahora TypeScript sabe que 'user' no es null aquí
+      await reportPost(selectedPost.$id, user.$id, reason);
+      Alert.alert("Gracias", "Hemos recibido tu reporte y lo revisaremos.");
+    } catch (error) {
+      Alert.alert("Error", "No se pudo enviar el reporte.");
+    }
+  };
+
   const renderPost = ({ item }: { item: any }) => {
     const songData = parseSongData(item.songData);
     const creator = getCreatorFromPost(item);
@@ -231,6 +333,9 @@ const Home = () => {
     const uid = user?.$id || currentUserId;
     const isLiked = item.likedBy?.includes(uid);
     const isSaved = item.savedBy?.includes(uid);
+
+    // Verificamos si soy el dueño para mostrar ciertas opciones o iconos
+    const isOwner = creator.id === uid;
 
     return (
       <View className="flex-row px-4">
@@ -265,13 +370,32 @@ const Home = () => {
                 className="font-bold text-[15px] mr-1"
                 style={{ color: textColor }}
               >
-                {creator.name}
+                {creator.name === "unknown"
+                  ? t("feed.unknownUser")
+                  : creator.name}
               </Text>
+
+              {/* Icono de Candado si es Privado (Solo lo verás tú porque los privados se filtran) */}
+              {item.isPrivate && (
+                <Ionicons
+                  name="lock-closed"
+                  size={12}
+                  color={subTextColor}
+                  style={{ marginRight: 4 }}
+                />
+              )}
+
               <Text className="text-[13px]" style={{ color: subTextColor }}>
-                @{creator.username} · {formatTimeAgo(item.$createdAt)}
+                @{creator.username} ·{" "}
+                {getRelativeTime(item.$createdAt, language)}
               </Text>
             </View>
-            <TouchableOpacity>
+
+            {/* BOTÓN DE OPCIONES (VISIBLE PARA TODOS) */}
+            <TouchableOpacity
+              onPress={() => openOptions(item)}
+              className="p-2 -mr-2"
+            >
               <Ionicons
                 name="ellipsis-horizontal"
                 size={18}
@@ -447,22 +571,39 @@ const Home = () => {
                 className="mt-4 text-center text-lg font-medium"
                 style={{ color: subTextColor }}
               >
-                Aún no sigues a nadie o no han publicado nada.
+                {t("feed.emptyTitle")}
               </Text>
               <Text
                 className="mt-2 text-center text-sm"
                 style={{ color: subTextColor }}
               >
-                Ve a la pestaña Explorar para encontrar gente.
+                {t("feed.emptySubtitle")}
               </Text>
             </View>
           )}
         />
       )}
+
+      {/* Modal de Compartir */}
       <ShareModal
         isVisible={isShareVisible}
         onClose={() => setShareVisible(false)}
         postId={postToShare}
+      />
+
+      {/* NUEVO: Modal de Opciones (Diseño Twitter/Instagram) */}
+      <OptionsModal
+        isVisible={isOptionsVisible}
+        onClose={() => setOptionsVisible(false)}
+        onTogglePrivacy={handleTogglePrivacyAction}
+        onDelete={handleDeleteAction}
+        onReport={handleReportAction}
+        isPrivate={selectedPost?.isPrivate || false}
+        // Validamos si el usuario actual es el creador del post seleccionado
+        isOwner={
+          (selectedPost?.postedBy?.$id || selectedPost?.creator?.$id) ===
+          user?.$id
+        }
       />
     </SafeAreaView>
   );

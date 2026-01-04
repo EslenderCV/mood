@@ -19,6 +19,8 @@ import { ImagePickerAsset } from "expo-image-picker";
 import { updateProfile } from "@/lib/appwrite";
 import { router, Stack } from "expo-router";
 import { useColorScheme } from "nativewind";
+// 1. IMPORTAR CONTEXTO
+import { useLanguage } from "@/context/LanguageContext";
 
 interface FormState {
   name: string;
@@ -31,6 +33,10 @@ interface FormState {
 const EditScreen = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+
+  // 2. USAR HOOK
+  const { t } = useLanguage();
+
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -66,11 +72,17 @@ const EditScreen = () => {
 
   const handleSave = async () => {
     if (formData.username.length < 3) {
-      Alert.alert("Error", "El usuario debe tener al menos 3 caracteres.");
+      Alert.alert(
+        t("editProfile.alerts.errorTitle"),
+        t("editProfile.alerts.usernameError")
+      );
       return;
     }
     if (!formData.email.includes("@")) {
-      Alert.alert("Error", "Correo inválido.");
+      Alert.alert(
+        t("editProfile.alerts.errorTitle"),
+        t("editProfile.alerts.emailError")
+      );
       return;
     }
 
@@ -86,10 +98,16 @@ const EditScreen = () => {
 
       if (setUser) setUser(updatedDoc as unknown as User);
 
-      Alert.alert("Éxito", "Perfil actualizado correctamente.");
+      Alert.alert(
+        t("editProfile.alerts.successTitle"),
+        t("editProfile.alerts.successMsg")
+      );
       router.back();
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Falló la actualización.");
+      Alert.alert(
+        t("editProfile.alerts.errorTitle"),
+        error.message || t("editProfile.alerts.errorMsg")
+      );
     } finally {
       setIsSaving(false);
     }
@@ -170,7 +188,7 @@ const EditScreen = () => {
       <Stack.Screen
         options={{
           headerShown: true,
-          headerTitle: "Editar Perfil",
+          headerTitle: t("editProfile.title"),
           headerStyle: { backgroundColor: bgColor },
           headerTintColor: textColor,
           headerTitleStyle: { fontWeight: "bold" },
@@ -221,39 +239,39 @@ const EditScreen = () => {
               className="mt-4 font-medium text-sm"
               style={{ color: subTextColor }}
             >
-              Toca para cambiar foto
+              {t("editProfile.changePhoto")}
             </Text>
           </View>
           <View className="w-full">
             <InputField
-              label="Nombre Completo"
+              label={t("editProfile.nameLabel")}
               value={formData.name}
               onChangeText={(text: string) =>
                 setFormData({ ...formData, name: text })
               }
               icon="user"
-              placeholder="Ej: Eslender Cruz"
+              placeholder={t("editProfile.namePlaceholder")}
             />
 
             <InputField
-              label="Nombre de Usuario"
+              label={t("editProfile.usernameLabel")}
               value={formData.username}
               onChangeText={(text: string) =>
                 setFormData({ ...formData, username: text })
               }
               icon="at-sign"
-              placeholder="Ej: slenderc"
+              placeholder={t("editProfile.usernamePlaceholder")}
               type="username"
             />
 
             <InputField
-              label="Correo Electrónico"
+              label={t("editProfile.emailLabel")}
               value={formData.email}
               onChangeText={(text: string) =>
                 setFormData({ ...formData, email: text })
               }
               icon="mail"
-              placeholder="ejemplo@correo.com"
+              placeholder={t("editProfile.emailPlaceholder")}
               type="email"
             />
             <View className="mb-6 w-full">
@@ -261,7 +279,7 @@ const EditScreen = () => {
                 className="text-xs font-bold mb-3 ml-1 uppercase tracking-wider"
                 style={{ color: subTextColor }}
               >
-                Plataforma de Música Favorita
+                {t("editProfile.platformLabel")}
               </Text>
               <View className="flex-row gap-4">
                 <TouchableOpacity
@@ -360,12 +378,12 @@ const EditScreen = () => {
               <>
                 <ActivityIndicator color="white" className="mr-2" />
                 <Text className="text-white font-bold text-lg">
-                  Guardando...
+                  {t("editProfile.savingButton")}
                 </Text>
               </>
             ) : (
               <Text className="text-white font-bold text-lg tracking-wide">
-                GUARDAR CAMBIOS
+                {t("editProfile.saveButton")}
               </Text>
             )}
           </TouchableOpacity>

@@ -24,10 +24,16 @@ import {
   deleteAllSessions,
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
+// 1. IMPORTAR CONTEXTO
+import { useLanguage } from "@/context/LanguageContext";
 
 const Security = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+
+  // 2. USAR HOOK
+  const { t } = useLanguage();
+
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -58,7 +64,8 @@ const Security = () => {
   }, []);
 
   const getDeviceName = () => {
-    const name = Device.modelName || Device.osName || "Dispositivo Móvil";
+    const name =
+      Device.modelName || Device.osName || t("security.sessions.device");
     setDeviceName(name);
   };
 
@@ -77,11 +84,14 @@ const Security = () => {
   const handleBiometricToggle = async () => {
     if (!biometrics) {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Confirma para activar FaceID/TouchID",
+        promptMessage: t("security.alerts.biometricPrompt"),
       });
       if (result.success) {
         setBiometrics(true);
-        Alert.alert("Seguridad", "Biometría activada correctamente.");
+        Alert.alert(
+          t("security.alerts.biometricsTitle"),
+          t("security.alerts.biometricSuccess")
+        );
       }
     } else {
       setBiometrics(false);
@@ -90,22 +100,28 @@ const Security = () => {
 
   const handleChangePassword = async () => {
     if (passForm.new !== passForm.confirm) {
-      Alert.alert("Error", "Las contraseñas nuevas no coinciden.");
+      Alert.alert(
+        t("security.alerts.error"),
+        t("security.alerts.passMismatch")
+      );
       return;
     }
     if (passForm.new.length < 8) {
-      Alert.alert("Error", "La contraseña debe tener al menos 8 caracteres.");
+      Alert.alert(t("security.alerts.error"), t("security.alerts.passLength"));
       return;
     }
 
     setIsUpdatingPass(true);
     try {
       await updateUserPassword(passForm.new, passForm.old);
-      Alert.alert("Éxito", "Tu contraseña ha sido actualizada.");
+      Alert.alert(
+        t("security.alerts.success"),
+        t("security.alerts.passSuccess")
+      );
       setShowPasswordModal(false);
       setPassForm({ old: "", new: "", confirm: "" });
     } catch (error: any) {
-      Alert.alert("Error", "Contraseña actual incorrecta o error de red.");
+      Alert.alert(t("security.alerts.error"), t("security.alerts.passError"));
     } finally {
       setIsUpdatingPass(false);
     }
@@ -114,32 +130,36 @@ const Security = () => {
   const handleRevokeSession = (sessionId: string, isCurrent: boolean) => {
     if (isCurrent) {
       Alert.alert(
-        "Aviso",
-        "No puedes revocar tu sesión actual aquí. Usa cerrar sesión."
+        t("security.alerts.notice"),
+        t("security.sessions.revokeError")
       );
       return;
     }
-    Alert.alert("Revocar Acceso", "¿Quieres desconectar este dispositivo?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Sí, desconectar",
-        style: "destructive",
-        onPress: async () => {
-          await deleteSession(sessionId);
-          fetchSessions();
+    Alert.alert(
+      t("security.sessions.revoke"),
+      t("security.sessions.revokeMsg"),
+      [
+        { text: t("security.modal.btnCancel"), style: "cancel" },
+        {
+          text: t("security.sessions.confirmRevoke"),
+          style: "destructive",
+          onPress: async () => {
+            await deleteSession(sessionId);
+            fetchSessions();
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   const handleLogoutAll = () => {
     Alert.alert(
-      "¿Cerrar sesión en TODOS lados?",
-      "Se cerrará tu sesión en todos los dispositivos.",
+      t("security.alerts.logoutAllTitle"),
+      t("security.alerts.logoutAllMsg"),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("security.modal.btnCancel"), style: "cancel" },
         {
-          text: "Cerrar Todo",
+          text: t("security.alerts.logoutAllConfirm"),
           style: "destructive",
           onPress: async () => {
             try {
@@ -148,7 +168,10 @@ const Security = () => {
               setIsLogged(false);
               router.replace("/signIn");
             } catch (error) {
-              Alert.alert("Error", "No se pudieron cerrar todas las sesiones.");
+              Alert.alert(
+                t("security.alerts.error"),
+                t("security.alerts.logoutAllError")
+              );
             }
           },
         },
@@ -224,7 +247,7 @@ const Security = () => {
           <Ionicons name="arrow-back" size={22} color={backIconColor} />
         </TouchableOpacity>
         <Text className="text-2xl font-bold" style={{ color: textColor }}>
-          Seguridad
+          {t("security.title")}
         </Text>
       </View>
       <ScrollView
@@ -248,10 +271,10 @@ const Security = () => {
           </View>
           <View className="flex-1">
             <Text className="text-emerald-500 font-bold text-base">
-              Cuenta Protegida
+              {t("security.protectedTitle")}
             </Text>
             <Text className="text-emerald-600/80 text-xs mt-0.5">
-              Tus credenciales están encriptadas y seguras.
+              {t("security.protectedMsg")}
             </Text>
           </View>
         </View>
@@ -259,20 +282,24 @@ const Security = () => {
           className="text-xs font-bold uppercase mb-2 tracking-widest pl-1"
           style={{ color: subTextColor }}
         >
-          Acceso y Autenticación
+          {t("security.headers.access")}
         </Text>
         <SecurityRow
           icon="key-outline"
-          title="Cambiar Contraseña"
-          subtitle="Se recomienda cambiarla cada 6 meses"
+          title={t("security.actions.changePass")}
+          subtitle={t("security.actions.changePassSub")}
           onPress={() => setShowPasswordModal(true)}
         />
 
         {isBiometricSupported && (
           <SecurityRow
             icon="finger-print-outline"
-            title={Platform.OS === "ios" ? "Face ID" : "Huella Digital"}
-            subtitle="Inicio de sesión rápido"
+            title={
+              Platform.OS === "ios"
+                ? t("security.actions.faceId")
+                : t("security.actions.touchId")
+            }
+            subtitle={t("security.actions.biometricsSub")}
             hasSwitch
             value={biometrics}
             onToggle={handleBiometricToggle}
@@ -284,7 +311,7 @@ const Security = () => {
             className="text-xs font-bold uppercase tracking-widest"
             style={{ color: subTextColor }}
           >
-            Sesiones Activas ({sessions.length})
+            {t("security.headers.sessions")} ({sessions.length})
           </Text>
           <TouchableOpacity onPress={fetchSessions}>
             <Ionicons name="refresh" size={16} color="#5E17EB" />
@@ -334,9 +361,9 @@ const Security = () => {
                     >
                       {session.current
                         ? deviceName
-                        : `${session.clientName || "Dispositivo"} (${
-                            session.osName
-                          })`}
+                        : `${
+                            session.clientName || t("security.sessions.device")
+                          } (${session.osName})`}
                     </Text>
                     <View className="flex-row items-center">
                       {session.current && (
@@ -350,8 +377,8 @@ const Security = () => {
                         }}
                       >
                         {session.current
-                          ? "Dispositivo Actual"
-                          : session.ip || "Ubicación Desconocida"}
+                          ? t("security.sessions.current")
+                          : session.ip || t("security.sessions.unknown")}
                       </Text>
                     </View>
                   </View>
@@ -376,24 +403,24 @@ const Security = () => {
           className="text-xs font-bold uppercase mb-2 mt-2 tracking-widest pl-1"
           style={{ color: subTextColor }}
         >
-          Zona de Peligro
+          {t("security.headers.danger")}
         </Text>
         <SecurityRow
           icon="log-out-outline"
-          title="Cerrar Sesión en Todo"
-          subtitle="Desconectar todos los dispositivos"
+          title={t("security.actions.logoutAll")}
+          subtitle={t("security.actions.logoutAllSub")}
           isDanger
           onPress={handleLogoutAll}
         />
         <SecurityRow
           icon="trash-outline"
-          title="Eliminar Cuenta"
-          subtitle="Acción irreversible"
+          title={t("security.actions.deleteAccount")}
+          subtitle={t("security.actions.deleteAccountSub")}
           isDanger
           onPress={() =>
             Alert.alert(
-              "Contacto",
-              "Para eliminar tu cuenta, contacta a soporte."
+              t("security.alerts.deleteContactTitle"),
+              t("security.alerts.deleteContactMsg")
             )
           }
         />
@@ -418,10 +445,10 @@ const Security = () => {
               className="text-2xl font-bold mb-2"
               style={{ color: textColor }}
             >
-              Cambiar Contraseña
+              {t("security.modal.title")}
             </Text>
             <Text className="text-sm mb-8" style={{ color: subTextColor }}>
-              La nueva contraseña debe tener al menos 8 caracteres.
+              {t("security.modal.subtitle")}
             </Text>
             <View className="gap-y-4">
               <View>
@@ -429,7 +456,7 @@ const Security = () => {
                   className="text-xs font-bold uppercase mb-2 ml-1"
                   style={{ color: subTextColor }}
                 >
-                  Contraseña Actual
+                  {t("security.modal.currentLabel")}
                 </Text>
                 <TextInput
                   secureTextEntry
@@ -439,7 +466,7 @@ const Security = () => {
                     borderColor: borderColor,
                     color: textColor,
                   }}
-                  placeholder="Ingresa tu contraseña actual"
+                  placeholder={t("security.modal.currentPlaceholder")}
                   placeholderTextColor={subTextColor}
                   value={passForm.old}
                   onChangeText={(t) => setPassForm({ ...passForm, old: t })}
@@ -450,7 +477,7 @@ const Security = () => {
                   className="text-xs font-bold uppercase mb-2 ml-1"
                   style={{ color: subTextColor }}
                 >
-                  Nueva Contraseña
+                  {t("security.modal.newLabel")}
                 </Text>
                 <TextInput
                   secureTextEntry
@@ -460,7 +487,7 @@ const Security = () => {
                     borderColor: borderColor,
                     color: textColor,
                   }}
-                  placeholder="Ingresa la nueva contraseña"
+                  placeholder={t("security.modal.newPlaceholder")}
                   placeholderTextColor={subTextColor}
                   value={passForm.new}
                   onChangeText={(t) => setPassForm({ ...passForm, new: t })}
@@ -471,7 +498,7 @@ const Security = () => {
                   className="text-xs font-bold uppercase mb-2 ml-1"
                   style={{ color: subTextColor }}
                 >
-                  Confirmar Nueva
+                  {t("security.modal.confirmLabel")}
                 </Text>
                 <TextInput
                   secureTextEntry
@@ -481,7 +508,7 @@ const Security = () => {
                     borderColor: borderColor,
                     color: textColor,
                   }}
-                  placeholder="Repite la nueva contraseña"
+                  placeholder={t("security.modal.confirmPlaceholder")}
                   placeholderTextColor={subTextColor}
                   value={passForm.confirm}
                   onChangeText={(t) => setPassForm({ ...passForm, confirm: t })}
@@ -498,7 +525,7 @@ const Security = () => {
                   <ActivityIndicator color="white" />
                 ) : (
                   <Text className="text-white font-bold text-lg">
-                    Actualizar Contraseña
+                    {t("security.modal.btnUpdate")}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -510,7 +537,7 @@ const Security = () => {
                   className="font-bold text-base"
                   style={{ color: subTextColor }}
                 >
-                  Cancelar
+                  {t("security.modal.btnCancel")}
                 </Text>
               </TouchableOpacity>
             </View>

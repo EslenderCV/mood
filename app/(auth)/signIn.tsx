@@ -17,9 +17,15 @@ import FormField from "@/components/FormField";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
 import { getCurrentUser, signInn } from "@/lib/appwrite";
 import { AppwriteException } from "react-native-appwrite";
+// 1. IMPORTAR CONTEXTO
+import { useLanguage } from "@/context/LanguageContext";
 
 const SignIn = () => {
   const { setUser, setLoggedIn } = useGlobalContext();
+
+  // 2. USAR HOOK
+  const { t } = useLanguage();
+
   const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({
     email: "",
@@ -28,7 +34,7 @@ const SignIn = () => {
 
   const submit = async () => {
     if (!form.email.trim() || !form.password.trim()) {
-      Alert.alert("Campos vacíos", "Por favor, completa todos los campos.");
+      Alert.alert(t("auth.alerts.emptyTitle"), t("auth.alerts.emptyMsg"));
       return;
     }
 
@@ -41,7 +47,10 @@ const SignIn = () => {
       router.replace("/home");
     } catch (error) {
       const appwriteError = error as AppwriteException;
-      Alert.alert("Error", appwriteError.message || "Credenciales incorrectas");
+      Alert.alert(
+        t("auth.alerts.errorTitle"),
+        appwriteError.message || t("auth.alerts.wrongCredentials")
+      );
     } finally {
       setIsLoading(false);
     }
@@ -62,15 +71,15 @@ const SignIn = () => {
                 resizeMode="contain"
               />
               <Text className="text-white text-4xl font-bold tracking-tight text-center">
-                ¡Hola de nuevo!
+                {t("auth.welcomeBack")}
               </Text>
               <Text className="text-zinc-400 text-base mt-2 text-center">
-                Ingresa tus credenciales para continuar vibra.
+                {t("auth.subtitleSignIn")}
               </Text>
             </View>
             <View className="space-y-4">
               <FormField
-                placeholder="Correo electrónico"
+                placeholder={t("auth.emailPlaceholder")}
                 value={form.email}
                 handleChangeText={(text: string) =>
                   setForm({ ...form, email: text })
@@ -78,7 +87,7 @@ const SignIn = () => {
                 otherStyles="mt-2"
               />
               <FormField
-                placeholder="Contraseña"
+                placeholder={t("auth.passwordPlaceholder")}
                 value={form.password}
                 handleChangeText={(text: string) =>
                   setForm({ ...form, password: text })
@@ -89,12 +98,12 @@ const SignIn = () => {
               <View className="items-end mb-6">
                 <TouchableOpacity activeOpacity={0.7}>
                   <Text className="text-zinc-500 text-sm font-medium">
-                    ¿Olvidaste tu contraseña?
+                    {t("auth.forgotPassword")}
                   </Text>
                 </TouchableOpacity>
               </View>
               <CustomButtom
-                text="INICIAR SESIÓN"
+                text={t("auth.signInButton")}
                 handlePress={submit}
                 containerStyles="w-full bg-[#5E17EB] rounded-2xl py-4 shadow-lg shadow-[#5E17EB]/40"
                 textStyles="text-white font-bold text-lg"
@@ -104,7 +113,7 @@ const SignIn = () => {
             <View className="flex-row justify-center items-center w-full gap-4 mt-12 mb-8">
               <View className="bg-zinc-800 flex-1 h-[1px]"></View>
               <Text className="text-zinc-500 text-xs font-semibold uppercase tracking-widest">
-                O continúa con
+                {t("auth.orContinue")}
               </Text>
               <View className="bg-zinc-800 flex-1 h-[1px]"></View>
             </View>
@@ -126,11 +135,13 @@ const SignIn = () => {
               </TouchableOpacity>
             </View>
             <View className="mt-10 flex-row items-center justify-center pb-10">
-              <Text className="text-zinc-400 text-base">¿Nuevo aquí? </Text>
+              <Text className="text-zinc-400 text-base">
+                {t("auth.newUser")}{" "}
+              </Text>
               <Link href="/signUp" asChild>
                 <TouchableOpacity>
                   <Text className="text-[#5E17EB] font-bold text-base">
-                    Crea una cuenta
+                    {t("auth.createAccount")}
                   </Text>
                 </TouchableOpacity>
               </Link>

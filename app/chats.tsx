@@ -26,10 +26,15 @@ import {
   client,
   appwriteConfig,
 } from "@/lib/appwrite";
+// 1. IMPORTAR CONTEXTO
+import { useLanguage } from "@/context/LanguageContext";
 
 const ChatsList = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+
+  // 2. USAR HOOK
+  const { t } = useLanguage();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
@@ -101,10 +106,14 @@ const ChatsList = () => {
   };
 
   const handleDeleteChat = async (chatId: string, index: number) => {
-    Alert.alert("Eliminar Chat", "¿Estás seguro? Se borrará de tu lista.", [
-      { text: "Cancelar", style: "cancel", onPress: () => closeRow(index) },
+    Alert.alert(t("chatsList.deleteTitle"), t("chatsList.deleteMsg"), [
       {
-        text: "Eliminar",
+        text: t("chatsList.cancel"),
+        style: "cancel",
+        onPress: () => closeRow(index),
+      },
+      {
+        text: t("chatsList.deleteOption"),
         style: "destructive",
         onPress: async () => {
           const newChats = [...chats];
@@ -116,7 +125,7 @@ const ChatsList = () => {
             await deleteChat(chatId);
           } catch (error) {
             console.log("Error borrando chat:", error);
-            Alert.alert("Error", "No se pudo eliminar el chat.");
+            Alert.alert(t("chatsList.errorTitle"), t("chatsList.errorDelete"));
             loadChats();
           }
         },
@@ -158,7 +167,7 @@ const ChatsList = () => {
           otherUserName: otherUserFixedData?.username || "Usuario",
           otherUserAvatar: otherUserFixedData?.pfp || "",
         },
-      });
+      } as any);
       setSearchQuery("");
       setIsSearching(false);
     } catch (error) {
@@ -187,7 +196,7 @@ const ChatsList = () => {
         <Animated.View style={{ transform: [{ scale }] }}>
           <Ionicons name="trash-outline" size={28} color="white" />
           <Text className="text-white text-[10px] font-bold mt-1">
-            Eliminar
+            {t("chatsList.deleteOption")}
           </Text>
         </Animated.View>
       </TouchableOpacity>
@@ -201,7 +210,7 @@ const ChatsList = () => {
     return (
       <Swipeable
         ref={(ref) => {
-          row[index] = ref;
+          if (ref) row[index] = ref;
         }}
         renderRightActions={(progress, dragX) =>
           renderRightActions(progress, dragX, item, index)
@@ -259,7 +268,7 @@ const ChatsList = () => {
               >
                 {item.lastSenderId === currentUser?.$id && (
                   <Text style={{ color: subTextColor, fontWeight: "normal" }}>
-                    Tú:{" "}
+                    {t("chat.you")}:{" "}
                   </Text>
                 )}
                 {item.lastMessage}
@@ -329,7 +338,7 @@ const ChatsList = () => {
               className="font-bold text-3xl ml-2"
               style={{ color: textColor }}
             >
-              Mensajes
+              {t("chatsList.title")}
             </Text>
           </View>
 
@@ -339,7 +348,7 @@ const ChatsList = () => {
           >
             <Ionicons name="search" size={20} color={iconColor} />
             <TextInput
-              placeholder="Buscar personas..."
+              placeholder={t("chatsList.searchPlaceholder")}
               placeholderTextColor={subTextColor}
               className="flex-1 ml-3 text-[16px] font-medium h-full"
               style={{ color: textColor }}
@@ -361,7 +370,7 @@ const ChatsList = () => {
               className="text-xs font-bold uppercase tracking-widest px-5 py-4"
               style={{ color: subTextColor }}
             >
-              Resultados
+              {t("chatsList.results")}
             </Text>
             <FlatList
               data={searchResults}
@@ -390,7 +399,7 @@ const ChatsList = () => {
                   style={{ opacity: 0.5, marginBottom: 10 }}
                 />
                 <Text className="text-center" style={{ color: subTextColor }}>
-                  No tienes chats activos
+                  {t("chatsList.empty")}
                 </Text>
               </View>
             }
