@@ -27,9 +27,8 @@ import {
   toggleSavePost,
   searchUsers,
   sendTagNotification,
-  deletePost, // Importado
-  togglePostPrivacy, // Importado
-  reportPost, // Importado
+  deletePost,
+  reportPost,
 } from "@/lib/appwrite";
 import CommentItem from "@/components/CommentItem";
 import { useColorScheme } from "nativewind";
@@ -38,6 +37,8 @@ import { useLanguage } from "@/context/LanguageContext";
 // --- IMPORTAR MODALES ---
 import ShareModal from "@/components/ShareModal";
 import OptionsModal from "@/components/OptionsModal";
+// 1. IMPORTAR TU NUEVA TARJETA VIRAL
+import MoodShareCard from "@/components/MoodShareCard";
 
 // --- HELPERS ---
 const formatTimeAgo = (dateString: string, t: (key: string) => string) => {
@@ -79,7 +80,6 @@ const PostDetails = () => {
   const inputBg = isDark ? "#18181B" : "#F4F4F5";
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
   const suggestionBg = isDark ? "#18181B" : "#FFFFFF";
-  const iconColor = isDark ? "#A1A1AA" : "#52525B"; // Color para iconos de acción
 
   const { id } = useLocalSearchParams();
   const { user } = useGlobalContext();
@@ -95,6 +95,9 @@ const PostDetails = () => {
   // --- ESTADOS PARA MODALES ---
   const [isOptionsVisible, setOptionsVisible] = useState(false);
   const [isShareVisible, setShareVisible] = useState(false);
+
+  // 2. ESTADO PARA EL MODAL VIRAL
+  const [isViralModalVisible, setViralModalVisible] = useState(false);
 
   const [replyingTo, setReplyingTo] = useState<{
     rootId: string;
@@ -142,21 +145,21 @@ const PostDetails = () => {
     }
   };
 
-  // --- GESTIÓN DE OPCIONES (3 PUNTOS) ---
-  const handleTogglePrivacyAction = async () => {
-    setOptionsVisible(false);
-    try {
-      const newStatus = !post.isPrivate;
-      setPost({ ...post, isPrivate: newStatus }); // UI inmediata
-      await togglePostPrivacy(post.$id, post.isPrivate);
-      Alert.alert(
-        "Éxito",
-        `Post ahora es ${newStatus ? "Privado" : "Público"}`
-      );
-    } catch (error) {
-      fetchData(); // Revertir si falla
-      Alert.alert("Error", "No se pudo actualizar");
-    }
+  // --- HELPER PARA DATOS VIRALES ---
+  const getViralPostData = () => {
+    if (!post) return null;
+    const song = parseSongData(post.songData);
+    const creator = post.postedBy || post.creator || {};
+
+    return {
+      title: song?.title || "Música",
+      artist: song?.artist || "Artista",
+      cover: song?.cover || null,
+      originalPostCreator: creator.username || "usuario",
+      // AGREGAMOS FOTO REAL Y COMENTARIO
+      creatorPfp: creator.pfp || null,
+      comment: post.comment || null,
+    };
   };
 
   const handleDeleteAction = () => {
@@ -169,7 +172,7 @@ const PostDetails = () => {
         onPress: async () => {
           try {
             await deletePost(post.$id);
-            router.back(); // Volver atrás si se borra
+            router.back();
           } catch (e) {
             Alert.alert("Error", "No se pudo eliminar");
           }
@@ -366,7 +369,6 @@ const PostDetails = () => {
             </Text>
           </View>
 
-          {/* Icono de Privado si aplica */}
           {post.isPrivate && (
             <View className="bg-zinc-800 p-1.5 rounded-md mr-1">
               <Ionicons name="lock-closed" size={12} color="#A1A1AA" />
@@ -456,8 +458,8 @@ const PostDetails = () => {
               </Text>
             </View>
 
-            {/* BOTÓN DE COMPARTIR */}
-            <TouchableOpacity onPress={() => setShareVisible(true)}>
+            {/* 3. CAMBIO: BOTÓN DE COMPARTIR AHORA ABRE LA TARJETA VIRAL */}
+            <TouchableOpacity onPress={() => setViralModalVisible(true)}>
               <Ionicons name="share-social-outline" size={24} color="#A1A1AA" />
             </TouchableOpacity>
           </View>
@@ -489,7 +491,6 @@ const PostDetails = () => {
     );
   }
 
-  // Verificar propiedad para el modal de opciones
   const isOwner = user?.$id === (post?.postedBy?.$id || post?.creator?.$id);
 
   return (
@@ -512,13 +513,22 @@ const PostDetails = () => {
           </Text>
         </View>
 
-        {/* BOTÓN DE 3 PUNTOS */}
-        <TouchableOpacity
-          onPress={() => setOptionsVisible(true)}
-          className="p-2 -mr-2"
-        >
-          <Ionicons name="ellipsis-horizontal" size={24} color={textColor} />
-        </TouchableOpacity>
+        {/* 4. TAMBIÉN AÑADÍ EL BOTÓN DE COMPARTIR ARRIBA (OPCIONAL) */}
+        <View className="flex-row items-center">
+          <TouchableOpacity
+            onPress={() => setViralModalVisible(true)}
+            className="p-2 mr-1"
+          >
+            <Ionicons name="share-outline" size={24} color={textColor} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setOptionsVisible(true)}
+            className="p-2 -mr-2"
+          >
+            <Ionicons name="ellipsis-horizontal" size={24} color={textColor} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -548,7 +558,6 @@ const PostDetails = () => {
         className="absolute bottom-0 w-full border-t"
         style={{ backgroundColor: bgColor, borderColor: borderColor }}
       >
-        {/* LISTA DE SUGERENCIAS FLOTANTE */}
         {showSuggestions && (
           <View
             className="w-full border-b"
@@ -659,22 +668,26 @@ const PostDetails = () => {
 
       {/* --- MODALES --- */}
 
-      {/* Modal de 3 puntos */}
       <OptionsModal
         isVisible={isOptionsVisible}
         onClose={() => setOptionsVisible(false)}
         onDelete={handleDeleteAction}
-        onTogglePrivacy={handleTogglePrivacyAction}
         onReport={handleReportAction}
-        isPrivate={post?.isPrivate || false}
         isOwner={isOwner}
       />
 
-      {/* Modal de Compartir */}
+      {/* Modal de Compartir Normal (Mantener si quieres las dos opciones) */}
       <ShareModal
         isVisible={isShareVisible}
         onClose={() => setShareVisible(false)}
         postId={post?.$id || ""}
+      />
+
+      {/* 5. AÑADIDO: MODAL VIRAL */}
+      <MoodShareCard
+        isVisible={isViralModalVisible}
+        onClose={() => setViralModalVisible(false)}
+        post={getViralPostData()}
       />
     </SafeAreaView>
   );

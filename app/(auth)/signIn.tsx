@@ -15,15 +15,13 @@ import { Link, router } from "expo-router";
 import CustomButtom from "@/components/CustomButtom";
 import FormField from "@/components/FormField";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
-import { getCurrentUser, signInn } from "@/lib/appwrite";
+// CORRECCIÓN 1: IMPORTAR signInWithOAuth
+import { getCurrentUser, signInn, signInWithOAuth } from "@/lib/appwrite";
 import { AppwriteException } from "react-native-appwrite";
-// 1. IMPORTAR CONTEXTO
 import { useLanguage } from "@/context/LanguageContext";
 
 const SignIn = () => {
   const { setUser, setLoggedIn } = useGlobalContext();
-
-  // 2. USAR HOOK
   const { t } = useLanguage();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -32,6 +30,7 @@ const SignIn = () => {
     password: "",
   });
 
+  // --- LÓGICA LOGIN NORMAL (CORREO/PASS) ---
   const submit = async () => {
     if (!form.email.trim() || !form.password.trim()) {
       Alert.alert(t("auth.alerts.emptyTitle"), t("auth.alerts.emptyMsg"));
@@ -53,6 +52,25 @@ const SignIn = () => {
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // --- CORRECCIÓN 2: LÓGICA GOOGLE / APPLE ---
+  const handleOAuth = async (provider: "google" | "apple") => {
+    console.log("1. Botón presionado:", provider); // <--- LOG 1
+
+    try {
+      setIsLoading(true);
+      console.log("2. Llamando a signInWithOAuth..."); // <--- LOG 2
+
+      await signInWithOAuth(provider);
+
+      console.log("3. Appwrite intentó abrir el navegador"); // <--- LOG 3
+    } catch (error: any) {
+      console.error("4. ERROR en handleOAuth:", error); // <--- LOG ERROR
+      Alert.alert("Error OAuth", error.message);
+    } finally {
+      setTimeout(() => setIsLoading(false), 2000);
     }
   };
 
@@ -117,15 +135,23 @@ const SignIn = () => {
               </Text>
               <View className="bg-zinc-800 flex-1 h-[1px]"></View>
             </View>
+
+            {/* CORRECCIÓN 3: BOTONES CONECTADOS */}
             <View className="flex-row justify-center gap-6">
-              <TouchableOpacity className="bg-zinc-900 border border-zinc-800 w-16 h-16 rounded-2xl items-center justify-center">
+              <TouchableOpacity
+                onPress={() => handleOAuth("google")} // <--- CONECTADO
+                className="bg-zinc-900 border border-zinc-800 w-16 h-16 rounded-2xl items-center justify-center"
+              >
                 <Image
                   source={require("@/assets/google-icon.png")}
                   className="w-7 h-7"
                   resizeMode="contain"
                 />
               </TouchableOpacity>
-              <TouchableOpacity className="bg-zinc-900 border border-zinc-800 w-16 h-16 rounded-2xl items-center justify-center">
+              <TouchableOpacity
+                onPress={() => handleOAuth("apple")} // <--- CONECTADO
+                className="bg-zinc-900 border border-zinc-800 w-16 h-16 rounded-2xl items-center justify-center"
+              >
                 <Image
                   source={require("@/assets/apple-icon.png")}
                   className="w-7 h-7"
@@ -134,6 +160,7 @@ const SignIn = () => {
                 />
               </TouchableOpacity>
             </View>
+
             <View className="mt-10 flex-row items-center justify-center pb-10">
               <Text className="text-zinc-400 text-base">
                 {t("auth.newUser")}{" "}

@@ -7,6 +7,7 @@ import {
   AppwriteException,
   Storage,
   ID,
+  OAuthProvider, // <--- IMPORTANTE: Agregado para arreglar el error
 } from "react-native-appwrite";
 
 export const appwriteConfig = {
@@ -104,6 +105,31 @@ export const signInn = async (email: string, password: string) => {
     throw new Error(error.message);
   }
 };
+
+// --- FUNCIÓN CORREGIDA PARA GOOGLE / APPLE ---
+export async function signInWithOAuth(provider: "google" | "apple") {
+  try {
+    // Estas URLs deben coincidir con tu Scheme en app.json (mood://)
+    const successUrl = "mood://home";
+    const failureUrl = "mood://login";
+
+    // CORRECCIÓN: Convertimos el string al Enum que espera Appwrite
+    const oAuthProvider =
+      provider === "google" ? OAuthProvider.Google : OAuthProvider.Apple;
+
+    const result = await account.createOAuth2Session(
+      oAuthProvider,
+      successUrl,
+      failureUrl
+    );
+
+    return result;
+  } catch (error: any) {
+    console.error("Error en OAuth:", error);
+    throw new Error(error.message);
+  }
+}
+// -----------------------------------------
 
 export const signOut = async () => {
   try {
@@ -1221,6 +1247,10 @@ export async function getOrCreateChat(
   }
 }
 
+// --- MODIFICACIÓN: Alias para que UserProfile.tsx encuentre "createChat" usando la lógica existente ---
+export const createChat = getOrCreateChat;
+// -----------------------------------------------------------------------------------------------------
+
 export async function deleteChat(chatId: string) {
   try {
     await databases.deleteDocument(
@@ -1707,6 +1737,56 @@ export async function getPlaylistById(playlistId: string) {
   } catch (error) {
     console.log("Error getPlaylistById", error);
     return null;
+  }
+}
+
+// ------------------------------------------------------------
+// NOTIFICACIONES PUSH (CORREGIDO)
+// ------------------------------------------------------------
+
+export async function updateUserPushToken(userId: string, token: string) {
+  try {
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      // AQUÍ ESTABA EL ERROR: Era 'userCollectionId' y debía ser 'usersCollectionId'
+      appwriteConfig.usersCollectionId,
+      userId,
+      {
+        expoPushToken: token,
+      }
+    );
+    console.log("Push Token actualizado en Appwrite");
+  } catch (error) {
+    console.log("Error actualizando push token:", error);
+  }
+}
+
+export async function sendPushNotification(
+  expoPushToken: string,
+  title: string,
+  body: string,
+  data = {}
+) {
+  const message = {
+    to: expoPushToken,
+    sound: "default",
+    title: title,
+    body: body,
+    data: data,
+  };
+
+  try {
+    await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Accept-encoding": "gzip, deflate",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(message),
+    });
+  } catch (error) {
+    console.log("Error enviando notificación:", error);
   }
 }
 

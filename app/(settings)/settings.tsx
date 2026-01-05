@@ -7,17 +7,26 @@ import {
   Alert,
   Modal,
   TouchableWithoutFeedback,
+  ActivityIndicator,
 } from "react-native";
 import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { Ionicons, FontAwesome5 } from "@expo/vector-icons"; // Agregado FontAwesome5
 import { router } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { useLanguage } from "@/context/LanguageContext"; // Asegúrate de que esta ruta sea correcta según tu estructura
+import { useLanguage } from "@/context/LanguageContext";
+
+// Importaciones para actualizar la preferencia
+import { useGlobalContext, User } from "@/context/GlobalProvider";
+import { updateProfile } from "@/lib/appwrite";
 
 const Settings = () => {
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+
+  // Contexto Global y Usuario
+  const { user, setUser } = useGlobalContext();
+  const [updatingPlatform, setUpdatingPlatform] = useState(false);
 
   // Hook Global de Idioma
   const { language, setLanguage, t, availableLanguages } = useLanguage();
@@ -30,39 +39,17 @@ const Settings = () => {
   const iconBg = isDark ? "#18181B" : "#F3F4F6";
   const borderColor = isDark ? "#27272A" : "#E5E7EB";
 
-  // Color específico para el botón de idioma (Corrección visual)
   const languagePillBg = isDark ? "#27272A" : "#F3F4F6";
   const pillTextColor = isDark ? "#FFFFFF" : "#000000";
 
   // --- ESTADOS ---
-  const [autoPlay, setAutoPlay] = useState(true);
-  const [hapticFeedback, setHapticFeedback] = useState(true);
-  const [spotifyConnected, setSpotifyConnected] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
-  // Objeto del idioma actual (para mostrar la bandera y nombre)
   const currentLangObj =
     availableLanguages.find((l) => l.code === language) ||
     availableLanguages[0];
 
   // --- HANDLERS ---
-  const handleSpotifyConnect = () => {
-    if (spotifyConnected) {
-      Alert.alert(t("settings.disconnect"), "¿Desvincular cuenta?", [
-        { text: t("settings.cancel"), style: "cancel" },
-        {
-          text: t("settings.disconnect"),
-          style: "destructive",
-          onPress: () => setSpotifyConnected(false),
-        },
-      ]);
-    } else {
-      Alert.alert("Spotify", "Conectando...", [
-        { text: "OK", onPress: () => setSpotifyConnected(true) },
-      ]);
-    }
-  };
-
   const handleSelectLanguage = (langCode: any) => {
     setLanguage(langCode);
     setShowLanguageModal(false);
@@ -70,6 +57,27 @@ const Settings = () => {
 
   const clearCache = () => {
     Alert.alert(t("settings.clearCache"), "Se han liberado 45MB.");
+  };
+
+  // Nuevo Handler para la plataforma de música
+  const handlePlatformChange = async (platform: string) => {
+    if (user?.preferredPlatform === platform || updatingPlatform) return;
+
+    try {
+      setUpdatingPlatform(true);
+      const updatedDoc = await updateProfile(user?.$id || "", {
+        preferredPlatform: platform,
+      });
+
+      if (setUser) {
+        // Actualizamos el contexto global para reflejar el cambio en toda la app
+        setUser({ ...user, preferredPlatform: platform } as User);
+      }
+    } catch (error) {
+      Alert.alert("Error", "No se pudo actualizar la preferencia de música.");
+    } finally {
+      setUpdatingPlatform(false);
+    }
   };
 
   // --- COMPONENTES AUXILIARES ---
@@ -84,11 +92,12 @@ const Settings = () => {
   );
 
   const SettingRow = ({
-    icon,
+    icon, // Puede ser string (Ionicons) o componente
     title,
     subtitle,
     children,
     color = "#5E17EB",
+    isCustomIcon = false, // Flag para saber si usamos FontAwesome
   }: any) => (
     <View
       className="flex-row items-center justify-between py-3.5 border-b px-2"
@@ -99,7 +108,11 @@ const Settings = () => {
           className="w-10 h-10 rounded-full items-center justify-center mr-4"
           style={{ backgroundColor: iconBg }}
         >
-          <Ionicons name={icon} size={20} color={color} />
+          {isCustomIcon ? (
+            icon
+          ) : (
+            <Ionicons name={icon} size={20} color={color} />
+          )}
         </View>
         <View>
           <Text
@@ -142,7 +155,6 @@ const Settings = () => {
         {/* --- SECCIÓN PERSONALIZACIÓN --- */}
         <SectionTitle title={t("settings.personalization")} />
 
-        {/* Idioma */}
         <TouchableOpacity onPress={() => setShowLanguageModal(true)}>
           <SettingRow
             icon="globe-outline"
@@ -166,7 +178,6 @@ const Settings = () => {
           </SettingRow>
         </TouchableOpacity>
 
-        {/* Modo Oscuro */}
         <SettingRow
           icon="moon"
           title={t("settings.darkMode")}
@@ -181,75 +192,47 @@ const Settings = () => {
           />
         </SettingRow>
 
-        {/* --- SECCIÓN EXPERIENCIA (Restaurada) --- */}
-        <SectionTitle title={t("settings.experience")} />
+        {/* --- NUEVA SECCIÓN: PLATAFORMA DE MÚSICA --- */}
+        <SectionTitle title="PLATAFORMA DE MÚSICA" />
 
-        <SettingRow
-          icon="finger-print"
-          title={t("settings.haptic")}
-          subtitle={t("settings.hapticSub")}
-          color="#F59E0B"
+        {/* Opción Spotify */}
+        <TouchableOpacity
+          onPress={() => handlePlatformChange("spotify")}
+          disabled={updatingPlatform}
         >
-          <Switch
-            trackColor={{ false: "#E5E7EB", true: "#5E17EB" }}
-            thumbColor="white"
-            onValueChange={setHapticFeedback}
-            value={hapticFeedback}
-          />
-        </SettingRow>
-
-        <SettingRow
-          icon="play-circle"
-          title={t("settings.autoplay")}
-          subtitle={t("settings.autoplaySub")}
-          color="#10B981"
-        >
-          <Switch
-            trackColor={{ false: "#E5E7EB", true: "#5E17EB" }}
-            thumbColor="white"
-            onValueChange={setAutoPlay}
-            value={autoPlay}
-          />
-        </SettingRow>
-
-        {/* --- SECCIÓN CONEXIONES (Restaurada) --- */}
-        <SectionTitle title={t("settings.connections")} />
-
-        <TouchableOpacity onPress={handleSpotifyConnect} activeOpacity={0.8}>
-          <View
-            className="flex-row items-center justify-between py-3.5 border-b px-2"
-            style={{ borderColor }}
+          <SettingRow
+            isCustomIcon={true}
+            icon={<FontAwesome5 name="spotify" size={20} color="#1DB954" />}
+            title="Spotify"
+            subtitle="Reproducir en Spotify"
           >
-            <View className="flex-row items-center flex-1 mr-4">
-              <View className="w-10 h-10 rounded-full bg-[#1DB954]/20 items-center justify-center mr-4">
-                <FontAwesome5 name="spotify" size={20} color="#1DB954" />
-              </View>
-              <View>
-                <Text
-                  className="text-[15px] font-medium"
-                  style={{ color: textColor }}
-                >
-                  Spotify
-                </Text>
-                <Text
-                  className="text-xs"
-                  style={{ color: spotifyConnected ? "#1DB954" : subTextColor }}
-                >
-                  {spotifyConnected
-                    ? t("settings.connected")
-                    : t("settings.connect")}
-                </Text>
-              </View>
-            </View>
-            <Ionicons
-              name={spotifyConnected ? "checkmark-circle" : "chevron-forward"}
-              size={20}
-              color={spotifyConnected ? "#1DB954" : subTextColor}
-            />
-          </View>
+            {user?.preferredPlatform === "spotify" && (
+              <Ionicons name="checkmark-circle" size={22} color="#1DB954" />
+            )}
+            {updatingPlatform && user?.preferredPlatform !== "spotify" && (
+              <View />
+            )}
+          </SettingRow>
         </TouchableOpacity>
 
-        {/* --- SECCIÓN DATOS (Restaurada) --- */}
+        {/* Opción Apple Music */}
+        <TouchableOpacity
+          onPress={() => handlePlatformChange("apple")}
+          disabled={updatingPlatform}
+        >
+          <SettingRow
+            isCustomIcon={true}
+            icon={<FontAwesome5 name="apple" size={22} color={textColor} />}
+            title="Apple Music"
+            subtitle="Reproducir en Apple Music"
+          >
+            {user?.preferredPlatform === "apple" && (
+              <Ionicons name="checkmark-circle" size={22} color="#FA243C" />
+            )}
+          </SettingRow>
+        </TouchableOpacity>
+
+        {/* --- SECCIÓN DATOS --- */}
         <SectionTitle title={t("settings.data")} />
 
         <TouchableOpacity onPress={clearCache}>
@@ -290,7 +273,7 @@ const Settings = () => {
         </View>
       </ScrollView>
 
-      {/* --- MODAL DE SELECCIÓN DE IDIOMA --- */}
+      {/* --- MODAL DE IDIOMA --- */}
       <Modal
         animationType="slide"
         transparent={true}

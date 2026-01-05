@@ -5,6 +5,7 @@ import { AudioProvider } from "@/context/AudioContext";
 import GlobalProvider, { useGlobalContext } from "@/context/GlobalProvider";
 import { ModalProvider } from "@/context/ModalContext";
 import { LanguageProvider } from "@/context/LanguageContext";
+import { NotificationProvider } from "@/context/NotificationContext";
 
 const StackLayout = () => {
   const { loggedIn, loading } = useGlobalContext();
@@ -52,22 +53,22 @@ const StackLayout = () => {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
-      {/* Agrega aquí cualquier otra pantalla que uses */}
     </Stack>
   );
 };
 
-// --- COMPONENTE RAÍZ ---
 const RootLayout = () => {
   return (
     <GlobalProvider>
-      <LanguageProvider>
-        <AudioProvider>
-          <ModalProvider>
-            <StackLayout />
-          </ModalProvider>
-        </AudioProvider>
-      </LanguageProvider>
+      <NotificationProvider>
+        <LanguageProvider>
+          <AudioProvider>
+            <ModalProvider>
+              <StackLayout />
+            </ModalProvider>
+          </AudioProvider>
+        </LanguageProvider>
+      </NotificationProvider>
     </GlobalProvider>
   );
 };

@@ -13,20 +13,18 @@ import {
 import React, { useState } from "react";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, Feather, FontAwesome5 } from "@expo/vector-icons";
+import { Ionicons, Feather } from "@expo/vector-icons"; // FontAwesome5 eliminado
 import * as ImagePicker from "expo-image-picker";
 import { ImagePickerAsset } from "expo-image-picker";
 import { updateProfile } from "@/lib/appwrite";
 import { router, Stack } from "expo-router";
 import { useColorScheme } from "nativewind";
-// 1. IMPORTAR CONTEXTO
 import { useLanguage } from "@/context/LanguageContext";
 
 interface FormState {
   name: string;
   username: string;
   email: string;
-  preferredPlatform: string;
   pfp: string | ImagePickerAsset | null;
 }
 
@@ -34,7 +32,6 @@ const EditScreen = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // 2. USAR HOOK
   const { t } = useLanguage();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
@@ -53,7 +50,6 @@ const EditScreen = () => {
     name: user?.name || "",
     username: user?.username || "",
     email: user?.email || "",
-    preferredPlatform: user?.preferredPlatform || "spotify",
     pfp: user?.pfp || null,
   });
 
@@ -92,7 +88,6 @@ const EditScreen = () => {
         name: formData.name.trim(),
         username: formData.username.toLowerCase().trim(),
         email: formData.email.trim(),
-        preferredPlatform: formData.preferredPlatform,
         pfp: formData.pfp,
       });
 
@@ -274,92 +269,7 @@ const EditScreen = () => {
               placeholder={t("editProfile.emailPlaceholder")}
               type="email"
             />
-            <View className="mb-6 w-full">
-              <Text
-                className="text-xs font-bold mb-3 ml-1 uppercase tracking-wider"
-                style={{ color: subTextColor }}
-              >
-                {t("editProfile.platformLabel")}
-              </Text>
-              <View className="flex-row gap-4">
-                <TouchableOpacity
-                  onPress={() =>
-                    setFormData({ ...formData, preferredPlatform: "spotify" })
-                  }
-                  className={`flex-1 flex-row items-center justify-center p-4 rounded-2xl border transition-all`}
-                  style={{
-                    backgroundColor:
-                      formData.preferredPlatform === "spotify"
-                        ? "rgba(29, 185, 84, 0.1)"
-                        : inputBg,
-                    borderColor:
-                      formData.preferredPlatform === "spotify"
-                        ? "#1DB954"
-                        : inputBorder,
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <FontAwesome5
-                    name="spotify"
-                    size={24}
-                    color={
-                      formData.preferredPlatform === "spotify"
-                        ? "#1DB954"
-                        : subTextColor
-                    }
-                  />
-                  <Text
-                    className="ml-2 font-bold"
-                    style={{
-                      color:
-                        formData.preferredPlatform === "spotify"
-                          ? "#1DB954"
-                          : subTextColor,
-                    }}
-                  >
-                    Spotify
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() =>
-                    setFormData({ ...formData, preferredPlatform: "apple" })
-                  }
-                  className={`flex-1 flex-row items-center justify-center p-4 rounded-2xl border transition-all`}
-                  style={{
-                    backgroundColor:
-                      formData.preferredPlatform === "apple"
-                        ? "rgba(250, 36, 60, 0.1)"
-                        : inputBg,
-                    borderColor:
-                      formData.preferredPlatform === "apple"
-                        ? "#FA243C"
-                        : inputBorder,
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <FontAwesome5
-                    name="apple"
-                    size={24}
-                    color={
-                      formData.preferredPlatform === "apple"
-                        ? "#FA243C"
-                        : subTextColor
-                    }
-                  />
-                  <Text
-                    className="ml-2 font-bold"
-                    style={{
-                      color:
-                        formData.preferredPlatform === "apple"
-                          ? "#FA243C"
-                          : subTextColor,
-                    }}
-                  >
-                    Apple Music
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            {/* Apartado de Plataforma ELIMINADO de aquí */}
           </View>
           <TouchableOpacity
             className={`w-full mt-2 h-[58px] items-center justify-center rounded-2xl shadow-lg flex-row`}

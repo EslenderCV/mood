@@ -18,7 +18,8 @@ import {
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
-import { useAudioContext } from "@/context/AudioContext"; // <--- 1. IMPORTAR CONTEXTO
+// IMPORTAR EL CONTEXTO QUE CREAREMOS ABAJO
+import { useAudioContext } from "@/context/AudioContext";
 
 const parseSongData = (songDataString: string) => {
   try {
@@ -59,11 +60,10 @@ const PostItem: React.FC<PostItemProps> = ({
   const cardBg = isDark ? "#1C1C1E" : "#F4F4F5";
   const cardBorder = isDark ? "#27272A" : "transparent";
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
-  const lineColor = isDark ? "#27272A" : "#E4E4E7";
 
   const { t, language } = useLanguage();
 
-  // --- 2. USAR CONTEXTO ---
+  // --- CONTEXTO DE AUDIO ---
   const { currentPlayingId, setPlayingId } = useAudioContext();
 
   // --- ESTADOS LOCALES ---
@@ -101,18 +101,24 @@ const PostItem: React.FC<PostItemProps> = ({
   // --- AUDIO LOGIC ---
   const player = useAudioPlayer(currentUrl);
 
-  // 3. EFECTO: Detectar si otro post empezó a sonar para pausarme a mí mismo
+  // EFECTO: Pausar si otro post empieza a sonar
   useEffect(() => {
-    if (currentPlayingId !== post.$id && isPlaying && player) {
+    // Si hay otro ID sonando y yo estoy tocando, me pauso.
+    if (
+      currentPlayingId &&
+      currentPlayingId !== post.$id &&
+      isPlaying &&
+      player
+    ) {
       player.pause();
       setIsPlaying(false);
     }
-  }, [currentPlayingId]); // Se ejecuta cada vez que cambia la canción global
+  }, [currentPlayingId, isPlaying, player, post.$id]);
 
-  // Efecto: Controlar Auto-Play, Fin de canción y Listener
+  // Efecto: Controlar Auto-Play y Fin de canción
   useEffect(() => {
     if (currentUrl && player) {
-      // Auto-Play al cargar URL fresca
+      // Auto-Play al cargar URL si soy el activo
       if (!player.playing && currentPlayingId === post.$id) {
         player.play();
         setIsPlaying(true);
@@ -123,7 +129,7 @@ const PostItem: React.FC<PostItemProps> = ({
           setIsPlaying(false);
           player.seekTo(0);
           player.pause();
-          // Opcional: Si termina, liberamos el "semáforo" global
+          // Liberar el estado global al terminar
           if (currentPlayingId === post.$id) {
             setPlayingId(null);
           }
@@ -142,38 +148,34 @@ const PostItem: React.FC<PostItemProps> = ({
         }
       };
     }
-  }, [currentUrl, player]);
+  }, [currentUrl, player, currentPlayingId, post.$id, setPlayingId]);
 
   const handlePlayPause = async () => {
-    // A. Si ya tenemos URL, gestionamos play/pause
+    // A. Si ya tenemos URL
     if (currentUrl && player) {
       if (player.playing) {
         player.pause();
         setIsPlaying(false);
-        // Si pauso manualmente, libero el ID global (opcional)
-        setPlayingId(null);
+        setPlayingId(null); // Libero
       } else {
         if (player.currentTime >= player.duration) {
           player.seekTo(0);
         }
-        // 4. AVISAR AL CONTEXTO QUE YO SOY EL QUE SUENA AHORA
-        setPlayingId(post.$id);
+        setPlayingId(post.$id); // Reclamo el audio
         player.play();
         setIsPlaying(true);
       }
       return;
     }
 
-    // B. Lazy Loading (Primera vez)
+    // B. Carga Inicial (Lazy Load)
     try {
       setIsLoadingAudio(true);
-      // 5. AVISAR AL CONTEXTO ANTES DE CARGAR PARA PARAR OTROS DE INMEDIATO
-      setPlayingId(post.$id);
+      setPlayingId(post.$id); // Reclamo antes de cargar para pausar otros
 
       const trackId = songData?.id || songData?.spotifyId;
 
       if (!trackId) {
-        console.error("❌ Error ID:", songData);
         Alert.alert("Error", "No se encontró un ID válido.");
         setIsLoadingAudio(false);
         return;
@@ -184,7 +186,7 @@ const PostItem: React.FC<PostItemProps> = ({
       if (!previewUrl) {
         Alert.alert("Error", "No se pudo generar el audio.");
         setIsLoadingAudio(false);
-        setPlayingId(null); // Revertir si falló
+        setPlayingId(null);
         return;
       }
 
@@ -251,10 +253,7 @@ const PostItem: React.FC<PostItemProps> = ({
             className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-800"
           />
         </TouchableOpacity>
-        <View
-          className="flex-1 w-[2px] my-1 rounded-full"
-          style={{ backgroundColor: lineColor }}
-        />
+        {/* 🔥 AQUÍ ELIMINÉ LA LÍNEA DE NÚMEROS '121212...' QUE CAUSABA EL ERROR */}
       </View>
 
       {/* DERECHA: Contenido */}
@@ -268,7 +267,7 @@ const PostItem: React.FC<PostItemProps> = ({
               {creator.name}
             </Text>
 
-            {post.isPrivate && (
+            {!!post.isPrivate && (
               <Ionicons
                 name="lock-closed"
                 size={12}
@@ -291,7 +290,7 @@ const PostItem: React.FC<PostItemProps> = ({
           </TouchableOpacity>
         </View>
 
-        {post.comment && post.comment.trim() !== "" && (
+        {!!post.comment && post.comment.trim() !== "" && (
           <Text
             className="text-[15px] mb-3 leading-5"
             style={{ color: textColor }}

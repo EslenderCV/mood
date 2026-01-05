@@ -32,7 +32,9 @@ import {
   appwriteConfig,
   markChatAsRead,
   getPostById,
-  getPlaylistById, // <--- IMPORTANTE: Asegúrate de tener esto en lib/appwrite.ts
+  getPlaylistById,
+  getUser, // <--- IMPORTADO
+  databases, // <--- IMPORTADO
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -334,7 +336,14 @@ const ChatRoom = () => {
 
   const params = useLocalSearchParams();
   const chatId = params.id as string;
-  const otherUserId = params.otherUserId as string;
+
+  // --- NUEVO ESTADO PARA INFORMACIÓN DEL USUARIO ---
+  const [chatUser, setChatUser] = useState({
+    name: (params.otherUserName as string) || "Usuario",
+    avatar: (params.otherUserAvatar as string) || null,
+    id: (params.otherUserId as string) || null,
+  });
+  // -----------------------------------------------
 
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -398,6 +407,39 @@ const ChatRoom = () => {
       const user = await getCurrentUser();
       if (!user) return router.replace("/signIn");
       setCurrentUser(user);
+
+      // --- LOGICA DE RECUPERACIÓN DE USUARIO SI FALTAN DATOS ---
+      if (!chatUser.id || !chatUser.avatar) {
+        try {
+          // Buscamos el documento del chat para saber quiénes son los participantes
+          const chatDoc = await databases.getDocument(
+            appwriteConfig.databaseId,
+            appwriteConfig.chatsCollectionId,
+            chatId
+          );
+
+          if (chatDoc && chatDoc.participants) {
+            // Encontramos el ID que NO es el mío
+            const otherId = chatDoc.participants.find(
+              (p: string) => p !== user.$id
+            );
+            if (otherId) {
+              const otherUserData = await getUser(otherId);
+              if (otherUserData) {
+                setChatUser({
+                  name: otherUserData.name || otherUserData.username,
+                  avatar: otherUserData.pfp,
+                  id: otherUserData.$id,
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.log("Error recuperando info del otro usuario:", err);
+        }
+      }
+      // ---------------------------------------------------------
+
       const msgs = await getChatMessages(chatId);
       setMessages(msgs);
       markChatAsRead(chatId, user.$id);
@@ -496,7 +538,8 @@ const ChatRoom = () => {
   };
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !currentUser) return;
+    // Verificamos que tengamos al otro usuario identificado
+    if (!newMessage.trim() || !currentUser || !chatUser.id) return;
 
     if (editingMessage) {
       const tempId = editingMessage.$id;
@@ -523,9 +566,7 @@ const ChatRoom = () => {
     let contentToSend = newMessage;
     if (replyingTo) {
       const replyName =
-        replyingTo.senderId === currentUser.$id
-          ? t("chat.you")
-          : params.otherUserName;
+        replyingTo.senderId === currentUser.$id ? t("chat.you") : chatUser.name; // Usamos chatUser.name en lugar de params
       let rawContent = replyingTo.content;
       if (replyingTo.content.includes(":::REPLY:::")) {
         rawContent = replyingTo.content.split(":::REPLY:::")[1];
@@ -544,7 +585,7 @@ const ChatRoom = () => {
       await sendMessage(
         chatId,
         currentUser.$id,
-        otherUserId,
+        chatUser.id, // Usamos chatUser.id recuperado
         tempContent,
         null
       );
@@ -637,7 +678,11 @@ const ChatRoom = () => {
           >
             {!isMe && (
               <Image
-                source={{ uri: params.otherUserAvatar as string }}
+                source={
+                  chatUser.avatar
+                    ? { uri: chatUser.avatar }
+                    : require("@/assets/noPfp.jpg")
+                }
                 className="w-7 h-7 rounded-full self-end mr-2 mb-1"
                 style={{ backgroundColor: inputBg }}
               />
@@ -753,7 +798,11 @@ const ChatRoom = () => {
             <Ionicons name="chevron-back" size={28} color={backIconColor} />
           </TouchableOpacity>
           <Image
-            source={{ uri: params.otherUserAvatar as string }}
+            source={
+              chatUser.avatar
+                ? { uri: chatUser.avatar }
+                : require("@/assets/noPfp.jpg")
+            }
             className="w-9 h-9 rounded-full"
             style={{ backgroundColor: inputBg }}
           />
@@ -763,7 +812,7 @@ const ChatRoom = () => {
               numberOfLines={1}
               style={{ color: textColor }}
             >
-              {params.otherUserName}
+              {chatUser.name}
             </Text>
             {isOtherUserOnline && (
               <Text className="text-xs text-green-500">{t("chat.online")}</Text>
@@ -803,7 +852,7 @@ const ChatRoom = () => {
                     : `${t("chat.replyingTo")} ${
                         replyingTo.senderId === currentUser?.$id
                           ? t("chat.yourself")
-                          : params.otherUserName
+                          : chatUser.name
                       }`}
                 </Text>
                 <Text

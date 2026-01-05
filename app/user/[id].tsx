@@ -8,6 +8,9 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Modal,
+  TouchableWithoutFeedback,
+  Share,
 } from "react-native";
 import React, { useState, useRef, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -24,11 +27,12 @@ import {
   checkFollowStatus,
   getFollowCounts,
   blockUser,
+  createChat,
+  sendPushNotification, // <--- NUEVO IMPORT
 } from "@/lib/appwrite";
-// 1. IMPORTAR CONTEXTO
 import { useLanguage } from "@/context/LanguageContext";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 const ITEM_SIZE = width / 3;
 
 const parseSongFromPost = (songDataString: string) => {
@@ -47,8 +51,6 @@ const parseSongFromPost = (songDataString: string) => {
 const UserProfile = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // 2. USAR HOOK
   const { t } = useLanguage();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
@@ -58,9 +60,12 @@ const UserProfile = () => {
   const cardBg = isDark ? "#18181B" : "#F4F4F5";
   const activeColor = "#5E17EB";
   const iconColor = isDark ? "#FFFFFF" : "#000000";
+  const dangerColor = "#EF4444";
+
   const params = useLocalSearchParams();
   const paramId = params.id || params.query;
   const userId = Array.isArray(paramId) ? paramId[0] : paramId;
+
   const [visitedUser, setVisitedUser] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
@@ -69,10 +74,15 @@ const UserProfile = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [followStatus, setFollowStatus] = useState<string | null>(null);
+  const [isFollowingMe, setIsFollowingMe] = useState(false);
+  const [isChatLoading, setIsChatLoading] = useState(false);
   const [stats, setStats] = useState({ followersCount: 0, followingCount: 0 });
   const [followLoading, setFollowLoading] = useState(false);
   const horizontalScrollRef = useRef<ScrollView>(null);
   const mainScrollRef = useRef<ScrollView>(null);
+
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [showFullImageModal, setShowFullImageModal] = useState(false);
 
   const fetchData = async () => {
     if (!userId) return;
@@ -87,6 +97,8 @@ const UserProfile = () => {
       if (myUser && userData) {
         currentStatus = await checkFollowStatus(myUser.$id, userData.$id);
         setFollowStatus(currentStatus);
+        const reverseStatus = await checkFollowStatus(userData.$id, myUser.$id);
+        setIsFollowingMe(reverseStatus === "accepted");
       }
 
       const counts = await getFollowCounts(userId);
@@ -151,48 +163,39 @@ const UserProfile = () => {
     setRefreshing(false);
   };
 
-  const handleBlockUser = async () => {
-    Alert.alert(
-      t("userProfile.alerts.blockTitle"),
-      t("userProfile.alerts.blockMsg"),
-      [
-        { text: t("userProfile.actions.cancel"), style: "cancel" },
-        {
-          text: t("userProfile.actions.confirmBlock"),
-          style: "destructive",
-          onPress: async () => {
-            try {
-              if (!currentUser || !visitedUser) return;
-              await blockUser(currentUser.$id, visitedUser.$id);
-              Alert.alert(t("userProfile.alerts.blockSuccess"), "", [
-                { text: "OK", onPress: () => router.back() },
-              ]);
-            } catch (error) {
-              Alert.alert(
-                t("userProfile.alerts.errorGeneric"),
-                t("userProfile.alerts.errorBlock")
-              );
-            }
-          },
-        },
-      ]
-    );
+  const handleShare = async () => {
+    if (!visitedUser) return;
+    try {
+      const message = `¡Mira el perfil de ${visitedUser.username} en Mood! 🎵`;
+      await Share.share({
+        message: message,
+      });
+    } catch (error) {
+      console.log("Error compartiendo:", error);
+    }
   };
 
-  const handleOptions = () => {
+  const handleBlockUser = async () => {
+    try {
+      if (!currentUser || !visitedUser) return;
+      await blockUser(currentUser.$id, visitedUser.$id);
+      setShowOptionsModal(false);
+      Alert.alert("Bloqueado", "El usuario ha sido bloqueado correctamente.", [
+        { text: "OK", onPress: () => router.back() },
+      ]);
+    } catch (error) {
+      setShowOptionsModal(false);
+      Alert.alert("Error", "No se pudo bloquear al usuario.");
+    }
+  };
+
+  const handleOptionsPress = () => {
     if (!currentUser || !visitedUser) return;
     if (currentUser.$id === visitedUser.$id) {
       router.push("/(settings)/privacy" as any);
       return;
     }
-    Alert.alert(t("userProfile.actions.options") || "Opciones", "", [
-      { text: t("userProfile.actions.cancel"), style: "cancel" },
-      {
-        text: t("userProfile.actions.block"),
-        style: "destructive",
-        onPress: handleBlockUser,
-      },
-    ]);
+    setShowOptionsModal(true);
   };
 
   const handleFollowAction = async () => {
@@ -211,7 +214,19 @@ const UserProfile = () => {
           }));
         }
       } else {
+        // --- LOGICA SEGUIR + NOTIFICACION ---
         await followUser(currentUser.$id, visitedUser.$id);
+
+        // Envío de Notificación
+        if (visitedUser.expoPushToken) {
+          await sendPushNotification(
+            visitedUser.expoPushToken,
+            "¡Nuevo seguidor! 🚀",
+            `@${currentUser.username} ha comenzado a seguirte.`,
+            { type: "profile", userId: currentUser.$id }
+          );
+        }
+
         if (visitedUser.isPrivate) {
           setFollowStatus("pending");
         } else {
@@ -229,16 +244,34 @@ const UserProfile = () => {
     }
   };
 
+  const handleChatPress = async () => {
+    if (!currentUser || !visitedUser || isChatLoading) return;
+    setIsChatLoading(true);
+    try {
+      const chatDoc = await createChat(currentUser.$id, visitedUser.$id);
+      if (chatDoc && chatDoc.$id) {
+        router.push(`/chat/${chatDoc.$id}` as any);
+      } else {
+        Alert.alert("Error", "No se pudo iniciar el chat.");
+      }
+    } catch (error) {
+      console.error("Error al iniciar chat:", error);
+      Alert.alert("Error", "Ocurrió un error al intentar abrir el chat.");
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
   const handleTabPress = (index: number) => {
     setActiveTab(index);
     horizontalScrollRef.current?.scrollTo({ x: index * width, animated: true });
   };
-
   const scrollToMoods = () => {
     mainScrollRef.current?.scrollTo({ y: 450, animated: true });
     handleTabPress(0);
   };
 
+  // Renders
   const renderMoodItem = (item: any) => {
     const songData = parseSongFromPost(item.songData);
     const imageUrl = songData
@@ -327,61 +360,27 @@ const UserProfile = () => {
     );
   }
 
-  if (!visitedUser) {
+  if (
+    !visitedUser ||
+    currentUser?.blockedUsers?.includes(visitedUser?.$id) ||
+    visitedUser?.blockedUsers?.includes(currentUser?.$id)
+  ) {
     return (
       <SafeAreaView
         className="flex-1 justify-center items-center"
         style={{ backgroundColor: bgColor }}
       >
-        <Text style={{ color: textColor }}>{t("userProfile.notFound")}</Text>
-      </SafeAreaView>
-    );
-  }
-
-  const iBlockedThem = currentUser?.blockedUsers?.includes(visitedUser?.$id);
-  const theyBlockedMe = visitedUser?.blockedUsers?.includes(currentUser?.$id);
-
-  if (iBlockedThem || theyBlockedMe) {
-    return (
-      <SafeAreaView
-        className="flex-1"
-        edges={["top"]}
-        style={{ backgroundColor: bgColor }}
-      >
-        <View className="flex-row justify-between items-center px-6 py-2 mb-6">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="p-2 rounded-full"
-            style={{ backgroundColor: cardBg }}
-          >
-            <Ionicons name="arrow-back" size={24} color={iconColor} />
-          </TouchableOpacity>
-          <Text className="text-xl font-bold" style={{ color: textColor }}>
-            {t("userProfile.title")}
-          </Text>
-          <TouchableOpacity onPress={handleOptions} className="p-2">
-            <Ionicons name="ellipsis-horizontal" size={24} color={iconColor} />
-          </TouchableOpacity>
-        </View>
-        <View className="flex-1 justify-center items-center px-10">
-          <View
-            className="w-24 h-24 rounded-full items-center justify-center mb-6"
-            style={{ backgroundColor: cardBg }}
-          >
-            <Ionicons name="ban-outline" size={50} color={subTextColor} />
-          </View>
-          <Text
-            className="font-bold text-xl text-center"
-            style={{ color: textColor }}
-          >
-            {t("userProfile.unavailableTitle")}
-          </Text>
-          <Text className="text-center mt-2" style={{ color: subTextColor }}>
-            {iBlockedThem
-              ? t("userProfile.blockedMsg")
-              : t("userProfile.unavailableMsg")}
-          </Text>
-        </View>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="absolute top-12 left-6 p-2 rounded-full"
+          style={{ backgroundColor: cardBg }}
+        >
+          <Ionicons name="arrow-back" size={24} color={iconColor} />
+        </TouchableOpacity>
+        <Ionicons name="ban-outline" size={50} color={subTextColor} />
+        <Text style={{ color: textColor, marginTop: 10 }}>
+          {t("userProfile.unavailableMsg") || "Usuario no disponible"}
+        </Text>
       </SafeAreaView>
     );
   }
@@ -389,6 +388,13 @@ const UserProfile = () => {
   const isPrivateAccount = visitedUser?.isPrivate;
   const isMe = currentUser?.$id === visitedUser?.$id;
   const showContent = isMe || !isPrivateAccount || followStatus === "accepted";
+  const pfpUrl = visitedUser?.pfp || null;
+
+  const modalTitle = t("userProfile.actions.options");
+  const displayModalTitle =
+    modalTitle && modalTitle !== "userProfile.actions.options"
+      ? modalTitle
+      : "Opciones";
 
   return (
     <SafeAreaView
@@ -397,6 +403,116 @@ const UserProfile = () => {
       style={{ backgroundColor: bgColor }}
     >
       <StatusBar style={isDark ? "light" : "dark"} />
+
+      {/* MODAL BLOQUEO */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showOptionsModal}
+        onRequestClose={() => setShowOptionsModal(false)}
+      >
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+          activeOpacity={1}
+          onPress={() => setShowOptionsModal(false)}
+        >
+          <TouchableWithoutFeedback>
+            <View
+              style={{
+                backgroundColor: isDark ? "#18181B" : "#FFFFFF",
+                width: "80%",
+                borderRadius: 24,
+                padding: 24,
+                borderWidth: 1,
+                borderColor: borderColor,
+              }}
+            >
+              <View className="items-center mb-6">
+                <View className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 items-center justify-center mb-4">
+                  <Ionicons
+                    name="shield-outline"
+                    size={32}
+                    color={dangerColor}
+                  />
+                </View>
+                <Text
+                  className="text-xl font-bold text-center mb-2"
+                  style={{ color: textColor }}
+                >
+                  {displayModalTitle}
+                </Text>
+                <Text
+                  className="text-center text-sm"
+                  style={{ color: subTextColor }}
+                >
+                  ¿Deseas bloquear el acceso de @{visitedUser.username} a tu
+                  perfil?
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleBlockUser}
+                className="w-full py-4 rounded-xl bg-red-500 mb-3 items-center flex-row justify-center"
+              >
+                <Ionicons
+                  name="ban"
+                  size={20}
+                  color="white"
+                  style={{ marginRight: 8 }}
+                />
+                <Text className="text-white font-bold text-base">
+                  {t("userProfile.actions.block") || "Bloquear"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowOptionsModal(false)}
+                className="w-full py-4 rounded-xl items-center"
+                style={{ backgroundColor: cardBg }}
+              >
+                <Text
+                  className="font-bold text-base"
+                  style={{ color: textColor }}
+                >
+                  {t("userProfile.actions.cancel") || "Cancelar"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* MODAL FOTO COMPLETA */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showFullImageModal}
+        onRequestClose={() => setShowFullImageModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: "black" }}>
+          <SafeAreaView className="flex-1">
+            <TouchableOpacity
+              onPress={() => setShowFullImageModal(false)}
+              className="absolute top-12 right-6 z-50 p-2 rounded-full bg-black/50"
+            >
+              <Ionicons name="close" size={30} color="white" />
+            </TouchableOpacity>
+            <View className="flex-1 justify-center items-center">
+              <Image
+                source={
+                  pfpUrl ? { uri: pfpUrl } : require("@/assets/noPfp.jpg")
+                }
+                style={{ width: width, height: height * 0.7 }}
+                resizeMode="contain"
+              />
+            </View>
+          </SafeAreaView>
+        </View>
+      </Modal>
+
       <ScrollView
         ref={mainScrollRef}
         showsVerticalScrollIndicator={false}
@@ -409,6 +525,7 @@ const UserProfile = () => {
           />
         }
       >
+        {/* HEADER NAV */}
         <View className="flex-row justify-between items-center px-6 py-2 mb-6">
           <TouchableOpacity
             onPress={() => router.back()}
@@ -417,25 +534,43 @@ const UserProfile = () => {
           >
             <Ionicons name="arrow-back" size={24} color={iconColor} />
           </TouchableOpacity>
-          <Text className="text-xl font-bold" style={{ color: textColor }}>
-            {t("userProfile.title")}
-          </Text>
-          <TouchableOpacity onPress={handleOptions} className="p-2">
-            <Ionicons name="ellipsis-horizontal" size={24} color={iconColor} />
-          </TouchableOpacity>
+
+          <View className="flex-row gap-3">
+            <TouchableOpacity
+              onPress={handleShare}
+              className="p-2 rounded-full"
+              style={{ backgroundColor: cardBg }}
+            >
+              <Ionicons name="share-outline" size={22} color={iconColor} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleOptionsPress}
+              className="p-2 rounded-full"
+              style={{ backgroundColor: cardBg }}
+            >
+              <Ionicons
+                name={isMe ? "settings-outline" : "shield-checkmark-outline"}
+                size={22}
+                color={iconColor}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* INFO USUARIO */}
         <View className="items-center">
-          <View className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/30">
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => setShowFullImageModal(true)}
+            className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/30"
+          >
             <Image
-              source={
-                visitedUser?.pfp
-                  ? { uri: visitedUser.pfp }
-                  : require("@/assets/noPfp.jpg")
-              }
+              source={pfpUrl ? { uri: pfpUrl } : require("@/assets/noPfp.jpg")}
               className="w-32 h-32 rounded-full"
               style={{ backgroundColor: cardBg }}
             />
-          </View>
+          </TouchableOpacity>
           <Text
             className="text-2xl font-bold mt-4"
             style={{ color: textColor }}
@@ -446,37 +581,63 @@ const UserProfile = () => {
             @{visitedUser?.username || "usuario"}
           </Text>
         </View>
-        <View className="px-6 mt-6 min-h-[50px] justify-center">
+
+        {/* BOTONES ACCIÓN */}
+        <View className="px-6 mt-6 min-h-[50px]">
           {currentUser && currentUser.$id !== visitedUser.$id && (
-            <TouchableOpacity
-              onPress={handleFollowAction}
-              disabled={followLoading}
-              className="w-full py-3 rounded-2xl items-center justify-center border"
-              style={{
-                backgroundColor: followStatus ? cardBg : activeColor,
-                borderColor: followStatus ? borderColor : activeColor,
-              }}
-            >
-              {followLoading ? (
-                <ActivityIndicator
-                  color={followStatus ? iconColor : "white"}
-                  size="small"
-                />
-              ) : (
-                <Text
-                  className="font-bold text-base"
-                  style={{ color: followStatus ? subTextColor : "white" }}
-                >
-                  {followStatus === "accepted"
-                    ? t("userProfile.actions.following")
-                    : followStatus === "pending"
-                    ? t("userProfile.actions.requested")
-                    : t("userProfile.actions.follow")}
-                </Text>
-              )}
-            </TouchableOpacity>
+            <View className="flex-row items-center gap-3 w-full">
+              <TouchableOpacity
+                onPress={handleFollowAction}
+                disabled={followLoading}
+                className="flex-1 py-3 rounded-2xl items-center justify-center border"
+                style={{
+                  backgroundColor: followStatus ? cardBg : activeColor,
+                  borderColor: followStatus ? borderColor : activeColor,
+                }}
+              >
+                {followLoading ? (
+                  <ActivityIndicator
+                    color={followStatus ? iconColor : "white"}
+                    size="small"
+                  />
+                ) : (
+                  <Text
+                    className="font-bold text-base"
+                    style={{ color: followStatus ? subTextColor : "white" }}
+                  >
+                    {followStatus === "accepted"
+                      ? isFollowingMe
+                        ? "Friends"
+                        : "Following"
+                      : followStatus === "pending"
+                      ? "Requested"
+                      : isFollowingMe
+                      ? "Follow Back"
+                      : "Follow"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleChatPress}
+                disabled={isChatLoading}
+                className="p-3 rounded-2xl border justify-center items-center aspect-square"
+                style={{ backgroundColor: cardBg, borderColor: borderColor }}
+              >
+                {isChatLoading ? (
+                  <ActivityIndicator color={activeColor} size="small" />
+                ) : (
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={24}
+                    color={activeColor}
+                  />
+                )}
+              </TouchableOpacity>
+            </View>
           )}
         </View>
+
+        {/* Stats */}
         <View
           className="flex-row justify-between items-center mx-4 h-[70px] mt-6 mb-3 px-2 rounded-3xl border shadow-sm"
           style={{
@@ -501,7 +662,7 @@ const UserProfile = () => {
               className="text-[10px] font-bold mt-1"
               style={{ color: subTextColor }}
             >
-              {t("profile.stats.followers")}
+              {t("profile.stats.followers") || "Followers"}
             </Text>
           </TouchableOpacity>
           <View
@@ -520,10 +681,9 @@ const UserProfile = () => {
               className="text-[10px] font-bold mt-1"
               style={{ color: subTextColor }}
             >
-              {t("profile.stats.moods")}
+              {t("profile.stats.moods") || "Moods"}
             </Text>
           </TouchableOpacity>
-
           <View
             className="h-8 w-[1px]"
             style={{ backgroundColor: borderColor }}
@@ -545,10 +705,12 @@ const UserProfile = () => {
               className="text-[10px] font-bold mt-1"
               style={{ color: subTextColor }}
             >
-              {t("profile.stats.following")}
+              {t("profile.stats.following") || "Following"}
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Tabs */}
         <View
           className="pt-4"
           style={{
@@ -574,10 +736,9 @@ const UserProfile = () => {
                 className="font-bold"
                 style={{ color: activeTab === 0 ? "white" : subTextColor }}
               >
-                {t("profile.tabs.moods")}
+                {t("profile.tabs.moods") || "Moods"}
               </Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               onPress={() => handleTabPress(1)}
               className="flex-1 py-3 rounded-xl items-center justify-center flex-row"
@@ -595,28 +756,20 @@ const UserProfile = () => {
                 className="font-bold"
                 style={{ color: activeTab === 1 ? "white" : subTextColor }}
               >
-                {t("profile.tabs.topHits")}
+                {t("profile.tabs.topHits") || "Top Hits"}
               </Text>
             </TouchableOpacity>
           </View>
         </View>
+
         {!showContent ? (
           <View className="items-center justify-center py-20 px-6">
-            <View
-              className="w-20 h-20 rounded-full border-2 items-center justify-center mb-4"
-              style={{ borderColor: borderColor }}
+            <Ionicons name="lock-closed-outline" size={40} color={iconColor} />
+            <Text
+              className="font-bold text-lg mt-4"
+              style={{ color: textColor }}
             >
-              <Ionicons
-                name="lock-closed-outline"
-                size={40}
-                color={iconColor}
-              />
-            </View>
-            <Text className="font-bold text-lg" style={{ color: textColor }}>
-              {t("userProfile.privateTitle")}
-            </Text>
-            <Text className="text-center mt-2" style={{ color: subTextColor }}>
-              {t("userProfile.privateMsg")}
+              {t("userProfile.privateTitle") || "Cuenta Privada"}
             </Text>
           </View>
         ) : (
@@ -632,16 +785,12 @@ const UserProfile = () => {
           >
             <View style={{ width }} className="min-h-[200px]">
               {posts.length === 0 ? (
-                <View className="flex-1 justify-center items-center py-20">
-                  <Ionicons
-                    name="images-outline"
-                    size={48}
-                    color={subTextColor}
-                  />
-                  <Text className="mt-4" style={{ color: subTextColor }}>
-                    {t("profile.empty.posts")}
-                  </Text>
-                </View>
+                <Text
+                  className="text-center mt-10"
+                  style={{ color: subTextColor }}
+                >
+                  No posts
+                </Text>
               ) : (
                 <View className="flex-row flex-wrap">
                   {posts.map(renderMoodItem)}
@@ -650,16 +799,12 @@ const UserProfile = () => {
             </View>
             <View style={{ width }} className="min-h-[200px]">
               {topSongs.length === 0 ? (
-                <View className="flex-1 justify-center items-center py-10">
-                  <Ionicons
-                    name="musical-note"
-                    size={40}
-                    color={subTextColor}
-                  />
-                  <Text className="mt-2" style={{ color: subTextColor }}>
-                    {t("profile.empty.songs")}
-                  </Text>
-                </View>
+                <Text
+                  className="text-center mt-10"
+                  style={{ color: subTextColor }}
+                >
+                  No songs
+                </Text>
               ) : (
                 <View>
                   {topSongs.map((song, index) => renderMusicItem(song, index))}
@@ -668,7 +813,6 @@ const UserProfile = () => {
             </View>
           </ScrollView>
         )}
-
         <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>

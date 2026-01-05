@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useNavigation } from "expo-router"; // Importamos useNavigation
+import { router, useNavigation } from "expo-router";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import TopBar from "@/components/TopBar";
 import {
@@ -19,6 +19,8 @@ import {
   getCurrentUser,
   deletePost,
   reportPost,
+  getUnreadNotificationCount,
+  getUnreadMessagesCount,
 } from "@/lib/appwrite";
 import ShareModal from "@/components/ShareModal";
 import OptionsModal from "@/components/OptionsModal";
@@ -26,7 +28,10 @@ import PostItem from "@/components/PostItem";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
 
-// Función auxiliar simple para obtener ID del creador
+// --- LISTA DE ADMINISTRADORES ---
+const ADMIN_USERS = [".angel", "whoseslender"];
+// --------------------------------
+
 const getCreatorId = (item: any) => {
   let userObj = item.creator || item.postedBy || item.users || item.user;
   if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
@@ -44,8 +49,6 @@ const Home = () => {
 
   const { t } = useLanguage();
   const { user, loading, loggedIn } = useGlobalContext();
-
-  // CORRECCIÓN AQUÍ: Usamos <any> para evitar el error de TypeScript con 'tabPress'
   const navigation = useNavigation<any>();
 
   const [feedPosts, setFeedPosts] = useState<any[]>([]);
@@ -53,7 +56,10 @@ const Home = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  // --- ESTADOS PARA MODALES ---
+  // --- ESTADOS PARA CONTEOS ---
+  const [notiCount, setNotiCount] = useState(0);
+  const [msgCount, setMsgCount] = useState(0);
+
   const [isShareVisible, setShareVisible] = useState(false);
   const [postToShare, setPostToShare] = useState<string>("");
   const [isOptionsVisible, setOptionsVisible] = useState(false);
@@ -61,7 +67,6 @@ const Home = () => {
 
   const flatListRef = useRef<FlatList>(null);
 
-  // --- DATA FETCHING ---
   const fetchData = async () => {
     try {
       let activeId = user?.$id;
@@ -72,6 +77,14 @@ const Home = () => {
           setCurrentUserId(u.$id);
         }
       } else setCurrentUserId(activeId);
+
+      // --- OBTENER CONTEOS ---
+      if (activeId) {
+        const nCount = await getUnreadNotificationCount(activeId);
+        const mCount = await getUnreadMessagesCount(activeId);
+        setNotiCount(nCount);
+        setMsgCount(mCount);
+      }
 
       let followedIds: string[] = [];
       if (activeId) {
@@ -92,10 +105,8 @@ const Home = () => {
       const timelinePosts = rawPosts.filter((post: any) => {
         const creatorId = getCreatorId(post);
         if (!creatorId || creatorId === "unknown") return false;
-
         const isMine = creatorId === activeId;
         const isFollowed = followedIds.includes(creatorId);
-
         return isMine || isFollowed;
       });
 
@@ -123,26 +134,15 @@ const Home = () => {
     await fetchData();
   };
 
-  // --- DETECTAR CLIC EN EL BOTÓN HOME (TabPress) ---
   useEffect(() => {
-    // Escuchamos el evento 'tabPress'
     const unsubscribe = navigation.addListener("tabPress", (e: any) => {
-      // Si la pantalla ya está enfocada (estamos en Home y tocamos Home de nuevo)
       if (navigation.isFocused()) {
-        // e.preventDefault(); // (Opcional) Descomenta si quieres evitar cualquier comportamiento por defecto
-
-        // 1. Scroll suave hacia arriba
         flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-
-        // 2. Refrescar los datos
         onRefresh();
       }
     });
-
     return unsubscribe;
   }, [navigation]);
-
-  // --- LÓGICA MODALES ---
 
   const openOptions = (post: any) => {
     setSelectedPost(post);
@@ -160,8 +160,11 @@ const Home = () => {
     setOptionsVisible(false);
 
     Alert.alert(
-      "¿Eliminar definitivamente?",
-      "Esta acción no se puede deshacer.",
+      "¿Eliminar Publicación?",
+      // CORRECCIÓN: Agregamos || "" para evitar error de undefined
+      ADMIN_USERS.includes(user?.username || "")
+        ? "Modo Admin: Esta acción eliminará el post de otro usuario."
+        : "Esta acción no se puede deshacer.",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -172,7 +175,10 @@ const Home = () => {
               setFeedPosts((prev) => prev.filter((p) => p.$id !== post.$id));
               await deletePost(post.$id);
             } catch (e) {
-              Alert.alert("Error", "No se pudo eliminar el post");
+              Alert.alert(
+                "Error",
+                "No se pudo eliminar el post. Verifica permisos en Appwrite."
+              );
               onRefresh();
             }
           },
@@ -226,6 +232,13 @@ const Home = () => {
     );
   };
 
+  // --- LÓGICA DE PODER ABSOLUTO ---
+  const isPostOwner =
+    (selectedPost?.postedBy?.$id || selectedPost?.creator?.$id) === user?.$id;
+  // CORRECCIÓN: Agregamos || "" para evitar error de undefined
+  const isAdmin = ADMIN_USERS.includes(user?.username || "");
+  const showDeleteOption = isPostOwner || isAdmin;
+
   return (
     <SafeAreaView
       className="flex-1"
@@ -233,7 +246,9 @@ const Home = () => {
       style={{ backgroundColor: bgColor }}
     >
       <StatusBar style={isDark ? "light" : "dark"} />
-      <TopBar />
+
+      {/* Pasamos los contadores al TopBar */}
+      <TopBar notificationCount={notiCount} messageCount={msgCount} />
 
       {isLoading ? (
         <View className="flex-1 justify-center items-center">
@@ -273,7 +288,6 @@ const Home = () => {
         />
       )}
 
-      {/* MODALES */}
       <ShareModal
         isVisible={isShareVisible}
         onClose={() => setShareVisible(false)}
@@ -285,10 +299,7 @@ const Home = () => {
         onClose={() => setOptionsVisible(false)}
         onDelete={handleDeleteAction}
         onReport={handleReportAction}
-        isOwner={
-          (selectedPost?.postedBy?.$id || selectedPost?.creator?.$id) ===
-          user?.$id
-        }
+        isOwner={showDeleteOption}
       />
     </SafeAreaView>
   );

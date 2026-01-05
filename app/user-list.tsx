@@ -2,181 +2,200 @@ import {
   View,
   Text,
   FlatList,
-  Image,
   TouchableOpacity,
+  Image,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from "react-native";
 import React, { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, router, Stack } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, router } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { useGlobalContext } from "@/context/GlobalProvider";
-import { useLanguage } from "@/context/LanguageContext";
-import { getUserFollowers, getUserFollowing } from "@/lib/appwrite";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  getUserFollowers,
+  getUserFollowing,
+  getCurrentUser,
+  followUser,
+  unfollowUser, // Puedes usarlo si decides agregar botón de unfollow
+  createChat,
+  checkFollowStatus,
+} from "@/lib/appwrite";
 
 const UserList = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-  const { t } = useLanguage();
-  const { user: currentUser } = useGlobalContext();
-
   const params = useLocalSearchParams();
-  const userId = params.userId as string;
-  const type = params.type as "followers" | "following";
+  const { userId, type } = params;
 
-  // Colores
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
-  const borderColor = isDark ? "#27272A" : "#E4E4E7";
   const cardBg = isDark ? "#18181B" : "#F4F4F5";
-  const iconColor = isDark ? "#FFFFFF" : "#000000";
+  const activeColor = "#5E17EB";
 
   const [users, setUsers] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  const [myFollowingIds, setMyFollowingIds] = useState<string[]>([]);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
   }, [userId, type]);
 
   const fetchData = async () => {
-    if (!userId) return;
+    setLoading(true);
     try {
-      let data = [];
+      const me = await getCurrentUser();
+      setCurrentUser(me);
+
+      let fetchedUsers: any[] = [];
+
       if (type === "followers") {
-        data = await getUserFollowers(userId);
+        fetchedUsers = await getUserFollowers(userId as string);
       } else {
-        data = await getUserFollowing(userId);
+        fetchedUsers = await getUserFollowing(userId as string);
       }
-      setUsers(data);
+      setUsers(fetchedUsers);
+
+      if (me && fetchedUsers.length > 0) {
+        const whoIFollow = await getUserFollowing(me.$id);
+        const followingIds = whoIFollow.map((u: any) => u.$id);
+        setMyFollowingIds(followingIds);
+      }
     } catch (error) {
-      console.log("Error fetching user list:", error);
+      console.error("Error fetching user list:", error);
     } finally {
-      setIsLoading(false);
-      setRefreshing(false);
+      setLoading(false);
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchData();
-  };
+  const handleAction = async (targetUser: any) => {
+    if (!currentUser) return;
+    if (actionLoading) return;
 
-  const handlePressUser = (item: any) => {
-    if (item.$id === currentUser?.$id) {
-      router.push("/(tabs)/profile");
+    const isFollowing = myFollowingIds.includes(targetUser.$id);
+
+    if (isFollowing) {
+      setActionLoading(targetUser.$id);
+      try {
+        const chatDoc = await createChat(currentUser.$id, targetUser.$id);
+        if (chatDoc) {
+          router.push(`/chat/${chatDoc.$id}` as any);
+        }
+      } catch (error) {
+        Alert.alert("Error", "No se pudo abrir el chat");
+      } finally {
+        setActionLoading(null);
+      }
     } else {
-      router.push({
-        pathname: "/user/[id]",
-        params: {
-          id: item.$id,
-          username: item.username,
-          name: item.name,
-          avatar: item.pfp,
-        },
-      } as any);
+      setActionLoading(targetUser.$id);
+      try {
+        await followUser(currentUser.$id, targetUser.$id);
+        setMyFollowingIds((prev) => [...prev, targetUser.$id]);
+      } catch (error) {
+        console.error("Error following:", error);
+      } finally {
+        setActionLoading(null);
+      }
     }
   };
 
-  const getTitle = () => {
-    if (type === "followers") return t("userList.followers");
-    if (type === "following") return t("userList.following");
-    return t("userList.title");
-  };
+  const renderItem = ({ item }: { item: any }) => {
+    const isMe = currentUser?.$id === item.$id;
+    const isFollowing = myFollowingIds.includes(item.$id);
+    const isLoadingThis = actionLoading === item.$id;
 
-  const renderItem = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      onPress={() => handlePressUser(item)}
-      activeOpacity={0.7}
-      className="flex-row items-center px-5 py-4 border-b"
-      style={{ borderColor: borderColor, backgroundColor: bgColor }}
-    >
-      <Image
-        source={item.pfp ? { uri: item.pfp } : require("@/assets/noPfp.jpg")}
-        className="w-12 h-12 rounded-full"
-        style={{ backgroundColor: cardBg }}
-      />
-      <View className="ml-4 flex-1">
-        <Text
-          className="font-bold text-base"
-          style={{ color: textColor }}
-          numberOfLines={1}
+    return (
+      <View className="flex-row items-center justify-between py-3 px-4 w-full">
+        {/* INFO USUARIO - RUTA CORREGIDA AQUI */}
+        <TouchableOpacity
+          className="flex-row items-center flex-1"
+          onPress={() => router.push(`/user/${item.$id}` as any)}
         >
-          {item.name}
-        </Text>
-        <Text
-          className="text-sm mt-0.5"
-          style={{ color: subTextColor }}
-          numberOfLines={1}
-        >
-          @{item.username}
-        </Text>
+          <Image
+            source={
+              item.pfp ? { uri: item.pfp } : require("@/assets/noPfp.jpg")
+            }
+            className="w-14 h-14 rounded-full border border-gray-200 dark:border-gray-800"
+            style={{ backgroundColor: cardBg }}
+          />
+          <View className="ml-3 flex-1">
+            <Text className="font-bold text-base" style={{ color: textColor }}>
+              {item.username}
+            </Text>
+            <Text className="text-sm" style={{ color: subTextColor }}>
+              {item.name}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* BOTÓN DE ACCIÓN */}
+        {!isMe && (
+          <TouchableOpacity
+            onPress={() => handleAction(item)}
+            disabled={isLoadingThis}
+            className={`px-5 py-2 rounded-lg items-center justify-center min-w-[100px] ${
+              isFollowing ? "bg-gray-200 dark:bg-gray-800" : "bg-[#5E17EB]"
+            }`}
+          >
+            {isLoadingThis ? (
+              <ActivityIndicator
+                size="small"
+                color={isFollowing ? textColor : "white"}
+              />
+            ) : (
+              <Text
+                className="font-semibold text-sm"
+                style={{ color: isFollowing ? textColor : "white" }}
+              >
+                {isFollowing ? "Message" : "Follow"}
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
-      <Ionicons name="chevron-forward" size={20} color={subTextColor} />
-    </TouchableOpacity>
-  );
+    );
+  };
 
   return (
-    <SafeAreaView
-      className="flex-1"
-      edges={["top"]}
-      style={{ backgroundColor: bgColor }}
-    >
-      <Stack.Screen options={{ headerShown: false }} />
-
-      {/* Header */}
+    <SafeAreaView className="flex-1" style={{ backgroundColor: bgColor }}>
       <View
-        className="flex-row items-center px-4 h-[50px] border-b"
-        style={{ borderColor: borderColor }}
+        className="flex-row items-center px-4 py-3 border-b"
+        style={{ borderColor: isDark ? "#27272A" : "#E5E7EB" }}
       >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          className="p-2 -ml-2 rounded-full"
-        >
-          <Ionicons name="arrow-back" size={24} color={iconColor} />
+        <TouchableOpacity onPress={() => router.back()} className="mr-4">
+          <Ionicons name="arrow-back" size={24} color={textColor} />
         </TouchableOpacity>
-        <Text
-          className="font-bold text-xl ml-2 capitalize"
-          style={{ color: textColor }}
-        >
-          {getTitle()}
+        <Text className="text-lg font-bold" style={{ color: textColor }}>
+          {type === "followers" ? "Followers" : "Following"}
         </Text>
       </View>
 
-      {/* Lista */}
-      {isLoading ? (
+      {loading ? (
         <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#5E17EB" />
+          <ActivityIndicator size="large" color={activeColor} />
         </View>
       ) : (
         <FlatList
           data={users}
           keyExtractor={(item) => item.$id}
           renderItem={renderItem}
+          contentContainerStyle={{ paddingVertical: 10 }}
+          ListEmptyComponent={
+            <View className="items-center mt-20">
+              <Text style={{ color: subTextColor }}>No users found.</Text>
+            </View>
+          }
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#5E17EB"
+              refreshing={loading}
+              onRefresh={fetchData}
+              tintColor={activeColor}
             />
-          }
-          ListEmptyComponent={
-            <View className="flex-1 justify-center items-center mt-20 px-10">
-              <Ionicons
-                name="people-outline"
-                size={48}
-                color={subTextColor}
-                style={{ opacity: 0.5, marginBottom: 10 }}
-              />
-              <Text className="text-center" style={{ color: subTextColor }}>
-                {type === "followers"
-                  ? t("userList.emptyFollowers")
-                  : t("userList.emptyFollowing")}
-              </Text>
-            </View>
           }
         />
       )}
