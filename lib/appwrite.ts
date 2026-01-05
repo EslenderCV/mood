@@ -7,7 +7,7 @@ import {
   AppwriteException,
   Storage,
   ID,
-  OAuthProvider, // <--- IMPORTANTE: Agregado para arreglar el error
+  OAuthProvider,
 } from "react-native-appwrite";
 
 export const appwriteConfig = {
@@ -38,10 +38,6 @@ const account = new Account(client);
 const avatars = new Avatars(client);
 const databases = new Databases(client);
 const storage = new Storage(client);
-
-// ==========================================
-// AUTH & USER
-// ==========================================
 
 export const createUser = async (
   email: string,
@@ -106,14 +102,11 @@ export const signInn = async (email: string, password: string) => {
   }
 };
 
-// --- FUNCIÓN CORREGIDA PARA GOOGLE / APPLE ---
 export async function signInWithOAuth(provider: "google" | "apple") {
   try {
-    // Estas URLs deben coincidir con tu Scheme en app.json (mood://)
     const successUrl = "mood://home";
     const failureUrl = "mood://login";
 
-    // CORRECCIÓN: Convertimos el string al Enum que espera Appwrite
     const oAuthProvider =
       provider === "google" ? OAuthProvider.Google : OAuthProvider.Apple;
 
@@ -129,7 +122,6 @@ export async function signInWithOAuth(provider: "google" | "apple") {
     throw new Error(error.message);
   }
 }
-// -----------------------------------------
 
 export const signOut = async () => {
   try {
@@ -153,14 +145,12 @@ export const getCurrentUser = async () => {
 
     const userData = currentUser.documents[0];
 
-    // --- VERIFICAR BANEO ---
     if (userData.isBanned) {
       try {
         await signOut();
       } catch (e) {}
       throw new Error("Cuenta suspendida por administración.");
     }
-    // ------------------------------
 
     return userData;
   } catch (error: any) {
@@ -180,7 +170,6 @@ export async function getUser(userId: string) {
       userId
     );
 
-    // --- Si está baneado, retornamos null para que la UI lo ignore ---
     if (user.isBanned) {
       return null;
     }
@@ -247,10 +236,6 @@ export async function updateUserPassword(newPass: string, oldPass: string) {
   }
 }
 
-// ==========================================
-// FILES & STORAGE
-// ==========================================
-
 export async function uploadFile(file: any) {
   if (!file) return;
 
@@ -281,14 +266,6 @@ export async function updateImage(file: any) {
   return await uploadFile(file);
 }
 
-// ==========================================
-// EXTERNAL MEDIA SERVICES (DEEZER)
-// ==========================================
-
-/**
- * Obtiene una URL de preview válida y fresca desde Deezer.
- * Usar esta función en el componente de UI al presionar Play.
- */
 export const getDeezerTrackUrl = async (trackId: string | number) => {
   if (!trackId) return null;
   try {
@@ -305,10 +282,6 @@ export const getDeezerTrackUrl = async (trackId: string | number) => {
   }
 };
 
-// ==========================================
-// POSTS
-// ==========================================
-
 export async function getPostById(postId: string) {
   try {
     const post = await databases.getDocument(
@@ -319,7 +292,7 @@ export async function getPostById(postId: string) {
     if (post.postedBy && typeof post.postedBy === "string") {
       const user = await getUser(post.postedBy);
 
-      if (!user) return null; // Usuario baneado o no existe
+      if (!user) return null;
 
       return { ...post, postedBy: user };
     }
@@ -341,26 +314,20 @@ export async function getPostById(postId: string) {
 
 export const createPost = async (
   comment: string,
-  songData: string, // Espera un JSON string
+  songData: string,
   userId: string
 ) => {
   try {
-    // --- LÓGICA DE LIMPIEZA DEEER ---
-    // Parseamos para asegurar que NO guardamos la URL de preview (que caduca),
-    // solo guardamos metadata estática e ID.
     let cleanSongData = songData;
     try {
       const parsedData = JSON.parse(songData);
-      // Si existe un preview, lo borramos para no ocupar espacio ni usar links rotos
       if (parsedData.preview) {
         delete parsedData.preview;
         cleanSongData = JSON.stringify(parsedData);
       }
     } catch (e) {
-      // Si falla el parse, guardamos tal cual, pero intentamos limpiar
       console.log("No se pudo limpiar el songData, guardando raw");
     }
-    // --------------------------------
 
     return await databases.createDocument(
       appwriteConfig.databaseId,
@@ -640,10 +607,6 @@ export async function getSavedPosts(userId: string) {
   }
 }
 
-// ==========================================
-// COMMENTS
-// ==========================================
-
 export async function createComment(
   postId: string,
   commentData: any,
@@ -739,10 +702,6 @@ export async function getPostComments(postId: string) {
     return [];
   }
 }
-
-// ==========================================
-// FOLLOWS
-// ==========================================
 
 export async function checkFollowStatus(
   followerId: string,
@@ -1019,10 +978,6 @@ export async function deleteFollowRequest(
   }
 }
 
-// ==========================================
-// NOTIFICATIONS
-// ==========================================
-
 export async function createNotification(data: {
   userId: string;
   type: "like" | "comment" | "follow" | "follow_request" | "tag";
@@ -1158,10 +1113,6 @@ export async function clearAllNotifications(userId: string) {
   }
 }
 
-// ==========================================
-// SEARCH & TAGS
-// ==========================================
-
 export async function searchUsers(query: string) {
   try {
     const users = await databases.listDocuments(
@@ -1211,10 +1162,6 @@ export const sendTagNotification = async (
   }
 };
 
-// ==========================================
-// CHATS
-// ==========================================
-
 export async function getOrCreateChat(
   currentUserId: string,
   otherUserId: string
@@ -1247,9 +1194,7 @@ export async function getOrCreateChat(
   }
 }
 
-// --- MODIFICACIÓN: Alias para que UserProfile.tsx encuentre "createChat" usando la lógica existente ---
 export const createChat = getOrCreateChat;
-// -----------------------------------------------------------------------------------------------------
 
 export async function deleteChat(chatId: string) {
   try {
@@ -1416,10 +1361,6 @@ export async function updateMessage(messageId: string, newContent: string) {
   }
 }
 
-// ==========================================
-// BLOCKING
-// ==========================================
-
 export async function blockUser(currentUserId: string, userToBlockId: string) {
   try {
     const currentUser = await databases.getDocument(
@@ -1520,10 +1461,6 @@ export async function deleteAllSessions() {
   }
 }
 
-// ==========================================
-// REPORTS
-// ==========================================
-
 export async function reportPost(
   postId: string,
   reporterId: string,
@@ -1548,10 +1485,6 @@ export async function reportPost(
     throw new Error("No se pudo enviar el reporte");
   }
 }
-
-// ==========================================
-// SPOTIFY & PLATFORM AUTH
-// ==========================================
 
 export async function saveSpotifyTokens(
   userId: string,
@@ -1594,10 +1527,6 @@ export async function setPreferredPlatform(
     throw new Error("No se pudo cambiar la preferencia");
   }
 }
-
-// ==========================================
-// PLAYLISTS
-// ==========================================
 
 export async function createPlaylist(
   name: string,
@@ -1740,15 +1669,10 @@ export async function getPlaylistById(playlistId: string) {
   }
 }
 
-// ------------------------------------------------------------
-// NOTIFICACIONES PUSH (CORREGIDO)
-// ------------------------------------------------------------
-
 export async function updateUserPushToken(userId: string, token: string) {
   try {
     await databases.updateDocument(
       appwriteConfig.databaseId,
-      // AQUÍ ESTABA EL ERROR: Era 'userCollectionId' y debía ser 'usersCollectionId'
       appwriteConfig.usersCollectionId,
       userId,
       {

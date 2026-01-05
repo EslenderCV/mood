@@ -26,16 +26,12 @@ import {
   client,
   appwriteConfig,
 } from "@/lib/appwrite";
-// 1. IMPORTAR CONTEXTO
 import { useLanguage } from "@/context/LanguageContext";
 
 const ChatsList = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // 2. USAR HOOK
   const { t } = useLanguage();
-
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";

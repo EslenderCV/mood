@@ -4,7 +4,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
 import { useColorScheme } from "nativewind";
 
-// Definimos las "props" que el componente espera recibir
 interface TopBarProps {
   notificationCount?: number;
   messageCount?: number;
@@ -28,7 +27,6 @@ const TopBar = ({ notificationCount = 0, messageCount = 0 }: TopBarProps) => {
         borderBottomWidth: isDark ? 1 : 0,
       }}
     >
-      {/* LOGO */}
       <View className="h-[45px] w-[80px] justify-center">
         <Image
           source={require("@/assets/fullLogo.png")}
@@ -37,10 +35,7 @@ const TopBar = ({ notificationCount = 0, messageCount = 0 }: TopBarProps) => {
           style={{ tintColor: isDark ? undefined : "#5E17EB" }}
         />
       </View>
-
-      {/* ICONOS */}
       <View className="flex-row items-center gap-x-3">
-        {/* BOTÓN DE NOTIFICACIONES */}
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={() => {
@@ -65,8 +60,6 @@ const TopBar = ({ notificationCount = 0, messageCount = 0 }: TopBarProps) => {
           )}
           <Ionicons name="notifications-outline" color={iconColor} size={22} />
         </TouchableOpacity>
-
-        {/* BOTÓN DE CHATS (Mensajes) */}
         <Link href="/chats" asChild>
           <TouchableOpacity
             activeOpacity={0.7}

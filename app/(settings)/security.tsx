@@ -24,14 +24,12 @@ import {
   deleteAllSessions,
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
-// 1. IMPORTAR CONTEXTO
 import { useLanguage } from "@/context/LanguageContext";
 
 const Security = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // 2. USAR HOOK
   const { t } = useLanguage();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";

@@ -2,8 +2,8 @@ import React from "react";
 import { TouchableOpacity, Text } from "react-native";
 
 interface FollowButtonProps {
-  isFollowing: boolean; // ¿Yo lo sigo?
-  isFollower: boolean; // ¿Él me sigue?
+  isFollowing: boolean;
+  isFollower: boolean;
   onPress: () => void;
 }
 
@@ -14,7 +14,7 @@ export const FollowButton = ({
 }: FollowButtonProps) => {
   const getLabel = () => {
     if (isFollowing) return "Siguiendo";
-    if (isFollower) return "Seguir también"; // O "Follow Back"
+    if (isFollower) return "Seguir también";
     return "Seguir";
   };
 

@@ -6,15 +6,12 @@ import { Redirect, router } from "expo-router";
 import CustomButtom from "@/components/CustomButtom";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import * as Animatable from "react-native-animatable";
-// 1. IMPORTAR CONTEXTO
 import { useLanguage } from "@/context/LanguageContext";
 
 const AnimatableView = Animatable.View as any;
 
 const Index = () => {
   const { loading, loggedIn } = useGlobalContext();
-
-  // 2. USAR HOOK
   const { t } = useLanguage();
 
   if (loading)

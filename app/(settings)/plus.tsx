@@ -3,14 +3,11 @@ import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
-// 1. IMPORTAR CONTEXTO
 import { useLanguage } from "@/context/LanguageContext";
 
 const GetPlus = () => {
-  // 2. USAR HOOK
   const { t } = useLanguage();
 
-  // Generamos las características dinámicamente usando las traducciones
   const features = [
     {
       id: 1,

@@ -98,7 +98,6 @@ async function registerForPushNotificationsAsync() {
       finalStatus = status;
     }
     if (finalStatus !== "granted") {
-      // Si no hay permisos, simplemente salimos sin romper la app
       return;
     }
 
@@ -107,11 +106,9 @@ async function registerForPushNotificationsAsync() {
         Constants?.expoConfig?.extra?.eas?.projectId ??
         Constants?.easConfig?.projectId;
       if (!projectId) {
-        // Este log es normal en desarrollo local sin EAS configurado
         console.log("Modo desarrollo: Project ID no encontrado.");
       }
 
-      // Intentamos obtener el token. Si falla por falta de projectId, lo capturamos.
       token = (
         await Notifications.getExpoPushTokenAsync({
           projectId: projectId || undefined,
@@ -120,7 +117,6 @@ async function registerForPushNotificationsAsync() {
 
       console.log("Mi Push Token:", token);
     } catch (e) {
-      // Silenciamos el error en consola para no ensuciar, ya que en Expo Go puede fallar
       console.log(
         "No se pudo obtener el token push (probablemente por entorno Expo Go)."
       );

@@ -18,9 +18,7 @@ import {
   getUserFollowing,
   getCurrentUser,
   followUser,
-  unfollowUser, // Puedes usarlo si decides agregar botón de unfollow
   createChat,
-  checkFollowStatus,
 } from "@/lib/appwrite";
 
 const UserList = () => {
@@ -111,7 +109,6 @@ const UserList = () => {
 
     return (
       <View className="flex-row items-center justify-between py-3 px-4 w-full">
-        {/* INFO USUARIO - RUTA CORREGIDA AQUI */}
         <TouchableOpacity
           className="flex-row items-center flex-1"
           onPress={() => router.push(`/user/${item.$id}` as any)}
@@ -132,8 +129,6 @@ const UserList = () => {
             </Text>
           </View>
         </TouchableOpacity>
-
-        {/* BOTÓN DE ACCIÓN */}
         {!isMe && (
           <TouchableOpacity
             onPress={() => handleAction(item)}

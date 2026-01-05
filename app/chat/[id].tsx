@@ -33,21 +33,18 @@ import {
   markChatAsRead,
   getPostById,
   getPlaylistById,
-  getUser, // <--- IMPORTADO
-  databases, // <--- IMPORTADO
+  getUser,
+  databases,
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
-// --- FUNCIÓN DE SEGURIDAD PARA VALIDAR IDs ---
 const isValidId = (id: string | null | undefined) => {
-  // Appwrite IDs: max 36 chars, solo alfanuméricos, guión y guión bajo.
   if (!id) return false;
   if (id.length > 36) return false;
   const validChars = /^[a-zA-Z0-9_.-]+$/;
   return validChars.test(id);
 };
 
-// --- COMPONENTE 1: BURBUJA DE POST COMPARTIDO (BLINDADO) ---
 const PostPreviewBubble = ({
   postId,
   onLongPress,
@@ -71,13 +68,11 @@ const PostPreviewBubble = ({
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Validación preventiva
     if (!isValidId(postId)) {
       setError(true);
       return;
     }
 
-    // 2. Fetch seguro
     getPostById(postId)
       .then((data) => {
         if (isMounted) {
@@ -86,7 +81,6 @@ const PostPreviewBubble = ({
         }
       })
       .catch((e) => {
-        // Silenciamos el error en UI, lo logueamos en consola
         console.log("Post preview error:", e);
         if (isMounted) setError(true);
       });
@@ -96,7 +90,6 @@ const PostPreviewBubble = ({
     };
   }, [postId]);
 
-  // Si hay error o ID inválido, no mostramos nada para no ensuciar el chat
   if (error) return null;
 
   if (!post)
@@ -154,7 +147,6 @@ const PostPreviewBubble = ({
   );
 };
 
-// --- COMPONENTE 2: TARJETA DE PLAYLIST COMPARTIDA (BLINDADO) ---
 const ChatPlaylistCard = ({
   playlistId,
   isMyMessage,
@@ -168,7 +160,6 @@ const ChatPlaylistCard = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // Estilos
   const cardBg = isDark ? "#262626" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A8A8A8" : "#737373";
@@ -177,7 +168,6 @@ const ChatPlaylistCard = ({
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Validación preventiva
     if (!isValidId(playlistId)) {
       setLoading(false);
       setError(true);
@@ -309,7 +299,6 @@ const ChatPlaylistCard = ({
   );
 };
 
-// --- CHAT ROOM PRINCIPAL ---
 const ChatRoom = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -337,13 +326,11 @@ const ChatRoom = () => {
   const params = useLocalSearchParams();
   const chatId = params.id as string;
 
-  // --- NUEVO ESTADO PARA INFORMACIÓN DEL USUARIO ---
   const [chatUser, setChatUser] = useState({
     name: (params.otherUserName as string) || "Usuario",
     avatar: (params.otherUserAvatar as string) || null,
     id: (params.otherUserId as string) || null,
   });
-  // -----------------------------------------------
 
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -369,7 +356,6 @@ const ChatRoom = () => {
             )
           ) {
             setMessages((prev) => {
-              // Evitar duplicados si llegan por websocket y fetch
               if (prev.find((m) => m.$id === payload.$id)) return prev;
               return [payload, ...prev];
             });
@@ -408,10 +394,8 @@ const ChatRoom = () => {
       if (!user) return router.replace("/signIn");
       setCurrentUser(user);
 
-      // --- LOGICA DE RECUPERACIÓN DE USUARIO SI FALTAN DATOS ---
       if (!chatUser.id || !chatUser.avatar) {
         try {
-          // Buscamos el documento del chat para saber quiénes son los participantes
           const chatDoc = await databases.getDocument(
             appwriteConfig.databaseId,
             appwriteConfig.chatsCollectionId,
@@ -419,7 +403,6 @@ const ChatRoom = () => {
           );
 
           if (chatDoc && chatDoc.participants) {
-            // Encontramos el ID que NO es el mío
             const otherId = chatDoc.participants.find(
               (p: string) => p !== user.$id
             );
@@ -438,7 +421,6 @@ const ChatRoom = () => {
           console.log("Error recuperando info del otro usuario:", err);
         }
       }
-      // ---------------------------------------------------------
 
       const msgs = await getChatMessages(chatId);
       setMessages(msgs);
@@ -538,7 +520,6 @@ const ChatRoom = () => {
   };
 
   const handleSend = async () => {
-    // Verificamos que tengamos al otro usuario identificado
     if (!newMessage.trim() || !currentUser || !chatUser.id) return;
 
     if (editingMessage) {
@@ -566,7 +547,7 @@ const ChatRoom = () => {
     let contentToSend = newMessage;
     if (replyingTo) {
       const replyName =
-        replyingTo.senderId === currentUser.$id ? t("chat.you") : chatUser.name; // Usamos chatUser.name en lugar de params
+        replyingTo.senderId === currentUser.$id ? t("chat.you") : chatUser.name;
       let rawContent = replyingTo.content;
       if (replyingTo.content.includes(":::REPLY:::")) {
         rawContent = replyingTo.content.split(":::REPLY:::")[1];
@@ -585,7 +566,7 @@ const ChatRoom = () => {
       await sendMessage(
         chatId,
         currentUser.$id,
-        chatUser.id, // Usamos chatUser.id recuperado
+        chatUser.id,
         tempContent,
         null
       );
@@ -622,7 +603,6 @@ const ChatRoom = () => {
     const hasSharedPlaylist = !!item.sharedPlaylistId;
     const hasContent = item.content && item.content.trim().length > 0;
 
-    // Si no tiene nada que mostrar, no renderizamos
     if (!hasSharedPost && !hasSharedPlaylist && !hasContent) return null;
 
     let displayContent = item.content;
@@ -690,23 +670,18 @@ const ChatRoom = () => {
             <View
               className={`max-w-[80%] ${isMe ? "items-end" : "items-start"}`}
             >
-              {/* CASO 1: POST */}
               {hasSharedPost && (
                 <PostPreviewBubble
                   postId={item.sharedPostId}
                   onLongPress={() => handleLongPress(item)}
                 />
               )}
-
-              {/* CASO 2: PLAYLIST */}
               {hasSharedPlaylist && (
                 <ChatPlaylistCard
                   playlistId={item.sharedPlaylistId}
                   isMyMessage={isMe}
                 />
               )}
-
-              {/* CASO 3: TEXTO */}
               {hasContent && (
                 <View
                   className={`px-3 py-2 rounded-[18px] ${

@@ -18,7 +18,6 @@ import {
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
-// IMPORTAR EL CONTEXTO QUE CREAREMOS ABAJO
 import { useAudioContext } from "@/context/AudioContext";
 
 const parseSongData = (songDataString: string) => {
@@ -52,7 +51,6 @@ const PostItem: React.FC<PostItemProps> = ({
 }) => {
   if (!post) return null;
 
-  // --- TEMAS ---
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const textColor = isDark ? "#FFFFFF" : "#09090B";
@@ -62,16 +60,10 @@ const PostItem: React.FC<PostItemProps> = ({
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
 
   const { t, language } = useLanguage();
-
-  // --- CONTEXTO DE AUDIO ---
   const { currentPlayingId, setPlayingId } = useAudioContext();
-
-  // --- ESTADOS LOCALES ---
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
-
-  // Estados UI Optimista
   const [isLiked, setIsLiked] = useState(
     post?.likedBy?.includes(currentUserId) || false
   );
@@ -98,12 +90,9 @@ const PostItem: React.FC<PostItemProps> = ({
   };
   const creator = getCreator();
 
-  // --- AUDIO LOGIC ---
   const player = useAudioPlayer(currentUrl);
 
-  // EFECTO: Pausar si otro post empieza a sonar
   useEffect(() => {
-    // Si hay otro ID sonando y yo estoy tocando, me pauso.
     if (
       currentPlayingId &&
       currentPlayingId !== post.$id &&
@@ -115,10 +104,8 @@ const PostItem: React.FC<PostItemProps> = ({
     }
   }, [currentPlayingId, isPlaying, player, post.$id]);
 
-  // Efecto: Controlar Auto-Play y Fin de canción
   useEffect(() => {
     if (currentUrl && player) {
-      // Auto-Play al cargar URL si soy el activo
       if (!player.playing && currentPlayingId === post.$id) {
         player.play();
         setIsPlaying(true);
@@ -129,7 +116,6 @@ const PostItem: React.FC<PostItemProps> = ({
           setIsPlaying(false);
           player.seekTo(0);
           player.pause();
-          // Liberar el estado global al terminar
           if (currentPlayingId === post.$id) {
             setPlayingId(null);
           }
@@ -151,27 +137,25 @@ const PostItem: React.FC<PostItemProps> = ({
   }, [currentUrl, player, currentPlayingId, post.$id, setPlayingId]);
 
   const handlePlayPause = async () => {
-    // A. Si ya tenemos URL
     if (currentUrl && player) {
       if (player.playing) {
         player.pause();
         setIsPlaying(false);
-        setPlayingId(null); // Libero
+        setPlayingId(null);
       } else {
         if (player.currentTime >= player.duration) {
           player.seekTo(0);
         }
-        setPlayingId(post.$id); // Reclamo el audio
+        setPlayingId(post.$id);
         player.play();
         setIsPlaying(true);
       }
       return;
     }
 
-    // B. Carga Inicial (Lazy Load)
     try {
       setIsLoadingAudio(true);
-      setPlayingId(post.$id); // Reclamo antes de cargar para pausar otros
+      setPlayingId(post.$id);
 
       const trackId = songData?.id || songData?.spotifyId;
 
@@ -199,7 +183,6 @@ const PostItem: React.FC<PostItemProps> = ({
     }
   };
 
-  // --- HANDLERS ---
   const handleLike = async () => {
     const prevLiked = isLiked;
     const prevCount = likesCount;
@@ -230,7 +213,6 @@ const PostItem: React.FC<PostItemProps> = ({
 
   return (
     <View className="flex-row px-4">
-      {/* IZQUIERDA: Avatar */}
       <View className="items-center mr-3">
         <TouchableOpacity
           className="z-10"
@@ -253,10 +235,7 @@ const PostItem: React.FC<PostItemProps> = ({
             className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-800"
           />
         </TouchableOpacity>
-        {/* 🔥 AQUÍ ELIMINÉ LA LÍNEA DE NÚMEROS '121212...' QUE CAUSABA EL ERROR */}
       </View>
-
-      {/* DERECHA: Contenido */}
       <View className="flex-1 pb-6">
         <View className="flex-row items-center justify-between mb-1">
           <View className="flex-row items-center flex-1 flex-wrap">
@@ -298,8 +277,6 @@ const PostItem: React.FC<PostItemProps> = ({
             {post.comment}
           </Text>
         )}
-
-        {/* MUSIC CARD */}
         <View
           className="rounded-2xl p-3 flex-row items-center mb-3"
           style={{

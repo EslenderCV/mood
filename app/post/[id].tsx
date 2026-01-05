@@ -8,10 +8,7 @@ import {
   Platform,
   ActivityIndicator,
   FlatList,
-  TouchableWithoutFeedback,
-  Keyboard,
   Alert,
-  ScrollView,
 } from "react-native";
 import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router } from "expo-router";
@@ -34,13 +31,10 @@ import CommentItem from "@/components/CommentItem";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
 
-// --- IMPORTAR MODALES ---
 import ShareModal from "@/components/ShareModal";
 import OptionsModal from "@/components/OptionsModal";
-// 1. IMPORTAR TU NUEVA TARJETA VIRAL
 import MoodShareCard from "@/components/MoodShareCard";
 
-// --- HELPERS ---
 const formatTimeAgo = (dateString: string, t: (key: string) => string) => {
   if (!dateString) return "";
   const date = new Date(dateString);
@@ -71,7 +65,6 @@ const PostDetails = () => {
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
 
-  // Colores
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -92,11 +85,9 @@ const PostDetails = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
-  // --- ESTADOS PARA MODALES ---
   const [isOptionsVisible, setOptionsVisible] = useState(false);
   const [isShareVisible, setShareVisible] = useState(false);
 
-  // 2. ESTADO PARA EL MODAL VIRAL
   const [isViralModalVisible, setViralModalVisible] = useState(false);
 
   const [replyingTo, setReplyingTo] = useState<{
@@ -106,7 +97,6 @@ const PostDetails = () => {
 
   const [commentText, setCommentText] = useState("");
 
-  // Estados Etiquetas
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
 
@@ -145,7 +135,6 @@ const PostDetails = () => {
     }
   };
 
-  // --- HELPER PARA DATOS VIRALES ---
   const getViralPostData = () => {
     if (!post) return null;
     const song = parseSongData(post.songData);
@@ -156,7 +145,6 @@ const PostDetails = () => {
       artist: song?.artist || "Artista",
       cover: song?.cover || null,
       originalPostCreator: creator.username || "usuario",
-      // AGREGAMOS FOTO REAL Y COMENTARIO
       creatorPfp: creator.pfp || null,
       comment: post.comment || null,
     };
@@ -200,7 +188,6 @@ const PostDetails = () => {
     }
   };
 
-  // --- LÓGICA ETIQUETAS Y COMENTARIOS ---
   const handleTextChange = async (text: string) => {
     setCommentText(text);
     const words = text.split(" ");
@@ -291,8 +278,6 @@ const PostDetails = () => {
       setSending(false);
     }
   };
-
-  // --- ACCIONES POST (Like, Save, Play) ---
   const handleLike = async () => {
     if (!post || !user) return;
     const originalLikes = post.likedBy || [];
@@ -425,8 +410,6 @@ const PostDetails = () => {
             </TouchableOpacity>
           </View>
         )}
-
-        {/* BARRA DE ACCIONES PRINCIPAL */}
         <View className="flex-row justify-between items-center mt-2 px-2">
           <View className="flex-row gap-6">
             <TouchableOpacity
@@ -457,8 +440,6 @@ const PostDetails = () => {
                 {allComments.length}
               </Text>
             </View>
-
-            {/* 3. CAMBIO: BOTÓN DE COMPARTIR AHORA ABRE LA TARJETA VIRAL */}
             <TouchableOpacity onPress={() => setViralModalVisible(true)}>
               <Ionicons name="share-social-outline" size={24} color="#A1A1AA" />
             </TouchableOpacity>
@@ -499,7 +480,6 @@ const PostDetails = () => {
       edges={["top"]}
       style={{ backgroundColor: bgColor }}
     >
-      {/* HEADER DE LA PANTALLA */}
       <View
         className="flex-row items-center justify-between px-4 h-[50px] border-b z-10"
         style={{ backgroundColor: bgColor, borderColor: borderColor }}
@@ -512,8 +492,6 @@ const PostDetails = () => {
             {t("postDetails.headerTitle")}
           </Text>
         </View>
-
-        {/* 4. TAMBIÉN AÑADÍ EL BOTÓN DE COMPARTIR ARRIBA (OPCIONAL) */}
         <View className="flex-row items-center">
           <TouchableOpacity
             onPress={() => setViralModalVisible(true)}
@@ -550,8 +528,6 @@ const PostDetails = () => {
           </Text>
         }
       />
-
-      {/* INPUT DE COMENTARIOS */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
@@ -665,9 +641,6 @@ const PostDetails = () => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-
-      {/* --- MODALES --- */}
-
       <OptionsModal
         isVisible={isOptionsVisible}
         onClose={() => setOptionsVisible(false)}
@@ -675,15 +648,11 @@ const PostDetails = () => {
         onReport={handleReportAction}
         isOwner={isOwner}
       />
-
-      {/* Modal de Compartir Normal (Mantener si quieres las dos opciones) */}
       <ShareModal
         isVisible={isShareVisible}
         onClose={() => setShareVisible(false)}
         postId={post?.$id || ""}
       />
-
-      {/* 5. AÑADIDO: MODAL VIRAL */}
       <MoodShareCard
         isVisible={isViralModalVisible}
         onClose={() => setViralModalVisible(false)}

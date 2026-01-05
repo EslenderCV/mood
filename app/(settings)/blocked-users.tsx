@@ -14,13 +14,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { getBlockedUsersList, unblockUser } from "@/lib/appwrite";
-// 1. IMPORTAR CONTEXTO
 import { useLanguage } from "@/context/LanguageContext";
 
 const BlockedUsers = () => {
   const { user, setUser } = useGlobalContext();
 
-  // 2. USAR HOOK
   const { t } = useLanguage();
 
   const [blockedList, setBlockedList] = useState<any[]>([]);

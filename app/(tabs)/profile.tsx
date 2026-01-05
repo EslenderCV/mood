@@ -14,7 +14,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { useGlobalContext } from "@/context/GlobalProvider";
-import { useModal } from "@/context/ModalContext";
 import { router, useFocusEffect } from "expo-router";
 import { useColorScheme } from "nativewind";
 import {
@@ -23,7 +22,6 @@ import {
   getFeedCandidates,
   getFollowedUserIds,
 } from "@/lib/appwrite";
-// 1. IMPORTAR CONTEXTO DE IDIOMA
 import { useLanguage } from "@/context/LanguageContext";
 
 const { width } = Dimensions.get("window");
@@ -60,7 +58,6 @@ const Profile = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // 2. USAR EL HOOK
   const { t } = useLanguage();
 
   const { user } = useGlobalContext();

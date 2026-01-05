@@ -21,10 +21,8 @@ import ViewShot, { captureRef } from "react-native-view-shot";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-// 🎨 COLORES DE MOOD
 const MOOD_PURPLE = "#5E17EB";
 const MOOD_DARK = "#09090B";
-const TEXT_COLOR = "#FFFFFF";
 
 interface Props {
   isVisible: boolean;
@@ -45,20 +43,14 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
   const viewShotRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<CardMode>("story");
-
-  // --- LÓGICA DE DIMENSIONES ---
   const canvasWidth = SCREEN_WIDTH * 0.85;
   const canvasHeight = mode === "square" ? canvasWidth : (canvasWidth * 16) / 9;
-
-  // Helpers de modo
   const isSquare = mode === "square";
   const isQuote = mode === "quote";
-
-  // Dimensiones dinámicas
   const getCoverSize = () => {
-    if (isQuote) return canvasWidth * 0.25; // Pequeña en modo cita
-    if (isSquare) return canvasWidth * 0.55; // Mediana-Grande en cuadrado
-    return canvasWidth * 0.75; // Grande en story
+    if (isQuote) return canvasWidth * 0.25;
+    if (isSquare) return canvasWidth * 0.55;
+    return canvasWidth * 0.75;
   };
 
   const handleCapture = async () => {
@@ -98,7 +90,6 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
       onRequestClose={onClose}
     >
       <View className="flex-1 bg-black/95 justify-center items-center">
-        {/* --- CABECERA --- */}
         <View className="absolute top-12 w-full flex-row justify-between items-center px-6 z-10">
           <TouchableOpacity
             onPress={onClose}
@@ -106,8 +97,6 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
           >
             <Ionicons name="close" size={24} color="white" />
           </TouchableOpacity>
-
-          {/* Toggle de Modos */}
           <View className="flex-row bg-zinc-800/80 rounded-full p-1 border border-zinc-700">
             <TouchableOpacity
               onPress={() => setMode("square")}
@@ -155,8 +144,6 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
             )}
           </View>
         </View>
-
-        {/* --- LIENZO DE CAPTURA --- */}
         <View
           style={{
             width: canvasWidth,
@@ -164,7 +151,7 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
             borderRadius: 24,
             overflow: "hidden",
             borderWidth: 1,
-            borderColor: "rgba(94, 23, 235, 0.2)", // Borde muy sutil
+            borderColor: "rgba(94, 23, 235, 0.2)",
             elevation: 20,
             shadowColor: MOOD_PURPLE,
             shadowOpacity: 0.6,
@@ -187,15 +174,10 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
                 alignItems: "center",
               }}
             >
-              {/* DECORACIÓN FONDO (Glows ambientales) */}
               <View className="absolute top-0 left-0 w-full h-full opacity-40">
-                {/* Círculo morado arriba derecha */}
                 <View className="absolute top-[-20%] right-[-30%] w-[300px] h-[300px] rounded-full bg-[#5E17EB] blur-[80px]" />
-                {/* Círculo azul abajo izquierda */}
                 <View className="absolute bottom-[-10%] left-[-20%] w-[250px] h-[250px] rounded-full bg-indigo-900 blur-[60px]" />
               </View>
-
-              {/* 1. HEADER LOGO */}
               <View className="w-full flex-row justify-center mt-2 z-10">
                 <View className="flex-row items-center bg-black/20 px-3 py-1 rounded-full border border-white/5 backdrop-blur-sm">
                   <Ionicons
@@ -209,13 +191,9 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
                   </Text>
                 </View>
               </View>
-
-              {/* 2. CONTENIDO CENTRAL */}
               <View className="items-center justify-center flex-1 w-full relative">
-                {/* --- MODO QUOTE (TEXTO) --- */}
                 {isQuote && post.comment ? (
                   <View className="w-full items-center justify-center">
-                    {/* Comillas decorativas gigantes de fondo */}
                     <MaterialCommunityIcons
                       name="format-quote-open"
                       size={120}
@@ -228,19 +206,13 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
                       color="rgba(255,255,255,0.05)"
                       style={{ position: "absolute", bottom: -40, right: 0 }}
                     />
-
-                    {/* Texto Principal */}
                     <Text
                       className="text-white text-center font-bold italic leading-8 shadow-sm"
                       style={{ fontSize: post.comment.length > 100 ? 20 : 26 }}
                     >
                       "{post.comment}"
                     </Text>
-
-                    {/* Separador visual */}
                     <View className="w-12 h-1 bg-[#5E17EB] rounded-full my-6 opacity-80" />
-
-                    {/* Mini tarjeta de la canción en modo Quote */}
                     <View className="flex-row items-center bg-white/5 p-3 rounded-2xl border border-white/10 w-full max-w-[90%]">
                       <Image
                         source={{
@@ -265,7 +237,6 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
                     </View>
                   </View>
                 ) : (
-                  /* --- MODOS STORY Y SQUARE (PORTADA HERO) --- */
                   <View className="items-center" style={{ width: "100%" }}>
                     <View
                       className="rounded-2xl shadow-2xl bg-zinc-900"
@@ -275,7 +246,7 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
                         shadowOpacity: 0.5,
                         shadowRadius: 24,
                         elevation: 20,
-                        padding: 0, // Eliminar padding interno si lo hubiera
+                        padding: 0,
                       }}
                     >
                       <Image
@@ -316,8 +287,6 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
                   </View>
                 )}
               </View>
-
-              {/* 3. FOOTER (USUARIO REAL + PLATAFORMAS) */}
               <View className="w-full flex-row justify-between items-end z-10">
                 <View className="flex-row items-center bg-black/30 p-1.5 pr-4 rounded-full border border-white/5 backdrop-blur-md">
                   <Image
@@ -346,8 +315,6 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
             </LinearGradient>
           </ViewShot>
         </View>
-
-        {/* --- BOTÓN DE COMPARTIR --- */}
         <View className="absolute bottom-12 w-full flex-row justify-center px-6">
           {loading ? (
             <View className="bg-zinc-800/80 px-8 py-4 rounded-full">

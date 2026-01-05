@@ -70,35 +70,29 @@ const ShareModal = ({ isVisible, onClose, postId }: any) => {
   const handleSend = async (targetUser: any) => {
     if (!user) return;
 
-    // Marcar este usuario específico como "Enviando..."
     setSendingMap((prev) => ({ ...prev, [targetUser.$id]: true }));
 
     try {
-      // 1. Obtener o crear el chat
       const chat = await getOrCreateChat(user.$id, targetUser.$id);
 
-      // 2. LÓGICA DE DETECCIÓN: ¿Es Playlist o Post?
       let finalPostId = null;
       let finalPlaylistId = null;
 
-      // Verificamos si el ID tiene el prefijo que pusimos en playlist/[id].tsx
       if (
         postId &&
         typeof postId === "string" &&
         postId.startsWith("playlist:")
       ) {
-        finalPlaylistId = postId.replace("playlist:", ""); // Quitamos el prefijo
+        finalPlaylistId = postId.replace("playlist:", "");
       } else {
-        finalPostId = postId; // Es un post normal
+        finalPostId = postId;
       }
 
-      // 3. Enviar mensaje con los parámetros correctos
-      // sendMessage(chatId, senderId, receiverId, content, sharedPostId, sharedPlaylistId)
       await sendMessage(
         chat.$id,
         user.$id,
         targetUser.$id,
-        "", // Contenido vacío para que solo salga la tarjeta
+        "",
         finalPostId,
         finalPlaylistId
       );

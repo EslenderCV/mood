@@ -14,7 +14,6 @@ import { router } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { updateProfile } from "@/lib/appwrite";
-// 1. IMPORTAR CONTEXTO
 import { useLanguage } from "@/context/LanguageContext";
 
 const Privacy = () => {
@@ -22,7 +21,6 @@ const Privacy = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // 2. USAR HOOK
   const { t } = useLanguage();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";

@@ -7,7 +7,6 @@ import {
   Alert,
   Modal,
   TextInput,
-  Dimensions,
   Animated,
 } from "react-native";
 import React, { useEffect, useState } from "react";
@@ -31,8 +30,6 @@ import {
 } from "react-native-gesture-handler";
 import { useGlobalContext } from "@/context/GlobalProvider";
 
-const { width } = Dimensions.get("window");
-
 export default function PlaylistDetail() {
   const { id } = useLocalSearchParams();
   const { colorScheme } = useColorScheme();
@@ -52,11 +49,9 @@ export default function PlaylistDetail() {
   const [newName, setNewName] = useState("");
   const [isShareVisible, setShareVisible] = useState(false);
 
-  // Agregar Canciones
   const [isAddSongModalVisible, setAddSongModalVisible] = useState(false);
   const [savedSongs, setSavedSongs] = useState<any[]>([]);
 
-  // Audio
   const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -173,7 +168,6 @@ export default function PlaylistDetail() {
   };
 
   const handleSync = () => {
-    // Determinamos la plataforma destino basada en la preferencia del usuario o la playlist
     const targetPlatform =
       user?.preferredPlatform === "apple" ? "Apple Music" : "Spotify";
 
@@ -193,8 +187,6 @@ export default function PlaylistDetail() {
       ]
     );
   };
-
-  // --- RENDERERS ---
 
   const renderCover = () => {
     const isDefaultCover =
@@ -298,7 +290,6 @@ export default function PlaylistDetail() {
   if (!playlist)
     return <View className="flex-1" style={{ backgroundColor: bgColor }} />;
 
-  // Configuración de iconos de plataforma
   const platformIcon =
     user?.preferredPlatform === "apple" ? "apple" : "spotify";
   const platformColor =
@@ -307,7 +298,6 @@ export default function PlaylistDetail() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView className="flex-1" style={{ backgroundColor: bgColor }}>
-        {/* HEADER: Navegación y Acciones (Arriba a la derecha) */}
         <View
           className="px-4 py-2 flex-row items-center justify-between border-b"
           style={{ borderColor: "transparent" }}
@@ -317,7 +307,6 @@ export default function PlaylistDetail() {
           </TouchableOpacity>
 
           <View className="flex-row gap-2 items-center">
-            {/* 1. Botón Sync (Logo Spotify/Apple) */}
             <TouchableOpacity
               onPress={handleSync}
               className="p-2 rounded-full"
@@ -333,16 +322,12 @@ export default function PlaylistDetail() {
                 color={platformColor}
               />
             </TouchableOpacity>
-
-            {/* 2. Botón Editar (Lápiz mejorado) */}
             <TouchableOpacity
               onPress={() => setEditModalVisible(true)}
               className="p-2"
             >
               <Ionicons name="create-outline" size={24} color={textColor} />
             </TouchableOpacity>
-
-            {/* 3. Botón Compartir */}
             <TouchableOpacity
               onPress={() => setShareVisible(true)}
               className="p-2 -mr-2"
@@ -363,7 +348,6 @@ export default function PlaylistDetail() {
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
           ListHeaderComponent={
             <View className="items-center mt-6 mb-8">
-              {/* PORTADA UNIFICADA */}
               {renderCover()}
 
               <Text
@@ -383,8 +367,6 @@ export default function PlaylistDetail() {
                   • {songs.length} canciones
                 </Text>
               </View>
-
-              {/* BOTÓN "AGREGAR CANCIONES" GRANDE Y VISIBLE */}
               <TouchableOpacity
                 onPress={() => {
                   fetchSavedSongs();
@@ -419,8 +401,6 @@ export default function PlaylistDetail() {
             </View>
           }
         />
-
-        {/* MODAL EDITAR NOMBRE */}
         <Modal
           animationType="fade"
           transparent
@@ -472,8 +452,6 @@ export default function PlaylistDetail() {
             </View>
           </View>
         </Modal>
-
-        {/* MODAL AGREGAR CANCIONES */}
         <Modal
           animationType="slide"
           transparent
@@ -551,8 +529,6 @@ export default function PlaylistDetail() {
             </View>
           </View>
         </Modal>
-
-        {/* MODAL COMPARTIR */}
         <ShareModal
           isVisible={isShareVisible}
           onClose={() => setShareVisible(false)}

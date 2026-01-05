@@ -7,7 +7,6 @@ import {
   Linking,
   ActivityIndicator,
   RefreshControl,
-  Dimensions,
   Animated,
   Alert,
   Modal,
@@ -17,7 +16,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from "react-native";
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
@@ -42,8 +41,6 @@ import {
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useLanguage } from "@/context/LanguageContext";
-
-const { width } = Dimensions.get("window");
 
 const Library = () => {
   const { colorScheme } = useColorScheme();
@@ -660,7 +657,6 @@ const Library = () => {
               </View>
             )}
 
-            {/* --- MODAL 1: CREAR PLAYLIST --- */}
             <Modal
               animationType="slide"
               transparent
@@ -743,7 +739,6 @@ const Library = () => {
               </TouchableWithoutFeedback>
             </Modal>
 
-            {/* --- MODAL 2: SELECCIONAR PLAYLIST (SWIPE LEFT) --- */}
             <Modal
               animationType="slide"
               transparent

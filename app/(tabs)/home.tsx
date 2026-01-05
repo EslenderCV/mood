@@ -28,9 +28,7 @@ import PostItem from "@/components/PostItem";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
 
-// --- LISTA DE ADMINISTRADORES ---
 const ADMIN_USERS = [".angel", "whoseslender"];
-// --------------------------------
 
 const getCreatorId = (item: any) => {
   let userObj = item.creator || item.postedBy || item.users || item.user;
@@ -56,7 +54,6 @@ const Home = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  // --- ESTADOS PARA CONTEOS ---
   const [notiCount, setNotiCount] = useState(0);
   const [msgCount, setMsgCount] = useState(0);
 
@@ -78,7 +75,6 @@ const Home = () => {
         }
       } else setCurrentUserId(activeId);
 
-      // --- OBTENER CONTEOS ---
       if (activeId) {
         const nCount = await getUnreadNotificationCount(activeId);
         const mCount = await getUnreadMessagesCount(activeId);
@@ -161,7 +157,6 @@ const Home = () => {
 
     Alert.alert(
       "¿Eliminar Publicación?",
-      // CORRECCIÓN: Agregamos || "" para evitar error de undefined
       ADMIN_USERS.includes(user?.username || "")
         ? "Modo Admin: Esta acción eliminará el post de otro usuario."
         : "Esta acción no se puede deshacer.",
@@ -232,10 +227,8 @@ const Home = () => {
     );
   };
 
-  // --- LÓGICA DE PODER ABSOLUTO ---
   const isPostOwner =
     (selectedPost?.postedBy?.$id || selectedPost?.creator?.$id) === user?.$id;
-  // CORRECCIÓN: Agregamos || "" para evitar error de undefined
   const isAdmin = ADMIN_USERS.includes(user?.username || "");
   const showDeleteOption = isPostOwner || isAdmin;
 
@@ -246,8 +239,6 @@ const Home = () => {
       style={{ backgroundColor: bgColor }}
     >
       <StatusBar style={isDark ? "light" : "dark"} />
-
-      {/* Pasamos los contadores al TopBar */}
       <TopBar notificationCount={notiCount} messageCount={msgCount} />
 
       {isLoading ? (

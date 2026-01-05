@@ -33,7 +33,6 @@ const HelpCenter = () => {
   const accentColor = "#5E17EB";
   const modalOverlayColor = isDark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.5)";
 
-  // SOLUCIÓN ERROR 1: Tipado explícito (string)
   const openWhatsApp = async (phoneNumber: string) => {
     setModalVisible(false);
     const message = "Hola, necesito asistencia con la aplicación Mood.";
@@ -65,7 +64,6 @@ const HelpCenter = () => {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: bgColor }}>
-      {/* --- MODAL TRADUCIDO --- */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -95,7 +93,6 @@ const HelpCenter = () => {
                 <View className="w-16 h-16 rounded-full bg-green-100 items-center justify-center mb-3">
                   <Ionicons name="logo-whatsapp" size={32} color="#25D366" />
                 </View>
-                {/* TRADUCCIÓN AQUI */}
                 <Text
                   className="text-xl font-bold text-center"
                   style={{ color: textColor }}
@@ -176,7 +173,6 @@ const HelpCenter = () => {
       </View>
 
       <ScrollView className="px-6" showsVerticalScrollIndicator={false}>
-        {/* TRADUCCIÓN AQUI */}
         <Text
           className="text-2xl font-bold mt-2 mb-6"
           style={{ color: textColor }}
@@ -273,7 +269,6 @@ const HelpCenter = () => {
             })}
           </View>
         </View>
-        {/* ... Footer igual ... */}
       </ScrollView>
     </SafeAreaView>
   );

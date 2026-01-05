@@ -13,7 +13,7 @@ import {
 import React, { useState } from "react";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, Feather } from "@expo/vector-icons"; // FontAwesome5 eliminado
+import { Ionicons, Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { ImagePickerAsset } from "expo-image-picker";
 import { updateProfile } from "@/lib/appwrite";
@@ -269,7 +269,6 @@ const EditScreen = () => {
               placeholder={t("editProfile.emailPlaceholder")}
               type="email"
             />
-            {/* Apartado de Plataforma ELIMINADO de aquí */}
           </View>
           <TouchableOpacity
             className={`w-full mt-2 h-[58px] items-center justify-center rounded-2xl shadow-lg flex-row`}

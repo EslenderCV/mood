@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { FontAwesome, FontAwesome5, Ionicons } from "@expo/vector-icons";
+import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { getPlaylistById } from "@/lib/appwrite";
 
@@ -54,7 +54,6 @@ const ChatPlaylistCard = ({
         maxWidth: 240,
       }}
     >
-      {/* Portada */}
       <View className="relative">
         <Image
           source={{ uri: playlist.cover }}
@@ -65,8 +64,6 @@ const ChatPlaylistCard = ({
           <Ionicons name="play-circle" size={20} color="white" />
         </View>
       </View>
-
-      {/* Info */}
       <View className="ml-3 flex-1">
         <Text
           numberOfLines={1}

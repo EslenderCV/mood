@@ -1,5 +1,3 @@
-// constants/translations.ts
-
 export const translations = {
   es: {
     settings: {

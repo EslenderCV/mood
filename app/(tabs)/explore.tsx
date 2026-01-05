@@ -7,7 +7,6 @@ import {
   Image,
   ActivityIndicator,
   RefreshControl,
-  Dimensions,
   Alert,
 } from "react-native";
 import React, { useState, useEffect } from "react";
@@ -15,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useAudioPlayer } from "expo-audio"; // Mantenemos esto para la pestaña "Música"
+import { useAudioPlayer } from "expo-audio";
 import { useColorScheme } from "nativewind";
 
 import {
@@ -35,16 +34,11 @@ import {
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
 
-// IMPORTACIONES
 import { useLanguage } from "@/context/LanguageContext";
-import { getRelativeTime } from "@/lib/dateUtils";
 import ShareModal from "@/components/ShareModal";
 import OptionsModal from "@/components/OptionsModal";
-import PostItem from "@/components/PostItem"; // <--- Tu componente refactorizado
+import PostItem from "@/components/PostItem";
 
-const { width } = Dimensions.get("window");
-
-// --- HELPERS (Necesarios para la lógica de clasificación de Explore) ---
 const parseSongFromPost = (songDataString: string) => {
   try {
     if (!songDataString) return null;
@@ -73,7 +67,6 @@ const getCreatorFromPost = (item: any) => {
   return { id: "unknown", username: "anon", name: "unknown", avatar: null };
 };
 
-// CATEGORÍAS INTERNAS
 const INTERNAL_CATEGORIES = ["posts", "music", "artists", "profiles"];
 
 const Explore = () => {
@@ -102,14 +95,10 @@ const Explore = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Estados para Modales
   const [isShareVisible, setShareVisible] = useState(false);
   const [postToShare, setPostToShare] = useState<string>("");
   const [isOptionsVisible, setOptionsVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState<any>(null);
-
-  // Audio Player local SOLO para la pestaña "Música" (Top Charts)
-  // PostItem maneja su propio audio internamente.
   const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -152,7 +141,6 @@ const Explore = () => {
     }
   };
 
-  // --- LÓGICA DE RANKING ---
   const rankExplorePosts = (posts: any[]) => {
     return posts
       .map((post) => {
@@ -324,8 +312,6 @@ const Explore = () => {
     fetchCategoryData();
   };
 
-  // --- HANDLERS PARA POSTITEM Y MODALES ---
-
   const handleOpenOptions = (post: any) => {
     setSelectedPost(post);
     setOptionsVisible(true);
@@ -378,8 +364,6 @@ const Explore = () => {
     }
   };
 
-  // --- RENDERS ---
-
   const getData = () => {
     switch (activeCategory) {
       case "music":
@@ -421,7 +405,6 @@ const Explore = () => {
     }
   };
 
-  // --- NUEVO RENDER ITEM USANDO POSTITEM ---
   const renderPostItem = ({ item }: { item: any }) => {
     return (
       <PostItem
@@ -435,7 +418,6 @@ const Explore = () => {
     );
   };
 
-  // --- ITEMS DE OTRAS CATEGORÍAS (SIN CAMBIOS) ---
   const renderProfileItem = ({ item }: { item: any }) => {
     const isTrending = item.totalLikes >= 5;
     return (
@@ -724,7 +706,6 @@ const Explore = () => {
                 }
               />
 
-              {/* MODALES */}
               <ShareModal
                 isVisible={isShareVisible}
                 onClose={() => setShareVisible(false)}
@@ -736,7 +717,6 @@ const Explore = () => {
                 onClose={() => setOptionsVisible(false)}
                 onDelete={handleDeleteAction}
                 onReport={handleReportAction}
-                // Validamos si soy el dueño
                 isOwner={
                   user?.$id && selectedPost
                     ? (selectedPost.postedBy?.$id ||

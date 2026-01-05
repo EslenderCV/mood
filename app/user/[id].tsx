@@ -28,7 +28,7 @@ import {
   getFollowCounts,
   blockUser,
   createChat,
-  sendPushNotification, // <--- NUEVO IMPORT
+  sendPushNotification,
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -214,10 +214,7 @@ const UserProfile = () => {
           }));
         }
       } else {
-        // --- LOGICA SEGUIR + NOTIFICACION ---
         await followUser(currentUser.$id, visitedUser.$id);
-
-        // Envío de Notificación
         if (visitedUser.expoPushToken) {
           await sendPushNotification(
             visitedUser.expoPushToken,
@@ -271,7 +268,6 @@ const UserProfile = () => {
     handleTabPress(0);
   };
 
-  // Renders
   const renderMoodItem = (item: any) => {
     const songData = parseSongFromPost(item.songData);
     const imageUrl = songData
@@ -403,8 +399,6 @@ const UserProfile = () => {
       style={{ backgroundColor: bgColor }}
     >
       <StatusBar style={isDark ? "light" : "dark"} />
-
-      {/* MODAL BLOQUEO */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -484,8 +478,6 @@ const UserProfile = () => {
           </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
-
-      {/* MODAL FOTO COMPLETA */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -512,7 +504,6 @@ const UserProfile = () => {
           </SafeAreaView>
         </View>
       </Modal>
-
       <ScrollView
         ref={mainScrollRef}
         showsVerticalScrollIndicator={false}
@@ -525,7 +516,6 @@ const UserProfile = () => {
           />
         }
       >
-        {/* HEADER NAV */}
         <View className="flex-row justify-between items-center px-6 py-2 mb-6">
           <TouchableOpacity
             onPress={() => router.back()}
@@ -557,8 +547,6 @@ const UserProfile = () => {
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* INFO USUARIO */}
         <View className="items-center">
           <TouchableOpacity
             activeOpacity={0.9}
@@ -581,8 +569,6 @@ const UserProfile = () => {
             @{visitedUser?.username || "usuario"}
           </Text>
         </View>
-
-        {/* BOTONES ACCIÓN */}
         <View className="px-6 mt-6 min-h-[50px]">
           {currentUser && currentUser.$id !== visitedUser.$id && (
             <View className="flex-row items-center gap-3 w-full">
@@ -636,8 +622,6 @@ const UserProfile = () => {
             </View>
           )}
         </View>
-
-        {/* Stats */}
         <View
           className="flex-row justify-between items-center mx-4 h-[70px] mt-6 mb-3 px-2 rounded-3xl border shadow-sm"
           style={{
@@ -709,8 +693,6 @@ const UserProfile = () => {
             </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Tabs */}
         <View
           className="pt-4"
           style={{

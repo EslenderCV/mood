@@ -13,8 +13,8 @@ interface OptionsModalProps {
   isVisible: boolean;
   onClose: () => void;
   onDelete: () => void;
-  onReport: () => void; // <--- Nueva función
-  isOwner: boolean; // <--- Para saber qué mostrar
+  onReport: () => void;
+  isOwner: boolean;
 }
 
 export default function OptionsModal({
@@ -56,8 +56,6 @@ export default function OptionsModal({
               >
                 {isOwner ? "Gestionar tu publicación" : "Acciones"}
               </Text>
-
-              {/* --- OPCIONES PARA EL DUEÑO --- */}
               {isOwner && (
                 <>
                   <TouchableOpacity
@@ -85,8 +83,6 @@ export default function OptionsModal({
                   </TouchableOpacity>
                 </>
               )}
-
-              {/* --- OPCIONES PARA OTROS USUARIOS --- */}
               {!isOwner && (
                 <TouchableOpacity
                   onPress={onReport}

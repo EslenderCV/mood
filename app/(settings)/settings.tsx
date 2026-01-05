@@ -7,16 +7,13 @@ import {
   Alert,
   Modal,
   TouchableWithoutFeedback,
-  ActivityIndicator,
 } from "react-native";
 import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons"; // Agregado FontAwesome5
+import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
-
-// Importaciones para actualizar la preferencia
 import { useGlobalContext, User } from "@/context/GlobalProvider";
 import { updateProfile } from "@/lib/appwrite";
 
@@ -24,14 +21,11 @@ const Settings = () => {
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // Contexto Global y Usuario
   const { user, setUser } = useGlobalContext();
   const [updatingPlatform, setUpdatingPlatform] = useState(false);
 
-  // Hook Global de Idioma
   const { language, setLanguage, t, availableLanguages } = useLanguage();
 
-  // --- PALETA DE COLORES ---
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const modalBg = isDark ? "#121212" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
@@ -42,14 +36,12 @@ const Settings = () => {
   const languagePillBg = isDark ? "#27272A" : "#F3F4F6";
   const pillTextColor = isDark ? "#FFFFFF" : "#000000";
 
-  // --- ESTADOS ---
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
   const currentLangObj =
     availableLanguages.find((l) => l.code === language) ||
     availableLanguages[0];
 
-  // --- HANDLERS ---
   const handleSelectLanguage = (langCode: any) => {
     setLanguage(langCode);
     setShowLanguageModal(false);
@@ -59,7 +51,6 @@ const Settings = () => {
     Alert.alert(t("settings.clearCache"), "Se han liberado 45MB.");
   };
 
-  // Nuevo Handler para la plataforma de música
   const handlePlatformChange = async (platform: string) => {
     if (user?.preferredPlatform === platform || updatingPlatform) return;
 
@@ -70,7 +61,6 @@ const Settings = () => {
       });
 
       if (setUser) {
-        // Actualizamos el contexto global para reflejar el cambio en toda la app
         setUser({ ...user, preferredPlatform: platform } as User);
       }
     } catch (error) {
@@ -79,8 +69,6 @@ const Settings = () => {
       setUpdatingPlatform(false);
     }
   };
-
-  // --- COMPONENTES AUXILIARES ---
 
   const SectionTitle = ({ title }: { title: string }) => (
     <Text
@@ -92,12 +80,12 @@ const Settings = () => {
   );
 
   const SettingRow = ({
-    icon, // Puede ser string (Ionicons) o componente
+    icon,
     title,
     subtitle,
     children,
     color = "#5E17EB",
-    isCustomIcon = false, // Flag para saber si usamos FontAwesome
+    isCustomIcon = false,
   }: any) => (
     <View
       className="flex-row items-center justify-between py-3.5 border-b px-2"
@@ -134,7 +122,6 @@ const Settings = () => {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: bgColor }}>
-      {/* HEADER */}
       <View
         className="px-6 py-4 flex-row items-center border-b"
         style={{ borderColor }}
@@ -152,7 +139,6 @@ const Settings = () => {
       </View>
 
       <ScrollView className="px-4 pb-10">
-        {/* --- SECCIÓN PERSONALIZACIÓN --- */}
         <SectionTitle title={t("settings.personalization")} />
 
         <TouchableOpacity onPress={() => setShowLanguageModal(true)}>
@@ -177,7 +163,6 @@ const Settings = () => {
             </View>
           </SettingRow>
         </TouchableOpacity>
-
         <SettingRow
           icon="moon"
           title={t("settings.darkMode")}
@@ -191,11 +176,7 @@ const Settings = () => {
             value={isDark}
           />
         </SettingRow>
-
-        {/* --- NUEVA SECCIÓN: PLATAFORMA DE MÚSICA --- */}
         <SectionTitle title="PLATAFORMA DE MÚSICA" />
-
-        {/* Opción Spotify */}
         <TouchableOpacity
           onPress={() => handlePlatformChange("spotify")}
           disabled={updatingPlatform}
@@ -214,8 +195,6 @@ const Settings = () => {
             )}
           </SettingRow>
         </TouchableOpacity>
-
-        {/* Opción Apple Music */}
         <TouchableOpacity
           onPress={() => handlePlatformChange("apple")}
           disabled={updatingPlatform}
@@ -231,8 +210,6 @@ const Settings = () => {
             )}
           </SettingRow>
         </TouchableOpacity>
-
-        {/* --- SECCIÓN DATOS --- */}
         <SectionTitle title={t("settings.data")} />
 
         <TouchableOpacity onPress={clearCache}>
@@ -255,8 +232,6 @@ const Settings = () => {
             </View>
           </SettingRow>
         </TouchableOpacity>
-
-        {/* FOOTER */}
         <View className="mt-12 items-center mb-8">
           <Text
             className="font-bold text-lg"
@@ -272,8 +247,6 @@ const Settings = () => {
           </Text>
         </View>
       </ScrollView>
-
-      {/* --- MODAL DE IDIOMA --- */}
       <Modal
         animationType="slide"
         transparent={true}

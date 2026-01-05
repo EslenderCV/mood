@@ -15,7 +15,6 @@ import { useGlobalContext } from "@/context/GlobalProvider";
 import { useModal } from "@/context/ModalContext";
 import PostModal from "@/components/PostModal";
 import { useColorScheme } from "nativewind";
-// 1. IMPORTAR CONTEXTO DE IDIOMA
 import { useLanguage } from "@/context/LanguageContext";
 
 const MenuOption = ({
@@ -55,8 +54,6 @@ const MenuOption = ({
 const TabsLayout = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // 2. USAR EL HOOK DE TRADUCCIÓN
   const { t } = useLanguage();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
@@ -115,7 +112,7 @@ const TabsLayout = () => {
         <Tabs.Screen
           name="home"
           options={{
-            title: t("tabs.home"), // TRADUCIDO
+            title: t("tabs.home"),
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "home" : "home-outline"}
@@ -128,7 +125,7 @@ const TabsLayout = () => {
         <Tabs.Screen
           name="explore"
           options={{
-            title: t("tabs.search"), // TRADUCIDO
+            title: t("tabs.search"),
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "compass" : "compass-outline"}
@@ -171,7 +168,7 @@ const TabsLayout = () => {
         <Tabs.Screen
           name="library"
           options={{
-            title: t("tabs.library"), // TRADUCIDO
+            title: t("tabs.library"),
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "albums" : "albums-outline"}
@@ -191,7 +188,7 @@ const TabsLayout = () => {
             },
           })}
           options={{
-            title: t("tabs.profile"), // TRADUCIDO
+            title: t("tabs.profile"),
             tabBarIcon: ({ focused }) => (
               <View
                 style={{

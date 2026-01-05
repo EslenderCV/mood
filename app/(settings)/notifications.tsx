@@ -23,7 +23,7 @@ import {
   getCurrentUser,
   getUserNotifications,
   markNotificationAsRead,
-  markAllNotificationsAsRead, // <--- IMPORTANTE: Importar la nueva función
+  markAllNotificationsAsRead,
   acceptFollowRequest,
   deleteFollowRequest,
   deleteNotification,
@@ -66,7 +66,6 @@ const NotificationsScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Calculamos si hay alguna sin leer para mostrar/ocultar el botón
   const hasUnread = notifications.some((n) => !n.isRead);
 
   useEffect(() => {
@@ -90,7 +89,6 @@ const NotificationsScreen = () => {
           prev.filter((n) => n.$id !== deletedPayload.$id)
         );
       }
-      // Escuchar actualizaciones (por si marcas como leído en otro dispositivo)
       if (response.events.includes("databases.*.documents.*.update")) {
         const updatedPayload = response.payload as any;
         setNotifications((prev) =>
@@ -119,27 +117,19 @@ const NotificationsScreen = () => {
     }
   };
 
-  // --- NUEVA LÓGICA: MARCAR TODO COMO LEÍDO ---
   const handleMarkAllRead = async () => {
-    // 1. Actualización Optimista (UI instantánea)
     const previousState = [...notifications];
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
 
     try {
-      // 2. Llamada al servidor
       await markAllNotificationsAsRead(currentUser.$id);
     } catch (error) {
-      // Si falla, revertimos
       setNotifications(previousState);
       Alert.alert("Error", "No se pudieron marcar como leídas.");
     }
   };
-  // ---------------------------------------------
-
   const handlePressNotification = async (item: any) => {
     if (item.type === "follow_request") return;
-
-    // Solo llamamos a la API si no estaba leída
     if (!item.isRead) {
       markNotificationAsRead(item.$id);
       const updated = notifications.map((n) =>
@@ -366,10 +356,7 @@ const NotificationsScreen = () => {
               {t("notifications.title")}
             </Text>
           </View>
-
-          {/* BOTONES DE ACCIÓN (MARCAR LEÍDO Y BORRAR TODO) */}
           <View className="flex-row items-center">
-            {/* Botón Marcar todo como leído (Solo aparece si hay algo sin leer) */}
             {hasUnread && (
               <TouchableOpacity
                 onPress={handleMarkAllRead}
@@ -379,12 +366,10 @@ const NotificationsScreen = () => {
                 <Ionicons
                   name="checkmark-done-outline"
                   size={24}
-                  color={textColor} // O puedes usar "#5E17EB" si quieres resaltarlo
+                  color={textColor}
                 />
               </TouchableOpacity>
             )}
-
-            {/* Botón Borrar todo (Ya existente) */}
             {notifications.length > 0 && (
               <TouchableOpacity onPress={handleClearAll} className="p-2">
                 <Ionicons name="trash-outline" size={22} color="#EF4444" />

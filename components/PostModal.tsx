@@ -109,7 +109,6 @@ export default function PostModal() {
     setPostModalVisible(false);
   };
 
-  // --- BÚSQUEDA DEEZER (REEMPLAZO DE ITUNES) ---
   const searchDeezerTracks = async (query: string) => {
     if (!query) return;
     setIsLoadingSearch(true);
@@ -204,7 +203,6 @@ export default function PostModal() {
     }
   };
 
-  // --- SHAZAM + DEEZER MATCH ---
   const handleShazam = async () => {
     if (linkedSong) return;
     if (player) player.pause();
