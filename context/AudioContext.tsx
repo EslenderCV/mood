@@ -1,38 +1,29 @@
 import React, { createContext, useContext, useState } from "react";
 
 interface AudioContextType {
-  currentSong: { title: string; artist: string; cover: string } | null;
-  isPlaying: boolean;
-  playSong: (song: { title: string; artist: string; cover: string }) => void;
-  togglePlay: () => void;
-  closePlayer: () => void;
+  currentPlayingId: string | null;
+  setPlayingId: (id: string | null) => void;
 }
 
-const AudioContext = createContext<AudioContextType>({} as any);
+const AudioContext = createContext<AudioContextType>({
+  currentPlayingId: null,
+  setPlayingId: () => {},
+});
 
-export const AudioProvider = ({ children }: { children: React.ReactNode }) => {
-  const [currentSong, setCurrentSong] = useState<any>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+export const useAudioContext = () => useContext(AudioContext);
 
-  const playSong = (song: any) => {
-    setCurrentSong(song);
-    setIsPlaying(true);
-  };
+export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [currentPlayingId, setCurrentPlayingId] = useState<string | null>(null);
 
-  const togglePlay = () => setIsPlaying(!isPlaying);
-
-  const closePlayer = () => {
-    setCurrentSong(null);
-    setIsPlaying(false);
+  const setPlayingId = (id: string | null) => {
+    setCurrentPlayingId(id);
   };
 
   return (
-    <AudioContext.Provider
-      value={{ currentSong, isPlaying, playSong, togglePlay, closePlayer }}
-    >
+    <AudioContext.Provider value={{ currentPlayingId, setPlayingId }}>
       {children}
     </AudioContext.Provider>
   );
 };
-
-export const useAudio = () => useContext(AudioContext);

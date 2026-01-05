@@ -95,7 +95,22 @@ export const translations = {
       tabs: {
         music: "Música",
         posts: "Posts",
+        songs: "Canciones", // NUEVO
+        playlists: "Playlists", // NUEVO
       },
+      createBtn: "Crear Playlist", // NUEVO
+      syncText: "Sincroniza con", // NUEVO
+      orLocal: "o crea local", // NUEVO
+      newPlaylist: "Nueva Playlist", // NUEVO
+      nameLabel: "NOMBRE", // NUEVO
+      platformLabel: "PLATAFORMA", // NUEVO
+      local: "Local", // NUEVO
+      cancel: "Cancelar", // NUEVO
+      create: "Crear", // NUEVO
+      addTo: "Agregar a Playlist", // NUEVO
+      songsCount: "canciones", // NUEVO
+      emptySubtitle:
+        "Guarda publicaciones con música para crear tu colección personal.", // NUEVO
       open: "ABRIR",
       via: "Vía",
       empty: {
@@ -341,6 +356,11 @@ export const translations = {
     },
     help: {
       title: "Ayuda",
+      subtitle: "¿En qué podemos ayudarte?", // NUEVO
+      modalTitle: "Selecciona un Agente", // NUEVO
+      modalSubtitle: "Elige una línea de atención", // NUEVO
+      supportMain: "Soporte Principal", // NUEVO
+      supportTech: "Soporte Técnico", // NUEVO
       searchPlaceholder: "Buscar ayuda...",
       chatSupport: "Chat Soporte",
       email: "Email",
@@ -413,7 +433,6 @@ export const translations = {
       errorTitle: "Error",
       errorMsg: "No se pudo desbloquear",
     },
-    // NUEVA SECCIÓN: LISTA DE USUARIOS (SEGUIDORES/SEGUIDOS)
     userList: {
       title: "Usuarios",
       followers: "Seguidores",
@@ -517,7 +536,22 @@ export const translations = {
       tabs: {
         music: "Music",
         posts: "Posts",
+        songs: "Songs", // NUEVO
+        playlists: "Playlists", // NUEVO
       },
+      createBtn: "Create Playlist", // NUEVO
+      syncText: "Sync with", // NUEVO
+      orLocal: "or create local", // NUEVO
+      newPlaylist: "New Playlist", // NUEVO
+      nameLabel: "NAME", // NUEVO
+      platformLabel: "PLATFORM", // NUEVO
+      local: "Local", // NUEVO
+      cancel: "Cancel", // NUEVO
+      create: "Create", // NUEVO
+      addTo: "Add to Playlist", // NUEVO
+      songsCount: "songs", // NUEVO
+      emptySubtitle:
+        "Save posts with music to create your personal collection.", // NUEVO
       open: "OPEN",
       via: "Via",
       empty: {
@@ -764,6 +798,11 @@ export const translations = {
     },
     help: {
       title: "Help Center",
+      subtitle: "How can we help you today?", // NUEVO
+      modalTitle: "Select an Agent", // NUEVO
+      modalSubtitle: "Choose a support line", // NUEVO
+      supportMain: "Main Support", // NUEVO
+      supportTech: "Tech Support", // NUEVO
       searchPlaceholder: "Search help...",
       chatSupport: "Chat Support",
       email: "Email",
@@ -939,7 +978,22 @@ export const translations = {
       tabs: {
         music: "Musique",
         posts: "Posts",
+        songs: "Chansons", // NUEVO
+        playlists: "Playlists", // NUEVO
       },
+      createBtn: "Créer une Playlist", // NUEVO
+      syncText: "Synchroniser avec", // NUEVO
+      orLocal: "ou créer localement", // NUEVO
+      newPlaylist: "Nouvelle Playlist", // NUEVO
+      nameLabel: "NOM", // NUEVO
+      platformLabel: "PLATEFORME", // NUEVO
+      local: "Local", // NUEVO
+      cancel: "Annuler", // NUEVO
+      create: "Créer", // NUEVO
+      addTo: "Ajouter à la Playlist", // NUEVO
+      songsCount: "chansons", // NUEVO
+      emptySubtitle:
+        "Enregistrez des publications avec de la musique pour créer votre collection personnelle.", // NUEVO
       open: "OUVRIR",
       via: "Via",
       empty: {
@@ -1187,6 +1241,11 @@ export const translations = {
     },
     help: {
       title: "Centre d'aide",
+      subtitle: "Comment pouvons-nous vous aider ?", // NUEVO
+      modalTitle: "Sélectionnez un agent", // NUEVO
+      modalSubtitle: "Choisissez une ligne d'assistance", // NUEVO
+      supportMain: "Support Principal", // NUEVO
+      supportTech: "Support Technique", // NUEVO
       searchPlaceholder: "Rechercher de l'aide...",
       chatSupport: "Support par chat",
       email: "E-mail",
@@ -1363,7 +1422,21 @@ export const translations = {
       tabs: {
         music: "Música",
         posts: "Posts",
+        songs: "Músicas", // NUEVO
+        playlists: "Playlists", // NUEVO
       },
+      createBtn: "Criar Playlist", // NUEVO
+      syncText: "Sincronizar com", // NUEVO
+      orLocal: "ou criar local", // NUEVO
+      newPlaylist: "Nova Playlist", // NUEVO
+      nameLabel: "NOME", // NUEVO
+      platformLabel: "PLATAFORMA", // NUEVO
+      local: "Local", // NUEVO
+      cancel: "Cancelar", // NUEVO
+      create: "Criar", // NUEVO
+      addTo: "Adicionar à Playlist", // NUEVO
+      songsCount: "músicas", // NUEVO
+      emptySubtitle: "Salve posts com música para criar sua coleção pessoal.", // NUEVO
       open: "ABRIR",
       via: "Via",
       empty: {
@@ -1608,6 +1681,11 @@ export const translations = {
     },
     help: {
       title: "Central de Ajuda",
+      subtitle: "Como podemos ajudar?", // NUEVO
+      modalTitle: "Selecione um Agente", // NUEVO
+      modalSubtitle: "Escolha uma linha de atendimento", // NUEVO
+      supportMain: "Suporte Principal", // NUEVO
+      supportTech: "Suporte Técnico", // NUEVO
       searchPlaceholder: "Buscar ajuda...",
       chatSupport: "Suporte via Chat",
       email: "E-mail",
@@ -1782,7 +1860,22 @@ export const translations = {
       tabs: {
         music: "Musica",
         posts: "Post",
+        songs: "Canzoni", // NUEVO
+        playlists: "Playlist", // NUEVO
       },
+      createBtn: "Crea Playlist", // NUEVO
+      syncText: "Sincronizza con", // NUEVO
+      orLocal: "o crea locale", // NUEVO
+      newPlaylist: "Nuova Playlist", // NUEVO
+      nameLabel: "NOME", // NUEVO
+      platformLabel: "PIATTAFORMA", // NUEVO
+      local: "Locale", // NUEVO
+      cancel: "Annulla", // NUEVO
+      create: "Crea", // NUEVO
+      addTo: "Aggiungi a Playlist", // NUEVO
+      songsCount: "canzoni", // NUEVO
+      emptySubtitle:
+        "Salva post con musica per creare la tua collezione personale.", // NUEVO
       open: "APRI",
       via: "Via",
       empty: {
@@ -2028,6 +2121,11 @@ export const translations = {
     },
     help: {
       title: "Centro Assistenza",
+      subtitle: "Come possiamo aiutarti?", // NUEVO
+      modalTitle: "Seleziona un Agente", // NUEVO
+      modalSubtitle: "Scegli una linea di supporto", // NUEVO
+      supportMain: "Supporto Principale", // NUEVO
+      supportTech: "Supporto Tecnico", // NUEVO
       searchPlaceholder: "Cerca aiuto...",
       chatSupport: "Supporto Chat",
       email: "Email",

@@ -13,9 +13,7 @@ interface OptionsModalProps {
   isVisible: boolean;
   onClose: () => void;
   onDelete: () => void;
-  onTogglePrivacy: () => void;
   onReport: () => void; // <--- Nueva función
-  isPrivate: boolean;
   isOwner: boolean; // <--- Para saber qué mostrar
 }
 
@@ -23,9 +21,7 @@ export default function OptionsModal({
   isVisible,
   onClose,
   onDelete,
-  onTogglePrivacy,
   onReport,
-  isPrivate,
   isOwner,
 }: OptionsModalProps) {
   const { colorScheme } = useColorScheme();
@@ -64,33 +60,6 @@ export default function OptionsModal({
               {/* --- OPCIONES PARA EL DUEÑO --- */}
               {isOwner && (
                 <>
-                  <TouchableOpacity
-                    onPress={onTogglePrivacy}
-                    className="flex-row items-center p-4 rounded-2xl mb-3"
-                    style={{ backgroundColor: isDark ? "#27272A" : "#F4F4F5" }}
-                  >
-                    <View className="w-10 h-10 rounded-full items-center justify-center mr-4 bg-zinc-200 dark:bg-zinc-700">
-                      <Ionicons
-                        name={isPrivate ? "earth" : "lock-closed"}
-                        size={22}
-                        color={textColor}
-                      />
-                    </View>
-                    <View className="flex-1">
-                      <Text
-                        className="font-bold text-base"
-                        style={{ color: textColor }}
-                      >
-                        {isPrivate ? "Hacer público" : "Hacer privado"}
-                      </Text>
-                      <Text className="text-xs" style={{ color: subTextColor }}>
-                        {isPrivate
-                          ? "Visible para todos"
-                          : "Solo visible para ti"}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
                   <TouchableOpacity
                     onPress={onDelete}
                     className="flex-row items-center p-4 rounded-2xl border border-red-500/20 bg-red-500/5"

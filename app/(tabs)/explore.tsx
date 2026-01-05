@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useAudioPlayer } from "expo-audio";
+import { useAudioPlayer } from "expo-audio"; // Mantenemos esto para la pestaña "Música"
 import { useColorScheme } from "nativewind";
 
 import {
@@ -30,22 +30,21 @@ import {
   getAllPosts,
   getFeedCandidates,
   getFollowedUserIds,
-  toggleLikePost, // Agregado
-  deletePost, // Agregado
-  togglePostPrivacy, // Agregado
-  reportPost, // Agregado
+  deletePost,
+  reportPost,
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
 
-// IMPORTACIONES NUEVAS
+// IMPORTACIONES
 import { useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
 import ShareModal from "@/components/ShareModal";
 import OptionsModal from "@/components/OptionsModal";
+import PostItem from "@/components/PostItem"; // <--- Tu componente refactorizado
 
 const { width } = Dimensions.get("window");
 
-// --- HELPERS ---
+// --- HELPERS (Necesarios para la lógica de clasificación de Explore) ---
 const parseSongFromPost = (songDataString: string) => {
   try {
     if (!songDataString) return null;
@@ -89,7 +88,6 @@ const Explore = () => {
   const inputBg = isDark ? "#18181B" : "#F4F4F5";
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
   const pillInactiveBg = isDark ? "#18181B" : "#F4F4F5";
-  const iconColor = isDark ? "#A1A1AA" : "#52525B";
 
   const { user } = useGlobalContext();
 
@@ -110,6 +108,8 @@ const Explore = () => {
   const [isOptionsVisible, setOptionsVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState<any>(null);
 
+  // Audio Player local SOLO para la pestaña "Música" (Top Charts)
+  // PostItem maneja su propio audio internamente.
   const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -152,6 +152,7 @@ const Explore = () => {
     }
   };
 
+  // --- LÓGICA DE RANKING ---
   const rankExplorePosts = (posts: any[]) => {
     return posts
       .map((post) => {
@@ -323,32 +324,7 @@ const Explore = () => {
     fetchCategoryData();
   };
 
-  // --- NUEVAS FUNCIONES DE ACCIÓN ---
-
-  const handleLike = async (post: any) => {
-    if (!user) return;
-    const originalLikes = post.likedBy || [];
-    const isLiked = originalLikes.includes(user.$id);
-    const newLikes = isLiked
-      ? originalLikes.filter((id: string) => id !== user.$id)
-      : [...originalLikes, user.$id];
-
-    // Actualización optimista del estado local
-    setExplorePosts((prev) =>
-      prev.map((p) => (p.$id === post.$id ? { ...p, likedBy: newLikes } : p))
-    );
-
-    try {
-      await toggleLikePost(post.$id, user.$id, originalLikes);
-    } catch (error) {
-      // Revertir si falla
-      setExplorePosts((prev) =>
-        prev.map((p) =>
-          p.$id === post.$id ? { ...p, likedBy: originalLikes } : p
-        )
-      );
-    }
-  };
+  // --- HANDLERS PARA POSTITEM Y MODALES ---
 
   const handleOpenOptions = (post: any) => {
     setSelectedPost(post);
@@ -358,23 +334,6 @@ const Explore = () => {
   const handleShare = (postId: string) => {
     setPostToShare(postId);
     setShareVisible(true);
-  };
-
-  // --- ACCIONES MODAL OPCIONES ---
-  const handleTogglePrivacyAction = async () => {
-    if (!selectedPost) return;
-    setOptionsVisible(false);
-    // En explorar, si lo haces privado, probablemente debería desaparecer,
-    // pero aquí solo actualizamos el estado o recargamos.
-    try {
-      await togglePostPrivacy(
-        selectedPost.$id,
-        selectedPost.isPrivate || false
-      );
-      onRefresh(); // Recargar lista
-    } catch (e) {
-      Alert.alert("Error", "No se pudo actualizar");
-    }
   };
 
   const handleDeleteAction = () => {
@@ -462,175 +421,21 @@ const Explore = () => {
     }
   };
 
-  const renderPostItem = ({ item, index }: { item: any; index: number }) => {
-    const creator = getCreatorFromPost(item);
-    const songData = parseSongFromPost(item.songData);
-
-    // Calcular datos reales
-    const likesCount = item.likedBy ? item.likedBy.length : 0;
-    const isLiked =
-      user && item.likedBy ? item.likedBy.includes(user.$id) : false;
-    const commentsCount =
-      item.commentsCount || (item.comments ? item.comments.length : 0);
-
-    const isThisPlaying = playingId === item.$id;
-    const showPause = isThisPlaying && isPlaying;
-    const isLastItem = index === explorePosts.length - 1;
-
+  // --- NUEVO RENDER ITEM USANDO POSTITEM ---
+  const renderPostItem = ({ item }: { item: any }) => {
     return (
-      <View className="flex-row px-4 pt-4">
-        <View className="items-center mr-3">
-          <TouchableOpacity
-            onPress={() => router.push(`/user/${creator.id}` as any)}
-          >
-            <Image
-              source={
-                creator.avatar
-                  ? { uri: creator.avatar }
-                  : require("@/assets/noPfp.jpg")
-              }
-              className="w-10 h-10 rounded-full"
-              style={{
-                backgroundColor: cardBg,
-                borderColor: borderColor,
-                borderWidth: 1,
-              }}
-              resizeMode="cover"
-            />
-          </TouchableOpacity>
-          {!isLastItem && (
-            <View
-              className="w-[2px] flex-1 my-2"
-              style={{ backgroundColor: borderColor }}
-            />
-          )}
-        </View>
-        <View
-          className="flex-1 pb-6 border-b"
-          style={{ borderColor: borderColor }}
-        >
-          <View className="flex-row items-center justify-between mb-1">
-            <View className="flex-row items-center flex-wrap flex-1 mr-2">
-              <Text
-                className="font-bold mr-1 text-base"
-                style={{ color: textColor }}
-              >
-                {creator.name === "unknown"
-                  ? t("feed.unknownUser")
-                  : creator.name}
-              </Text>
-              <Text className="text-sm" style={{ color: subTextColor }}>
-                @{creator.username} ·{" "}
-                {getRelativeTime(item.$createdAt, language)}
-              </Text>
-            </View>
-
-            {/* BOTÓN 3 PUNTOS FUNCIONAL */}
-            <TouchableOpacity
-              onPress={() => handleOpenOptions(item)}
-              className="p-1 -mr-2"
-            >
-              <Ionicons
-                name="ellipsis-horizontal"
-                size={18}
-                color={iconColor}
-              />
-            </TouchableOpacity>
-          </View>
-
-          <Text
-            className="text-base mb-3 leading-5"
-            style={{ color: textColor }}
-          >
-            {item.comment}
-          </Text>
-
-          {songData && (
-            <View
-              className="rounded-xl p-2 flex-row items-center mb-3 border"
-              style={{ backgroundColor: cardBg, borderColor: borderColor }}
-            >
-              <Image
-                source={{ uri: songData.cover }}
-                className="w-12 h-12 rounded-lg mr-3"
-                style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
-                resizeMode="cover"
-              />
-              <View className="flex-1 justify-center mr-2">
-                <Text
-                  className="font-bold"
-                  numberOfLines={1}
-                  style={{ color: textColor }}
-                >
-                  {songData.title}
-                </Text>
-                <Text
-                  className="text-xs"
-                  numberOfLines={1}
-                  style={{ color: subTextColor }}
-                >
-                  {songData.artist}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => handlePlayPreview(songData.preview, item.$id)}
-                className="bg-[#5E17EB] w-8 h-8 rounded-full items-center justify-center"
-              >
-                <Ionicons
-                  name={showPause ? "pause" : "play"}
-                  size={16}
-                  color="white"
-                  style={showPause ? {} : { marginLeft: 2 }}
-                />
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <View className="flex-row items-center justify-between pr-8 mt-1">
-            {/* BOTÓN COMENTARIOS */}
-            <TouchableOpacity
-              className="flex-row items-center"
-              onPress={() => router.push(`/post/${item.$id}` as any)}
-            >
-              <Ionicons name="chatbubble-outline" size={20} color={iconColor} />
-              <Text className="text-xs ml-1.5" style={{ color: subTextColor }}>
-                {commentsCount}
-              </Text>
-            </TouchableOpacity>
-
-            {/* BOTÓN LIKES FUNCIONAL */}
-            <TouchableOpacity
-              className="flex-row items-center"
-              onPress={() => handleLike(item)}
-            >
-              <Ionicons
-                name={isLiked ? "heart" : "heart-outline"}
-                size={22}
-                color={isLiked ? "#EF4444" : iconColor}
-              />
-              <Text
-                className="text-xs ml-1.5"
-                style={{ color: isLiked ? "#EF4444" : subTextColor }}
-              >
-                {likesCount}
-              </Text>
-            </TouchableOpacity>
-
-            {/* BOTÓN COMPARTIR FUNCIONAL */}
-            <TouchableOpacity onPress={() => handleShare(item.$id)}>
-              <Ionicons
-                name="share-social-outline"
-                size={22}
-                color={iconColor}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+      <PostItem
+        post={item}
+        currentUserId={user?.$id || ""}
+        onProfilePress={(id) => router.push(`/user/${id}` as any)}
+        onCommentPress={(id) => router.push(`/post/${id}` as any)}
+        onOptionsPress={() => handleOpenOptions(item)}
+        onSharePress={() => handleShare(item.$id)}
+      />
     );
   };
 
-  // ... (Resto de renderProfileItem, renderMusicItem, renderArtistItem, renderHeader IGUAL QUE ANTES) ...
+  // --- ITEMS DE OTRAS CATEGORÍAS (SIN CAMBIOS) ---
   const renderProfileItem = ({ item }: { item: any }) => {
     const isTrending = item.totalLikes >= 5;
     return (
@@ -894,7 +699,7 @@ const Explore = () => {
                     case "profiles":
                       return renderProfileItem({ item });
                     default:
-                      return renderPostItem({ item, index });
+                      return renderPostItem({ item });
                   }
                 }}
                 ListHeaderComponent={renderHeader}
@@ -919,7 +724,7 @@ const Explore = () => {
                 }
               />
 
-              {/* MODALES AGREGADOS */}
+              {/* MODALES */}
               <ShareModal
                 isVisible={isShareVisible}
                 onClose={() => setShareVisible(false)}
@@ -930,10 +735,8 @@ const Explore = () => {
                 isVisible={isOptionsVisible}
                 onClose={() => setOptionsVisible(false)}
                 onDelete={handleDeleteAction}
-                onTogglePrivacy={handleTogglePrivacyAction}
                 onReport={handleReportAction}
-                isPrivate={selectedPost?.isPrivate || false}
-                // Validamos si soy el dueño (creator.id o postedBy.$id)
+                // Validamos si soy el dueño
                 isOwner={
                   user?.$id && selectedPost
                     ? (selectedPost.postedBy?.$id ||

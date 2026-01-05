@@ -48,6 +48,8 @@ const { width } = Dimensions.get("window");
 const Library = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+
+  // Hook de idioma
   const { t } = useLanguage();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
@@ -147,7 +149,6 @@ const Library = () => {
     if (nativeEvent.state === State.ACTIVE) router.push("/explore");
   };
 
-  // --- HELPER: RENDERIZAR IMAGEN O ICONO POR DEFECTO (DISEÑO MEJORADO) ---
   const renderPlaylistImage = (coverUrl: string | null, size: number = 24) => {
     const isDefault = !coverUrl || coverUrl.includes("avatars/initials");
 
@@ -160,7 +161,6 @@ const Library = () => {
         />
       );
     }
-    // Diseño consistente "Desde fuera"
     return (
       <View
         style={{
@@ -173,7 +173,6 @@ const Library = () => {
         }}
         className="items-center justify-center relative overflow-hidden"
       >
-        {/* Fondo sutil */}
         <View className="absolute inset-0 bg-[#5E17EB] opacity-10" />
         <Ionicons name="musical-notes" size={size} color={accentColor} />
       </View>
@@ -448,7 +447,7 @@ const Library = () => {
         {item.name}
       </Text>
       <Text className="text-xs ml-1" style={{ color: subTextColor }}>
-        {item.songs?.length || 0} canciones
+        {item.songs?.length || 0} {t("library.songsCount")}
       </Text>
     </TouchableOpacity>
   );
@@ -476,7 +475,7 @@ const Library = () => {
             color={importPlatform === "mood" ? "#5E17EB" : subTextColor}
           />
           <Text className="font-bold mt-1" style={{ color: textColor }}>
-            Local
+            {t("library.local")}
           </Text>
         </TouchableOpacity>
 
@@ -541,7 +540,7 @@ const Library = () => {
                     className="text-xl font-bold"
                     style={{ color: textColor }}
                   >
-                    Canciones
+                    {t("library.tabs.songs")}
                   </Text>
                   {activeTab === "songs" && (
                     <View className="h-1 bg-[#5E17EB] rounded-full mt-1 w-1/2" />
@@ -557,7 +556,7 @@ const Library = () => {
                     className="text-xl font-bold"
                     style={{ color: textColor }}
                   >
-                    Playlists
+                    {t("library.tabs.playlists")}
                   </Text>
                   {activeTab === "playlists" && (
                     <View className="h-1 bg-[#5E17EB] rounded-full mt-1 w-1/2" />
@@ -619,14 +618,14 @@ const Library = () => {
                       className="font-bold text-base"
                       style={{ color: textColor }}
                     >
-                      Crear Playlist
+                      {t("library.createBtn")}
                     </Text>
                     <Text className="text-xs" style={{ color: subTextColor }}>
-                      Sincroniza con{" "}
+                      {t("library.syncText")}{" "}
                       {user?.preferredPlatform === "apple"
                         ? "Apple Music"
                         : "Spotify"}{" "}
-                      o crea local
+                      {t("library.orLocal")}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -651,7 +650,7 @@ const Library = () => {
                         className="text-center mt-10"
                         style={{ color: subTextColor }}
                       >
-                        Aún no tienes playlists.
+                        {t("library.empty.title")}
                       </Text>
                     ) : (
                       <ActivityIndicator color={accentColor} size="large" />
@@ -688,13 +687,13 @@ const Library = () => {
                           className="text-xl font-bold mb-4"
                           style={{ color: textColor }}
                         >
-                          Nueva Playlist
+                          {t("library.newPlaylist")}
                         </Text>
                         <Text
                           className="text-sm font-bold mb-2"
                           style={{ color: subTextColor }}
                         >
-                          NOMBRE
+                          {t("library.nameLabel")}
                         </Text>
                         <TextInput
                           className="p-4 rounded-xl mb-6 text-lg border"
@@ -703,7 +702,7 @@ const Library = () => {
                             color: textColor,
                             borderColor,
                           }}
-                          placeholder="Mis favoritas de Mood..."
+                          placeholder={t("library.createBtn") + "..."}
                           placeholderTextColor={subTextColor}
                           value={newPlaylistName}
                           onChangeText={setNewPlaylistName}
@@ -713,7 +712,7 @@ const Library = () => {
                           className="text-sm font-bold mb-2"
                           style={{ color: subTextColor }}
                         >
-                          PLATAFORMA
+                          {t("library.platformLabel")}
                         </Text>
                         {renderPlatformOptions()}
                         <View className="flex-row gap-3">
@@ -725,7 +724,7 @@ const Library = () => {
                               className="font-bold text-lg"
                               style={{ color: subTextColor }}
                             >
-                              Cancelar
+                              {t("library.cancel")}
                             </Text>
                           </TouchableOpacity>
                           <TouchableOpacity
@@ -733,7 +732,7 @@ const Library = () => {
                             className="flex-1 bg-[#5E17EB] p-4 rounded-full items-center"
                           >
                             <Text className="text-white font-bold text-lg">
-                              Crear
+                              {t("library.create")}
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -765,7 +764,7 @@ const Library = () => {
                         className="text-xl font-bold mb-4 text-center"
                         style={{ color: textColor }}
                       >
-                        Agregar a Playlist
+                        {t("library.addTo")}
                       </Text>
                       <FlatList
                         data={playlists}
@@ -792,7 +791,7 @@ const Library = () => {
                                 className="text-xs"
                                 style={{ color: subTextColor }}
                               >
-                                {item.songs.length} canciones
+                                {item.songs.length} {t("library.songsCount")}
                               </Text>
                             </View>
                             <View className="flex-1 items-end">
@@ -813,7 +812,7 @@ const Library = () => {
                           className="font-bold text-base"
                           style={{ color: subTextColor }}
                         >
-                          Cancelar
+                          {t("library.cancel")}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -843,7 +842,7 @@ const EmptyState = ({ t, textColor, subTextColor, emptyIconColor }: any) => (
       className="text-center mt-2 px-10 leading-6"
       style={{ color: subTextColor }}
     >
-      Guarda publicaciones con música para crear tu colección personal.
+      {t("library.emptySubtitle")}
     </Text>
   </View>
 );

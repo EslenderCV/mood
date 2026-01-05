@@ -23,7 +23,7 @@ export const appwriteConfig = {
   chatsCollectionId: "6949bf1f002f7ce268a2",
   messagesCollectionId: "6949c1b6000d070ff309",
   reportsCollectionId: "6959a194002105f44c03",
-  playlistsCollectionId: "6959a8460009615dfbcb", // ID de colección de Playlists
+  playlistsCollectionId: "6959a8460009615dfbcb",
 };
 
 const client = new Client();
@@ -73,6 +73,7 @@ export const createUser = async (
         preferredPlatform: "spotify",
         allowTags: true,
         blockedUsers: [],
+        isBanned: false,
       }
     );
     return newUser;
@@ -123,7 +124,19 @@ export const getCurrentUser = async () => {
     );
 
     if (!currentUser || currentUser.documents.length === 0) return null;
-    return currentUser.documents[0];
+
+    const userData = currentUser.documents[0];
+
+    // --- VERIFICAR BANEO ---
+    if (userData.isBanned) {
+      try {
+        await signOut();
+      } catch (e) {}
+      throw new Error("Cuenta suspendida por administración.");
+    }
+    // ------------------------------
+
+    return userData;
   } catch (error: any) {
     if (error.code === 401 || error.message?.includes("missing scopes")) {
       return null;
@@ -135,13 +148,18 @@ export const getCurrentUser = async () => {
 
 export async function getUser(userId: string) {
   try {
-    return await databases.getDocument(
+    const user = await databases.getDocument(
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
       userId
     );
+
+    // --- Si está baneado, retornamos null para que la UI lo ignore ---
+    if (user.isBanned) {
+      return null;
+    }
+    return user;
   } catch (error) {
-    console.log("Error obteniendo usuario:", error);
     return null;
   }
 }
@@ -238,6 +256,30 @@ export async function updateImage(file: any) {
 }
 
 // ==========================================
+// EXTERNAL MEDIA SERVICES (DEEZER)
+// ==========================================
+
+/**
+ * Obtiene una URL de preview válida y fresca desde Deezer.
+ * Usar esta función en el componente de UI al presionar Play.
+ */
+export const getDeezerTrackUrl = async (trackId: string | number) => {
+  if (!trackId) return null;
+  try {
+    const response = await fetch(`https://api.deezer.com/track/${trackId}`);
+    const data = await response.json();
+
+    if (data && data.preview) {
+      return data.preview;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching Deezer url", error);
+    return null;
+  }
+};
+
+// ==========================================
 // POSTS
 // ==========================================
 
@@ -250,8 +292,20 @@ export async function getPostById(postId: string) {
     );
     if (post.postedBy && typeof post.postedBy === "string") {
       const user = await getUser(post.postedBy);
+
+      if (!user) return null; // Usuario baneado o no existe
+
       return { ...post, postedBy: user };
     }
+
+    if (
+      post.postedBy &&
+      typeof post.postedBy === "object" &&
+      post.postedBy.isBanned
+    ) {
+      return null;
+    }
+
     return post;
   } catch (error) {
     console.log("Error getting post by ID:", error);
@@ -261,17 +315,34 @@ export async function getPostById(postId: string) {
 
 export const createPost = async (
   comment: string,
-  songData: string,
+  songData: string, // Espera un JSON string
   userId: string
 ) => {
   try {
+    // --- LÓGICA DE LIMPIEZA DEEER ---
+    // Parseamos para asegurar que NO guardamos la URL de preview (que caduca),
+    // solo guardamos metadata estática e ID.
+    let cleanSongData = songData;
+    try {
+      const parsedData = JSON.parse(songData);
+      // Si existe un preview, lo borramos para no ocupar espacio ni usar links rotos
+      if (parsedData.preview) {
+        delete parsedData.preview;
+        cleanSongData = JSON.stringify(parsedData);
+      }
+    } catch (e) {
+      // Si falla el parse, guardamos tal cual, pero intentamos limpiar
+      console.log("No se pudo limpiar el songData, guardando raw");
+    }
+    // --------------------------------
+
     return await databases.createDocument(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
       ID.unique(),
       {
         comment: comment,
-        songData: songData,
+        songData: cleanSongData,
         datePosted: new Date().toISOString(),
         postedBy: userId,
         likedBy: [],
@@ -298,28 +369,11 @@ export async function deletePost(postId: string) {
   }
 }
 
-export async function togglePostPrivacy(
-  postId: string,
-  currentStatus: boolean
-) {
-  try {
-    const updatedPost = await databases.updateDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.postsCollectionId,
-      postId,
-      {
-        isPrivate: !currentStatus,
-      }
-    );
-    return updatedPost;
-  } catch (error: any) {
-    console.error("Error al cambiar privacidad:", error);
-    throw new Error(error.message);
-  }
-}
-
 export const getUserPosts = async (userId: string) => {
   try {
+    const user = await getUser(userId);
+    if (!user) return [];
+
     const posts = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
@@ -336,7 +390,7 @@ export async function getAllPosts(currentUserId?: string) {
     const posts = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
-      [Query.orderDesc("$createdAt"), Query.equal("isPrivate", false)]
+      [Query.orderDesc("$createdAt")]
     );
 
     const postsWithData = await Promise.all(
@@ -346,6 +400,8 @@ export async function getAllPosts(currentUserId?: string) {
           creator = await getUser(creator);
         }
 
+        if (!creator || creator.isBanned) return null;
+
         const comments = await databases.listDocuments(
           appwriteConfig.databaseId,
           appwriteConfig.commentsCollectionId,
@@ -354,12 +410,13 @@ export async function getAllPosts(currentUserId?: string) {
 
         return {
           ...post,
-          postedBy: creator || post.postedBy,
+          postedBy: creator,
           commentsCount: comments.total,
         };
       })
     );
-    return postsWithData;
+
+    return postsWithData.filter((p) => p !== null);
   } catch (error: any) {
     if (error.code === 401 || error.message?.includes("authorized")) {
       return [];
@@ -374,7 +431,11 @@ export const getLatestUsers = async () => {
     const result = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
-      [Query.orderDesc("$createdAt"), Query.limit(20)]
+      [
+        Query.orderDesc("$createdAt"),
+        Query.limit(20),
+        Query.notEqual("isBanned", true),
+      ]
     );
     return result.documents;
   } catch (error) {
@@ -394,11 +455,20 @@ export async function getFeedCandidates() {
     const populatedPosts = await Promise.all(
       posts.documents.map(async (post) => {
         let userData = post.postedBy;
+
         if (post.postedBy && typeof post.postedBy === "string") {
           try {
             userData = await getUser(post.postedBy);
-          } catch (e) {}
+          } catch (e) {
+            userData = null;
+          }
         }
+
+        if (userData && typeof userData === "object" && userData.isBanned) {
+          userData = null;
+        }
+
+        if (!userData) return null;
 
         const commentsData = await databases.listDocuments(
           appwriteConfig.databaseId,
@@ -413,7 +483,8 @@ export async function getFeedCandidates() {
         };
       })
     );
-    return populatedPosts;
+
+    return populatedPosts.filter((p) => p !== null);
   } catch (error: any) {
     throw new Error(error.message || String(error));
   }
@@ -455,6 +526,7 @@ export async function toggleLikePost(
             typeof post.postedBy === "object"
               ? post.postedBy.$id
               : post.postedBy;
+
           await createNotification({
             userId: ownerId,
             type: "like",
@@ -517,19 +589,25 @@ export async function getSavedPosts(userId: string) {
 
     const populatedPosts = await Promise.all(
       posts.documents.map(async (post) => {
-        if (post.postedBy && typeof post.postedBy === "string") {
-          try {
-            const userData = await getUser(post.postedBy);
-            return { ...post, postedBy: userData };
-          } catch (e) {
-            return post;
+        if (post.postedBy) {
+          let userData = null;
+          if (typeof post.postedBy === "string") {
+            try {
+              userData = await getUser(post.postedBy);
+            } catch (e) {}
+          } else {
+            userData = post.postedBy;
           }
+
+          if (!userData || userData.isBanned) return null;
+
+          return { ...post, postedBy: userData };
         }
         return post;
       })
     );
 
-    return populatedPosts;
+    return populatedPosts.filter((p) => p !== null);
   } catch (error: any) {
     console.error("Error getSavedPosts:", error);
     return [];
@@ -694,6 +772,8 @@ export async function getFollowedUserIds(currentUserId: string) {
 export async function followUser(followerId: string, followedId: string) {
   try {
     const targetUser = await getUser(followedId);
+    if (!targetUser) throw new Error("Usuario no disponible");
+
     const isPrivate = targetUser?.isPrivate || false;
     const status = isPrivate ? "pending" : "accepted";
 
@@ -785,6 +865,7 @@ export async function getUserFollowers(userId: string) {
       [Query.equal("followedId", userId), Query.equal("status", "accepted")]
     );
     if (follows.documents.length === 0) return [];
+
     const followersDetails = await Promise.all(
       follows.documents.map(async (doc) => {
         if (!doc.followerId) return null;
@@ -806,6 +887,7 @@ export async function getUserFollowing(userId: string) {
       [Query.equal("followerId", userId), Query.equal("status", "accepted")]
     );
     if (follows.documents.length === 0) return [];
+
     const followingDetails = await Promise.all(
       follows.documents.map(async (doc) => {
         if (!doc.followedId) return null;
@@ -1059,7 +1141,11 @@ export async function searchUsers(query: string) {
     const users = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
-      [Query.search("username", query), Query.limit(5)]
+      [
+        Query.search("username", query),
+        Query.limit(5),
+        Query.notEqual("isBanned", true),
+      ]
     );
 
     const filteredUsers = users.documents.filter((doc) => {
@@ -1220,10 +1306,14 @@ export async function getUserChats(userId: string) {
           (id: string) => id !== userId
         );
         const otherUser = await getUser(otherUserId);
+
+        if (!otherUser) return null;
+
         return { ...chat, otherUser: otherUser };
       })
     );
-    return chatsWithUserData;
+
+    return chatsWithUserData.filter((c) => c !== null);
   } catch (error) {
     return [];
   }
