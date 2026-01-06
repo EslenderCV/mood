@@ -71,6 +71,7 @@ export const createUser = async (
         allowTags: true,
         blockedUsers: [],
         isBanned: false,
+        isPrivate: false,
       }
     );
     return newUser;
