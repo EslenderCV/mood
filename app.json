@@ -14,21 +14,35 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.gammes.mood"
+      "bundleIdentifier": "com.gammes.mood",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos para tu perfil y publicaciones.",
+        "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar y subir fotos.",
+        "NSMicrophoneUsageDescription": "Mood necesita acceso al micrófono para grabar audio en los videos."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.eslender.mood"
+      "package": "com.gammes.mood",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-router",
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app accesses your photos to let you share them with your friends."
+          "photosPermission": "Mood necesita acceso a tus fotos para que puedas compartirlas en tu perfil.",
+          "cameraPermission": "Mood necesita acceso a la cámara para que puedas tomar fotos."
         }
       ],
       "expo-audio",
@@ -37,6 +51,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "TU_PROJECT_ID_AQUI" 
+      }
     }
   }
 }

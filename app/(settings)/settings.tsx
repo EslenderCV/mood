@@ -7,6 +7,7 @@ import {
   Alert,
   Modal,
   TouchableWithoutFeedback,
+  Linking, // <--- 1. IMPORTADO
 } from "react-native";
 import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -67,6 +68,16 @@ const Settings = () => {
       Alert.alert("Error", "No se pudo actualizar la preferencia de música.");
     } finally {
       setUpdatingPlatform(false);
+    }
+  };
+
+  // 2. FUNCIÓN PARA ABRIR ENLACES
+  const openLink = async (url: string) => {
+    const supported = await Linking.canOpenURL(url);
+    if (supported) {
+      await Linking.openURL(url);
+    } else {
+      Alert.alert("Error", "No se pudo abrir el enlace.");
     }
   };
 
@@ -232,6 +243,38 @@ const Settings = () => {
             </View>
           </SettingRow>
         </TouchableOpacity>
+
+        {/* 3. SECCIÓN LEGAL AÑADIDA */}
+        <SectionTitle title="LEGAL" />
+        <TouchableOpacity
+          onPress={() =>
+            openLink(
+              "https://candied-resolution-5fa.notion.site/T-rminos-de-Uso-y-EULA-Acuerdo-de-Licencia-2e08961d2f1080769b1ddd43f1ea92c7?source=copy_link"
+            )
+          }
+        >
+          <SettingRow
+            icon="document-text-outline"
+            title="Términos y Condiciones (EULA)"
+            subtitle="Reglas de convivencia"
+            color={textColor}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() =>
+            openLink(
+              "https://candied-resolution-5fa.notion.site/Pol-tica-de-Privacidad-de-Mood-2e08961d2f1080018d6dc0ba872fab3d?source=copy_link"
+            )
+          }
+        >
+          <SettingRow
+            icon="shield-checkmark-outline"
+            title="Política de Privacidad"
+            subtitle="Cómo cuidamos tus datos"
+            color={textColor}
+          />
+        </TouchableOpacity>
+
         <View className="mt-12 items-center mb-8">
           <Text
             className="font-bold text-lg"

@@ -7,8 +7,11 @@ import {
   RefreshControl,
   Alert,
   Animated,
+  Platform,
+  LayoutAnimation,
+  UIManager,
 } from "react-native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,67 +34,151 @@ import {
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
+// Habilitar animaciones de Layout en Android
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// --- UTILIDADES ---
 const formatTimeAgo = (dateString: string, t: (key: string) => string) => {
   const date = new Date(dateString);
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-  if (diffInSeconds < 60) return t("notifications.time.justNow");
-
+  if (diffInSeconds < 60) return t("notifications.time.justNow") || "Ahora";
   const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) return `${diffInMinutes}${t("notifications.time.m")}`;
-
+  if (diffInMinutes < 60)
+    return `${diffInMinutes}${t("notifications.time.m") || "m"}`;
   const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return `${diffInHours}${t("notifications.time.h")}`;
-
+  if (diffInHours < 24)
+    return `${diffInHours}${t("notifications.time.h") || "h"}`;
   const diffInDays = Math.floor(diffInHours / 24);
-  return `${diffInDays}${t("notifications.time.d")}`;
+  return `${diffInDays}${t("notifications.time.d") || "d"}`;
 };
 
+// --- COMPONENTES UI ---
+
+const NotificationSkeleton = ({ isDark }: { isDark: boolean }) => {
+  const bg = isDark ? "bg-zinc-800" : "bg-gray-200";
+  return (
+    <View className="flex-row px-4 py-4 items-center animate-pulse">
+      <View className={`w-12 h-12 rounded-full ${bg} mr-3`} />
+      <View className="flex-1 space-y-2">
+        <View className={`w-3/4 h-4 rounded ${bg}`} />
+        <View className={`w-1/4 h-3 rounded ${bg}`} />
+      </View>
+    </View>
+  );
+};
+
+const FilterPill = ({
+  label,
+  isActive,
+  onPress,
+  isDark,
+}: {
+  label: string;
+  isActive: boolean;
+  onPress: () => void;
+  isDark: boolean;
+}) => {
+  const activeBg = "#5E17EB";
+  const inactiveBg = isDark ? "#27272A" : "#F3F4F6";
+  const activeText = "#FFFFFF";
+  const inactiveText = isDark ? "#A1A1AA" : "#71717A";
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      className="px-5 py-2 rounded-full mr-2 border"
+      style={{
+        backgroundColor: isActive ? activeBg : inactiveBg,
+        borderColor: isActive ? activeBg : isDark ? "#3F3F46" : "#E5E7EB",
+      }}
+    >
+      <Text
+        className="text-xs font-bold"
+        style={{ color: isActive ? activeText : inactiveText }}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+// --- PANTALLA PRINCIPAL ---
+
 const NotificationsScreen = () => {
+  // Theme & Context
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
 
+  // Colores dinámicos
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
-  const borderColor = isDark ? "#27272A" : "#E4E4E7";
-  const unreadBg = isDark ? "rgba(39, 39, 42, 0.4)" : "#F3F4F6";
-  const iconBg = isDark ? "#27272A" : "#E4E4E7";
-  const backIconColor = isDark ? "#FFFFFF" : "#000000";
+  const borderColor = isDark ? "#27272A" : "#F3F4F6"; // Más sutil
+  const unreadBg = isDark ? "rgba(94, 23, 235, 0.1)" : "#F5F3FF"; // Tinte morado muy suave
+  const iconBg = isDark ? "#18181B" : "#F4F4F5";
 
-  const [notifications, setNotifications] = useState<any[]>([]);
+  // Estados
+  const [allNotifications, setAllNotifications] = useState<any[]>([]);
+  const [filteredNotifications, setFilteredNotifications] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState<"all" | "requests" | "activity">("all");
 
-  const hasUnread = notifications.some((n) => !n.isRead);
+  const hasUnread = allNotifications.some((n) => !n.isRead);
 
+  // Inicialización
   useEffect(() => {
     fetchNotifications();
   }, []);
 
+  // Filtrado local
+  useEffect(() => {
+    if (filter === "all") {
+      setFilteredNotifications(allNotifications);
+    } else if (filter === "requests") {
+      setFilteredNotifications(
+        allNotifications.filter((n) => n.type === "follow_request")
+      );
+    } else {
+      setFilteredNotifications(
+        allNotifications.filter((n) => n.type !== "follow_request")
+      );
+    }
+  }, [filter, allNotifications]);
+
+  // Realtime Subscription
   useEffect(() => {
     if (!currentUser) return;
     const channel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.notificationsCollectionId}.documents`;
 
     const unsubscribe = client.subscribe(channel, (response) => {
+      // Configurar animación suave para nuevos items
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
       if (response.events.includes("databases.*.documents.*.create")) {
         const newPayload = response.payload as any;
         if (newPayload.userId === currentUser.$id) {
-          setNotifications((prev) => [newPayload, ...prev]);
+          setAllNotifications((prev) => [newPayload, ...prev]);
         }
       }
       if (response.events.includes("databases.*.documents.*.delete")) {
         const deletedPayload = response.payload as any;
-        setNotifications((prev) =>
+        setAllNotifications((prev) =>
           prev.filter((n) => n.$id !== deletedPayload.$id)
         );
       }
       if (response.events.includes("databases.*.documents.*.update")) {
         const updatedPayload = response.payload as any;
-        setNotifications((prev) =>
+        setAllNotifications((prev) =>
           prev.map((n) => (n.$id === updatedPayload.$id ? updatedPayload : n))
         );
       }
@@ -108,7 +195,7 @@ const NotificationsScreen = () => {
       if (!user) return;
       setCurrentUser(user);
       const results = await getUserNotifications(user.$id);
-      setNotifications(results);
+      setAllNotifications(results);
     } catch (error) {
       console.log(error);
     } finally {
@@ -117,25 +204,28 @@ const NotificationsScreen = () => {
     }
   };
 
-  const handleMarkAllRead = async () => {
-    const previousState = [...notifications];
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  // --- HANDLERS ---
 
+  const handleMarkAllRead = async () => {
+    const previousState = [...allNotifications];
+    setAllNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     try {
       await markAllNotificationsAsRead(currentUser.$id);
     } catch (error) {
-      setNotifications(previousState);
-      Alert.alert("Error", "No se pudieron marcar como leídas.");
+      setAllNotifications(previousState);
+      Alert.alert("Error", "No se pudo actualizar.");
     }
   };
+
   const handlePressNotification = async (item: any) => {
     if (item.type === "follow_request") return;
+
+    // Optimistic UI update
     if (!item.isRead) {
       markNotificationAsRead(item.$id);
-      const updated = notifications.map((n) =>
-        n.$id === item.$id ? { ...n, isRead: true } : n
+      setAllNotifications((prev) =>
+        prev.map((n) => (n.$id === item.$id ? { ...n, isRead: true } : n))
       );
-      setNotifications(updated);
     }
 
     if (item.postId) {
@@ -154,8 +244,9 @@ const NotificationsScreen = () => {
   };
 
   const handleAcceptRequest = async (notification: any) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     try {
-      setNotifications((prev) =>
+      setAllNotifications((prev) =>
         prev.filter((n) => n.$id !== notification.$id)
       );
       await acceptFollowRequest(
@@ -164,32 +255,28 @@ const NotificationsScreen = () => {
         notification.$id
       );
     } catch (error) {
-      Alert.alert(
-        t("notifications.errorTitle"),
-        t("notifications.errorAccept")
-      );
+      Alert.alert("Error", t("notifications.errorAccept"));
       fetchNotifications();
     }
   };
 
   const handleDeleteRequest = async (notification: any) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     try {
-      setNotifications((prev) =>
+      setAllNotifications((prev) =>
         prev.filter((n) => n.$id !== notification.$id)
       );
       await deleteFollowRequest(notification.senderId, currentUser.$id);
       await markNotificationAsRead(notification.$id);
     } catch (error) {
-      Alert.alert(
-        t("notifications.errorTitle"),
-        t("notifications.errorDelete")
-      );
+      Alert.alert("Error", t("notifications.errorDelete"));
     }
   };
 
   const handleDeleteSingle = async (item: any) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
     try {
-      setNotifications((prev) => prev.filter((n) => n.$id !== item.$id));
+      setAllNotifications((prev) => prev.filter((n) => n.$id !== item.$id));
       await deleteNotification(item.$id);
     } catch (error) {
       console.log("Error borrando", error);
@@ -205,18 +292,19 @@ const NotificationsScreen = () => {
         onPress: async () => {
           setIsLoading(true);
           await clearAllNotifications(currentUser.$id);
-          setNotifications([]);
+          setAllNotifications([]);
           setIsLoading(false);
         },
       },
     ]);
   };
 
+  // --- RENDERERS ---
+
   const renderRightActions = (progress: any, dragX: any, item: any) => {
     if (item.type === "follow_request") return null;
-
     const scale = dragX.interpolate({
-      inputRange: [-100, 0],
+      inputRange: [-80, 0],
       outputRange: [1, 0],
       extrapolate: "clamp",
     });
@@ -224,7 +312,7 @@ const NotificationsScreen = () => {
     return (
       <TouchableOpacity
         onPress={() => handleDeleteSingle(item)}
-        className="bg-red-600 justify-center items-center w-[80px]"
+        className="bg-red-500 w-[80px] justify-center items-center"
       >
         <Animated.View style={{ transform: [{ scale }] }}>
           <Ionicons name="trash-outline" size={24} color="white" />
@@ -234,31 +322,39 @@ const NotificationsScreen = () => {
   };
 
   const renderItem = ({ item }: { item: any }) => {
-    let icon = "notifications";
-    let color = "bg-zinc-800";
+    // Configuración visual según tipo
+    let iconName = "notifications";
+    let iconColor = "#A1A1AA";
+    let iconBgColor = isDark ? "#27272A" : "#F4F4F5";
 
-    if (item.type === "like") {
-      icon = "heart";
-      color = "bg-red-500";
-    }
-    if (item.type === "comment") {
-      icon = "chatbubble";
-      color = "bg-[#5E17EB]";
-    }
-    if (item.type === "follow") {
-      icon = "person-add";
-      color = "bg-blue-500";
-    }
-    if (item.type === "tag") {
-      icon = "at";
-      color = "bg-green-500";
-    }
-    if (item.type === "follow_request") {
-      icon = "lock-closed";
-      color = isDark ? "bg-zinc-600" : "bg-zinc-500";
+    switch (item.type) {
+      case "like":
+        iconName = "heart";
+        iconColor = "#EF4444"; // Rojo
+        iconBgColor = isDark ? "rgba(239, 68, 68, 0.2)" : "#FEF2F2";
+        break;
+      case "comment":
+        iconName = "chatbubble";
+        iconColor = "#5E17EB"; // Morado
+        iconBgColor = isDark ? "rgba(94, 23, 235, 0.2)" : "#F3E8FF";
+        break;
+      case "follow":
+        iconName = "person-add";
+        iconColor = "#3B82F6"; // Azul
+        iconBgColor = isDark ? "rgba(59, 130, 246, 0.2)" : "#EFF6FF";
+        break;
+      case "tag":
+        iconName = "at";
+        iconColor = "#10B981"; // Verde
+        iconBgColor = isDark ? "rgba(16, 185, 129, 0.2)" : "#ECFDF5";
+        break;
+      case "follow_request":
+        iconName = "lock-closed";
+        iconColor = isDark ? "#FFFFFF" : "#000000";
+        break;
     }
 
-    const rowBg = !item.isRead ? unreadBg : bgColor;
+    const isRequest = item.type === "follow_request";
 
     return (
       <Swipeable
@@ -268,64 +364,96 @@ const NotificationsScreen = () => {
         overshootRight={false}
       >
         <TouchableOpacity
-          activeOpacity={item.type === "follow_request" ? 1 : 0.7}
+          activeOpacity={isRequest ? 1 : 0.7}
           onPress={() => handlePressNotification(item)}
-          className="flex-row px-4 py-4 border-b"
-          style={{ backgroundColor: rowBg, borderColor: borderColor }}
+          className={`flex-row p-4 border-b ${
+            !item.isRead ? "border-l-4" : ""
+          }`}
+          style={{
+            backgroundColor: !item.isRead ? unreadBg : bgColor,
+            borderColor: borderColor,
+            borderLeftColor: !item.isRead ? "#5E17EB" : borderColor,
+          }}
         >
-          <View className="mr-3 relative">
+          {/* Avatar + Icono Superpuesto */}
+          <View className="mr-4 relative">
             <Image
               source={{ uri: item.senderAvatar }}
-              className="w-12 h-12 rounded-full"
-              style={{ backgroundColor: iconBg }}
+              className="w-12 h-12 rounded-full border"
+              style={{ borderColor: borderColor }}
             />
-            <View
-              className={`absolute -bottom-1 -right-1 ${color} w-5 h-5 rounded-full items-center justify-center border`}
-              style={{ borderColor: bgColor }}
-            >
-              <Ionicons name={icon as any} size={10} color="white" />
-            </View>
+            {!isRequest && (
+              <View
+                className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full items-center justify-center border-2"
+                style={{
+                  backgroundColor: iconBgColor,
+                  borderColor: bgColor,
+                }}
+              >
+                <Ionicons name={iconName as any} size={12} color={iconColor} />
+              </View>
+            )}
           </View>
-          <View className="flex-1 justify-center">
-            <Text className="text-[15px]" style={{ color: textColor }}>
+
+          {/* Contenido Texto */}
+          <View className="flex-1 justify-center space-y-1">
+            <Text
+              className="text-[15px] leading-5"
+              style={{ color: textColor }}
+              numberOfLines={2}
+            >
               <Text className="font-bold">{item.senderName}</Text>{" "}
-              {item.message}
+              <Text style={{ color: isDark ? "#D4D4D8" : "#4B5563" }}>
+                {item.message.replace(item.senderName, "")}
+              </Text>
             </Text>
 
-            {item.type === "follow_request" ? (
-              <View className="flex-row mt-3 gap-3">
+            {/* Acciones para Follow Request */}
+            {isRequest ? (
+              <View className="flex-row mt-2 gap-3">
                 <TouchableOpacity
                   onPress={() => handleAcceptRequest(item)}
-                  className="bg-[#5E17EB] px-4 py-1.5 rounded-lg flex-1 items-center"
+                  className="bg-[#5E17EB] px-6 py-2 rounded-xl flex-1 items-center shadow-sm"
                 >
                   <Text className="text-white font-bold text-xs">
-                    {t("notifications.confirm")}
+                    {t("notifications.confirm") || "Confirmar"}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => handleDeleteRequest(item)}
-                  className="px-4 py-1.5 rounded-lg flex-1 items-center"
-                  style={{ backgroundColor: iconBg }}
+                  className="px-6 py-2 rounded-xl flex-1 items-center border"
+                  style={{ borderColor: borderColor, backgroundColor: iconBg }}
                 >
                   <Text
                     className="font-bold text-xs"
                     style={{ color: textColor }}
                   >
-                    {t("notifications.delete")}
+                    {t("notifications.delete") || "Eliminar"}
                   </Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <Text className="text-xs mt-1" style={{ color: subTextColor }}>
+              <Text className="text-xs" style={{ color: subTextColor }}>
                 {formatTimeAgo(item.$createdAt, t)}
               </Text>
             )}
           </View>
-          <View className="items-center justify-center pl-2">
-            {!item.isRead && item.type !== "follow_request" && (
-              <View className="w-2 h-2 bg-[#5E17EB] rounded-full" />
-            )}
-          </View>
+
+          {/* Indicador o Preview Post (si tuvieras imagen del post) */}
+          {!isRequest && (
+            <View className="ml-2 justify-center">
+              {item.postImage ? (
+                // Si la noti trae imagen del post, la mostramos
+                <Image
+                  source={{ uri: item.postImage }}
+                  className="w-10 h-10 rounded-lg"
+                />
+              ) : !item.isRead ? (
+                // Si no es leída, mostramos un puntito sutil
+                <View className="w-2 h-2 bg-[#5E17EB] rounded-full" />
+              ) : null}
+            </View>
+          )}
         </TouchableOpacity>
       </Swipeable>
     );
@@ -333,79 +461,115 @@ const NotificationsScreen = () => {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: bgColor }}>
-      <SafeAreaView
-        className="flex-1"
-        edges={["top"]}
-        style={{ backgroundColor: bgColor }}
-      >
-        <View
-          className="flex-row items-center justify-between px-4 h-[50px] border-b"
-          style={{ borderColor: borderColor }}
-        >
-          <View className="flex-row items-center">
-            <TouchableOpacity
-              onPress={() => router.back()}
-              className="p-2 -ml-2"
-            >
-              <Ionicons name="arrow-back" size={24} color={backIconColor} />
+      <SafeAreaView className="flex-1" edges={["top"]}>
+        
+        {/* HEADER MODERNO */}
+        <View className="px-4 pb-2">
+          <View className="flex-row items-center justify-between h-[50px] mb-2">
+            <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+              <Ionicons
+                name="arrow-back"
+                size={26}
+                color={isDark ? "white" : "black"}
+              />
             </TouchableOpacity>
+
             <Text
-              className="font-bold text-lg ml-2"
+              className="text-xl font-bold"
               style={{ color: textColor }}
             >
-              {t("notifications.title")}
+              {t("notifications.title") || "Actividad"}
             </Text>
+
+            <View className="flex-row items-center">
+              {hasUnread && (
+                <TouchableOpacity onPress={handleMarkAllRead} className="p-2">
+                  <Ionicons
+                    name="checkmark-done-outline"
+                    size={24}
+                    color="#5E17EB"
+                  />
+                </TouchableOpacity>
+              )}
+              {allNotifications.length > 0 && (
+                <TouchableOpacity onPress={handleClearAll} className="p-2">
+                  <Ionicons name="trash-outline" size={22} color={subTextColor} />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-          <View className="flex-row items-center">
-            {hasUnread && (
-              <TouchableOpacity
-                onPress={handleMarkAllRead}
-                className="p-2 mr-1"
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="checkmark-done-outline"
-                  size={24}
-                  color={textColor}
-                />
-              </TouchableOpacity>
-            )}
-            {notifications.length > 0 && (
-              <TouchableOpacity onPress={handleClearAll} className="p-2">
-                <Ionicons name="trash-outline" size={22} color="#EF4444" />
-              </TouchableOpacity>
-            )}
+
+          {/* FILTROS (PILLS) */}
+          <View className="flex-row pb-2">
+            <FilterPill
+              label="Todas"
+              isActive={filter === "all"}
+              onPress={() => setFilter("all")}
+              isDark={isDark}
+            />
+            <FilterPill
+              label="Solicitudes"
+              isActive={filter === "requests"}
+              onPress={() => setFilter("requests")}
+              isDark={isDark}
+            />
+            <FilterPill
+              label="Actividad"
+              isActive={filter === "activity"}
+              onPress={() => setFilter("activity")}
+              isDark={isDark}
+            />
           </View>
         </View>
 
-        <FlatList
-          data={notifications}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.$id}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                fetchNotifications();
-              }}
-              tintColor="#5E17EB"
-            />
-          }
-          ListEmptyComponent={
-            <View className="mt-20 items-center">
-              <Ionicons
-                name="notifications-off-outline"
-                size={48}
-                color={subTextColor}
-                style={{ opacity: 0.5, marginBottom: 10 }}
+        {/* LISTA */}
+        {isLoading ? (
+          <View>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <NotificationSkeleton key={i} isDark={isDark} />
+            ))}
+          </View>
+        ) : (
+          <FlatList
+            data={filteredNotifications}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.$id}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  setRefreshing(true);
+                  fetchNotifications();
+                }}
+                tintColor="#5E17EB"
+                colors={["#5E17EB"]}
               />
-              <Text style={{ color: subTextColor }}>
-                {t("notifications.empty")}
-              </Text>
-            </View>
-          }
-        />
+            }
+            ListEmptyComponent={
+              <View className="mt-20 items-center px-10">
+                <View className="w-20 h-20 bg-zinc-100 dark:bg-zinc-800 rounded-full items-center justify-center mb-4">
+                  <Ionicons
+                    name="notifications-outline"
+                    size={40}
+                    color={subTextColor}
+                  />
+                </View>
+                <Text
+                  className="font-bold text-lg mb-2 text-center"
+                  style={{ color: textColor }}
+                >
+                  {t("notifications.emptyTitle") || "Sin notificaciones"}
+                </Text>
+                <Text className="text-center text-sm" style={{ color: subTextColor }}>
+                  {t("notifications.empty") ||
+                    "Aquí aparecerán tus likes, comentarios y nuevos seguidores."}
+                </Text>
+              </View>
+            }
+          />
+        )}
       </SafeAreaView>
     </GestureHandlerRootView>
   );
