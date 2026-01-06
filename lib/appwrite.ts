@@ -71,6 +71,7 @@ export const createUser = async (
         allowTags: true,
         blockedUsers: [],
         isBanned: false,
+        isPrivate: false,
       }
     );
     return newUser;
@@ -1715,3 +1716,25 @@ export async function sendPushNotification(
 }
 
 export { client, databases };
+
+export async function deleteUserAccount(userId: string) {
+  try {
+    // 1. Intentamos eliminar el documento del usuario en la base de datos
+    // Esto borra su perfil, nombre, foto, bio, etc.
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId
+    );
+
+    // 2. Eliminamos la sesión actual (Logout forzado)
+    await account.deleteSession("current");
+
+    return true;
+  } catch (error: any) {
+    console.error("Error deleting account:", error);
+    // A veces falla si el usuario ya borró la sesión, así que no lanzamos error fatal
+    // pero devolvemos false o el error para manejarlo en la UI si es necesario.
+    throw new Error(error.message);
+  }
+}

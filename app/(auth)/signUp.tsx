@@ -7,6 +7,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Linking, // <--- 1. IMPORTADO
 } from "react-native";
 import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -69,20 +70,23 @@ const SignUp = () => {
   };
 
   const handleOAuth = async (provider: "google" | "apple") => {
-    console.log("1. Botón presionado:", provider);
-
     try {
       setIsLoading(true);
-      console.log("2. Llamando a signInWithOAuth...");
-
       await signInWithOAuth(provider);
-
-      console.log("3. Appwrite intentó abrir el navegador");
     } catch (error: any) {
-      console.error("4. ERROR en handleOAuth:", error);
       Alert.alert("Error OAuth", error.message);
     } finally {
       setTimeout(() => setIsLoading(false), 2000);
+    }
+  };
+
+  // 2. FUNCIÓN PARA ABRIR ENLACES
+  const openLink = async (url: string) => {
+    const supported = await Linking.canOpenURL(url);
+    if (supported) {
+      await Linking.openURL(url);
+    } else {
+      Alert.alert("Error", "No se pudo abrir el enlace");
     }
   };
 
@@ -143,7 +147,37 @@ const SignUp = () => {
                 loading={isLoading}
               />
             </View>
-            <View className="flex-row justify-center items-center w-full gap-4 mt-10 mb-8">
+
+            {/* 3. AQUÍ ESTÁ EL TEXTO LEGAL OBLIGATORIO */}
+            <View className="mt-4 flex-row flex-wrap justify-center px-2">
+              <Text className="text-zinc-500 text-xs text-center leading-5">
+                Al registrarte, aceptas nuestros{" "}
+                <Text
+                  className="text-[#5E17EB] font-bold"
+                  onPress={() =>
+                    openLink(
+                      "https://candied-resolution-5fa.notion.site/T-rminos-de-Uso-y-EULA-Acuerdo-de-Licencia-2e08961d2f1080769b1ddd43f1ea92c7?source=copy_link"
+                    )
+                  }
+                >
+                  Términos de Uso
+                </Text>{" "}
+                y{" "}
+                <Text
+                  className="text-[#5E17EB] font-bold"
+                  onPress={() =>
+                    openLink(
+                      "https://candied-resolution-5fa.notion.site/Pol-tica-de-Privacidad-de-Mood-2e08961d2f1080018d6dc0ba872fab3d?source=copy_link"
+                    )
+                  }
+                >
+                  Política de Privacidad
+                </Text>
+                .
+              </Text>
+            </View>
+
+            <View className="flex-row justify-center items-center w-full gap-4 mt-6 mb-8">
               <View className="bg-zinc-800 flex-1 h-[1px]"></View>
               <Text className="text-zinc-500 text-xs font-semibold uppercase tracking-widest">
                 {t("auth.orRegister")}

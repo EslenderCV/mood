@@ -22,6 +22,7 @@ import {
   getUserSessions,
   deleteSession,
   deleteAllSessions,
+  deleteUserAccount, // <--- 1. IMPORTADO
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useLanguage } from "@/context/LanguageContext";
@@ -43,7 +44,10 @@ const Security = () => {
   const modalBg = isDark ? "#18181B" : "#FFFFFF";
   const inputBg = isDark ? "#27272A" : "#F4F4F5";
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
-  const { setUser, setIsLogged } = useGlobalContext();
+
+  // 2. AGREGAMOS 'user' PARA OBTENER EL ID
+  const { setUser, setIsLogged, user } = useGlobalContext();
+  
   const [biometrics, setBiometrics] = useState(false);
   const [isBiometricSupported, setIsBiometricSupported] = useState(false);
   const [sessions, setSessions] = useState<any[]>([]);
@@ -176,6 +180,41 @@ const Security = () => {
       ]
     );
   };
+
+  // 3. NUEVA FUNCIÓN PARA ELIMINAR CUENTA
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "¿Eliminar cuenta permanentemente?", // Puedes usar t(...) si tienes la traducción
+      "Esta acción borrará todos tus datos, fotos y chats. No se puede deshacer.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar Cuenta",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              if (!user?.$id) return;
+
+              // Llamamos a la función que creamos en lib/appwrite.ts
+              await deleteUserAccount(user.$id);
+
+              // Limpiamos estado local
+              setUser(null);
+              setIsLogged(false);
+
+              // Redirigimos al login
+              router.replace("/signIn");
+              
+              Alert.alert("Cuenta Eliminada", "Tu cuenta ha sido eliminada exitosamente.");
+            } catch (error: any) {
+              Alert.alert("Error", "No se pudo eliminar la cuenta. Intenta cerrar sesión y volver a entrar.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const SecurityRow = ({
     icon,
     title,
@@ -410,18 +449,16 @@ const Security = () => {
           isDanger
           onPress={handleLogoutAll}
         />
+        
+        {/* 4. BOTÓN CONECTADO A LA LÓGICA REAL */}
         <SecurityRow
           icon="trash-outline"
           title={t("security.actions.deleteAccount")}
           subtitle={t("security.actions.deleteAccountSub")}
           isDanger
-          onPress={() =>
-            Alert.alert(
-              t("security.alerts.deleteContactTitle"),
-              t("security.alerts.deleteContactMsg")
-            )
-          }
+          onPress={handleDeleteAccount} 
         />
+        
         <View className="h-20" />
       </ScrollView>
       <Modal
