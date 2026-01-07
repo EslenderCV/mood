@@ -15,6 +15,7 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
+  Dimensions,
 } from "react-native";
 import React, { useState, useCallback, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -38,15 +39,40 @@ import {
   getUserPlaylists,
   createPlaylist,
   addSongToPlaylist,
+  getDeezerTrackUrl, // IMPORTANTE: Para el audio
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useLanguage } from "@/context/LanguageContext";
 
+const { width } = Dimensions.get("window");
+
+// --- COMPONENTE VISUALIZADOR DE AUDIO ---
+const AudioVisualizer = ({
+  isPlaying,
+  color,
+}: {
+  isPlaying: boolean;
+  color: string;
+}) => {
+  return (
+    <View className="flex-row items-end gap-[2px] h-3 ml-2 opacity-80">
+      {[1, 2, 3].map((i) => (
+        <View
+          key={i}
+          className={`w-[3px] rounded-full`}
+          style={{
+            height: isPlaying ? Math.random() * 10 + 4 : 4,
+            backgroundColor: isPlaying ? "#5E17EB" : color,
+          }}
+        />
+      ))}
+    </View>
+  );
+};
+
 const Library = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // Hook de idioma
   const { t } = useLanguage();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
@@ -78,15 +104,41 @@ const Library = () => {
     useState(false);
   const [songToAdd, setSongToAdd] = useState<any>(null);
 
+  // --- AUDIO STATES ---
   const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const player = useAudioPlayer(currentSongUrl || "");
 
+  const player = useAudioPlayer(currentSongUrl);
+
+  // Auto-play
   useEffect(() => {
     if (currentSongUrl && player) {
-      player.play();
-      setIsPlaying(true);
+      if (!player.playing) {
+        player.play();
+        setIsPlaying(true);
+      }
+
+      const statusListener = (status: any) => {
+        if (status.didJustFinish) {
+          setIsPlaying(false);
+          player.seekTo(0);
+          player.pause();
+        }
+      };
+
+      if (player.addListener) {
+        player.addListener("playbackStatusUpdate", statusListener);
+      } else if ((player as any).setOnPlaybackStatusUpdate) {
+        (player as any).setOnPlaybackStatusUpdate(statusListener);
+      }
+
+      return () => {
+        if (player.removeListener) {
+          player.removeListener("playbackStatusUpdate", statusListener);
+        }
+      };
     }
   }, [currentSongUrl, player]);
 
@@ -109,7 +161,8 @@ const Library = () => {
                 post.postedBy.username || post.postedBy.name || "Usuario";
             return {
               ...song,
-              id: post.$id,
+              id: post.$id, // ID del post guardado
+              trackId: song.id || song.spotifyId, // ID REAL de la canción
               originalPostCreator: creatorName,
               postId: post.$id,
             };
@@ -144,6 +197,60 @@ const Library = () => {
 
   const handleFlingRight = ({ nativeEvent }: any) => {
     if (nativeEvent.state === State.ACTIVE) router.push("/explore");
+  };
+
+  // --- LÓGICA DE REPRODUCCIÓN (FETCH + FALLBACK) ---
+  const handlePlaySong = async (item: any) => {
+    const songIdKey = item.id; // ID único en la lista (Post ID)
+
+    if (playingId === songIdKey) {
+      if (isPlaying) {
+        player.pause();
+        setIsPlaying(false);
+      } else {
+        player.play();
+        setIsPlaying(true);
+      }
+      return;
+    }
+
+    if (isPlaying) {
+      player.pause();
+      setIsPlaying(false);
+    }
+
+    try {
+      setLoadingAudioId(songIdKey);
+
+      const trackId = item.trackId || item.spotifyId;
+      let finalUrl = null;
+
+      if (trackId) {
+        try {
+          finalUrl = await getDeezerTrackUrl(String(trackId));
+        } catch (e) {
+          console.log("API Fetch error", e);
+        }
+      }
+
+      if (!finalUrl && item.preview) {
+        finalUrl = item.preview;
+      }
+
+      if (!finalUrl) {
+        Alert.alert("Lo sentimos", "Audio no disponible.");
+        setLoadingAudioId(null);
+        return;
+      }
+
+      setPlayingId(songIdKey);
+      setCurrentSongUrl(finalUrl);
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Error", "Error al reproducir.");
+    } finally {
+      setLoadingAudioId(null);
+    }
   };
 
   const renderPlaylistImage = (coverUrl: string | null, size: number = 24) => {
@@ -219,23 +326,6 @@ const Library = () => {
     } catch (error) {
       Alert.alert("Error", "No se pudo agregar.");
     }
-  };
-
-  const handlePlayPreview = (previewUrl: string, id: string) => {
-    if (!previewUrl) return;
-    if (playingId === id) {
-      if (isPlaying) {
-        player.pause();
-        setIsPlaying(false);
-      } else {
-        player.play();
-        setIsPlaying(true);
-      }
-      return;
-    }
-    setIsPlaying(false);
-    setPlayingId(id);
-    setCurrentSongUrl(previewUrl);
   };
 
   const handleUnsave = async (item: any) => {
@@ -321,7 +411,9 @@ const Library = () => {
     const platform = user?.preferredPlatform || "spotify";
     const iconName = platform === "apple" ? "apple" : "spotify";
     const brandColor = platform === "apple" ? "#FA243C" : "#1DB954";
+
     const isThisPlaying = playingId === item.id;
+    const isLoadingThis = loadingAudioId === item.id;
     const showPause = isThisPlaying && isPlaying;
 
     return (
@@ -340,47 +432,60 @@ const Library = () => {
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => router.push(`/post/${item.postId}` as any)}
-          className="mb-4 rounded-3xl p-3 border flex-row items-center relative overflow-hidden"
+          className="mb-3 rounded-2xl p-3 border flex-row items-center relative overflow-hidden"
           style={{ backgroundColor: cardBg, borderColor: borderColor }}
         >
           <View className="relative mr-4">
             <Image
               source={{ uri: item.cover }}
-              className="w-20 h-20 rounded-2xl bg-zinc-800"
+              className="w-16 h-16 rounded-xl bg-zinc-800"
               resizeMode="cover"
             />
+            {/* Botón Play sobre la carátula */}
             <TouchableOpacity
               onPress={(e) => {
                 e.stopPropagation();
-                handlePlayPreview(item.preview, item.id);
+                handlePlaySong(item);
               }}
-              className="absolute inset-0 items-center justify-center bg-black/20 rounded-2xl"
+              className="absolute inset-0 items-center justify-center bg-black/20 rounded-xl"
             >
-              <View className="bg-black/40 w-10 h-10 rounded-full items-center justify-center backdrop-blur-sm">
-                <Ionicons
-                  name={showPause ? "pause" : "play"}
-                  size={20}
-                  color="white"
-                  style={showPause ? {} : { marginLeft: 2 }}
-                />
+              <View className="bg-black/40 w-8 h-8 rounded-full items-center justify-center backdrop-blur-sm">
+                {isLoadingThis ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Ionicons
+                    name={showPause ? "pause" : "play"}
+                    size={16}
+                    color="white"
+                    style={showPause ? {} : { marginLeft: 2 }}
+                  />
+                )}
               </View>
             </TouchableOpacity>
           </View>
+
           <View className="flex-1 justify-center py-1 pr-2">
             <Text
-              className="font-bold text-base leading-5 mb-1"
+              className="font-bold text-[15px] leading-5 mb-0.5"
               numberOfLines={1}
-              style={{ color: textColor }}
+              style={{ color: isThisPlaying ? accentColor : textColor }}
             >
               {item.title}
             </Text>
-            <Text
-              className="text-sm font-medium mb-2"
-              numberOfLines={1}
-              style={{ color: subTextColor }}
-            >
-              {item.artist}
-            </Text>
+
+            <View className="flex-row items-center mb-1">
+              <Text
+                className="text-xs font-medium"
+                numberOfLines={1}
+                style={{ color: subTextColor }}
+              >
+                {item.artist}
+              </Text>
+              {isThisPlaying && isPlaying && (
+                <AudioVisualizer isPlaying={true} color={accentColor} />
+              )}
+            </View>
+
             <View className="flex-row items-center">
               <Ionicons name="flash" size={10} color="#EAB308" />
               <Text
@@ -391,14 +496,15 @@ const Library = () => {
               </Text>
             </View>
           </View>
+
           <TouchableOpacity
             onPress={(e) => {
               e.stopPropagation();
               openExternalMusic(item);
             }}
-            className="w-10 h-10 rounded-full items-center justify-center bg-zinc-200 dark:bg-zinc-800"
+            className="w-9 h-9 rounded-full items-center justify-center bg-zinc-200 dark:bg-zinc-800"
           >
-            <FontAwesome5 name={iconName} size={20} color={brandColor} />
+            <FontAwesome5 name={iconName} size={16} color={brandColor} />
           </TouchableOpacity>
         </TouchableOpacity>
       </Swipeable>
@@ -657,6 +763,7 @@ const Library = () => {
               </View>
             )}
 
+            {/* MODALS */}
             <Modal
               animationType="slide"
               transparent
@@ -685,12 +792,7 @@ const Library = () => {
                         >
                           {t("library.newPlaylist")}
                         </Text>
-                        <Text
-                          className="text-sm font-bold mb-2"
-                          style={{ color: subTextColor }}
-                        >
-                          {t("library.nameLabel")}
-                        </Text>
+
                         <TextInput
                           className="p-4 rounded-xl mb-6 text-lg border"
                           style={{
@@ -704,13 +806,15 @@ const Library = () => {
                           onChangeText={setNewPlaylistName}
                           autoFocus
                         />
+
                         <Text
-                          className="text-sm font-bold mb-2"
+                          className="text-sm font-bold mb-3"
                           style={{ color: subTextColor }}
                         >
                           {t("library.platformLabel")}
                         </Text>
                         {renderPlatformOptions()}
+
                         <View className="flex-row gap-3">
                           <TouchableOpacity
                             onPress={() => setCreateModalVisible(false)}
@@ -775,7 +879,7 @@ const Library = () => {
                             >
                               {renderPlaylistImage(item.cover, 24)}
                             </View>
-                            <View>
+                            <View className="flex-1">
                               <Text
                                 className="font-bold text-lg"
                                 style={{ color: textColor }}
@@ -789,27 +893,14 @@ const Library = () => {
                                 {item.songs.length} {t("library.songsCount")}
                               </Text>
                             </View>
-                            <View className="flex-1 items-end">
-                              <Ionicons
-                                name="add-circle-outline"
-                                size={24}
-                                color={accentColor}
-                              />
-                            </View>
+                            <Ionicons
+                              name="add-circle-outline"
+                              size={24}
+                              color={accentColor}
+                            />
                           </TouchableOpacity>
                         )}
                       />
-                      <TouchableOpacity
-                        onPress={() => setAddToPlaylistModalVisible(false)}
-                        className="mt-4 p-4 items-center"
-                      >
-                        <Text
-                          className="font-bold text-base"
-                          style={{ color: subTextColor }}
-                        >
-                          {t("library.cancel")}
-                        </Text>
-                      </TouchableOpacity>
                     </View>
                   </TouchableWithoutFeedback>
                 </View>

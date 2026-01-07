@@ -56,7 +56,7 @@ const Home = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   // Usamos un fondo un poco más sofisticado (Zinc-950) en dark mode
-  const bgColor = isDark ? "#09090B" : "#FFFFFF";
+  const bgColor = isDark ? "#000000" : "#FFFFFF";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
 
   const { t } = useLanguage();
@@ -262,7 +262,6 @@ const Home = () => {
       edges={["top"]}
       style={{ backgroundColor: bgColor }}
     >
-      <StatusBar style={isDark ? "light" : "dark"} />
       <TopBar notificationCount={notiCount} messageCount={msgCount} />
 
       {isLoading ? (

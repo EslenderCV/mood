@@ -57,7 +57,7 @@ const TabsLayout = () => {
   const { t } = useLanguage();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
-  const tabBarBg = isDark ? "#121212" : "#FFFFFF";
+  const tabBarBg = isDark ? "#000000" : "#FFFFFF";
   const borderColor = isDark ? "#27272A" : "#F4F4F5";
 
   const menuBg = isDark ? "#18181B" : "#FFFFFF";

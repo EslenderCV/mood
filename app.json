@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mood",
+    "scheme": ["mood", "appwrite-callback-6689e59b000acd6caf6f"],
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.gammes.mood",
+      "bundleIdentifier": "com.Gammes.Mood",
       "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos para tu perfil y publicaciones.",
@@ -27,7 +27,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.gammes.mood",
+      "package": "com.Gammes.Mood",
       "versionCode": 1,
       "permissions": [
         "CAMERA",

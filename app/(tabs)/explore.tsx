@@ -32,6 +32,7 @@ import {
   getFollowedUserIds,
   deletePost,
   reportPost,
+  getDeezerTrackUrl, // <--- IMPORTADO
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
 
@@ -100,7 +101,7 @@ const Explore = () => {
   const { t } = useLanguage();
 
   // --- Paleta de Colores Refinada ---
-  const bgColor = isDark ? "#09090B" : "#FFFFFF"; // Zinc 950
+  const bgColor = isDark ? "#000" : "#FFFFFF"; // Zinc 950
   const textColor = isDark ? "#FAFAFA" : "#18181B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const cardBg = isDark ? "#18181B" : "#F4F4F5"; // Zinc 900
@@ -130,6 +131,7 @@ const Explore = () => {
   // Audio Player
   const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null); // Nuevo estado para carga individual
   const [isPlaying, setIsPlaying] = useState(false);
 
   const player = useAudioPlayer(currentSongUrl || "");
@@ -141,9 +143,12 @@ const Explore = () => {
     }
   }, [currentSongUrl, player]);
 
-  const handlePlayPreview = (previewUrl: string, id: string) => {
-    if (!previewUrl) return;
-    if (playingId === id) {
+  // --- Lógica de Reproducción (Igual que PostItem) ---
+  const handlePlayMusicItem = async (item: any) => {
+    const listId = item.id; // ID único en la lista (ej: "Title-Artist")
+
+    // Si es el mismo ítem, pausar o reanudar
+    if (playingId === listId) {
       if (isPlaying) {
         player.pause();
         setIsPlaying(false);
@@ -153,9 +158,42 @@ const Explore = () => {
       }
       return;
     }
-    setIsPlaying(false);
-    setPlayingId(id);
-    setCurrentSongUrl(previewUrl);
+
+    // Si hay otro sonando, pausarlo
+    if (isPlaying) {
+      player.pause();
+      setIsPlaying(false);
+    }
+
+    try {
+      setLoadingAudioId(listId); // Activar spinner en este ítem
+
+      const trackId = item.trackId; // ID real de la canción (Deezer/Spotify)
+
+      if (!trackId) {
+        Alert.alert("Error", "ID de canción no disponible.");
+        setLoadingAudioId(null);
+        return;
+      }
+
+      // Fetch a la API (Lógica de PostItem)
+      const previewUrl = await getDeezerTrackUrl(trackId);
+
+      if (!previewUrl) {
+        Alert.alert("Error", "No se pudo obtener el audio.");
+        setLoadingAudioId(null);
+        return;
+      }
+
+      setPlayingId(listId);
+      setCurrentSongUrl(previewUrl);
+      // El useEffect se encargará de hacer play() cuando cambie la URL
+    } catch (e) {
+      console.log(e);
+      Alert.alert("Error", "Ocurrió un error al reproducir.");
+    } finally {
+      setLoadingAudioId(null);
+    }
   };
 
   // --- Navegación por Gestos ---
@@ -286,7 +324,8 @@ const Explore = () => {
             } else {
               songMap.set(uniqueKey, {
                 ...songData,
-                id: uniqueKey,
+                id: uniqueKey, // ID para la lista
+                trackId: songData.id || songData.spotifyId, // ID REAL para la API
                 postId: post.$id,
                 likes: likes,
                 type: "music",
@@ -310,7 +349,6 @@ const Explore = () => {
             if (artistMap.has(artistName)) {
               const data = artistMap.get(artistName);
               data.count += 1;
-              // Randomly update cover to keep it fresh
               if (Math.random() > 0.5) data.cover = songData.cover;
             } else {
               artistMap.set(artistName, {
@@ -419,7 +457,6 @@ const Explore = () => {
           {t("explore.title")}
         </Text>
 
-        {/* Search Bar Refinado */}
         <View
           className="flex-row items-center h-12 rounded-2xl px-4 border"
           style={{ backgroundColor: inputBg, borderColor: "transparent" }}
@@ -436,7 +473,6 @@ const Explore = () => {
         </View>
       </View>
 
-      {/* Categorías como Pills elegantes */}
       <FlatList
         horizontal
         data={CATEGORIES}
@@ -484,13 +520,13 @@ const Explore = () => {
 
   const renderMusicItem = ({ item }: { item: any }) => {
     const isThisPlaying = playingId === item.id;
+    const isLoadingThis = loadingAudioId === item.id; // Estado de carga local
     const showPause = isThisPlaying && isPlaying;
 
-    // Colores de medalla para el Top 3
     let rankColor = subTextColor;
-    if (item.rank === 1) rankColor = "#FFD700"; // Oro
-    if (item.rank === 2) rankColor = "#C0C0C0"; // Plata
-    if (item.rank === 3) rankColor = "#CD7F32"; // Bronce
+    if (item.rank === 1) rankColor = "#FFD700";
+    if (item.rank === 2) rankColor = "#C0C0C0";
+    if (item.rank === 3) rankColor = "#CD7F32";
 
     return (
       <TouchableOpacity
@@ -540,15 +576,19 @@ const Explore = () => {
           className="w-10 h-10 rounded-full items-center justify-center bg-white/10"
           onPress={(e) => {
             e.stopPropagation();
-            handlePlayPreview(item.preview, item.id);
+            handlePlayMusicItem(item); // Usamos la nueva función con fetch
           }}
         >
-          <Ionicons
-            name={showPause ? "pause" : "play"}
-            size={22}
-            color={accentColor}
-            style={{ marginLeft: showPause ? 0 : 2 }}
-          />
+          {isLoadingThis ? (
+            <ActivityIndicator size="small" color={accentColor} />
+          ) : (
+            <Ionicons
+              name={showPause ? "pause" : "play"}
+              size={22}
+              color={accentColor}
+              style={{ marginLeft: showPause ? 0 : 2 }}
+            />
+          )}
         </TouchableOpacity>
       </TouchableOpacity>
     );
@@ -688,7 +728,7 @@ const Explore = () => {
             </View>
           ) : null
         }
-        contentContainerStyle={{ paddingBottom: 50 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

@@ -27,6 +27,7 @@ import {
   sendTagNotification,
   deletePost,
   reportPost,
+  getDeezerTrackUrl, // <--- IMPORTANTE: Importamos la función de la API
 } from "@/lib/appwrite";
 import CommentItem from "@/components/CommentItem";
 import { useColorScheme } from "nativewind";
@@ -94,13 +95,10 @@ const PostDetails = () => {
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
 
-  // Paleta de colores refinada
-  const bgColor = isDark ? "#09090B" : "#FFFFFF"; // Zinc-950 en dark
+  const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FAFAFA" : "#18181B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
-
-  // Card Song Background: Más sutil
   const songCardBg = isDark ? "#18181B" : "#F4F4F5";
   const inputBg = isDark ? "#27272A" : "#F3F4F6";
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
@@ -131,10 +129,13 @@ const PostDetails = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
 
+  // --- LOGICA DE AUDIO ---
   const [isPlaying, setIsPlaying] = useState(false);
-  const player = useAudioPlayer(
-    post ? parseSongData(post.songData)?.preview : null
-  );
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false); // Spinner en el botón
+  const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null); // URL dinámica
+
+  // Inicializamos el player con la URL que obtendremos (o null al principio)
+  const player = useAudioPlayer(currentSongUrl);
 
   const inputRef = useRef<TextInput>(null);
 
@@ -148,6 +149,38 @@ const PostDetails = () => {
       setRootComments(roots);
     }
   }, [allComments]);
+
+  // Efecto para auto-reproducir y manejar eventos cuando el player esté listo
+  useEffect(() => {
+    if (currentSongUrl && player) {
+      // Si acabamos de cargar la URL, reproducimos
+      if (!player.playing) {
+        player.play();
+        setIsPlaying(true);
+      }
+
+      // Listener para cuando termina la canción
+      const statusListener = (status: any) => {
+        if (status.didJustFinish) {
+          setIsPlaying(false);
+          player.seekTo(0);
+          player.pause();
+        }
+      };
+
+      if (player.addListener) {
+        player.addListener("playbackStatusUpdate", statusListener);
+      } else if ((player as any).setOnPlaybackStatusUpdate) {
+        (player as any).setOnPlaybackStatusUpdate(statusListener);
+      }
+
+      return () => {
+        if (player.removeListener) {
+          player.removeListener("playbackStatusUpdate", statusListener);
+        }
+      };
+    }
+  }, [currentSongUrl, player]);
 
   const fetchData = async () => {
     try {
@@ -179,6 +212,53 @@ const PostDetails = () => {
       creatorPfp: creator.pfp || null,
       comment: post.comment || null,
     };
+  };
+
+  // --- NUEVA LÓGICA DE REPRODUCCIÓN (FETCH) ---
+  const handlePlayPause = async () => {
+    // 1. Si ya tenemos URL y player listo, solo alternamos pausa/play
+    if (currentSongUrl && player) {
+      if (player.playing) {
+        player.pause();
+        setIsPlaying(false);
+      } else {
+        if (player.currentTime >= player.duration) {
+          player.seekTo(0);
+        }
+        player.play();
+        setIsPlaying(true);
+      }
+      return;
+    }
+
+    // 2. Si no tenemos URL, la buscamos
+    try {
+      setIsLoadingAudio(true);
+      const songData = parseSongData(post.songData);
+      const trackId = songData?.id || songData?.spotifyId;
+
+      if (!trackId) {
+        Alert.alert("Error", "ID de canción no disponible.");
+        setIsLoadingAudio(false);
+        return;
+      }
+
+      const previewUrl = await getDeezerTrackUrl(trackId);
+
+      if (!previewUrl) {
+        Alert.alert("Error", "No se pudo obtener el audio.");
+        setIsLoadingAudio(false);
+        return;
+      }
+
+      // Al setear la URL, el useEffect de arriba detectará el cambio y hará play()
+      setCurrentSongUrl(previewUrl);
+      setIsLoadingAudio(false);
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Ocurrió un error al reproducir.");
+      setIsLoadingAudio(false);
+    }
   };
 
   const handleDeleteAction = () => {
@@ -339,16 +419,6 @@ const PostDetails = () => {
     } catch (e) {}
   };
 
-  const handlePlay = () => {
-    if (isPlaying) {
-      player.pause();
-      setIsPlaying(false);
-    } else {
-      player.play();
-      setIsPlaying(true);
-    }
-  };
-
   const renderHeader = () => {
     if (!post) return null;
     const songData = parseSongData(post.songData);
@@ -451,17 +521,21 @@ const PostDetails = () => {
             </View>
 
             <TouchableOpacity
-              onPress={handlePlay}
+              onPress={handlePlayPause} // Usamos la nueva función
               className="w-14 h-14 rounded-full items-center justify-center shadow-md"
               style={{ backgroundColor: accentColor }}
               activeOpacity={0.8}
             >
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={26}
-                color="white"
-                style={{ marginLeft: isPlaying ? 0 : 3 }}
-              />
+              {isLoadingAudio ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Ionicons
+                  name={isPlaying ? "pause" : "play"}
+                  size={26}
+                  color="white"
+                  style={{ marginLeft: isPlaying ? 0 : 3 }}
+                />
+              )}
             </TouchableOpacity>
           </View>
         )}
@@ -554,7 +628,7 @@ const PostDetails = () => {
       edges={["top"]}
       style={{ backgroundColor: bgColor }}
     >
-      {/* Top Navigation - BUTTON REMOVED HERE */}
+      {/* Top Navigation */}
       <View
         className="flex-row items-center justify-between px-4 h-[50px] border-b z-10"
         style={{ backgroundColor: bgColor, borderColor: borderColor }}
@@ -571,7 +645,6 @@ const PostDetails = () => {
           </Text>
         </View>
         <View className="flex-row items-center gap-1">
-          {/* ELIMINADO EL BOTÓN DE COMPARTIR DE AQUÍ */}
           <TouchableOpacity
             onPress={() => setOptionsVisible(true)}
             className="p-2 -mr-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"

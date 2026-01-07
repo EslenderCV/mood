@@ -20,7 +20,6 @@ import { useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
 import { useAudioContext } from "@/context/AudioContext";
 
-// Componente decorativo para el audio
 const AudioVisualizer = ({
   isPlaying,
   color,

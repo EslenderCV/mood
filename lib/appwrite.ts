@@ -9,9 +9,11 @@ import {
   ID,
   OAuthProvider,
 } from "react-native-appwrite";
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 
 export const appwriteConfig = {
-  endpoint: "https://cloud.appwrite.io/v1",
+  endpoint: "https://fra.cloud.appwrite.io/v1",
   platform: "com.gammes.mood",
   projectId: "6689e59b000acd6caf6f",
   databaseId: "6689e7cc002bf2740136",
@@ -38,6 +40,89 @@ const account = new Account(client);
 const avatars = new Avatars(client);
 const databases = new Databases(client);
 const storage = new Storage(client);
+
+// --- AUTENTICACIÓN MANUAL (VERSIÓN FINAL) ---
+export const signInWithOAuth = async (provider: "google" | "apple") => {
+  try {
+    // 1. LIMPIEZA PREVENTIVA (El truco mágico 🪄)
+    // Intentamos borrar cualquier sesión vieja antes de empezar.
+    // Esto soluciona el error: "Creation of a session is prohibited..."
+    try {
+      await account.deleteSession("current");
+    } catch (e) {
+      // Si no había sesión, ignoramos el error y seguimos.
+    }
+
+    const providerEnum =
+      provider === "google" ? OAuthProvider.Google : OAuthProvider.Apple;
+
+    // 2. REDIRECCIÓN A LA RAÍZ (Solución al "Unmatched Route")
+    // Quitamos la palabra "google" del final para que el Router
+    // simplemente abra la app en la pantalla de inicio.
+    const redirectUri = "appwrite-callback-6689e59b000acd6caf6f://";
+
+    const authUrl = await account.createOAuth2Token(
+      providerEnum,
+      redirectUri,
+      redirectUri
+    );
+
+    if (!authUrl) throw new Error("Error al generar token OAuth2");
+
+    const result = await WebBrowser.openAuthSessionAsync(
+      authUrl.toString(),
+      redirectUri
+    );
+
+    if (result.type === "success" && result.url) {
+      const parsed = Linking.parse(result.url);
+
+      const secret = Array.isArray(parsed.queryParams?.secret)
+        ? parsed.queryParams?.secret[0]
+        : parsed.queryParams?.secret;
+
+      const userId = Array.isArray(parsed.queryParams?.userId)
+        ? parsed.queryParams?.userId[0]
+        : parsed.queryParams?.userId;
+
+      if (secret && userId) {
+        // Aquí creamos la sesión. Si por milagro sigue diciendo que está activa,
+        // capturamos el error y lo tratamos como un éxito.
+        try {
+          await account.createSession(userId, secret);
+        } catch (sessionError: any) {
+          if (
+            sessionError.message?.includes("active") ||
+            sessionError.code === 409
+          ) {
+            console.log("Sesión ya activa, continuando...");
+            return true;
+          }
+          throw sessionError; // Si es otro error, que falle
+        }
+        return true;
+      }
+    }
+
+    if (result.type === "cancel" || result.type === "dismiss") {
+      throw new Error("Cancelado por el usuario");
+    }
+
+    return false;
+  } catch (error: any) {
+    console.error("OAuth failed:", error);
+    throw new Error(error.message);
+  }
+};
+
+export const signOut = async () => {
+  try {
+    await account.deleteSession("current");
+    return true;
+  } catch (error: any) {
+    return true;
+  }
+};
 
 export const createUser = async (
   email: string,
@@ -103,35 +188,6 @@ export const signInn = async (email: string, password: string) => {
   }
 };
 
-export async function signInWithOAuth(provider: "google" | "apple") {
-  try {
-    const successUrl = "mood://home";
-    const failureUrl = "mood://login";
-
-    const oAuthProvider =
-      provider === "google" ? OAuthProvider.Google : OAuthProvider.Apple;
-
-    const result = await account.createOAuth2Session(
-      oAuthProvider,
-      successUrl,
-      failureUrl
-    );
-
-    return result;
-  } catch (error: any) {
-    console.error("Error en OAuth:", error);
-    throw new Error(error.message);
-  }
-}
-
-export const signOut = async () => {
-  try {
-    return await account.deleteSession("current");
-  } catch (error) {
-    throw new Error((error as AppwriteException).message);
-  }
-};
-
 export const getCurrentUser = async () => {
   try {
     const currentAccount = await account.get();
@@ -162,6 +218,8 @@ export const getCurrentUser = async () => {
     return null;
   }
 };
+
+// --- USUARIOS Y PERFILES ---
 
 export async function getUser(userId: string) {
   try {
@@ -266,6 +324,8 @@ export async function uploadFile(file: any) {
 export async function updateImage(file: any) {
   return await uploadFile(file);
 }
+
+// --- MÚSICA Y POSTS ---
 
 export const getDeezerTrackUrl = async (trackId: string | number) => {
   if (!trackId) return null;
@@ -608,6 +668,8 @@ export async function getSavedPosts(userId: string) {
   }
 }
 
+// --- COMENTARIOS ---
+
 export async function createComment(
   postId: string,
   commentData: any,
@@ -703,6 +765,8 @@ export async function getPostComments(postId: string) {
     return [];
   }
 }
+
+// --- SEGUIDORES Y AMIGOS ---
 
 export async function checkFollowStatus(
   followerId: string,
@@ -979,6 +1043,8 @@ export async function deleteFollowRequest(
   }
 }
 
+// --- NOTIFICACIONES ---
+
 export async function createNotification(data: {
   userId: string;
   type: "like" | "comment" | "follow" | "follow_request" | "tag";
@@ -1162,6 +1228,8 @@ export const sendTagNotification = async (
     console.log("Error enviando notificación de etiqueta:", error);
   }
 };
+
+// --- CHATS ---
 
 export async function getOrCreateChat(
   currentUserId: string,
@@ -1719,22 +1787,67 @@ export { client, databases };
 
 export async function deleteUserAccount(userId: string) {
   try {
-    // 1. Intentamos eliminar el documento del usuario en la base de datos
-    // Esto borra su perfil, nombre, foto, bio, etc.
     await databases.deleteDocument(
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
       userId
     );
 
-    // 2. Eliminamos la sesión actual (Logout forzado)
     await account.deleteSession("current");
 
     return true;
   } catch (error: any) {
     console.error("Error deleting account:", error);
-    // A veces falla si el usuario ya borró la sesión, así que no lanzamos error fatal
-    // pero devolvemos false o el error para manejarlo en la UI si es necesario.
     throw new Error(error.message);
   }
 }
+
+export const syncOrCreateUserDocument = async () => {
+  try {
+    // 1. Obtenemos el usuario de la sesión de Auth (Google)
+    const currentAccount = await account.get();
+    if (!currentAccount) throw new Error("No hay cuenta activa");
+
+    // 2. Buscamos si ya tiene un documento en tu colección de usuarios
+    const userContext = await databases.listDocuments(
+      appwriteConfig.databaseId, // CORREGIDO: antes decía config
+      appwriteConfig.usersCollectionId, // CORREGIDO: antes decía config
+      [Query.equal("accId", currentAccount.$id)] // CORREGIDO: el campo en tu DB es 'accId'
+    );
+
+    // 3. Si ya existe, lo devolvemos
+    if (userContext.documents.length > 0) {
+      return userContext.documents[0];
+    }
+
+    // 4. SI NO EXISTE (Usuario nuevo de Google), lo creamos automáticamente
+    const avatarUrl = `https://fra.cloud.appwrite.io/v1/avatars/initials?name=${encodeURIComponent(
+      currentAccount.name
+    )}&project=${appwriteConfig.projectId}`;
+
+    const newUser = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      ID.unique(),
+      {
+        accId: currentAccount.$id,
+        email: currentAccount.email,
+        name: currentAccount.name,
+        pfp: avatarUrl,
+        username:
+          currentAccount.name.replace(/\s+/g, "").toLowerCase() +
+          Math.floor(Math.random() * 1000),
+        preferredPlatform: "spotify",
+        allowTags: true,
+        blockedUsers: [],
+        isBanned: false,
+        isPrivate: false,
+      }
+    );
+
+    return newUser;
+  } catch (error) {
+    console.log("Error sincronizando usuario:", error);
+    return null;
+  }
+};

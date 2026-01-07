@@ -12,10 +12,17 @@ import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Link, router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import CustomButtom from "@/components/CustomButtom";
 import FormField from "@/components/FormField";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
-import { getCurrentUser, signInn, signInWithOAuth } from "@/lib/appwrite";
+import {
+  getCurrentUser,
+  signInn,
+  signInWithOAuth,
+  syncOrCreateUserDocument,
+} from "@/lib/appwrite";
+import { sendWelcomeEmail } from "@/lib/email";
 import { AppwriteException } from "react-native-appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -39,9 +46,14 @@ const SignIn = () => {
       setIsLoading(true);
       await signInn(form.email, form.password);
       const result = await getCurrentUser();
-      setLoggedIn(true);
-      setUser(result as unknown as User);
-      router.replace("/home");
+
+      if (result) {
+        setLoggedIn(true);
+        setUser(result as unknown as User);
+        router.replace("/home");
+      } else {
+        throw new Error("No se pudo obtener la información del usuario.");
+      }
     } catch (error) {
       const appwriteError = error as AppwriteException;
       Alert.alert(
@@ -54,20 +66,34 @@ const SignIn = () => {
   };
 
   const handleOAuth = async (provider: "google" | "apple") => {
-    console.log("1. Botón presionado:", provider);
-
     try {
       setIsLoading(true);
-      console.log("2. Llamando a signInWithOAuth...");
+      const success = await signInWithOAuth(provider);
 
-      await signInWithOAuth(provider);
+      if (success) {
+        const user = await syncOrCreateUserDocument();
 
-      console.log("3. Appwrite intentó abrir el navegador");
+        if (user) {
+          // 1. Enviamos el correo en segundo plano
+          sendWelcomeEmail(user.email, user.name).catch(console.error);
+
+          // 2. Actualizamos el estado global
+          setUser(user as unknown as User);
+          setLoggedIn(true);
+
+          // 3. SOLUCIÓN CLAVE: Esperar a que el navegador se cierre por completo
+          // antes de intentar montar la pantalla de Home que usa recursos nativos.
+          setTimeout(() => {
+            router.replace("/home");
+          }, 500); // Aumentamos a 500ms para mayor seguridad en Android físico
+        } else {
+          Alert.alert("Error", "No se pudo crear el perfil de usuario.");
+        }
+      }
     } catch (error: any) {
-      console.error("4. ERROR en handleOAuth:", error);
-      Alert.alert("Error OAuth", error.message);
+      Alert.alert("Error", error.message);
     } finally {
-      setTimeout(() => setIsLoading(false), 2000);
+      setIsLoading(false);
     }
   };
 
@@ -132,6 +158,7 @@ const SignIn = () => {
               </Text>
               <View className="bg-zinc-800 flex-1 h-[1px]"></View>
             </View>
+
             <View className="flex-row justify-center gap-6">
               <TouchableOpacity
                 onPress={() => handleOAuth("google")}
