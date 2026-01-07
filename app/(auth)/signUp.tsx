@@ -7,7 +7,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Linking, // <--- 1. IMPORTADO
+  Linking,
 } from "react-native";
 import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,7 +16,13 @@ import { Link, router } from "expo-router";
 import CustomButtom from "@/components/CustomButtom";
 import FormField from "@/components/FormField";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
-import { createUser, signInWithOAuth } from "@/lib/appwrite";
+import {
+  createUser,
+  signInWithOAuth,
+  getCurrentUser,
+  syncOrCreateUserDocument,
+} from "@/lib/appwrite";
+import { sendWelcomeEmail } from "@/lib/email";
 import { AppwriteException } from "react-native-appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -54,6 +60,8 @@ const SignUp = () => {
       );
 
       if (setUser) {
+        sendWelcomeEmail(form.email, form.name).catch(console.error);
+
         setUser(result as unknown as User);
         setLoggedIn(true);
         router.replace("/home");
@@ -72,15 +80,35 @@ const SignUp = () => {
   const handleOAuth = async (provider: "google" | "apple") => {
     try {
       setIsLoading(true);
-      await signInWithOAuth(provider);
+      const success = await signInWithOAuth(provider);
+
+      if (success) {
+        const user = await syncOrCreateUserDocument();
+
+        if (user) {
+          // 1. Enviamos el correo en segundo plano
+          sendWelcomeEmail(user.email, user.name).catch(console.error);
+
+          // 2. Actualizamos el estado global
+          setUser(user as unknown as User);
+          setLoggedIn(true);
+
+          // 3. SOLUCIÓN CLAVE: Esperar a que el navegador se cierre por completo
+          // antes de intentar montar la pantalla de Home que usa recursos nativos.
+          setTimeout(() => {
+            router.replace("/home");
+          }, 500); // Aumentamos a 500ms para mayor seguridad en Android físico
+        } else {
+          Alert.alert("Error", "No se pudo sincronizar el perfil del usuario.");
+        }
+      }
     } catch (error: any) {
-      Alert.alert("Error OAuth", error.message);
+      Alert.alert("Error", error.message);
     } finally {
-      setTimeout(() => setIsLoading(false), 2000);
+      setIsLoading(false);
     }
   };
 
-  // 2. FUNCIÓN PARA ABRIR ENLACES
   const openLink = async (url: string) => {
     const supported = await Linking.canOpenURL(url);
     if (supported) {
@@ -146,35 +174,6 @@ const SignUp = () => {
                 textStyles="text-white font-bold text-lg"
                 loading={isLoading}
               />
-            </View>
-
-            {/* 3. AQUÍ ESTÁ EL TEXTO LEGAL OBLIGATORIO */}
-            <View className="mt-4 flex-row flex-wrap justify-center px-2">
-              <Text className="text-zinc-500 text-xs text-center leading-5">
-                Al registrarte, aceptas nuestros{" "}
-                <Text
-                  className="text-[#5E17EB] font-bold"
-                  onPress={() =>
-                    openLink(
-                      "https://candied-resolution-5fa.notion.site/T-rminos-de-Uso-y-EULA-Acuerdo-de-Licencia-2e08961d2f1080769b1ddd43f1ea92c7?source=copy_link"
-                    )
-                  }
-                >
-                  Términos de Uso
-                </Text>{" "}
-                y{" "}
-                <Text
-                  className="text-[#5E17EB] font-bold"
-                  onPress={() =>
-                    openLink(
-                      "https://candied-resolution-5fa.notion.site/Pol-tica-de-Privacidad-de-Mood-2e08961d2f1080018d6dc0ba872fab3d?source=copy_link"
-                    )
-                  }
-                >
-                  Política de Privacidad
-                </Text>
-                .
-              </Text>
             </View>
 
             <View className="flex-row justify-center items-center w-full gap-4 mt-6 mb-8">

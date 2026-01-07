@@ -5,7 +5,7 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mood",
+    "scheme": ["mood", "appwrite-callback-6689e59b000acd6caf6f"],
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/images/splash-icon.png",

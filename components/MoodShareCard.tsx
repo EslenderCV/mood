@@ -22,7 +22,7 @@ import ViewShot, { captureRef } from "react-native-view-shot";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const MOOD_PURPLE = "#5E17EB";
-const MOOD_DARK = "#09090B";
+const MOOD_DARK = "#000000";
 
 interface Props {
   isVisible: boolean;
