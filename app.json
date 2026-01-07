@@ -2,10 +2,13 @@
   "expo": {
     "name": "Mood",
     "slug": "mood",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": ["mood", "appwrite-callback-6689e59b000acd6caf6f"],
+    "scheme": [
+      "mood",
+      "appwrite-callback-6689e59b000acd6caf6f"
+    ],
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -15,7 +18,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.Gammes.Mood",
-      "buildNumber": "4",
+      "buildNumber": "6",
       "infoPlist": {
         "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos para tu perfil y publicaciones.",
         "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar y subir fotos.",
@@ -29,7 +32,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.Gammes.Mood",
-      "versionCode": 4,
+      "versionCode": 6,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
