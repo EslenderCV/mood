@@ -22,11 +22,11 @@ import {
   getUnreadNotificationCount,
   getUnreadMessagesCount,
 } from "@/lib/appwrite";
-import ShareModal from "@/components/ShareModal";
 import OptionsModal from "@/components/OptionsModal";
-import PostItem from "@/components/PostItem";
+import PostItem from "@/components/PostItem"; // <--- ESTE ES EL QUE REDISEÑAREMOS ABAJO
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
+import MoodShareCard from "@/components/MoodShareCard";
 
 const ADMIN_USERS = [".angel", "whoseslender"];
 
@@ -39,10 +39,24 @@ const getCreatorId = (item: any) => {
   return "unknown";
 };
 
+const parseSongData = (songDataString: string) => {
+  try {
+    if (!songDataString) return null;
+    const song = JSON.parse(songDataString);
+    if (song.cover && song.cover.includes("100x100bb")) {
+      song.cover = song.cover.replace("100x100bb", "600x600bb");
+    }
+    return song;
+  } catch (e) {
+    return null;
+  }
+};
+
 const Home = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-  const bgColor = isDark ? "#000000" : "#FFFFFF";
+  // Usamos un fondo un poco más sofisticado (Zinc-950) en dark mode
+  const bgColor = isDark ? "#09090B" : "#FFFFFF";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
 
   const { t } = useLanguage();
@@ -57,8 +71,8 @@ const Home = () => {
   const [notiCount, setNotiCount] = useState(0);
   const [msgCount, setMsgCount] = useState(0);
 
-  const [isShareVisible, setShareVisible] = useState(false);
-  const [postToShare, setPostToShare] = useState<string>("");
+  const [isViralModalVisible, setViralModalVisible] = useState(false);
+  const [postToShareData, setPostToShareData] = useState<any>(null);
   const [isOptionsVisible, setOptionsVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState<any>(null);
 
@@ -145,9 +159,28 @@ const Home = () => {
     setOptionsVisible(true);
   };
 
-  const openShare = (postId: string) => {
-    setPostToShare(postId);
-    setShareVisible(true);
+  const openShare = (post: any) => {
+    setPostToShareData(post);
+    setViralModalVisible(true);
+  };
+
+  const getViralPostData = () => {
+    if (!postToShareData) return null;
+    const song = parseSongData(postToShareData.songData);
+    let creator =
+      postToShareData.postedBy ||
+      postToShareData.creator ||
+      postToShareData.users?.[0] ||
+      {};
+
+    return {
+      title: song?.title || "Música",
+      artist: song?.artist || "Artista",
+      cover: song?.cover || null,
+      originalPostCreator: creator.username || "usuario",
+      creatorPfp: creator.pfp || creator.avatar || null,
+      comment: postToShareData.comment || null,
+    };
   };
 
   const handleDeleteAction = () => {
@@ -158,7 +191,7 @@ const Home = () => {
     Alert.alert(
       "¿Eliminar Publicación?",
       ADMIN_USERS.includes(user?.username || "")
-        ? "Modo Admin: Esta acción eliminará el post de otro usuario."
+        ? "Modo Admin"
         : "Esta acción no se puede deshacer.",
       [
         { text: "Cancelar", style: "cancel" },
@@ -170,10 +203,7 @@ const Home = () => {
               setFeedPosts((prev) => prev.filter((p) => p.$id !== post.$id));
               await deletePost(post.$id);
             } catch (e) {
-              Alert.alert(
-                "Error",
-                "No se pudo eliminar el post. Verifica permisos en Appwrite."
-              );
+              Alert.alert("Error", "No se pudo eliminar.");
               onRefresh();
             }
           },
@@ -185,52 +215,46 @@ const Home = () => {
   const handleReportAction = () => {
     if (!selectedPost || !user?.$id) return;
     setOptionsVisible(false);
-
-    Alert.alert(
-      "Reportar Publicación",
-      "¿Por qué quieres reportar este contenido?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Contenido Inapropiado",
-          onPress: () => submitReport("inappropriate"),
-        },
-        { text: "Spam", onPress: () => submitReport("spam") },
-        { text: "Otro", onPress: () => submitReport("other") },
-      ]
-    );
+    Alert.alert("Reportar", "Selecciona una razón", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Spam", onPress: () => submitReport("spam") },
+      { text: "Inapropiado", onPress: () => submitReport("inappropriate") },
+    ]);
   };
 
   const submitReport = async (reason: string) => {
-    if (!user) {
-      Alert.alert("Error", "Debes iniciar sesión para reportar.");
-      return;
-    }
+    if (!user) return;
     try {
       await reportPost(selectedPost.$id, user.$id, reason);
-      Alert.alert("Gracias", "Hemos recibido tu reporte y lo revisaremos.");
+      Alert.alert("Gracias", "Reporte enviado.");
     } catch (error) {
-      Alert.alert("Error", "No se pudo enviar el reporte.");
+      Alert.alert("Error", "No se pudo enviar.");
     }
   };
 
+  const borderColor = isDark ? "#27272A" : "#E5E5E5";
+
   const renderItem = ({ item }: { item: any }) => {
     return (
-      <PostItem
-        post={item}
-        currentUserId={user?.$id || currentUserId || ""}
-        onProfilePress={(userId) => router.push(`/user/${userId}` as any)}
-        onCommentPress={(postId) => router.push(`/post/${postId}` as any)}
-        onOptionsPress={() => openOptions(item)}
-        onSharePress={() => openShare(item.$id)}
-      />
+      <View
+        className="py-4 border-1 border-b"
+        style={{ borderColor: borderColor }}
+      >
+        <PostItem
+          post={item}
+          currentUserId={user?.$id || currentUserId || ""}
+          onProfilePress={(userId) => router.push(`/user/${userId}` as any)}
+          onCommentPress={(postId) => router.push(`/post/${postId}` as any)}
+          onOptionsPress={() => openOptions(item)}
+          onSharePress={() => openShare(item)}
+        />
+      </View>
     );
   };
 
   const isPostOwner =
     (selectedPost?.postedBy?.$id || selectedPost?.creator?.$id) === user?.$id;
   const isAdmin = ADMIN_USERS.includes(user?.username || "");
-  const showDeleteOption = isPostOwner || isAdmin;
 
   return (
     <SafeAreaView
@@ -251,7 +275,8 @@ const Home = () => {
           data={feedPosts}
           keyExtractor={(item) => item.$id}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: 100, paddingTop: 10 }}
+          contentContainerStyle={{ paddingBottom: 20, paddingTop: 10 }} // Espacio al final
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -261,7 +286,11 @@ const Home = () => {
           }
           ListEmptyComponent={() => (
             <View className="flex-1 mt-20 items-center px-6">
-              <Ionicons name="people-outline" size={48} color={subTextColor} />
+              <Ionicons
+                name="musical-notes-outline"
+                size={48}
+                color={subTextColor}
+              />
               <Text
                 className="mt-4 text-center text-lg font-medium"
                 style={{ color: subTextColor }}
@@ -279,10 +308,10 @@ const Home = () => {
         />
       )}
 
-      <ShareModal
-        isVisible={isShareVisible}
-        onClose={() => setShareVisible(false)}
-        postId={postToShare}
+      <MoodShareCard
+        isVisible={isViralModalVisible}
+        onClose={() => setViralModalVisible(false)}
+        post={getViralPostData()}
       />
 
       <OptionsModal
@@ -290,7 +319,7 @@ const Home = () => {
         onClose={() => setOptionsVisible(false)}
         onDelete={handleDeleteAction}
         onReport={handleReportAction}
-        isOwner={showDeleteOption}
+        isOwner={isPostOwner || isAdmin}
       />
     </SafeAreaView>
   );

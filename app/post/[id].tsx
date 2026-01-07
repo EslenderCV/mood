@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   FlatList,
   Alert,
+  Dimensions,
 } from "react-native";
 import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router } from "expo-router";
@@ -35,6 +36,8 @@ import ShareModal from "@/components/ShareModal";
 import OptionsModal from "@/components/OptionsModal";
 import MoodShareCard from "@/components/MoodShareCard";
 
+const { width } = Dimensions.get("window");
+
 const formatTimeAgo = (dateString: string, t: (key: string) => string) => {
   if (!dateString) return "";
   const date = new Date(dateString);
@@ -60,19 +63,49 @@ const parseSongData = (songDataString: string) => {
   }
 };
 
+// Componente visual simple para simular barras de audio
+const AudioVisualizer = ({
+  isPlaying,
+  color,
+}: {
+  isPlaying: boolean;
+  color: string;
+}) => {
+  return (
+    <View className="flex-row items-end gap-1 h-4 ml-1 opacity-60">
+      {[1, 2, 3, 4].map((i) => (
+        <View
+          key={i}
+          className={`w-1 rounded-full ${
+            isPlaying ? "bg-[#5E17EB]" : "bg-zinc-400"
+          }`}
+          style={{
+            height: isPlaying ? Math.random() * 16 + 4 : 4,
+            backgroundColor: isPlaying ? "#5E17EB" : color,
+          }}
+        />
+      ))}
+    </View>
+  );
+};
+
 const PostDetails = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
 
-  const bgColor = isDark ? "#000000" : "#FFFFFF";
-  const textColor = isDark ? "#FFFFFF" : "#000000";
+  // Paleta de colores refinada
+  const bgColor = isDark ? "#09090B" : "#FFFFFF"; // Zinc-950 en dark
+  const textColor = isDark ? "#FAFAFA" : "#18181B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
-  const cardBg = isDark ? "#1C1C1E" : "#F4F4F5";
-  const inputBg = isDark ? "#18181B" : "#F4F4F5";
+
+  // Card Song Background: Más sutil
+  const songCardBg = isDark ? "#18181B" : "#F4F4F5";
+  const inputBg = isDark ? "#27272A" : "#F3F4F6";
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
   const suggestionBg = isDark ? "#18181B" : "#FFFFFF";
+  const accentColor = "#5E17EB";
 
   const { id } = useLocalSearchParams();
   const { user } = useGlobalContext();
@@ -87,7 +120,6 @@ const PostDetails = () => {
 
   const [isOptionsVisible, setOptionsVisible] = useState(false);
   const [isShareVisible, setShareVisible] = useState(false);
-
   const [isViralModalVisible, setViralModalVisible] = useState(false);
 
   const [replyingTo, setReplyingTo] = useState<{
@@ -96,7 +128,6 @@ const PostDetails = () => {
   } | null>(null);
 
   const [commentText, setCommentText] = useState("");
-
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
 
@@ -329,101 +360,129 @@ const PostDetails = () => {
 
     return (
       <View
-        className="px-4 pt-2 pb-4 mb-2"
+        className="px-5 pt-4 pb-2 mb-2"
         style={{ backgroundColor: bgColor }}
       >
-        <TouchableOpacity
-          className="flex-row items-center mb-3"
-          onPress={() => {
-            if (creator.$id) router.push(`/user/${creator.$id}` as any);
-          }}
-        >
-          <Image
-            source={
-              creator.pfp ? { uri: creator.pfp } : require("@/assets/noPfp.jpg")
-            }
-            className="w-10 h-10 rounded-full border"
-            style={{ borderColor: borderColor, backgroundColor: cardBg }}
-          />
-          <View className="ml-3 flex-1">
-            <Text className="font-bold text-base" style={{ color: textColor }}>
-              {creator.name}
-            </Text>
-            <Text className="text-sm" style={{ color: subTextColor }}>
-              @{creator.username} · {formatTimeAgo(post.$createdAt, t)}
-            </Text>
-          </View>
+        {/* User Header */}
+        <View className="flex-row items-center justify-between mb-4">
+          <TouchableOpacity
+            className="flex-row items-center flex-1"
+            onPress={() => {
+              if (creator.$id) router.push(`/user/${creator.$id}` as any);
+            }}
+          >
+            <Image
+              source={
+                creator.pfp
+                  ? { uri: creator.pfp }
+                  : require("@/assets/noPfp.jpg")
+              }
+              className="w-11 h-11 rounded-full border-2"
+              style={{ borderColor: borderColor }}
+            />
+            <View className="ml-3 flex-1">
+              <Text
+                className="font-bold text-[17px] leading-5"
+                style={{ color: textColor }}
+              >
+                {creator.name}
+              </Text>
+              <Text
+                className="text-sm font-medium"
+                style={{ color: subTextColor }}
+              >
+                @{creator.username} · {formatTimeAgo(post.$createdAt, t)}
+              </Text>
+            </View>
+          </TouchableOpacity>
 
           {post.isPrivate && (
-            <View className="bg-zinc-800 p-1.5 rounded-md mr-1">
-              <Ionicons name="lock-closed" size={12} color="#A1A1AA" />
+            <View className="bg-zinc-100 dark:bg-zinc-800 p-2 rounded-full">
+              <Ionicons name="lock-closed" size={14} color={subTextColor} />
             </View>
           )}
-        </TouchableOpacity>
+        </View>
 
+        {/* Post Text Content */}
         {post.comment && (
           <Text
-            className="text-[15px] mb-4 leading-6 px-1"
+            className="text-[17px] leading-7 font-normal mb-5"
             style={{ color: textColor }}
           >
             {post.comment}
           </Text>
         )}
 
+        {/* Improved Song Card */}
         {songData && (
           <View
-            className="rounded-2xl p-4 flex-row items-center border mb-4"
-            style={{ backgroundColor: cardBg, borderColor: borderColor }}
+            className="rounded-3xl p-4 flex-row items-center mb-6 shadow-sm"
+            style={{
+              backgroundColor: songCardBg,
+            }}
           >
             <Image
               source={{ uri: songData.cover }}
-              className="w-16 h-16 rounded-xl"
+              className="w-20 h-20 rounded-2xl shadow-sm"
               style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
             />
-            <View className="flex-1 ml-4 mr-2">
+
+            <View className="flex-1 ml-4 mr-2 justify-center">
               <Text
-                className="font-bold text-base"
+                className="font-bold text-[17px] mb-1"
                 numberOfLines={1}
                 style={{ color: textColor }}
               >
                 {songData.title}
               </Text>
               <Text
-                className="text-sm mt-1"
+                className="text-base mb-2"
                 numberOfLines={1}
                 style={{ color: subTextColor }}
               >
                 {songData.artist}
               </Text>
+
+              {/* Visualizador de Audio (Decorativo) */}
+              <View className="flex-row items-center">
+                <Ionicons name="musical-notes" size={12} color={accentColor} />
+                <AudioVisualizer isPlaying={isPlaying} color={subTextColor} />
+              </View>
             </View>
+
             <TouchableOpacity
               onPress={handlePlay}
-              className="w-12 h-12 rounded-full bg-[#5E17EB] items-center justify-center shadow-lg"
+              className="w-14 h-14 rounded-full items-center justify-center shadow-md"
+              style={{ backgroundColor: accentColor }}
               activeOpacity={0.8}
             >
               <Ionicons
                 name={isPlaying ? "pause" : "play"}
-                size={24}
+                size={26}
                 color="white"
-                style={{ marginLeft: isPlaying ? 0 : 2 }}
+                style={{ marginLeft: isPlaying ? 0 : 3 }}
               />
             </TouchableOpacity>
           </View>
         )}
-        <View className="flex-row justify-between items-center mt-2 px-2">
+
+        {/* Action Bar Redesigned */}
+        <View className="flex-row justify-between items-center mt-2 px-2 pb-2">
           <View className="flex-row gap-6">
+            {/* Like Button */}
             <TouchableOpacity
               onPress={handleLike}
-              className="flex-row items-center"
+              className="flex-row items-center gap-2"
+              activeOpacity={0.6}
             >
               <Ionicons
                 name={isLiked ? "heart" : "heart-outline"}
                 size={26}
-                color={isLiked ? "#EF4444" : "#A1A1AA"}
+                color={isLiked ? "#EF4444" : subTextColor}
               />
               {likedBy.length > 0 && (
                 <Text
-                  className="ml-2 font-medium"
+                  className="font-semibold text-base"
                   style={{ color: isLiked ? "#EF4444" : subTextColor }}
                 >
                   {likedBy.length}
@@ -431,30 +490,45 @@ const PostDetails = () => {
               )}
             </TouchableOpacity>
 
-            <View className="flex-row items-center">
-              <Ionicons name="chatbubble-outline" size={24} color="#A1A1AA" />
-              <Text
-                className="ml-2 font-medium"
-                style={{ color: subTextColor }}
-              >
-                {allComments.length}
-              </Text>
+            {/* Comment Count */}
+            <View className="flex-row items-center gap-2">
+              <Ionicons
+                name="chatbubble-outline"
+                size={24}
+                color={subTextColor}
+              />
+              {allComments.length > 0 && (
+                <Text
+                  className="font-semibold text-base"
+                  style={{ color: subTextColor }}
+                >
+                  {allComments.length}
+                </Text>
+              )}
             </View>
-            <TouchableOpacity onPress={() => setViralModalVisible(true)}>
-              <Ionicons name="share-social-outline" size={24} color="#A1A1AA" />
-            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity onPress={handleSave}>
-            <Ionicons
-              name={isSaved ? "bookmark" : "bookmark-outline"}
-              size={24}
-              color={isSaved ? "#5E17EB" : "#A1A1AA"}
-            />
-          </TouchableOpacity>
+          <View className="flex-row gap-6">
+            <TouchableOpacity onPress={() => setViralModalVisible(true)}>
+              <Ionicons
+                name="share-social-outline"
+                size={24}
+                color={subTextColor}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={handleSave}>
+              <Ionicons
+                name={isSaved ? "bookmark" : "bookmark-outline"}
+                size={24}
+                color={isSaved ? accentColor : subTextColor}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
+
         <View
-          className="h-[1px] w-full mt-6"
+          className="h-[1px] w-full mt-4 opacity-50"
           style={{ backgroundColor: borderColor }}
         />
       </View>
@@ -467,7 +541,7 @@ const PostDetails = () => {
         className="flex-1 justify-center items-center"
         style={{ backgroundColor: bgColor }}
       >
-        <ActivityIndicator color="#5E17EB" size="large" />
+        <ActivityIndicator color={accentColor} size="large" />
       </SafeAreaView>
     );
   }
@@ -480,29 +554,27 @@ const PostDetails = () => {
       edges={["top"]}
       style={{ backgroundColor: bgColor }}
     >
+      {/* Top Navigation - BUTTON REMOVED HERE */}
       <View
         className="flex-row items-center justify-between px-4 h-[50px] border-b z-10"
         style={{ backgroundColor: bgColor, borderColor: borderColor }}
       >
         <View className="flex-row items-center">
-          <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="p-2 -ml-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
+          >
             <Ionicons name="arrow-back" size={24} color={backIconColor} />
           </TouchableOpacity>
-          <Text className="font-bold text-lg ml-4" style={{ color: textColor }}>
+          <Text className="font-bold text-lg ml-2" style={{ color: textColor }}>
             {t("postDetails.headerTitle")}
           </Text>
         </View>
-        <View className="flex-row items-center">
-          <TouchableOpacity
-            onPress={() => setViralModalVisible(true)}
-            className="p-2 mr-1"
-          >
-            <Ionicons name="share-outline" size={24} color={textColor} />
-          </TouchableOpacity>
-
+        <View className="flex-row items-center gap-1">
+          {/* ELIMINADO EL BOTÓN DE COMPARTIR DE AQUÍ */}
           <TouchableOpacity
             onPress={() => setOptionsVisible(true)}
-            className="p-2 -mr-2"
+            className="p-2 -mr-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
           >
             <Ionicons name="ellipsis-horizontal" size={24} color={textColor} />
           </TouchableOpacity>
@@ -522,12 +594,26 @@ const PostDetails = () => {
         )}
         ListHeaderComponent={renderHeader}
         contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <Text className="text-center mt-10" style={{ color: subTextColor }}>
-            {t("postDetails.emptyComments")}
-          </Text>
+          <View className="items-center justify-center py-10">
+            <Text
+              className="text-center font-medium"
+              style={{ color: subTextColor }}
+            >
+              {t("postDetails.emptyComments")}
+            </Text>
+            <Text
+              className="text-center text-xs mt-2 opacity-60"
+              style={{ color: subTextColor }}
+            >
+              Sé el primero en opinar sobre este Vibe.
+            </Text>
+          </View>
         }
       />
+
+      {/* Input Section */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
@@ -571,34 +657,41 @@ const PostDetails = () => {
 
         {replyingTo && (
           <View
-            className="flex-row items-center justify-between px-4 py-2"
-            style={{ backgroundColor: isDark ? "#18181B" : "#E4E4E7" }}
+            className="flex-row items-center justify-between px-4 py-2 border-b"
+            style={{
+              backgroundColor: isDark ? "#18181B" : "#F8FAFC",
+              borderColor: borderColor,
+            }}
           >
-            <Text className="text-xs" style={{ color: subTextColor }}>
+            <Text
+              className="text-xs font-medium"
+              style={{ color: subTextColor }}
+            >
               {t("postDetails.replyingTo")}{" "}
-              <Text className="text-[#5E17EB] font-bold">
-                @{replyingTo.username}
-              </Text>
+              <Text style={{ color: accentColor }}>@{replyingTo.username}</Text>
             </Text>
-            <TouchableOpacity onPress={cancelReply}>
+            <TouchableOpacity onPress={cancelReply} className="p-1">
               <Ionicons name="close" size={16} color={subTextColor} />
             </TouchableOpacity>
           </View>
         )}
 
-        <View className="flex-row items-center px-4 py-3 pb-6">
+        <View
+          className="flex-row items-end px-4 py-3 pb-6 gap-3"
+          style={{ backgroundColor: bgColor }}
+        >
           <Image
             source={{
               uri:
                 user?.pfp ||
                 "https://cloud.appwrite.io/v1/avatars/initials?name=Me",
             }}
-            className="w-9 h-9 rounded-full mr-3"
-            style={{ backgroundColor: cardBg }}
+            className="w-8 h-8 rounded-full mb-1"
+            style={{ backgroundColor: inputBg }}
           />
           <View
-            className="flex-1 rounded-full flex-row items-center px-4 py-2 border"
-            style={{ backgroundColor: inputBg, borderColor: borderColor }}
+            className="flex-1 rounded-[20px] flex-row items-center px-4 py-1 border"
+            style={{ backgroundColor: inputBg, borderColor: "transparent" }}
           >
             <TextInput
               ref={inputRef}
@@ -610,8 +703,8 @@ const PostDetails = () => {
                   : t("postDetails.commentPlaceholder")
               }
               placeholderTextColor={subTextColor}
-              className="flex-1 text-sm"
-              style={{ color: textColor, maxHeight: 80 }}
+              className="flex-1 text-[15px] pt-2 pb-2"
+              style={{ color: textColor, maxHeight: 100 }}
               value={commentText}
               onChangeText={handleTextChange}
               multiline
@@ -620,27 +713,29 @@ const PostDetails = () => {
           <TouchableOpacity
             onPress={submitComment}
             disabled={!commentText.trim() || sending}
-            className={`ml-3 w-10 h-10 rounded-full items-center justify-center ${
-              commentText.trim() ? "bg-[#5E17EB]" : "bg-zinc-800"
+            className={`w-10 h-10 rounded-full items-center justify-center mb-0.5 ${
+              commentText.trim()
+                ? "opacity-100 scale-100"
+                : "opacity-80 scale-95"
             }`}
-            style={
-              !commentText.trim()
-                ? { backgroundColor: isDark ? "#27272A" : "#E4E4E7" }
-                : {}
-            }
+            style={{
+              backgroundColor: commentText.trim() ? accentColor : inputBg,
+              transform: [{ scale: commentText.trim() ? 1 : 0.95 }],
+            }}
           >
             {sending ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
               <Ionicons
                 name="arrow-up"
-                size={20}
+                size={22}
                 color={commentText.trim() ? "white" : subTextColor}
               />
             )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
       <OptionsModal
         isVisible={isOptionsVisible}
         onClose={() => setOptionsVisible(false)}

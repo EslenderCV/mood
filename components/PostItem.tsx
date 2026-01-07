@@ -20,6 +20,30 @@ import { useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
 import { useAudioContext } from "@/context/AudioContext";
 
+// Componente decorativo para el audio
+const AudioVisualizer = ({
+  isPlaying,
+  color,
+}: {
+  isPlaying: boolean;
+  color: string;
+}) => {
+  return (
+    <View className="flex-row items-end gap-[3px] h-3 ml-2 opacity-80">
+      {[1, 2, 3].map((i) => (
+        <View
+          key={i}
+          className={`w-[3px] rounded-full`}
+          style={{
+            height: isPlaying ? Math.random() * 12 + 4 : 4,
+            backgroundColor: isPlaying ? "#5E17EB" : color,
+          }}
+        />
+      ))}
+    </View>
+  );
+};
+
 const parseSongData = (songDataString: string) => {
   try {
     if (!songDataString) return null;
@@ -53,17 +77,22 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-  const textColor = isDark ? "#FFFFFF" : "#09090B";
+
+  // Paleta de colores Premium
+  const textColor = isDark ? "#FAFAFA" : "#18181B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
-  const cardBg = isDark ? "#1C1C1E" : "#F4F4F5";
-  const cardBorder = isDark ? "#27272A" : "transparent";
+
+  // Fondo de la tarjeta de canción (Sutil contraste)
+  const songCardBg = isDark ? "#18181B" : "#F4F4F5";
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
+  const accentColor = "#5E17EB";
 
   const { t, language } = useLanguage();
   const { currentPlayingId, setPlayingId } = useAudioContext();
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
+
   const [isLiked, setIsLiked] = useState(
     post?.likedBy?.includes(currentUserId) || false
   );
@@ -92,6 +121,7 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const player = useAudioPlayer(currentUrl);
 
+  // Lógica de Audio (igual que antes)
   useEffect(() => {
     if (
       currentPlayingId &&
@@ -110,7 +140,6 @@ const PostItem: React.FC<PostItemProps> = ({
         player.play();
         setIsPlaying(true);
       }
-
       const statusListener = (status: any) => {
         if (status.didJustFinish) {
           setIsPlaying(false);
@@ -121,13 +150,11 @@ const PostItem: React.FC<PostItemProps> = ({
           }
         }
       };
-
       if (player.addListener) {
         player.addListener("playbackStatusUpdate", statusListener);
       } else if ((player as any).setOnPlaybackStatusUpdate) {
         (player as any).setOnPlaybackStatusUpdate(statusListener);
       }
-
       return () => {
         if (player.removeListener) {
           player.removeListener("playbackStatusUpdate", statusListener);
@@ -152,32 +179,23 @@ const PostItem: React.FC<PostItemProps> = ({
       }
       return;
     }
-
     try {
       setIsLoadingAudio(true);
       setPlayingId(post.$id);
-
       const trackId = songData?.id || songData?.spotifyId;
-
       if (!trackId) {
-        Alert.alert("Error", "No se encontró un ID válido.");
         setIsLoadingAudio(false);
         return;
       }
-
       const previewUrl = await getDeezerTrackUrl(trackId);
-
       if (!previewUrl) {
-        Alert.alert("Error", "No se pudo generar el audio.");
         setIsLoadingAudio(false);
         setPlayingId(null);
         return;
       }
-
       setCurrentUrl(previewUrl);
       setIsLoadingAudio(false);
     } catch (error) {
-      console.error(error);
       setIsLoadingAudio(false);
       setPlayingId(null);
     }
@@ -212,104 +230,111 @@ const PostItem: React.FC<PostItemProps> = ({
   if (!songData) return null;
 
   return (
-    <View className="flex-row px-4">
-      <View className="items-center mr-3">
-        <TouchableOpacity
-          className="z-10"
-          onPress={() =>
-            onProfilePress
-              ? onProfilePress(creator.id)
-              : router.push(`/user/${creator.id}` as any)
-          }
-        >
-          <Image
-            source={
-              creator.avatar
-                ? { uri: creator.avatar }
-                : require("@/assets/noPfp.jpg")
+    <View className="px-5">
+      {/* 1. HEADER: Avatar + Name + Time + Options */}
+      <View className="flex-row items-start justify-between mb-2">
+        <View className="flex-row items-center flex-1">
+          <TouchableOpacity
+            onPress={() =>
+              onProfilePress
+                ? onProfilePress(creator.id)
+                : router.push(`/user/${creator.id}` as any)
             }
-            style={{
-              borderColor: isDark ? "#000" : "#F4F4F5",
-              borderWidth: 2,
-            }}
-            className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-800"
-          />
-        </TouchableOpacity>
-      </View>
-      <View className="flex-1 pb-6">
-        <View className="flex-row items-center justify-between mb-1">
-          <View className="flex-row items-center flex-1 flex-wrap">
+          >
+            <Image
+              source={
+                creator.avatar
+                  ? { uri: creator.avatar }
+                  : require("@/assets/noPfp.jpg")
+              }
+              className="w-10 h-10 rounded-full border-2 border-transparent"
+              style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
+            />
+          </TouchableOpacity>
+
+          <View className="ml-3 flex-1">
+            <View className="flex-row items-center">
+              <Text
+                className="font-bold text-[15px] leading-5"
+                style={{ color: textColor }}
+              >
+                {creator.name}
+              </Text>
+              {!!post.isPrivate && (
+                <Ionicons
+                  name="lock-closed"
+                  size={12}
+                  color={subTextColor}
+                  style={{ marginLeft: 4 }}
+                />
+              )}
+            </View>
             <Text
-              className="font-bold text-[15px] mr-1"
-              style={{ color: textColor }}
+              className="text-[13px] font-medium"
+              style={{ color: subTextColor }}
             >
-              {creator.name}
-            </Text>
-
-            {!!post.isPrivate && (
-              <Ionicons
-                name="lock-closed"
-                size={12}
-                color={subTextColor}
-                style={{ marginRight: 4 }}
-              />
-            )}
-
-            <Text className="text-[13px]" style={{ color: subTextColor }}>
               @{creator.username} · {getRelativeTime(post.$createdAt, language)}
             </Text>
           </View>
-
-          <TouchableOpacity onPress={onOptionsPress} className="p-2 -mr-2">
-            <Ionicons
-              name="ellipsis-horizontal"
-              size={18}
-              color={subTextColor}
-            />
-          </TouchableOpacity>
         </View>
 
+        <TouchableOpacity onPress={onOptionsPress} className="p-2 -mr-2">
+          <Ionicons name="ellipsis-horizontal" size={20} color={subTextColor} />
+        </TouchableOpacity>
+      </View>
+
+      {/* 2. CONTENIDO (Texto) */}
+      <View className="pl-[52px]">
         {!!post.comment && post.comment.trim() !== "" && (
           <Text
-            className="text-[15px] mb-3 leading-5"
+            className="text-[15px] leading-6 mb-3 font-normal"
             style={{ color: textColor }}
           >
             {post.comment}
           </Text>
         )}
+
+        {/* 3. SONG CARD REDISEÑADA */}
         <View
-          className="rounded-2xl p-3 flex-row items-center mb-3"
+          className="rounded-2xl p-3 flex-row items-center mb-4"
           style={{
-            backgroundColor: cardBg,
-            borderWidth: isDark ? 1 : 0,
-            borderColor: cardBorder,
-            marginTop: post.comment ? 0 : 4,
+            backgroundColor: songCardBg,
+            // Quitamos el borde para un look más "Clean"
           }}
         >
           <Image
             source={{ uri: songData.cover }}
-            className="w-12 h-12 rounded-lg bg-zinc-300 dark:bg-zinc-800"
+            className="w-14 h-14 rounded-xl shadow-sm"
+            style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
           />
-          <View className="flex-1 ml-3 mr-2">
+
+          <View className="flex-1 ml-3 mr-2 justify-center">
             <Text
-              className="font-bold text-sm"
+              className="font-bold text-[15px] mb-0.5"
               numberOfLines={1}
               style={{ color: textColor }}
             >
               {songData.title}
             </Text>
             <Text
-              className="text-xs mt-0.5"
+              className="text-[13px]"
               numberOfLines={1}
               style={{ color: subTextColor }}
             >
               {songData.artist}
             </Text>
+
+            {/* Visualizador de Audio (Estética) */}
+            <View className="mt-1 flex-row items-center">
+              <Ionicons name="musical-notes" size={10} color={accentColor} />
+              <AudioVisualizer isPlaying={isPlaying} color={subTextColor} />
+            </View>
           </View>
 
           <TouchableOpacity
             onPress={handlePlayPause}
-            className="w-10 h-10 rounded-full bg-[#5E17EB] items-center justify-center shadow-sm"
+            className="w-10 h-10 rounded-full items-center justify-center shadow-md"
+            style={{ backgroundColor: accentColor }}
             activeOpacity={0.8}
           >
             {isLoadingAudio ? (
@@ -325,10 +350,11 @@ const PostItem: React.FC<PostItemProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* FOOTER */}
-        <View className="flex-row justify-between items-center mt-1 pr-2">
+        {/* 4. FOOTER (Acciones) */}
+        <View className="flex-row justify-between items-center pr-2">
+          {/* Comments */}
           <TouchableOpacity
-            className="flex-row items-center py-1"
+            className="flex-row items-center gap-2"
             onPress={() =>
               onCommentPress
                 ? onCommentPress(post.$id)
@@ -338,7 +364,7 @@ const PostItem: React.FC<PostItemProps> = ({
             <Ionicons name="chatbubble-outline" size={20} color={iconColor} />
             {(post.commentsCount || 0) > 0 && (
               <Text
-                className="text-xs ml-1.5 font-medium"
+                className="text-xs font-medium"
                 style={{ color: subTextColor }}
               >
                 {post.commentsCount}
@@ -346,9 +372,10 @@ const PostItem: React.FC<PostItemProps> = ({
             )}
           </TouchableOpacity>
 
+          {/* Likes */}
           <TouchableOpacity
             onPress={handleLike}
-            className="flex-row items-center py-1"
+            className="flex-row items-center gap-2"
           >
             <Ionicons
               name={isLiked ? "heart" : "heart-outline"}
@@ -357,7 +384,7 @@ const PostItem: React.FC<PostItemProps> = ({
             />
             {likesCount > 0 && (
               <Text
-                className="text-xs ml-1.5 font-medium"
+                className="text-xs font-medium"
                 style={{ color: isLiked ? "#EF4444" : subTextColor }}
               >
                 {likesCount}
@@ -365,35 +392,29 @@ const PostItem: React.FC<PostItemProps> = ({
             )}
           </TouchableOpacity>
 
+          {/* Saves */}
           <TouchableOpacity
             onPress={handleSave}
-            className="flex-row items-center py-1"
+            className="flex-row items-center gap-2"
           >
             <Ionicons
               name={isSaved ? "bookmark" : "bookmark-outline"}
               size={22}
-              color={isSaved ? "#5E17EB" : iconColor}
+              color={isSaved ? accentColor : iconColor}
             />
             {savesCount > 0 && (
               <Text
-                className="text-xs ml-1.5 font-medium"
-                style={{ color: isSaved ? "#5E17EB" : subTextColor }}
+                className="text-xs font-medium"
+                style={{ color: isSaved ? accentColor : subTextColor }}
               >
                 {savesCount}
               </Text>
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={onSharePress}
-            className="flex-row items-center py-1"
-          >
-            <Ionicons
-              name="paper-plane-outline"
-              size={22}
-              color={iconColor}
-              style={{ transform: [{ rotate: "-10deg" }], marginTop: -2 }}
-            />
+          {/* Share */}
+          <TouchableOpacity onPress={onSharePress}>
+            <Ionicons name="share-social-outline" size={22} color={iconColor} />
           </TouchableOpacity>
         </View>
       </View>

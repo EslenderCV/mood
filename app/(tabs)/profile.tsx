@@ -319,7 +319,7 @@ const Profile = () => {
         ref={mainScrollRef}
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[4]}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 0 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

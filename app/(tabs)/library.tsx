@@ -571,7 +571,7 @@ const Library = () => {
                 contentContainerStyle={{
                   paddingHorizontal: 24,
                   paddingTop: 10,
-                  paddingBottom: 100,
+                  paddingBottom: 20,
                 }}
                 refreshControl={
                   <RefreshControl
