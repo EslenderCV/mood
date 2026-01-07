@@ -2,7 +2,7 @@
   "expo": {
     "name": "Mood",
     "slug": "mood",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": ["mood", "appwrite-callback-6689e59b000acd6caf6f"],
@@ -15,11 +15,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.Gammes.Mood",
-      "buildNumber": "1",
+      "buildNumber": "4",
       "infoPlist": {
         "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos para tu perfil y publicaciones.",
         "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar y subir fotos.",
-        "NSMicrophoneUsageDescription": "Mood necesita acceso al micrófono para grabar audio en los videos."
+        "NSMicrophoneUsageDescription": "Mood necesita acceso al micrófono para grabar audio en los videos.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -28,12 +29,13 @@
         "backgroundColor": "#000000"
       },
       "package": "com.Gammes.Mood",
-      "versionCode": 1,
+      "versionCode": 4,
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "RECORD_AUDIO"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "plugins": [
@@ -54,8 +56,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "TU_PROJECT_ID_AQUI"
-      }
-    }
+        "projectId": "0a9bc82d-9da3-408d-a6c8-1e172ca17a61"
+      },
+      "router": {}
+    },
+    "owner": "gammes"
   }
 }
