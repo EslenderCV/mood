@@ -1864,3 +1864,17 @@ export async function registerPushTokenInAppwrite(token: string) {
     console.log("Error registrando push token en Appwrite:", error);
   }
 }
+
+export async function updateUserToken(userId: string, token: string) {
+  try {
+    // Crea un "Target" de mensajería para este usuario
+    // Reemplaza "TU_PROVIDER_ID" con el ID de tu proveedor FCM en Appwrite (Messaging > Providers)
+    // Si no sabes el ID, ve a Appwrite Console > Messaging > Providers y copia el ID del que dice "FCM".
+    // Si aún no tienes provider, puedes comentar esta línea por ahora para que no de error.
+
+    // await account.createPushTarget(ID.unique(), token, "TU_PROVIDER_ID_AQUI");
+    console.log("Token procesado para usuario:", userId);
+  } catch (error: any) {
+    console.log("Error guardando token:", error.message);
+  }
+}
