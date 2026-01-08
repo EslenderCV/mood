@@ -1,4 +1,5 @@
-import { Client, Messaging, ID } from "node-appwrite"; // <--- 1. AGREGADO "ID" AQUÍ
+import sdk from "node-appwrite";
+const { Client, Messaging, ID } = sdk; // <--- 1. AGREGADO "ID" AQUÍ
 
 export default async ({ req, res, log, error }) => {
   // 1. Inicializar SDK
