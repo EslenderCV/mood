@@ -27,7 +27,8 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.Gammes.Mood",
+      "googleServicesFile": "./google-services.json",
+      "package": "com.gammes.mood",
       "versionCode": 1,
       "permissions": [
         "CAMERA",
@@ -54,7 +55,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "TU_PROJECT_ID_AQUI"
+        "projectId": "ea303976-5cd4-406f-acbf-78b2a8f135d1"
       }
     }
   }
