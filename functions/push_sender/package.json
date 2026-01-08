@@ -4,6 +4,9 @@
   "description": "",
   "main": "src/main.js",
   "type": "module",
+  "scripts": {
+    "build": "echo 'Build completado'"
+  },
   "dependencies": {
     "node-appwrite": "^14.0.0"
   }
