@@ -1,13 +1,14 @@
 {
   "name": "push-sender",
   "version": "1.0.0",
+  "type": "module",
   "description": "",
   "main": "src/main.js",
-  "type": "module",
   "scripts": {
-    "build": "echo 'Build completado'"
+    "build": "echo 'Build completado exitosamente'"
   },
   "dependencies": {
-    "node-appwrite": "^14.0.0"
-  }
+    "node-appwrite": "^11.0.0"
+  },
+  "devDependencies": {}
 }
