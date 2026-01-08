@@ -1,5 +1,6 @@
-import sdk from "node-appwrite";
-const { Client, Messaging, ID } = sdk; // <--- 1. AGREGADO "ID" AQUÍ
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const { Client, Messaging, ID } = require("node-appwrite");
 
 export default async ({ req, res, log, error }) => {
   // 1. Inicializar SDK
