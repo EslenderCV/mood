@@ -1,63 +1,84 @@
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const { Client, Messaging, ID } = require("node-appwrite");
+import sdk from "node-appwrite";
+
+// ------------------------------------------------------------------
+// 🛡️ BLOQUE DE SEGURIDAD UNIVERSAL
+// Esto arregla el error "Messaging is not a constructor".
+// Intenta cargar la librería de forma directa Y de forma empaquetada.
+// ------------------------------------------------------------------
+const Client = sdk.Client || sdk.default?.Client;
+const Messaging = sdk.Messaging || sdk.default?.Messaging;
+const ID = sdk.ID || sdk.default?.ID;
 
 export default async ({ req, res, log, error }) => {
-  // 1. Inicializar SDK
-  const client = new Client()
-    .setEndpoint(
-      process.env.APPWRITE_ENDPOINT || "https://cloud.appwrite.io/v1"
-    ) // <--- 2. Protección por si la variable no existe
-    .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
-    .setKey(process.env.APPWRITE_API_KEY);
-
-  const messaging = new Messaging(client);
+  // 1. Verificación de seguridad inicial
+  if (!Client || !Messaging) {
+    error(
+      "❌ Error Crítico: La librería node-appwrite no se cargó correctamente."
+    );
+    return res.json({ error: "Library Load Failed" }, 500);
+  }
 
   try {
-    // 3. PARSEO SEGURO DEL BODY (Vital para que lea los datos reales)
+    // 2. Inicializar SDK
+    const client = new Client()
+      .setEndpoint(
+        process.env.APPWRITE_ENDPOINT || "https://cloud.appwrite.io/v1"
+      )
+      .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
+      .setKey(process.env.APPWRITE_API_KEY);
+
+    const messaging = new Messaging(client);
+
+    // 3. PARSEO INTELIGENTE DEL BODY
+    // Appwrite a veces manda el body como String y a veces como Objeto.
     let notificationDoc = req.body;
 
-    // Si llega como texto (string), lo convertimos a objeto JSON
     if (typeof req.body === "string") {
+      // Si llega vacío o es una cadena vacía
+      if (!req.body) {
+        return res.json({ message: "Evento vacío (Prueba manual)" });
+      }
       try {
         notificationDoc = JSON.parse(req.body);
       } catch (e) {
-        return res.json({ error: "El body no es un JSON válido" });
+        // Si falló el parseo, asumimos que es una prueba vacía
+        log("⚠️ No se pudo parsear el JSON. Usando body tal cual.");
       }
     }
 
-    // Validación básica
-    if (!notificationDoc) {
-      return res.json({ error: "No llegaron datos en el evento" });
+    // Si lanzamos la ejecución manual desde la consola con {}, notificationDoc estará vacío
+    if (!notificationDoc || !notificationDoc.userId) {
+      log(
+        "ℹ️ Ejecución de prueba o sin datos de usuario. El sistema funciona."
+      );
+      return res.json({
+        message: "Sistema operativo. Esperando eventos reales.",
+      });
     }
 
-    // 4. Extraer variables
+    // 4. Extraer datos reales
     const receiverId = notificationDoc.userId;
-    const messageBody = notificationDoc.message;
+    const messageBody =
+      notificationDoc.message || "Tienes una nueva notificación";
     const senderName = notificationDoc.senderName || "Mood App";
 
-    // Log para depuración (Lo verás en la consola de Appwrite)
-    log(`Procesando notificación para: ${receiverId}`);
-    log(`Mensaje: ${messageBody}`);
-
-    // Evitar enviarse notificación a uno mismo
-    // (Asegúrate que en tu BD 'senderId' exista, si no, borra este if)
-    if (notificationDoc.senderId && notificationDoc.senderId === receiverId) {
-      return res.json({ result: "Auto-notificación ignorada" });
-    }
+    log(`🔔 Procesando notificación para: ${receiverId}`);
 
     // 5. Enviar la Push Notification
+    // NOTA: createPush requiere [userId] en un array
     const result = await messaging.createPush(
       ID.unique(), // Message ID
-      "Mood", // Título de la notificación
-      `${senderName}: ${messageBody}`, // Cuerpo: "Elz: le gustó tu post"
+      "Mood", // Título
+      `${senderName}: ${messageBody}`, // Cuerpo
       [], // Topics (vacío)
-      [receiverId] // Users (Array con el ID del usuario destino)
+      [receiverId] // Users (A quién se le envía)
     );
 
-    return res.json({ success: true, result });
+    log("✅ Notificación enviada con éxito a FCM/APNS");
+    return res.json({ success: true, data: result });
   } catch (err) {
-    error("Error fatal enviando push: " + err.message);
-    return res.json({ error: err.message });
+    // Si algo falla, lo registramos en los logs de Appwrite
+    error("🔴 Error enviando push: " + err.message);
+    return res.json({ error: err.message }, 500);
   }
 };
