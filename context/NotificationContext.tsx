@@ -65,7 +65,6 @@ export const NotificationProvider = ({
       });
 
     return () => {
-      // CORRECCIÓN ERROR 2: Usar el método .remove() propio de la suscripción
       if (notificationListener.current) {
         notificationListener.current.remove();
       }
@@ -107,12 +106,10 @@ async function registerForPushNotificationsAsync() {
     }
 
     if (finalStatus !== "granted") {
-      // alert("Faltan permisos para notificaciones.");
       return;
     }
 
     try {
-      // CAMBIO: Usamos el token nativo (Device Token) para Appwrite
       const tokenData = await Notifications.getDevicePushTokenAsync();
       token = tokenData.data;
     } catch (e) {

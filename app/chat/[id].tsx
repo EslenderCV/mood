@@ -11,24 +11,16 @@ import {
   Alert,
   AlertButton,
 } from "react-native";
-
 import React, { useEffect, useState, useRef } from "react";
-
 import { useLocalSearchParams, router, Stack } from "expo-router";
-
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
-
 import {
   GestureHandlerRootView,
   Swipeable,
 } from "react-native-gesture-handler";
-
 import * as Haptics from "expo-haptics";
-
 import { useColorScheme } from "nativewind";
-
 import {
   getCurrentUser,
   getChatMessages,
@@ -42,58 +34,41 @@ import {
   getPlaylistById,
   getUser,
   databases,
+  sendPushNotification, // <--- 1. IMPORTADO
 } from "@/lib/appwrite";
-
 import { useLanguage } from "@/context/LanguageContext";
 
 const isValidId = (id: string | null | undefined) => {
   if (!id) return false;
-
   if (id.length > 36) return false;
-
   const validChars = /^[a-zA-Z0-9_.-]+$/;
-
   return validChars.test(id);
 };
 
 const PostPreviewBubble = ({
   postId,
-
   onLongPress,
 }: {
   postId: string;
-
   onLongPress?: () => void;
 }) => {
   const { colorScheme } = useColorScheme();
-
   const isDark = colorScheme === "dark";
-
   const { t } = useLanguage();
-
   const cardBg = isDark ? "#262626" : "#FFFFFF";
-
   const textColor = isDark ? "#FFFFFF" : "#000000";
-
   const subTextColor = isDark ? "#A8A8A8" : "#737373";
-
   const borderColor = isDark ? "#363636" : "#E5E5E5";
-
   const footerBg = isDark ? "rgba(255,255,255,0.03)" : "#FAFAFA";
-
   const [post, setPost] = useState<any>(null);
-
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-
     if (!isValidId(postId)) {
       setError(true);
-
       return;
     }
-
     getPostById(postId)
       .then((data) => {
         if (isMounted) {
@@ -101,20 +76,16 @@ const PostPreviewBubble = ({
           else setError(true);
         }
       })
-
       .catch((e) => {
         console.log("Post preview error:", e);
-
         if (isMounted) setError(true);
       });
-
     return () => {
       isMounted = false;
     };
   }, [postId]);
 
   if (error) return null;
-
   if (!post)
     return (
       <View
@@ -146,12 +117,10 @@ const PostPreviewBubble = ({
           className="w-full h-full"
           resizeMode="cover"
         />
-
         <View className="absolute inset-0 bg-black/20 justify-center items-center">
           <Ionicons name="play-circle" size={40} color="white" />
         </View>
       </View>
-
       <View className="p-3" style={{ backgroundColor: footerBg }}>
         <Text
           className="font-bold text-sm leading-tight"
@@ -160,7 +129,6 @@ const PostPreviewBubble = ({
         >
           {song?.title || t("chat.song")}
         </Text>
-
         <Text
           className="text-xs mt-0.5 font-medium"
           numberOfLines={1}
@@ -175,61 +143,43 @@ const PostPreviewBubble = ({
 
 const ChatPlaylistCard = ({
   playlistId,
-
   isMyMessage,
 }: {
   playlistId: string;
-
   isMyMessage: boolean;
 }) => {
   const { colorScheme } = useColorScheme();
-
   const isDark = colorScheme === "dark";
-
   const [playlist, setPlaylist] = useState<any>(null);
-
   const [loading, setLoading] = useState(true);
-
   const [error, setError] = useState(false);
-
   const cardBg = isDark ? "#262626" : "#FFFFFF";
-
   const textColor = isDark ? "#FFFFFF" : "#000000";
-
   const subTextColor = isDark ? "#A8A8A8" : "#737373";
-
   const borderColor = isDark ? "#363636" : "#E5E5E5";
 
   useEffect(() => {
     let isMounted = true;
-
     if (!isValidId(playlistId)) {
       setLoading(false);
-
       setError(true);
-
       return;
     }
-
     const loadData = async () => {
       try {
         const data = await getPlaylistById(playlistId);
-
         if (isMounted) {
           if (data) setPlaylist(data);
           else setError(true);
         }
       } catch (e) {
         console.log("Error playlist chat:", e);
-
         if (isMounted) setError(true);
       } finally {
         if (isMounted) setLoading(false);
       }
     };
-
     loadData();
-
     return () => {
       isMounted = false;
     };
@@ -243,9 +193,7 @@ const ChatPlaylistCard = ({
           backgroundColor: isMyMessage
             ? "rgba(255,255,255,0.2)"
             : "rgba(0,0,0,0.1)",
-
           width: 200,
-
           height: 60,
         }}
       >
@@ -262,9 +210,7 @@ const ChatPlaylistCard = ({
         className="p-3 rounded-xl mb-1 border justify-center"
         style={{
           backgroundColor: isDark ? "#3f1a1a" : "#fee2e2",
-
           borderColor: "#fca5a5",
-
           width: 200,
         }}
       >
@@ -280,7 +226,6 @@ const ChatPlaylistCard = ({
       : playlist.platform === "spotify"
       ? "logo-spotify"
       : "musical-notes";
-
   const platformColor =
     playlist.platform === "apple"
       ? "#FA243C"
@@ -295,11 +240,8 @@ const ChatPlaylistCard = ({
       className="flex-row items-center p-2 rounded-[18px] mb-1 border overflow-hidden"
       style={{
         backgroundColor: cardBg,
-
         borderColor: borderColor,
-
         width: 240,
-
         height: 70,
       }}
     >
@@ -316,7 +258,6 @@ const ChatPlaylistCard = ({
           </View>
         )}
       </View>
-
       <View className="ml-3 flex-1 justify-center">
         <Text
           numberOfLines={1}
@@ -325,20 +266,17 @@ const ChatPlaylistCard = ({
         >
           {playlist.name}
         </Text>
-
         <View className="flex-row items-center mt-1">
           <Ionicons
             name={platformIcon as any}
             size={12}
             color={platformColor}
           />
-
           <Text className="text-[11px] ml-1.5" style={{ color: subTextColor }}>
             {playlist.songs?.length || 0} canciones
           </Text>
         </View>
       </View>
-
       <Ionicons
         name="chevron-forward"
         size={18}
@@ -351,80 +289,51 @@ const ChatPlaylistCard = ({
 
 const ChatRoom = () => {
   const { colorScheme } = useColorScheme();
-
   const isDark = colorScheme === "dark";
-
   const { t } = useLanguage();
-
   const bgColor = isDark ? "#000000" : "#FFFFFF";
-
   const textColor = isDark ? "#FFFFFF" : "#000000";
-
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
-
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
-
   const inputBg = isDark ? "#18181B" : "#F4F4F5";
-
   const headerBg = isDark ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.95)";
-
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
-
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
-
   const myBubbleBg = "#5E17EB";
-
   const myBubbleText = "#FFFFFF";
-
   const otherBubbleBg = isDark ? "#27272A" : "#F3F4F6";
-
   const otherBubbleText = isDark ? "#FFFFFF" : "#000000";
-
   const replyBoxMyBg = "rgba(0, 0, 0, 0.2)";
-
   const replyBoxOtherBg = isDark
     ? "rgba(255, 255, 255, 0.1)"
     : "rgba(0, 0, 0, 0.05)";
 
   const params = useLocalSearchParams();
-
   const chatId = params.id as string;
 
   const [chatUser, setChatUser] = useState({
     name: (params.otherUserName as string) || "Usuario",
-
     avatar: (params.otherUserAvatar as string) || null,
-
     id: (params.otherUserId as string) || null,
+    expoPushToken: null as string | null, // <--- 2. TOKEN EN EL ESTADO
   });
 
   const [messages, setMessages] = useState<any[]>([]);
-
   const [newMessage, setNewMessage] = useState("");
-
   const [currentUser, setCurrentUser] = useState<any>(null);
-
   const [replyingTo, setReplyingTo] = useState<any>(null);
-
   const [editingMessage, setEditingMessage] = useState<any>(null);
-
   const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
-
   const flatListRef = useRef<FlatList>(null);
-
   const inputRef = useRef<TextInput>(null);
-
   const rowRefs = useRef(new Map()).current;
 
   useEffect(() => {
     loadData();
-
     const unsubscribe = client.subscribe(
       `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`,
-
       (response) => {
         const payload = response.payload as any;
-
         if (payload.chatId === chatId) {
           if (
             response.events.includes(
@@ -433,16 +342,13 @@ const ChatRoom = () => {
           ) {
             setMessages((prev) => {
               if (prev.find((m) => m.$id === payload.$id)) return prev;
-
               return [payload, ...prev];
             });
-
             getCurrentUser().then((u) => {
               if (u && payload.senderId !== u.$id)
                 markChatAsRead(chatId, u.$id);
             });
           }
-
           if (
             response.events.includes(
               "databases.*.collections.*.documents.*.update"
@@ -452,7 +358,6 @@ const ChatRoom = () => {
               prev.map((msg) => (msg.$id === payload.$id ? payload : msg))
             );
           }
-
           if (
             response.events.includes(
               "databases.*.collections.*.documents.*.delete"
@@ -465,44 +370,52 @@ const ChatRoom = () => {
         }
       }
     );
-
     return () => unsubscribe();
   }, [chatId]);
 
   const loadData = async () => {
     try {
       const user = await getCurrentUser();
-
       if (!user) return router.replace("/signIn");
-
       setCurrentUser(user);
 
-      if (!chatUser.id || !chatUser.avatar) {
+      // Lógica para obtener el otro usuario y su TOKEN
+      // Aunque venga por params, tratamos de refrescar para obtener el token
+      if (!chatUser.id || !chatUser.avatar || !chatUser.expoPushToken) {
         try {
-          const chatDoc = await databases.getDocument(
-            appwriteConfig.databaseId,
-
-            appwriteConfig.chatsCollectionId,
-
-            chatId
-          );
-
-          if (chatDoc && chatDoc.participants) {
-            const otherId = chatDoc.participants.find(
-              (p: string) => p !== user.$id
+          // Opción A: Tenemos el ID en params
+          if (chatUser.id) {
+            const otherUserData = await getUser(chatUser.id);
+            if (otherUserData) {
+              setChatUser({
+                name: otherUserData.name || otherUserData.username,
+                avatar: otherUserData.pfp,
+                id: otherUserData.$id,
+                expoPushToken: otherUserData.expoPushToken, // Guardar Token
+              });
+            }
+          } else {
+            // Opción B: Buscar en el documento del chat
+            const chatDoc = await databases.getDocument(
+              appwriteConfig.databaseId,
+              appwriteConfig.chatsCollectionId,
+              chatId
             );
 
-            if (otherId) {
-              const otherUserData = await getUser(otherId);
-
-              if (otherUserData) {
-                setChatUser({
-                  name: otherUserData.name || otherUserData.username,
-
-                  avatar: otherUserData.pfp,
-
-                  id: otherUserData.$id,
-                });
+            if (chatDoc && chatDoc.participants) {
+              const otherId = chatDoc.participants.find(
+                (p: string) => p !== user.$id
+              );
+              if (otherId) {
+                const otherUserData = await getUser(otherId);
+                if (otherUserData) {
+                  setChatUser({
+                    name: otherUserData.name || otherUserData.username,
+                    avatar: otherUserData.pfp,
+                    id: otherUserData.$id,
+                    expoPushToken: otherUserData.expoPushToken, // Guardar Token
+                  });
+                }
               }
             }
           }
@@ -512,9 +425,7 @@ const ChatRoom = () => {
       }
 
       const msgs = await getChatMessages(chatId);
-
       setMessages(msgs);
-
       markChatAsRead(chatId, user.$id);
     } catch (error) {
       console.log("Error loading chat:", error);
@@ -523,73 +434,51 @@ const ChatRoom = () => {
 
   const onSwipeToReply = (message: any) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
     setReplyingTo(message);
-
     setEditingMessage(null);
-
     const ref = rowRefs.get(message.$id);
-
     if (ref) ref.close();
-
     inputRef.current?.focus();
   };
 
   const handleLongPress = (item: any) => {
     if (item.senderId !== currentUser?.$id) return;
-
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
     const options: AlertButton[] = [
       { text: t("chat.cancel"), style: "cancel" },
     ];
-
     if (!item.sharedPostId && !item.sharedPlaylistId) {
       options.push({ text: t("chat.edit"), onPress: () => startEditing(item) });
     }
-
     options.push({
       text: t("chat.delete"),
-
       style: "destructive",
-
       onPress: () => confirmDelete(item.$id),
     });
-
     Alert.alert(t("chat.options"), "", options);
   };
 
   const startEditing = (item: any) => {
     setReplyingTo(null);
-
     let cleanContent = item.content;
-
     if (item.content.includes(":::REPLY:::")) {
       const parts = item.content.split(":::REPLY:::");
-
       if (parts.length > 1) cleanContent = parts[1];
     } else if (item.content.startsWith("Replying to:")) {
       const parts = item.content.split("\n\n");
-
       if (parts.length > 1) cleanContent = parts.slice(1).join("\n\n");
     }
-
     setEditingMessage({ ...item, cleanContent });
-
     setNewMessage(cleanContent);
-
     inputRef.current?.focus();
   };
 
   const confirmDelete = (messageId: string) => {
     Alert.alert(t("chat.deleteTitle"), t("chat.deleteMsg"), [
       { text: t("chat.cancel"), style: "cancel" },
-
       {
         text: t("chat.delete"),
-
         style: "destructive",
-
         onPress: () => handleDelete(messageId),
       },
     ]);
@@ -598,11 +487,9 @@ const ChatRoom = () => {
   const handleDelete = async (messageId: string) => {
     try {
       setMessages((prev) => prev.filter((m) => m.$id !== messageId));
-
       await deleteMessage(messageId);
     } catch (error) {
       Alert.alert("Error", t("chat.errorDelete"));
-
       loadData();
     }
   };
@@ -610,12 +497,10 @@ const ChatRoom = () => {
   const scrollToOriginalMessage = (originalText: string) => {
     const index = messages.findIndex((m) => {
       let contentToCheck = m.content;
-
       if (m.content.includes(":::REPLY:::"))
         contentToCheck = m.content.split(":::REPLY:::")[1];
       else if (m.content.startsWith("Replying to:"))
         contentToCheck = m.content.split("\n\n")[1];
-
       return (
         contentToCheck.includes(originalText) || contentToCheck === originalText
       );
@@ -624,12 +509,9 @@ const ChatRoom = () => {
     if (index !== -1 && flatListRef.current) {
       flatListRef.current.scrollToIndex({
         index,
-
         animated: true,
-
         viewPosition: 0.5,
       });
-
       Haptics.selectionAsync();
     }
   };
@@ -639,74 +521,68 @@ const ChatRoom = () => {
 
     if (editingMessage) {
       const tempId = editingMessage.$id;
-
       let finalContent = newMessage;
-
       if (editingMessage.content.includes(":::REPLY:::")) {
         const parts = editingMessage.content.split(":::REPLY:::");
-
         finalContent = `${parts[0]}:::REPLY:::${newMessage}`;
       }
-
       setNewMessage("");
-
       setEditingMessage(null);
-
       try {
         setMessages((prev) =>
           prev.map((m) =>
             m.$id === tempId ? { ...m, content: finalContent } : m
           )
         );
-
         await updateMessage(tempId, finalContent);
       } catch (error) {
         Alert.alert("Error", t("chat.errorEdit"));
       }
-
       return;
     }
 
     let contentToSend = newMessage;
-
     if (replyingTo) {
       const replyName =
         replyingTo.senderId === currentUser.$id ? t("chat.you") : chatUser.name;
-
       let rawContent = replyingTo.content;
-
       if (replyingTo.content.includes(":::REPLY:::")) {
         rawContent = replyingTo.content.split(":::REPLY:::")[1];
       } else if (replyingTo.content.startsWith("Replying to:")) {
         rawContent = replyingTo.content.split("\n\n").slice(1).join("\n\n");
       }
-
       const snippet = rawContent.substring(0, 50).replace(/\n/g, " ");
-
       contentToSend = `${replyName}:::${snippet}:::REPLY:::${newMessage}`;
     }
 
+    // Guardamos el texto limpio para la notificación
+    const messageForNotification = newMessage;
     const tempContent = contentToSend;
-
     setNewMessage("");
-
     setReplyingTo(null);
 
     try {
       await sendMessage(
         chatId,
-
         currentUser.$id,
-
         chatUser.id,
-
         tempContent,
-
         null
       );
+
+      // --- 3. LÓGICA DE NOTIFICACIÓN PUSH ---
+      if (chatUser.expoPushToken) {
+        console.log("🚀 Enviando Push a:", chatUser.name);
+        await sendPushNotification(
+          chatUser.expoPushToken,
+          currentUser.name || currentUser.username || "Nuevo mensaje", // Título
+          messageForNotification, // Cuerpo: EL MENSAJE LIMPIO
+          { type: "chat", chatId: chatId, url: `/chat/${chatId}` } // Data
+        );
+      }
+      // --------------------------------------
     } catch (error) {
       setNewMessage(tempContent);
-
       Alert.alert("Error", "No se pudo enviar");
     }
   };
@@ -730,56 +606,40 @@ const ChatRoom = () => {
 
   const renderMessage = ({ item }: { item: any }) => {
     const isMe = item.senderId === currentUser?.$id;
-
     const time = new Date(item.$createdAt).toLocaleTimeString([], {
       hour: "2-digit",
-
       minute: "2-digit",
     });
 
     const hasSharedPost = !!item.sharedPostId;
-
     const hasSharedPlaylist = !!item.sharedPlaylistId;
-
     const hasContent = item.content && item.content.trim().length > 0;
 
     if (!hasSharedPost && !hasSharedPlaylist && !hasContent) return null;
 
     let displayContent = item.content;
-
     let replySnippet = null;
-
     let replyName = null;
 
     if (hasContent) {
       if (item.content.includes(":::REPLY:::")) {
         const parts = item.content.split(":::REPLY:::");
-
         const metadata = parts[0].split(":::");
-
         if (metadata.length >= 2) {
           replyName = metadata[0];
-
           replySnippet = metadata[1];
         } else {
           replyName = t("chat.reply");
-
           replySnippet = metadata[0];
         }
-
         displayContent = parts[1];
       } else if (item.content.startsWith("Replying to:")) {
         const parts = item.content.split("\n\n");
-
         if (parts.length > 1) {
           replyName = t("chat.reply");
-
           replySnippet = parts[0]
-
             .replace("Replying to: ", "")
-
             .replace(/"/g, "");
-
           displayContent = parts.slice(1).join("\n\n");
         }
       }
@@ -819,7 +679,6 @@ const ChatRoom = () => {
                 style={{ backgroundColor: inputBg }}
               />
             )}
-
             <View
               className={`max-w-[80%] ${isMe ? "items-end" : "items-start"}`}
             >
@@ -829,14 +688,12 @@ const ChatRoom = () => {
                   onLongPress={() => handleLongPress(item)}
                 />
               )}
-
               {hasSharedPlaylist && (
                 <ChatPlaylistCard
                   playlistId={item.sharedPlaylistId}
                   isMyMessage={isMe}
                 />
               )}
-
               {hasContent && (
                 <View
                   className={`px-3 py-2 rounded-[18px] ${
@@ -844,9 +701,7 @@ const ChatRoom = () => {
                   } mt-1`}
                   style={{
                     backgroundColor: isMe ? myBubbleBg : otherBubbleBg,
-
                     opacity: editingMessage?.$id === item.$id ? 0.5 : 1,
-
                     minWidth: 80,
                   }}
                 >
@@ -858,7 +713,6 @@ const ChatRoom = () => {
                       className="mb-1 rounded-md overflow-hidden border-l-4 p-1.5"
                       style={{
                         backgroundColor: isMe ? replyBoxMyBg : replyBoxOtherBg,
-
                         borderColor: isMe ? "rgba(255,255,255,0.7)" : "#5E17EB",
                       }}
                     >
@@ -870,7 +724,6 @@ const ChatRoom = () => {
                       >
                         {replyName}
                       </Text>
-
                       <Text
                         className="text-[12px]"
                         numberOfLines={1}
@@ -882,14 +735,12 @@ const ChatRoom = () => {
                       </Text>
                     </TouchableOpacity>
                   )}
-
                   <Text
                     className="text-[15px] leading-5"
                     style={{ color: isMe ? myBubbleText : otherBubbleText }}
                   >
                     {displayContent}
                   </Text>
-
                   <View className="flex-row items-center justify-end mt-1 space-x-1">
                     <Text
                       className="text-[10px]"
@@ -899,7 +750,6 @@ const ChatRoom = () => {
                     >
                       {time}
                     </Text>
-
                     {isMe && (
                       <Ionicons
                         name="checkmark-done"
@@ -927,7 +777,6 @@ const ChatRoom = () => {
         style={{ backgroundColor: bgColor }}
       >
         <Stack.Screen options={{ headerShown: false }} />
-
         <View
           className="flex-row items-center px-2 py-2 border-b z-10"
           style={{ backgroundColor: headerBg, borderColor: borderColor }}
@@ -935,7 +784,6 @@ const ChatRoom = () => {
           <TouchableOpacity onPress={() => router.back()} className="p-2">
             <Ionicons name="chevron-back" size={28} color={backIconColor} />
           </TouchableOpacity>
-
           <Image
             source={
               chatUser.avatar
@@ -945,7 +793,6 @@ const ChatRoom = () => {
             className="w-9 h-9 rounded-full"
             style={{ backgroundColor: inputBg }}
           />
-
           <View className="ml-3 flex-1">
             <Text
               className="font-bold text-base"
@@ -954,7 +801,6 @@ const ChatRoom = () => {
             >
               {chatUser.name}
             </Text>
-
             {isOtherUserOnline && (
               <Text className="text-xs text-green-500">{t("chat.online")}</Text>
             )}
@@ -980,11 +826,8 @@ const ChatRoom = () => {
               className="flex-row items-center justify-between px-3 py-2 m-2 rounded-xl border-l-4"
               style={{
                 backgroundColor: inputBg,
-
                 borderColor: editingMessage ? "#EAB308" : "#5E17EB",
-
                 borderLeftWidth: 4,
-
                 elevation: 2,
               }}
             >
@@ -1001,7 +844,6 @@ const ChatRoom = () => {
                           : chatUser.name
                       }`}
                 </Text>
-
                 <Text
                   className="text-xs"
                   numberOfLines={1}
@@ -1016,13 +858,10 @@ const ChatRoom = () => {
                     : replyingTo.content}
                 </Text>
               </View>
-
               <TouchableOpacity
                 onPress={() => {
                   setReplyingTo(null);
-
                   setEditingMessage(null);
-
                   setNewMessage("");
                 }}
                 className="p-2"
@@ -1055,7 +894,6 @@ const ChatRoom = () => {
                 onChangeText={setNewMessage}
               />
             </View>
-
             <TouchableOpacity
               onPress={handleSend}
               className="ml-2 w-10 h-10 rounded-full items-center justify-center transition-all"
@@ -1065,7 +903,6 @@ const ChatRoom = () => {
                     ? "#EAB308"
                     : "#5E17EB"
                   : inputBg,
-
                 opacity: newMessage.trim() ? 1 : 0.7,
               }}
               disabled={!newMessage.trim()}

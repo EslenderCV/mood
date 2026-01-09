@@ -1,7 +1,6 @@
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-// 👇 Importamos la función que guarda el token en Appwrite (la verificaremos en el paso 3)
 import { updateUserToken } from "./appwrite";
 
 export async function registerForPushNotificationsAsync(userId: string) {
@@ -21,7 +20,6 @@ export async function registerForPushNotificationsAsync(userId: string) {
       await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
-    // Si no tiene permiso, lo pedimos
     if (existingStatus !== "granted") {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
@@ -32,8 +30,6 @@ export async function registerForPushNotificationsAsync(userId: string) {
       return;
     }
 
-    // Generar el token
-    // (A veces requiere projectId si usas EAS, pero intenta así primero)
     try {
       const tokenData = await Notifications.getExpoPushTokenAsync();
       token = tokenData.data;
@@ -43,7 +39,6 @@ export async function registerForPushNotificationsAsync(userId: string) {
       return;
     }
 
-    // Guardar en Appwrite
     if (userId && token) {
       try {
         await updateUserToken(userId, token);

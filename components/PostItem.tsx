@@ -5,7 +5,6 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { useAudioPlayer } from "expo-audio";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,10 +14,14 @@ import {
   toggleLikePost,
   toggleSavePost,
   getDeezerTrackUrl,
+  getUser,
+  sendPushNotification,
+  getCurrentUser,
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
 import { useAudioContext } from "@/context/AudioContext";
+import { useGlobalContext } from "@/context/GlobalProvider";
 
 const AudioVisualizer = ({
   isPlaying,
@@ -73,7 +76,7 @@ const PostItem: React.FC<PostItemProps> = ({
   onSharePress,
 }) => {
   if (!post) return null;
-
+  const { user } = useGlobalContext();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
@@ -92,9 +95,7 @@ const PostItem: React.FC<PostItemProps> = ({
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
 
-  const [isLiked, setIsLiked] = useState(
-    post?.likedBy?.includes(currentUserId) || false
-  );
+  const [isLiked, setIsLiked] = useState(post.likedBy.includes(currentUserId));
   const [isSaved, setIsSaved] = useState(
     post?.savedBy?.includes(currentUserId) || false
   );
@@ -104,7 +105,7 @@ const PostItem: React.FC<PostItemProps> = ({
   const songData = parseSongData(post.songData);
 
   const getCreator = () => {
-    let userObj = post.creator || post.postedBy || post.users || post.user;
+    let userObj = post.postedBy;
     if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
     if (userObj && typeof userObj === "object") {
       return {
@@ -203,11 +204,36 @@ const PostItem: React.FC<PostItemProps> = ({
   const handleLike = async () => {
     const prevLiked = isLiked;
     const prevCount = likesCount;
+
     setIsLiked(!isLiked);
     setLikesCount(isLiked ? likesCount - 1 : likesCount + 1);
+
     try {
-      await toggleLikePost(post.$id, currentUserId, post.likedBy || []);
-    } catch {
+      const currentLikesArray = post.likedBy || [];
+      await toggleLikePost(post.$id, currentUserId, currentLikesArray);
+
+      const isNewLike = !prevLiked;
+      const creatorId = post.postedBy?.$id;
+      const isNotSelf = creatorId !== currentUserId;
+      if (isNewLike && isNotSelf) {
+        const creatorToken = post.postedBy?.expoPushToken;
+
+        if (creatorToken) {
+          await sendPushNotification(
+            creatorToken,
+            "¡Le gustó tu post! ❤️",
+            `A @${user?.username || "alguien"} le gustó tu publicación.`,
+            {
+              type: "post",
+              postId: post.$id,
+              userId: currentUserId,
+            }
+          );
+        } else {
+        }
+      } else {
+      }
+    } catch (error) {
       setIsLiked(prevLiked);
       setLikesCount(prevCount);
     }
