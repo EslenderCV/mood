@@ -19,7 +19,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.Gammes.Mood",
       "usesAppleSignIn": true,
-      "buildNumber": "8",
+      "buildNumber": "9",
       "infoPlist": {
         "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos para tu perfil y publicaciones.",
         "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar y subir fotos.",
@@ -33,7 +33,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.Gammes.Mood",
-      "versionCode": 8,
+      "versionCode": 9,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
