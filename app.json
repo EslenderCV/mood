@@ -33,7 +33,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.Gammes.Mood",
-      "versionCode": 7,
+      "versionCode": 8,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
