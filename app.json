@@ -2,10 +2,13 @@
   "expo": {
     "name": "Mood",
     "slug": "mood",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": ["mood", "appwrite-callback-6689e59b000acd6caf6f"],
+    "scheme": [
+      "mood",
+      "appwrite-callback-6689e59b000acd6caf6f"
+    ],
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -15,11 +18,13 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.Gammes.Mood",
-      "buildNumber": "1",
+      "usesAppleSignIn": true,
+      "buildNumber": "8",
       "infoPlist": {
         "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos para tu perfil y publicaciones.",
         "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar y subir fotos.",
-        "NSMicrophoneUsageDescription": "Mood necesita acceso al micrófono para grabar audio en los videos."
+        "NSMicrophoneUsageDescription": "Mood necesita acceso al micrófono para grabar audio en los videos.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,15 +32,16 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "googleServicesFile": "./google-services.json",
-      "package": "com.gammes.mood",
-      "versionCode": 1,
+      "package": "com.Gammes.Mood",
+      "versionCode": 8,
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "RECORD_AUDIO"
-      ]
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-router",
@@ -48,15 +54,18 @@
       ],
       "expo-audio",
       "expo-localization",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
       "eas": {
-        "projectId": "ea303976-5cd4-406f-acbf-78b2a8f135d1"
-      }
-    }
+        "projectId": "0a9bc82d-9da3-408d-a6c8-1e172ca17a61"
+      },
+      "router": {}
+    },
+    "owner": "gammes"
   }
 }
