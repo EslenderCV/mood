@@ -14,7 +14,7 @@ import { Platform } from "react-native";
 
 export const appwriteConfig = {
   endpoint: "https://fra.cloud.appwrite.io/v1",
-  platform: "com.gammes.mood",
+  platform: "com.Gammes.Mood",
   projectId: "6689e59b000acd6caf6f",
   databaseId: "6689e7cc002bf2740136",
   usersCollectionId: "6689e818000ae6ccbdec",
