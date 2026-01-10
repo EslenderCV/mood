@@ -7,18 +7,15 @@ import React, {
 } from "react";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
-import {
-  registerPushTokenInAppwrite,
-  updateUserPushToken,
-  getCurrentUser,
-} from "@/lib/appwrite";
+import { getCurrentUser, updateUserPushToken } from "@/lib/appwrite";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: true,
+    shouldSetBadge: false,
     shouldShowBanner: true,
     shouldShowList: true,
   }),
@@ -31,7 +28,7 @@ export const NotificationProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const [pushToken, setPushToken] = useState<string | undefined>("");
+  const [expoPushToken, setExpoPushToken] = useState<string | undefined>("");
 
   const notificationListener = useRef<Notifications.Subscription | undefined>(
     undefined
@@ -42,11 +39,8 @@ export const NotificationProvider = ({
 
   useEffect(() => {
     registerForPushNotificationsAsync().then(async (token) => {
-      setPushToken(token);
-
+      setExpoPushToken(token);
       if (token) {
-        await registerPushTokenInAppwrite(token);
-
         const currentUser = await getCurrentUser();
         if (currentUser) {
           await updateUserPushToken(currentUser.$id, token);
@@ -75,7 +69,7 @@ export const NotificationProvider = ({
   }, []);
 
   return (
-    <NotificationContext.Provider value={{ pushToken }}>
+    <NotificationContext.Provider value={{ expoPushToken }}>
       {children}
     </NotificationContext.Provider>
   );
@@ -99,24 +93,36 @@ async function registerForPushNotificationsAsync() {
     const { status: existingStatus } =
       await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
-
     if (existingStatus !== "granted") {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-
     if (finalStatus !== "granted") {
       return;
     }
 
     try {
-      const tokenData = await Notifications.getDevicePushTokenAsync();
-      token = tokenData.data;
+      const projectId =
+        Constants?.expoConfig?.extra?.eas?.projectId ??
+        Constants?.easConfig?.projectId;
+      if (!projectId) {
+        console.log("Modo desarrollo: Project ID no encontrado.");
+      }
+
+      token = (
+        await Notifications.getExpoPushTokenAsync({
+          projectId: projectId || undefined,
+        })
+      ).data;
+
+      console.log("Mi Push Token:", token);
     } catch (e) {
-      console.log("Error obteniendo token nativo:", e);
+      console.log(
+        "No se pudo obtener el token push (probablemente por entorno Expo Go)."
+      );
     }
   } else {
-    console.log("Debes usar un dispositivo físico.");
+    console.log("Debes usar un dispositivo físico para Push Notifications");
   }
 
   return token;
