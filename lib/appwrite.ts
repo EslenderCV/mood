@@ -1,7 +1,6 @@
 import {
   Client,
   Account,
-  Avatars,
   Databases,
   Query,
   AppwriteException,
@@ -11,10 +10,11 @@ import {
 } from "react-native-appwrite";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
+import { Platform } from "react-native";
 
 export const appwriteConfig = {
   endpoint: "https://fra.cloud.appwrite.io/v1",
-  platform: "com.gammes.mood",
+  platform: "com.Gammes.Mood",
   projectId: "6689e59b000acd6caf6f",
   databaseId: "6689e7cc002bf2740136",
   usersCollectionId: "6689e818000ae6ccbdec",
@@ -27,6 +27,8 @@ export const appwriteConfig = {
   messagesCollectionId: "6949c1b6000d070ff309",
   reportsCollectionId: "6959a194002105f44c03",
   playlistsCollectionId: "6959a8460009615dfbcb",
+  providerIdAndroid: "695f237d001c17a72dcc",
+  providerIdIos: "",
 };
 
 const client = new Client();
@@ -36,29 +38,19 @@ client
   .setProject(appwriteConfig.projectId)
   .setPlatform(appwriteConfig.platform);
 
-const account = new Account(client);
-const avatars = new Avatars(client);
+export const account = new Account(client);
 const databases = new Databases(client);
 const storage = new Storage(client);
 
-// --- AUTENTICACIÓN MANUAL (VERSIÓN FINAL) ---
 export const signInWithOAuth = async (provider: "google" | "apple") => {
   try {
-    // 1. LIMPIEZA PREVENTIVA (El truco mágico 🪄)
-    // Intentamos borrar cualquier sesión vieja antes de empezar.
-    // Esto soluciona el error: "Creation of a session is prohibited..."
     try {
       await account.deleteSession("current");
-    } catch (e) {
-      // Si no había sesión, ignoramos el error y seguimos.
-    }
+    } catch (e) {}
 
     const providerEnum =
       provider === "google" ? OAuthProvider.Google : OAuthProvider.Apple;
 
-    // 2. REDIRECCIÓN A LA RAÍZ (Solución al "Unmatched Route")
-    // Quitamos la palabra "google" del final para que el Router
-    // simplemente abra la app en la pantalla de inicio.
     const redirectUri = "appwrite-callback-6689e59b000acd6caf6f://";
 
     const authUrl = await account.createOAuth2Token(
@@ -86,8 +78,6 @@ export const signInWithOAuth = async (provider: "google" | "apple") => {
         : parsed.queryParams?.userId;
 
       if (secret && userId) {
-        // Aquí creamos la sesión. Si por milagro sigue diciendo que está activa,
-        // capturamos el error y lo tratamos como un éxito.
         try {
           await account.createSession(userId, secret);
         } catch (sessionError: any) {
@@ -98,7 +88,7 @@ export const signInWithOAuth = async (provider: "google" | "apple") => {
             console.log("Sesión ya activa, continuando...");
             return true;
           }
-          throw sessionError; // Si es otro error, que falle
+          throw sessionError;
         }
         return true;
       }
@@ -219,8 +209,6 @@ export const getCurrentUser = async () => {
   }
 };
 
-// --- USUARIOS Y PERFILES ---
-
 export async function getUser(userId: string) {
   try {
     const user = await databases.getDocument(
@@ -324,8 +312,6 @@ export async function uploadFile(file: any) {
 export async function updateImage(file: any) {
   return await uploadFile(file);
 }
-
-// --- MÚSICA Y POSTS ---
 
 export const getDeezerTrackUrl = async (trackId: string | number) => {
   if (!trackId) return null;
@@ -668,8 +654,6 @@ export async function getSavedPosts(userId: string) {
   }
 }
 
-// --- COMENTARIOS ---
-
 export async function createComment(
   postId: string,
   commentData: any,
@@ -765,8 +749,6 @@ export async function getPostComments(postId: string) {
     return [];
   }
 }
-
-// --- SEGUIDORES Y AMIGOS ---
 
 export async function checkFollowStatus(
   followerId: string,
@@ -1043,8 +1025,6 @@ export async function deleteFollowRequest(
   }
 }
 
-// --- NOTIFICACIONES ---
-
 export async function createNotification(data: {
   userId: string;
   type: "like" | "comment" | "follow" | "follow_request" | "tag";
@@ -1228,8 +1208,6 @@ export const sendTagNotification = async (
     console.log("Error enviando notificación de etiqueta:", error);
   }
 };
-
-// --- CHATS ---
 
 export async function getOrCreateChat(
   currentUserId: string,
@@ -1804,23 +1782,19 @@ export async function deleteUserAccount(userId: string) {
 
 export const syncOrCreateUserDocument = async () => {
   try {
-    // 1. Obtenemos el usuario de la sesión de Auth (Google)
     const currentAccount = await account.get();
     if (!currentAccount) throw new Error("No hay cuenta activa");
 
-    // 2. Buscamos si ya tiene un documento en tu colección de usuarios
     const userContext = await databases.listDocuments(
-      appwriteConfig.databaseId, // CORREGIDO: antes decía config
-      appwriteConfig.usersCollectionId, // CORREGIDO: antes decía config
-      [Query.equal("accId", currentAccount.$id)] // CORREGIDO: el campo en tu DB es 'accId'
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      [Query.equal("accId", currentAccount.$id)]
     );
 
-    // 3. Si ya existe, lo devolvemos
     if (userContext.documents.length > 0) {
       return userContext.documents[0];
     }
 
-    // 4. SI NO EXISTE (Usuario nuevo de Google), lo creamos automáticamente
     const avatarUrl = `https://fra.cloud.appwrite.io/v1/avatars/initials?name=${encodeURIComponent(
       currentAccount.name
     )}&project=${appwriteConfig.projectId}`;
@@ -1851,3 +1825,56 @@ export const syncOrCreateUserDocument = async () => {
     return null;
   }
 };
+
+export async function registerPushTokenInAppwrite(token: string) {
+  try {
+    // 1. Determinar el proveedor según el dispositivo
+    let providerId = "";
+    if (Platform.OS === "android") {
+      providerId = appwriteConfig.providerIdAndroid;
+    } else {
+      providerId = appwriteConfig.providerIdIos;
+    }
+
+    if (!providerId || providerId.includes("TU_ID")) {
+      console.log("⚠️ Faltan configurar los Provider IDs en appwriteConfig");
+      return;
+    }
+
+    // 2. Verificar sesión actual
+    try {
+      await account.get();
+    } catch (e) {
+      console.log("No hay sesión activa, no se puede registrar el push token");
+      return;
+    }
+
+    // 3. Crear el Target
+    // Usamos ID.unique() para el targetId, pero Appwrite es inteligente:
+    // Si el mismo token ya existe para este usuario, lanzará error (que ignoramos)
+    await account.createPushTarget(ID.unique(), token, providerId);
+
+    console.log("✅ Push Target registrado en Appwrite exitosamente.");
+  } catch (error: any) {
+    // Si el error es que ya existe, no nos importa.
+    if (error.message && error.message.includes("Target already exists")) {
+      console.log("El dispositivo ya estaba registrado.");
+      return;
+    }
+    console.log("Error registrando push token en Appwrite:", error);
+  }
+}
+
+export async function updateUserToken(userId: string, token: string) {
+  try {
+    // Crea un "Target" de mensajería para este usuario
+    // Reemplaza "TU_PROVIDER_ID" con el ID de tu proveedor FCM en Appwrite (Messaging > Providers)
+    // Si no sabes el ID, ve a Appwrite Console > Messaging > Providers y copia el ID del que dice "FCM".
+    // Si aún no tienes provider, puedes comentar esta línea por ahora para que no de error.
+
+    // await account.createPushTarget(ID.unique(), token, "TU_PROVIDER_ID_AQUI");
+    console.log("Token procesado para usuario:", userId);
+  } catch (error: any) {
+    console.log("Error guardando token:", error.message);
+  }
+}

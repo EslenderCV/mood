@@ -27,8 +27,12 @@ import {
   sendTagNotification,
   deletePost,
   reportPost,
-  getDeezerTrackUrl, // <--- IMPORTANTE: Importamos la función de la API
+  getDeezerTrackUrl,
+  getUser,
+  databases,
+  sendPushNotification,
 } from "@/lib/appwrite";
+import { Query } from "react-native-appwrite";
 import CommentItem from "@/components/CommentItem";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
@@ -38,6 +42,98 @@ import OptionsModal from "@/components/OptionsModal";
 import MoodShareCard from "@/components/MoodShareCard";
 
 const { width } = Dimensions.get("window");
+
+const getUserByUsername = async (username: string) => {
+  try {
+    const result = await databases.listDocuments(
+      "6689e7cc002bf2740136",
+      "6689e818000ae6ccbdec",
+      [Query.equal("username", username)]
+    );
+    return result.documents[0] || null;
+  } catch (e) {
+    return null;
+  }
+};
+
+const sendCommentNotifications = async (
+  post: any,
+  commentText: string,
+  currentUser: any,
+  replyingToUser: any = null
+) => {
+  const notifiedUsers = new Set();
+
+  const creatorId = post.postedBy?.$id || post.creator?.$id;
+
+  if (creatorId && creatorId !== currentUser.$id) {
+    try {
+      const postOwner = await getUser(creatorId);
+      if (postOwner?.expoPushToken) {
+        await sendPushNotification(
+          postOwner.expoPushToken,
+          "Nuevo comentario 💬",
+          `@${currentUser.username} comentó tu publicación.`,
+          { type: "post", postId: post.$id }
+        );
+        notifiedUsers.add(creatorId);
+        console.log("🔔 Notificación enviada al dueño del post");
+      }
+    } catch (e) {
+      console.error("Error notificando dueño:", e);
+    }
+  }
+
+  // B. NOTIFICAR RESPUESTA (Reply)
+  if (replyingToUser && replyingToUser.$id !== currentUser.$id) {
+    if (!notifiedUsers.has(replyingToUser.$id)) {
+      try {
+        const targetUser = await getUser(replyingToUser.$id);
+        if (targetUser?.expoPushToken) {
+          await sendPushNotification(
+            targetUser.expoPushToken,
+            "Te respondieron ↩️",
+            `@${currentUser.username} respondió tu comentario.`,
+            { type: "post", postId: post.$id }
+          );
+          notifiedUsers.add(targetUser.$id);
+          console.log("🔔 Notificación enviada por respuesta");
+        }
+      } catch (e) {
+        console.error("Error notificando respuesta:", e);
+      }
+    }
+  }
+
+  const mentions = commentText.match(/@(\w+)/g);
+  if (mentions) {
+    for (const mention of mentions) {
+      const username = mention.substring(1);
+      if (username === currentUser.username) continue;
+
+      try {
+        const mentionedUser = await getUserByUsername(username);
+
+        if (
+          mentionedUser &&
+          mentionedUser.expoPushToken &&
+          !notifiedUsers.has(mentionedUser.$id)
+        ) {
+          await sendPushNotification(
+            mentionedUser.expoPushToken,
+            "Te mencionaron 📣",
+            `@${currentUser.username} te mencionó en un comentario.`,
+            { type: "post", postId: post.$id }
+          );
+          notifiedUsers.add(mentionedUser.$id);
+          console.log(`🔔 Notificación enviada a @${username}`);
+        }
+      } catch (e) {
+        console.error(`Error buscando mención @${username}:`, e);
+      }
+    }
+  }
+};
 
 const formatTimeAgo = (dateString: string, t: (key: string) => string) => {
   if (!dateString) return "";
@@ -64,7 +160,6 @@ const parseSongData = (songDataString: string) => {
   }
 };
 
-// Componente visual simple para simular barras de audio
 const AudioVisualizer = ({
   isPlaying,
   color,
@@ -123,20 +218,18 @@ const PostDetails = () => {
   const [replyingTo, setReplyingTo] = useState<{
     rootId: string;
     username: string;
+    userId: string;
   } | null>(null);
 
   const [commentText, setCommentText] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
 
-  // --- LOGICA DE AUDIO ---
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoadingAudio, setIsLoadingAudio] = useState(false); // Spinner en el botón
-  const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null); // URL dinámica
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
 
-  // Inicializamos el player con la URL que obtendremos (o null al principio)
   const player = useAudioPlayer(currentSongUrl);
-
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -150,16 +243,13 @@ const PostDetails = () => {
     }
   }, [allComments]);
 
-  // Efecto para auto-reproducir y manejar eventos cuando el player esté listo
   useEffect(() => {
     if (currentSongUrl && player) {
-      // Si acabamos de cargar la URL, reproducimos
       if (!player.playing) {
         player.play();
         setIsPlaying(true);
       }
 
-      // Listener para cuando termina la canción
       const statusListener = (status: any) => {
         if (status.didJustFinish) {
           setIsPlaying(false);
@@ -214,9 +304,7 @@ const PostDetails = () => {
     };
   };
 
-  // --- NUEVA LÓGICA DE REPRODUCCIÓN (FETCH) ---
   const handlePlayPause = async () => {
-    // 1. Si ya tenemos URL y player listo, solo alternamos pausa/play
     if (currentSongUrl && player) {
       if (player.playing) {
         player.pause();
@@ -231,7 +319,6 @@ const PostDetails = () => {
       return;
     }
 
-    // 2. Si no tenemos URL, la buscamos
     try {
       setIsLoadingAudio(true);
       const songData = parseSongData(post.songData);
@@ -251,7 +338,6 @@ const PostDetails = () => {
         return;
       }
 
-      // Al setear la URL, el useEffect de arriba detectará el cambio y hará play()
       setCurrentSongUrl(previewUrl);
       setIsLoadingAudio(false);
     } catch (error) {
@@ -350,7 +436,13 @@ const PostDetails = () => {
       ? targetComment.parentId
       : targetComment.$id;
     const username = targetComment.username;
-    setReplyingTo({ rootId: rootId, username: username });
+
+    setReplyingTo({
+      rootId: rootId,
+      username: username,
+      userId: targetComment.userId,
+    });
+
     setCommentText(`@${username} `);
     inputRef.current?.focus();
   };
@@ -377,6 +469,13 @@ const PostDetails = () => {
         parentId
       );
 
+      sendCommentNotifications(
+        post,
+        commentText,
+        user,
+        replyingTo ? { $id: replyingTo.userId } : null
+      );
+
       await processMentions(commentText, postId);
 
       setAllComments((prev) => [newComment, ...prev]);
@@ -389,19 +488,54 @@ const PostDetails = () => {
       setSending(false);
     }
   };
+
+  // --- HANDLE LIKE OPTIMIZADO ---
   const handleLike = async () => {
     if (!post || !user) return;
+
+    // 1. Guardar estado original para rollback
+    const originalPost = { ...post };
     const originalLikes = post.likedBy || [];
     const isLiked = originalLikes.includes(user.$id);
+
+    // 2. Actualización Optimista
     const newLikes = isLiked
       ? originalLikes.filter((id: string) => id !== user.$id)
       : [...originalLikes, user.$id];
 
     setPost({ ...post, likedBy: newLikes });
+
     try {
+      // 3. DB Update
       await toggleLikePost(post.$id, user.$id, originalLikes);
+
+      // 4. Notificación
+      if (!isLiked) {
+        // Si es un like nuevo
+        const creator = post.postedBy || post.creator;
+
+        // Verificar que no sea tu propio post
+        if (creator && creator.$id !== user.$id) {
+          const creatorToken = creator.expoPushToken;
+
+          if (creatorToken) {
+            console.log("🚀 Enviando notificación a:", creator.username);
+            await sendPushNotification(
+              creatorToken,
+              "¡Le gustó tu post! ❤️",
+              `A @${user.username || "alguien"} le gustó tu publicación.`,
+              {
+                type: "post",
+                postId: post.$id,
+                userId: user.$id,
+              }
+            );
+          }
+        }
+      }
     } catch (error) {
-      setPost(post);
+      console.error("Error like:", error);
+      setPost(originalPost); // Rollback
     }
   };
 
@@ -473,7 +607,6 @@ const PostDetails = () => {
           )}
         </View>
 
-        {/* Post Text Content */}
         {post.comment && (
           <Text
             className="text-[17px] leading-7 font-normal mb-5"
@@ -483,7 +616,6 @@ const PostDetails = () => {
           </Text>
         )}
 
-        {/* Improved Song Card */}
         {songData && (
           <View
             className="rounded-3xl p-4 flex-row items-center mb-6 shadow-sm"
@@ -513,7 +645,6 @@ const PostDetails = () => {
                 {songData.artist}
               </Text>
 
-              {/* Visualizador de Audio (Decorativo) */}
               <View className="flex-row items-center">
                 <Ionicons name="musical-notes" size={12} color={accentColor} />
                 <AudioVisualizer isPlaying={isPlaying} color={subTextColor} />
@@ -521,7 +652,7 @@ const PostDetails = () => {
             </View>
 
             <TouchableOpacity
-              onPress={handlePlayPause} // Usamos la nueva función
+              onPress={handlePlayPause}
               className="w-14 h-14 rounded-full items-center justify-center shadow-md"
               style={{ backgroundColor: accentColor }}
               activeOpacity={0.8}
@@ -540,10 +671,8 @@ const PostDetails = () => {
           </View>
         )}
 
-        {/* Action Bar Redesigned */}
         <View className="flex-row justify-between items-center mt-2 px-2 pb-2">
           <View className="flex-row gap-6">
-            {/* Like Button */}
             <TouchableOpacity
               onPress={handleLike}
               className="flex-row items-center gap-2"
@@ -564,7 +693,6 @@ const PostDetails = () => {
               )}
             </TouchableOpacity>
 
-            {/* Comment Count */}
             <View className="flex-row items-center gap-2">
               <Ionicons
                 name="chatbubble-outline"
@@ -628,7 +756,6 @@ const PostDetails = () => {
       edges={["top"]}
       style={{ backgroundColor: bgColor }}
     >
-      {/* Top Navigation */}
       <View
         className="flex-row items-center justify-between px-4 h-[50px] border-b z-10"
         style={{ backgroundColor: bgColor, borderColor: borderColor }}
@@ -686,7 +813,6 @@ const PostDetails = () => {
         }
       />
 
-      {/* Input Section */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}

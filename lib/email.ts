@@ -1,7 +1,3 @@
-// lib/email.ts
-
-// IMPORTANTE: Ya no importamos 'resend' para evitar errores de compilación
-// Reemplaza con tu API Key real de Resend
 const RESEND_API_KEY = "re_YYap2SXf_JexquXEYNyrxLK2MAnis1MLB";
 
 export const sendWelcomeEmail = async (email: string, name: string) => {
