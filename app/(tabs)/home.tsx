@@ -6,6 +6,9 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Modal,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -21,12 +24,15 @@ import {
   reportPost,
   getUnreadNotificationCount,
   getUnreadMessagesCount,
+  client,
+  appwriteConfig,
 } from "@/lib/appwrite";
 import OptionsModal from "@/components/OptionsModal";
-import PostItem from "@/components/PostItem"; // <--- ESTE ES EL QUE REDISEÑAREMOS ABAJO
+import PostItem from "@/components/PostItem";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
 import MoodShareCard from "@/components/MoodShareCard";
+import ShareModal from "@/components/ShareModal"; // <--- IMPORTADO
 
 const ADMIN_USERS = [".angel", "whoseslender"];
 
@@ -55,7 +61,6 @@ const parseSongData = (songDataString: string) => {
 const Home = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-  // Usamos un fondo un poco más sofisticado (Zinc-950) en dark mode
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
 
@@ -71,8 +76,14 @@ const Home = () => {
   const [notiCount, setNotiCount] = useState(0);
   const [msgCount, setMsgCount] = useState(0);
 
-  const [isViralModalVisible, setViralModalVisible] = useState(false);
-  const [postToShareData, setPostToShareData] = useState<any>(null);
+  // --- ESTADOS PARA COMPARTIR ---
+  const [isViralModalVisible, setViralModalVisible] = useState(false); // Externo
+  const [isShareVisible, setShareVisible] = useState(false); // Interno
+  const [isShareSelectorVisible, setShareSelectorVisible] = useState(false); // Selector
+
+  const [postToShareData, setPostToShareData] = useState<any>(null); // Objeto
+  const [sharePostId, setSharePostId] = useState<string>(""); // ID String
+
   const [isOptionsVisible, setOptionsVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState<any>(null);
 
@@ -90,10 +101,7 @@ const Home = () => {
       } else setCurrentUserId(activeId);
 
       if (activeId) {
-        const nCount = await getUnreadNotificationCount(activeId);
-        const mCount = await getUnreadMessagesCount(activeId);
-        setNotiCount(nCount);
-        setMsgCount(mCount);
+        updateCounts(activeId);
       }
 
       let followedIds: string[] = [];
@@ -135,9 +143,58 @@ const Home = () => {
     }
   };
 
+  const updateCounts = async (userId: string) => {
+    try {
+      const [nCount, mCount] = await Promise.all([
+        getUnreadNotificationCount(userId),
+        getUnreadMessagesCount(userId),
+      ]);
+      setNotiCount(nCount);
+      setMsgCount(mCount);
+    } catch (error) {
+      console.log("Error updating counts:", error);
+    }
+  };
+
   useEffect(() => {
     if (!loading) fetchData();
   }, [user, loading, loggedIn]);
+
+  useEffect(() => {
+    if (!currentUserId || !client) return;
+
+    const channels = [
+      `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.notificationsCollectionId}.documents`,
+      `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`,
+    ];
+
+    const unsubscribe = client.subscribe(channels, (response) => {
+      if (
+        response.events.includes(
+          "databases.*.collections.*.documents.*.create"
+        ) ||
+        response.events.includes(
+          "databases.*.collections.*.documents.*.update"
+        ) ||
+        response.events.includes("databases.*.collections.*.documents.*.delete")
+      ) {
+        const payload: any = response.payload;
+        const isForMe =
+          payload.userId === currentUserId ||
+          payload.to === currentUserId ||
+          payload.receiverId === currentUserId ||
+          (payload.users && payload.users.includes(currentUserId));
+
+        if (isForMe) {
+          updateCounts(currentUserId);
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUserId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -159,9 +216,11 @@ const Home = () => {
     setOptionsVisible(true);
   };
 
+  // --- LÓGICA DE COMPARTIR ACTUALIZADA ---
   const openShare = (post: any) => {
     setPostToShareData(post);
-    setViralModalVisible(true);
+    setSharePostId(post.$id);
+    setShareSelectorVisible(true); // Abre el selector
   };
 
   const getViralPostData = () => {
@@ -274,7 +333,7 @@ const Home = () => {
           data={feedPosts}
           keyExtractor={(item) => item.$id}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: 20, paddingTop: 10 }} // Espacio al final
+          contentContainerStyle={{ paddingBottom: 20, paddingTop: 10 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -307,10 +366,120 @@ const Home = () => {
         />
       )}
 
+      {/* --- MODAL SELECTOR DE COMPARTIR --- */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isShareSelectorVisible}
+        onRequestClose={() => setShareSelectorVisible(false)}
+      >
+        <TouchableWithoutFeedback
+          onPress={() => setShareSelectorVisible(false)}
+        >
+          <View className="flex-1 justify-end bg-black/60">
+            <TouchableWithoutFeedback>
+              <View
+                className="rounded-t-[32px] p-6 pb-12"
+                style={{ backgroundColor: isDark ? "#18181B" : "white" }}
+              >
+                <View className="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full self-center mb-6" />
+
+                <Text
+                  className="text-xl font-bold text-center mb-8"
+                  style={{ color: isDark ? "white" : "black" }}
+                >
+                  Compartir Publicación
+                </Text>
+
+                <View className="flex-row gap-4">
+                  {/* OPCIÓN INTERNA (MOOD) */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShareSelectorVisible(false);
+                      setTimeout(() => setShareVisible(true), 300);
+                    }}
+                    className="flex-1 p-5 rounded-3xl items-center border"
+                    style={{
+                      backgroundColor: isDark ? "#27272A" : "#F3F4F6",
+                      borderColor: isDark ? "#3F3F46" : "#E5E5E5",
+                    }}
+                  >
+                    <View className="w-14 h-14 bg-[#5E17EB]/10 rounded-full items-center justify-center mb-3">
+                      <Ionicons name="repeat" size={28} color="#5E17EB" />
+                    </View>
+                    <Text
+                      className="font-bold text-base mb-1"
+                      style={{ color: isDark ? "white" : "black" }}
+                    >
+                      En Mood
+                    </Text>
+                    <Text
+                      className="text-xs text-center"
+                      style={{ color: subTextColor }}
+                    >
+                      Repostear o enviar a amigos
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* OPCIÓN EXTERNA (VIRAL) */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShareSelectorVisible(false);
+                      setTimeout(() => setViralModalVisible(true), 300);
+                    }}
+                    className="flex-1 p-5 rounded-3xl items-center border"
+                    style={{
+                      backgroundColor: isDark ? "#27272A" : "#F3F4F6",
+                      borderColor: isDark ? "#3F3F46" : "#E5E5E5",
+                    }}
+                  >
+                    <View className="w-14 h-14 bg-pink-500/10 rounded-full items-center justify-center mb-3">
+                      <Ionicons name="share-social" size={28} color="#ec4899" />
+                    </View>
+                    <Text
+                      className="font-bold text-base mb-1"
+                      style={{ color: isDark ? "white" : "black" }}
+                    >
+                      Viral Card
+                    </Text>
+                    <Text
+                      className="text-xs text-center"
+                      style={{ color: subTextColor }}
+                    >
+                      Stories, Instagram y más
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => setShareSelectorVisible(false)}
+                  className="mt-6 p-4 rounded-full items-center"
+                >
+                  <Text
+                    className="font-bold text-base"
+                    style={{ color: subTextColor }}
+                  >
+                    Cancelar
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* --- MODAL VIRAL (EXTERNO) --- */}
       <MoodShareCard
         isVisible={isViralModalVisible}
         onClose={() => setViralModalVisible(false)}
         post={getViralPostData()}
+      />
+
+      {/* --- MODAL SHARE (INTERNO) --- */}
+      <ShareModal
+        isVisible={isShareVisible}
+        onClose={() => setShareVisible(false)}
+        postId={sharePostId}
       />
 
       <OptionsModal

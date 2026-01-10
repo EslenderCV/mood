@@ -10,6 +10,8 @@ import {
   FlatList,
   Alert,
   Dimensions,
+  Modal,
+  TouchableWithoutFeedback,
 } from "react-native";
 import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router } from "expo-router";
@@ -77,14 +79,12 @@ const sendCommentNotifications = async (
           { type: "post", postId: post.$id }
         );
         notifiedUsers.add(creatorId);
-        console.log("🔔 Notificación enviada al dueño del post");
       }
     } catch (e) {
       console.error("Error notificando dueño:", e);
     }
   }
 
-  // B. NOTIFICAR RESPUESTA (Reply)
   if (replyingToUser && replyingToUser.$id !== currentUser.$id) {
     if (!notifiedUsers.has(replyingToUser.$id)) {
       try {
@@ -97,7 +97,6 @@ const sendCommentNotifications = async (
             { type: "post", postId: post.$id }
           );
           notifiedUsers.add(targetUser.$id);
-          console.log("🔔 Notificación enviada por respuesta");
         }
       } catch (e) {
         console.error("Error notificando respuesta:", e);
@@ -126,7 +125,6 @@ const sendCommentNotifications = async (
             { type: "post", postId: post.$id }
           );
           notifiedUsers.add(mentionedUser.$id);
-          console.log(`🔔 Notificación enviada a @${username}`);
         }
       } catch (e) {
         console.error(`Error buscando mención @${username}:`, e);
@@ -168,15 +166,13 @@ const AudioVisualizer = ({
   color: string;
 }) => {
   return (
-    <View className="flex-row items-end gap-1 h-4 ml-1 opacity-60">
+    <View className="flex-row items-end gap-[3px] h-4 ml-2 opacity-80">
       {[1, 2, 3, 4].map((i) => (
         <View
           key={i}
-          className={`w-1 rounded-full ${
-            isPlaying ? "bg-[#5E17EB]" : "bg-zinc-400"
-          }`}
+          className={`w-[3px] rounded-full`}
           style={{
-            height: isPlaying ? Math.random() * 16 + 4 : 4,
+            height: isPlaying ? Math.random() * 14 + 4 : 4,
             backgroundColor: isPlaying ? "#5E17EB" : color,
           }}
         />
@@ -194,7 +190,7 @@ const PostDetails = () => {
   const textColor = isDark ? "#FAFAFA" : "#18181B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
-  const songCardBg = isDark ? "#18181B" : "#F4F4F5";
+  const songCardBg = isDark ? "#18181B" : "#F8FAFC"; // Fondo tarjeta más limpio
   const inputBg = isDark ? "#27272A" : "#F3F4F6";
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
   const suggestionBg = isDark ? "#18181B" : "#FFFFFF";
@@ -211,9 +207,11 @@ const PostDetails = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
+  // --- ESTADOS PARA COMPARTIR ---
   const [isOptionsVisible, setOptionsVisible] = useState(false);
-  const [isShareVisible, setShareVisible] = useState(false);
-  const [isViralModalVisible, setViralModalVisible] = useState(false);
+  const [isShareVisible, setShareVisible] = useState(false); // Interno
+  const [isViralModalVisible, setViralModalVisible] = useState(false); // Externo
+  const [isShareSelectorVisible, setShareSelectorVisible] = useState(false); // Selector
 
   const [replyingTo, setReplyingTo] = useState<{
     rootId: string;
@@ -489,16 +487,13 @@ const PostDetails = () => {
     }
   };
 
-  // --- HANDLE LIKE OPTIMIZADO ---
   const handleLike = async () => {
     if (!post || !user) return;
 
-    // 1. Guardar estado original para rollback
     const originalPost = { ...post };
     const originalLikes = post.likedBy || [];
     const isLiked = originalLikes.includes(user.$id);
 
-    // 2. Actualización Optimista
     const newLikes = isLiked
       ? originalLikes.filter((id: string) => id !== user.$id)
       : [...originalLikes, user.$id];
@@ -506,20 +501,13 @@ const PostDetails = () => {
     setPost({ ...post, likedBy: newLikes });
 
     try {
-      // 3. DB Update
       await toggleLikePost(post.$id, user.$id, originalLikes);
 
-      // 4. Notificación
       if (!isLiked) {
-        // Si es un like nuevo
         const creator = post.postedBy || post.creator;
-
-        // Verificar que no sea tu propio post
         if (creator && creator.$id !== user.$id) {
           const creatorToken = creator.expoPushToken;
-
           if (creatorToken) {
-            console.log("🚀 Enviando notificación a:", creator.username);
             await sendPushNotification(
               creatorToken,
               "¡Le gustó tu post! ❤️",
@@ -535,7 +523,7 @@ const PostDetails = () => {
       }
     } catch (error) {
       console.error("Error like:", error);
-      setPost(originalPost); // Rollback
+      setPost(originalPost);
     }
   };
 
@@ -553,6 +541,7 @@ const PostDetails = () => {
     } catch (e) {}
   };
 
+  // --- RENDERIZADO DEL POST (REDISEÑADO) ---
   const renderHeader = () => {
     if (!post) return null;
     const songData = parseSongData(post.songData);
@@ -564,10 +553,10 @@ const PostDetails = () => {
 
     return (
       <View
-        className="px-5 pt-4 pb-2 mb-2"
+        className="px-5 pt-2 pb-2 mb-2"
         style={{ backgroundColor: bgColor }}
       >
-        {/* User Header */}
+        {/* User Info Header */}
         <View className="flex-row items-center justify-between mb-4">
           <TouchableOpacity
             className="flex-row items-center flex-1"
@@ -581,8 +570,7 @@ const PostDetails = () => {
                   ? { uri: creator.pfp }
                   : require("@/assets/noPfp.jpg")
               }
-              className="w-11 h-11 rounded-full border-2"
-              style={{ borderColor: borderColor }}
+              className="w-12 h-12 rounded-full border border-zinc-200 dark:border-zinc-800"
             />
             <View className="ml-3 flex-1">
               <Text
@@ -592,7 +580,7 @@ const PostDetails = () => {
                 {creator.name}
               </Text>
               <Text
-                className="text-sm font-medium"
+                className="text-xs font-medium mt-0.5"
                 style={{ color: subTextColor }}
               >
                 @{creator.username} · {formatTimeAgo(post.$createdAt, t)}
@@ -607,38 +595,46 @@ const PostDetails = () => {
           )}
         </View>
 
+        {/* Caption */}
         {post.comment && (
           <Text
-            className="text-[17px] leading-7 font-normal mb-5"
+            className="text-[17px] leading-7 font-normal mb-5 px-1"
             style={{ color: textColor }}
           >
             {post.comment}
           </Text>
         )}
 
+        {/* SONG CARD REDISEÑADA (Estilo Player Premium) */}
         {songData && (
           <View
-            className="rounded-3xl p-4 flex-row items-center mb-6 shadow-sm"
+            className="rounded-[24px] p-4 flex-row items-center mb-6 border relative overflow-hidden"
             style={{
               backgroundColor: songCardBg,
+              borderColor: borderColor,
             }}
           >
+            {/* Visualizer Background Effect */}
+            {isPlaying && (
+              <View className="absolute inset-0 bg-[#5E17EB] opacity-5" />
+            )}
+
             <Image
               source={{ uri: songData.cover }}
-              className="w-20 h-20 rounded-2xl shadow-sm"
+              className="w-20 h-20 rounded-2xl"
               style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
             />
 
             <View className="flex-1 ml-4 mr-2 justify-center">
               <Text
-                className="font-bold text-[17px] mb-1"
+                className="font-black text-[18px] mb-1 tracking-tight"
                 numberOfLines={1}
                 style={{ color: textColor }}
               >
                 {songData.title}
               </Text>
               <Text
-                className="text-base mb-2"
+                className="text-sm font-medium mb-2 opacity-80"
                 numberOfLines={1}
                 style={{ color: subTextColor }}
               >
@@ -647,7 +643,12 @@ const PostDetails = () => {
 
               <View className="flex-row items-center">
                 <Ionicons name="musical-notes" size={12} color={accentColor} />
-                <AudioVisualizer isPlaying={isPlaying} color={subTextColor} />
+                <Text className="text-[10px] ml-1 font-bold text-[#5E17EB]">
+                  MOOD PREVIEW
+                </Text>
+                {isPlaying && (
+                  <AudioVisualizer isPlaying={isPlaying} color={subTextColor} />
+                )}
               </View>
             </View>
 
@@ -662,7 +663,7 @@ const PostDetails = () => {
               ) : (
                 <Ionicons
                   name={isPlaying ? "pause" : "play"}
-                  size={26}
+                  size={24}
                   color="white"
                   style={{ marginLeft: isPlaying ? 0 : 3 }}
                 />
@@ -671,8 +672,9 @@ const PostDetails = () => {
           </View>
         )}
 
-        <View className="flex-row justify-between items-center mt-2 px-2 pb-2">
-          <View className="flex-row gap-6">
+        {/* Actions Row */}
+        <View className="flex-row justify-between items-center mt-2 px-4 pb-2">
+          <View className="flex-row gap-8">
             <TouchableOpacity
               onPress={handleLike}
               className="flex-row items-center gap-2"
@@ -711,7 +713,7 @@ const PostDetails = () => {
           </View>
 
           <View className="flex-row gap-6">
-            <TouchableOpacity onPress={() => setViralModalVisible(true)}>
+            <TouchableOpacity onPress={() => setShareSelectorVisible(true)}>
               <Ionicons
                 name="share-social-outline"
                 size={24}
@@ -730,7 +732,7 @@ const PostDetails = () => {
         </View>
 
         <View
-          className="h-[1px] w-full mt-4 opacity-50"
+          className="h-[1px] w-full mt-4 opacity-30"
           style={{ backgroundColor: borderColor }}
         />
       </View>
@@ -756,29 +758,28 @@ const PostDetails = () => {
       edges={["top"]}
       style={{ backgroundColor: bgColor }}
     >
+      {/* Header Limpio */}
       <View
         className="flex-row items-center justify-between px-4 h-[50px] border-b z-10"
         style={{ backgroundColor: bgColor, borderColor: borderColor }}
       >
-        <View className="flex-row items-center">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="p-2 -ml-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
-          >
-            <Ionicons name="arrow-back" size={24} color={backIconColor} />
-          </TouchableOpacity>
-          <Text className="font-bold text-lg ml-2" style={{ color: textColor }}>
-            {t("postDetails.headerTitle")}
-          </Text>
-        </View>
-        <View className="flex-row items-center gap-1">
-          <TouchableOpacity
-            onPress={() => setOptionsVisible(true)}
-            className="p-2 -mr-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
-          >
-            <Ionicons name="ellipsis-horizontal" size={24} color={textColor} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="p-2 -ml-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
+        >
+          <Ionicons name="arrow-back" size={24} color={backIconColor} />
+        </TouchableOpacity>
+
+        <Text className="font-bold text-base" style={{ color: textColor }}>
+          Vibe
+        </Text>
+
+        <TouchableOpacity
+          onPress={() => setOptionsVisible(true)}
+          className="p-2 -mr-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
+        >
+          <Ionicons name="ellipsis-horizontal" size={24} color={textColor} />
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -793,10 +794,10 @@ const PostDetails = () => {
           />
         )}
         ListHeaderComponent={renderHeader}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View className="items-center justify-center py-10">
+          <View className="items-center justify-center py-10 opacity-60">
             <Text
               className="text-center font-medium"
               style={{ color: subTextColor }}
@@ -815,13 +816,13 @@ const PostDetails = () => {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="absolute bottom-0 w-full"
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-        className="absolute bottom-0 w-full border-t"
-        style={{ backgroundColor: bgColor, borderColor: borderColor }}
       >
+        {/* Sugerencias de mención */}
         {showSuggestions && (
           <View
-            className="w-full border-b"
+            className="w-full border-t border-b"
             style={{
               backgroundColor: suggestionBg,
               borderColor: borderColor,
@@ -854,86 +855,173 @@ const PostDetails = () => {
           </View>
         )}
 
-        {replyingTo && (
-          <View
-            className="flex-row items-center justify-between px-4 py-2 border-b"
-            style={{
-              backgroundColor: isDark ? "#18181B" : "#F8FAFC",
-              borderColor: borderColor,
-            }}
-          >
-            <Text
-              className="text-xs font-medium"
-              style={{ color: subTextColor }}
+        {/* Input Container Moderno */}
+        <View
+          className="border-t pb-6 pt-2 px-2"
+          style={{ backgroundColor: bgColor, borderColor: borderColor }}
+        >
+          {replyingTo && (
+            <View className="flex-row items-center justify-between px-4 pb-2 mb-1">
+              <Text
+                className="text-xs font-medium"
+                style={{ color: subTextColor }}
+              >
+                Respondiendo a{" "}
+                <Text style={{ color: accentColor }}>
+                  @{replyingTo.username}
+                </Text>
+              </Text>
+              <TouchableOpacity onPress={cancelReply} className="p-1">
+                <Ionicons name="close" size={16} color={subTextColor} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <View className="flex-row items-end gap-3 px-2">
+            <Image
+              source={{
+                uri:
+                  user?.pfp ||
+                  "https://cloud.appwrite.io/v1/avatars/initials?name=Me",
+              }}
+              className="w-10 h-10 rounded-full mb-1"
+              style={{ backgroundColor: inputBg }}
+            />
+            <View
+              className="flex-1 rounded-3xl flex-row items-center px-5 py-1 border"
+              style={{
+                backgroundColor: inputBg,
+                borderColor: isDark ? "transparent" : borderColor,
+              }}
             >
-              {t("postDetails.replyingTo")}{" "}
-              <Text style={{ color: accentColor }}>@{replyingTo.username}</Text>
-            </Text>
-            <TouchableOpacity onPress={cancelReply} className="p-1">
-              <Ionicons name="close" size={16} color={subTextColor} />
+              <TextInput
+                ref={inputRef}
+                placeholder={
+                  replyingTo
+                    ? `Responde a ${replyingTo.username}...`
+                    : "Escribe un comentario..."
+                }
+                placeholderTextColor={subTextColor}
+                className="flex-1 text-[16px] py-3"
+                style={{ color: textColor, maxHeight: 100 }}
+                value={commentText}
+                onChangeText={handleTextChange}
+                multiline
+              />
+            </View>
+            <TouchableOpacity
+              onPress={submitComment}
+              disabled={!commentText.trim() || sending}
+              className={`w-11 h-11 rounded-full items-center justify-center mb-0.5 ${
+                commentText.trim()
+                  ? "opacity-100 scale-100 shadow-md"
+                  : "opacity-60 scale-95"
+              }`}
+              style={{
+                backgroundColor: commentText.trim() ? accentColor : inputBg,
+              }}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Ionicons
+                  name="arrow-up"
+                  size={24}
+                  color={commentText.trim() ? "white" : subTextColor}
+                />
+              )}
             </TouchableOpacity>
           </View>
-        )}
-
-        <View
-          className="flex-row items-end px-4 py-3 pb-6 gap-3"
-          style={{ backgroundColor: bgColor }}
-        >
-          <Image
-            source={{
-              uri:
-                user?.pfp ||
-                "https://cloud.appwrite.io/v1/avatars/initials?name=Me",
-            }}
-            className="w-8 h-8 rounded-full mb-1"
-            style={{ backgroundColor: inputBg }}
-          />
-          <View
-            className="flex-1 rounded-[20px] flex-row items-center px-4 py-1 border"
-            style={{ backgroundColor: inputBg, borderColor: "transparent" }}
-          >
-            <TextInput
-              ref={inputRef}
-              placeholder={
-                replyingTo
-                  ? `${t("postDetails.replyPlaceholder")} ${
-                      replyingTo.username
-                    }...`
-                  : t("postDetails.commentPlaceholder")
-              }
-              placeholderTextColor={subTextColor}
-              className="flex-1 text-[15px] pt-2 pb-2"
-              style={{ color: textColor, maxHeight: 100 }}
-              value={commentText}
-              onChangeText={handleTextChange}
-              multiline
-            />
-          </View>
-          <TouchableOpacity
-            onPress={submitComment}
-            disabled={!commentText.trim() || sending}
-            className={`w-10 h-10 rounded-full items-center justify-center mb-0.5 ${
-              commentText.trim()
-                ? "opacity-100 scale-100"
-                : "opacity-80 scale-95"
-            }`}
-            style={{
-              backgroundColor: commentText.trim() ? accentColor : inputBg,
-              transform: [{ scale: commentText.trim() ? 1 : 0.95 }],
-            }}
-          >
-            {sending ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Ionicons
-                name="arrow-up"
-                size={22}
-                color={commentText.trim() ? "white" : subTextColor}
-              />
-            )}
-          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* MODAL SELECTOR DE COMPARTIR (Bottom Sheet) */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isShareSelectorVisible}
+        onRequestClose={() => setShareSelectorVisible(false)}
+      >
+        <TouchableWithoutFeedback
+          onPress={() => setShareSelectorVisible(false)}
+        >
+          <View className="flex-1 justify-end bg-black/60">
+            <TouchableWithoutFeedback>
+              <View
+                className="rounded-t-[32px] p-6 pb-12"
+                style={{ backgroundColor: isDark ? "#18181B" : "white" }}
+              >
+                <View className="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full self-center mb-6" />
+                <Text
+                  className="text-xl font-bold text-center mb-8"
+                  style={{ color: isDark ? "white" : "black" }}
+                >
+                  Compartir Vibe
+                </Text>
+
+                <View className="flex-row gap-4">
+                  {/* OPCIÓN INTERNA */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShareSelectorVisible(false);
+                      setTimeout(() => setShareVisible(true), 300);
+                    }}
+                    className="flex-1 p-5 rounded-3xl items-center border"
+                    style={{
+                      backgroundColor: isDark ? "#27272A" : "#F3F4F6",
+                      borderColor: isDark ? "#3F3F46" : "#E5E5E5",
+                    }}
+                  >
+                    <View className="w-14 h-14 bg-[#5E17EB]/10 rounded-full items-center justify-center mb-3">
+                      <Ionicons name="repeat" size={28} color="#5E17EB" />
+                    </View>
+                    <Text
+                      className="font-bold text-base mb-1"
+                      style={{ color: isDark ? "white" : "black" }}
+                    >
+                      En Mood
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* OPCIÓN EXTERNA */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShareSelectorVisible(false);
+                      setTimeout(() => setViralModalVisible(true), 300);
+                    }}
+                    className="flex-1 p-5 rounded-3xl items-center border"
+                    style={{
+                      backgroundColor: isDark ? "#27272A" : "#F3F4F6",
+                      borderColor: isDark ? "#3F3F46" : "#E5E5E5",
+                    }}
+                  >
+                    <View className="w-14 h-14 bg-pink-500/10 rounded-full items-center justify-center mb-3">
+                      <Ionicons name="share-social" size={28} color="#ec4899" />
+                    </View>
+                    <Text
+                      className="font-bold text-base mb-1"
+                      style={{ color: isDark ? "white" : "black" }}
+                    >
+                      Viral Card
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setShareSelectorVisible(false)}
+                  className="mt-6 p-4 rounded-full items-center"
+                >
+                  <Text
+                    className="font-bold text-base"
+                    style={{ color: subTextColor }}
+                  >
+                    Cancelar
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       <OptionsModal
         isVisible={isOptionsVisible}

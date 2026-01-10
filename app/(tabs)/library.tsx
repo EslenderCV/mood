@@ -39,7 +39,7 @@ import {
   getUserPlaylists,
   createPlaylist,
   addSongToPlaylist,
-  getDeezerTrackUrl, // IMPORTANTE: Para el audio
+  getDeezerTrackUrl,
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useLanguage } from "@/context/LanguageContext";
@@ -78,6 +78,7 @@ const Library = () => {
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#09090B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
+  // Cambio: Fondo de tarjeta más sutil o transparente para diseño moderno
   const cardBg = isDark ? "#18181B" : "#F4F4F5";
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
   const emptyIconColor = isDark ? "#27272A" : "#E4E4E7";
@@ -379,11 +380,11 @@ const Library = () => {
     });
     return (
       <View
-        className="justify-center items-end pr-6 mb-4 rounded-3xl"
-        style={{ backgroundColor: dangerColor, width: "100%", marginTop: 0 }}
+        className="justify-center items-end pr-6 mb-2 rounded-2xl"
+        style={{ backgroundColor: dangerColor, width: "100%" }}
       >
         <Animated.View style={{ transform: [{ scale }], marginRight: 10 }}>
-          <Ionicons name="trash-outline" size={28} color="white" />
+          <Ionicons name="trash-outline" size={24} color="white" />
         </Animated.View>
       </View>
     );
@@ -397,19 +398,22 @@ const Library = () => {
     });
     return (
       <View
-        className="justify-center items-start pl-6 mb-4 rounded-3xl"
-        style={{ backgroundColor: successColor, width: "100%", marginTop: 0 }}
+        className="justify-center items-start pl-6 mb-2 rounded-2xl"
+        style={{ backgroundColor: successColor, width: "100%" }}
       >
         <Animated.View style={{ transform: [{ scale }], marginLeft: 10 }}>
-          <Ionicons name="add-circle-outline" size={28} color="white" />
+          <Ionicons name="add-circle-outline" size={24} color="white" />
         </Animated.View>
       </View>
     );
   };
 
+  // --- AQUÍ ESTÁ EL CAMBIO PRINCIPAL DE DISEÑO ---
   const renderCollectionItem = ({ item }: { item: any }) => {
     const platform = user?.preferredPlatform || "spotify";
     const iconName = platform === "apple" ? "apple" : "spotify";
+
+    // Colores oficiales
     const brandColor = platform === "apple" ? "#FA243C" : "#1DB954";
 
     const isThisPlaying = playingId === item.id;
@@ -428,83 +432,126 @@ const Library = () => {
         overshootLeft={false}
         onSwipeableRightOpen={() => handleUnsave(item)}
         onSwipeableLeftOpen={() => openAddToPlaylistModal(item)}
+        containerStyle={{ marginBottom: 12 }} // Espaciado entre items
       >
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => router.push(`/post/${item.postId}` as any)}
-          className="mb-3 rounded-2xl p-3 border flex-row items-center relative overflow-hidden"
-          style={{ backgroundColor: cardBg, borderColor: borderColor }}
+          // DISEÑO NUEVO: Sin bordes duros, fondo más limpio, rounded-xl
+          className="flex-row items-center p-3 rounded-2xl"
+          style={{
+            backgroundColor: isDark ? "#18181B" : "#FFFFFF",
+            // Sombra sutil solo en modo claro para profundidad
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: isDark ? 0 : 0.05,
+            shadowRadius: 3,
+            elevation: isDark ? 0 : 1,
+          }}
         >
-          <View className="relative mr-4">
+          {/* 1. IMAGEN DE PORTADA */}
+          <View className="relative mr-4 shadow-sm">
             <Image
               source={{ uri: item.cover }}
-              className="w-16 h-16 rounded-xl bg-zinc-800"
+              className="w-14 h-14 rounded-xl bg-zinc-800"
               resizeMode="cover"
             />
-            {/* Botón Play sobre la carátula */}
+            {/* Overlay Play/Pause mejorado */}
             <TouchableOpacity
               onPress={(e) => {
                 e.stopPropagation();
                 handlePlaySong(item);
               }}
-              className="absolute inset-0 items-center justify-center bg-black/20 rounded-xl"
+              className="absolute inset-0 items-center justify-center bg-black/10 rounded-xl"
             >
-              <View className="bg-black/40 w-8 h-8 rounded-full items-center justify-center backdrop-blur-sm">
-                {isLoadingThis ? (
+              {isLoadingThis ? (
+                <View className="bg-black/50 w-8 h-8 rounded-full items-center justify-center backdrop-blur-sm">
                   <ActivityIndicator size="small" color="white" />
-                ) : (
+                </View>
+              ) : (
+                (showPause || isThisPlaying) && (
+                  <View className="bg-black/50 w-8 h-8 rounded-full items-center justify-center backdrop-blur-sm">
+                    <Ionicons
+                      name={showPause ? "pause" : "stats-chart"}
+                      size={14}
+                      color="white"
+                    />
+                  </View>
+                )
+              )}
+              {/* Si no está sonando ni cargando, no mostramos nada sobre la foto para que se vea limpia, 
+                  o puedes descomentar abajo para mostrar siempre el play */}
+              {!isLoadingThis && !isThisPlaying && (
+                <View className="bg-black/20 w-8 h-8 rounded-full items-center justify-center">
                   <Ionicons
-                    name={showPause ? "pause" : "play"}
-                    size={16}
+                    name="play"
+                    size={14}
                     color="white"
-                    style={showPause ? {} : { marginLeft: 2 }}
+                    style={{ marginLeft: 2 }}
                   />
-                )}
-              </View>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
 
-          <View className="flex-1 justify-center py-1 pr-2">
+          {/* 2. INFORMACIÓN TEXTO */}
+          <View className="flex-1 justify-center mr-2">
             <Text
-              className="font-bold text-[15px] leading-5 mb-0.5"
+              className="font-bold text-[16px] mb-1"
               numberOfLines={1}
               style={{ color: isThisPlaying ? accentColor : textColor }}
             >
               {item.title}
             </Text>
 
-            <View className="flex-row items-center mb-1">
+            <View className="flex-row items-center">
               <Text
-                className="text-xs font-medium"
+                className="text-[13px] font-medium"
                 numberOfLines={1}
-                style={{ color: subTextColor }}
+                style={{ color: subTextColor, maxWidth: "85%" }}
               >
                 {item.artist}
               </Text>
+              {/* Visualizador al lado del artista si suena */}
               {isThisPlaying && isPlaying && (
                 <AudioVisualizer isPlaying={true} color={accentColor} />
               )}
             </View>
 
-            <View className="flex-row items-center">
-              <Ionicons name="flash" size={10} color="#EAB308" />
+            {/* "Via User" más discreto */}
+            <View className="flex-row items-center mt-1">
+              <Ionicons
+                name="arrow-redo"
+                size={10}
+                color={subTextColor}
+                style={{ opacity: 0.6 }}
+              />
               <Text
-                className="text-yellow-600 dark:text-yellow-500 text-[10px] ml-1 font-bold opacity-80"
+                className="text-[10px] ml-1 font-medium opacity-60"
+                style={{ color: subTextColor }}
                 numberOfLines={1}
               >
-                via {item.originalPostCreator}
+                Agregado por {item.originalPostCreator}
               </Text>
             </View>
           </View>
 
+          {/* 3. BOTÓN DE PLATAFORMA (CORREGIDO) */}
           <TouchableOpacity
             onPress={(e) => {
               e.stopPropagation();
               openExternalMusic(item);
             }}
-            className="w-9 h-9 rounded-full items-center justify-center bg-zinc-200 dark:bg-zinc-800"
+            // Aquí está la magia: Fondo del COLOR DE LA MARCA, Icono BLANCO.
+            // Se ve mucho mejor que el fondo gris con icono de color.
+            className="w-9 h-9 rounded-full items-center justify-center shadow-sm"
+            style={{ backgroundColor: brandColor }}
           >
-            <FontAwesome5 name={iconName} size={16} color={brandColor} />
+            <FontAwesome5
+              name={iconName}
+              size={16}
+              color="white" // Icono siempre blanco para contraste perfecto
+            />
           </TouchableOpacity>
         </TouchableOpacity>
       </Swipeable>
@@ -675,7 +722,7 @@ const Library = () => {
                 renderItem={renderCollectionItem}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
-                  paddingHorizontal: 24,
+                  paddingHorizontal: 20, // Ajustado padding horizontal
                   paddingTop: 10,
                   paddingBottom: 20,
                 }}

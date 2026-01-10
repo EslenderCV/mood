@@ -9,9 +9,11 @@ import {
   RefreshControl,
   Alert,
   Dimensions,
+  Modal,
+  TouchableWithoutFeedback,
 } from "react-native";
 import React, { useState, useEffect, useCallback } from "react";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, FontAwesome5 } from "@expo/vector-icons"; // Agregado FontAwesome5 para trofeos
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -32,7 +34,7 @@ import {
   getFollowedUserIds,
   deletePost,
   reportPost,
-  getDeezerTrackUrl, // <--- IMPORTADO
+  getDeezerTrackUrl,
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
 
@@ -40,10 +42,15 @@ import { useLanguage } from "@/context/LanguageContext";
 import ShareModal from "@/components/ShareModal";
 import OptionsModal from "@/components/OptionsModal";
 import PostItem from "@/components/PostItem";
+import MoodShareCard from "@/components/MoodShareCard";
 
 const { width } = Dimensions.get("window");
 
 // --- Helpers ---
+const normalizeString = (str: string) => {
+  return str ? str.trim().toLowerCase() : "";
+};
+
 const parseSongFromPost = (songDataString: string) => {
   try {
     if (!songDataString) return null;
@@ -81,7 +88,7 @@ const CATEGORIES = [
   {
     id: "music",
     labelKey: "explore.categories.music",
-    icon: "musical-notes-outline",
+    icon: "musical-notes", // Icono relleno para destacar
   },
   {
     id: "artists",
@@ -101,11 +108,11 @@ const Explore = () => {
   const { t } = useLanguage();
 
   // --- Paleta de Colores Refinada ---
-  const bgColor = isDark ? "#000" : "#FFFFFF"; // Zinc 950
+  const bgColor = isDark ? "#000" : "#FFFFFF";
   const textColor = isDark ? "#FAFAFA" : "#18181B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
-  const cardBg = isDark ? "#18181B" : "#F4F4F5"; // Zinc 900
-  const inputBg = isDark ? "#27272A" : "#F3F4F6"; // Zinc 800
+  const cardBg = isDark ? "#18181B" : "#F8FAFC"; // Fondo más limpio
+  const inputBg = isDark ? "#27272A" : "#F3F4F6";
   const borderColor = isDark ? "#27272A" : "#E5E5E5";
   const accentColor = "#5E17EB";
 
@@ -122,16 +129,20 @@ const Explore = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Modales
-  const [isShareVisible, setShareVisible] = useState(false);
-  const [postToShare, setPostToShare] = useState<string>("");
+  // --- MODALES Y COMPARTIR ---
   const [isOptionsVisible, setOptionsVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState<any>(null);
+
+  const [isShareVisible, setShareVisible] = useState(false);
+  const [isViralModalVisible, setViralModalVisible] = useState(false);
+  const [isShareSelectorVisible, setShareSelectorVisible] = useState(false);
+  const [postToShare, setPostToShare] = useState<string>("");
+  const [postToShareData, setPostToShareData] = useState<any>(null);
 
   // Audio Player
   const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null); // Nuevo estado para carga individual
+  const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const player = useAudioPlayer(currentSongUrl || "");
@@ -143,11 +154,10 @@ const Explore = () => {
     }
   }, [currentSongUrl, player]);
 
-  // --- Lógica de Reproducción (Igual que PostItem) ---
+  // --- Lógica de Reproducción ---
   const handlePlayMusicItem = async (item: any) => {
-    const listId = item.id; // ID único en la lista (ej: "Title-Artist")
+    const listId = item.id;
 
-    // Si es el mismo ítem, pausar o reanudar
     if (playingId === listId) {
       if (isPlaying) {
         player.pause();
@@ -159,16 +169,14 @@ const Explore = () => {
       return;
     }
 
-    // Si hay otro sonando, pausarlo
     if (isPlaying) {
       player.pause();
       setIsPlaying(false);
     }
 
     try {
-      setLoadingAudioId(listId); // Activar spinner en este ítem
-
-      const trackId = item.trackId; // ID real de la canción (Deezer/Spotify)
+      setLoadingAudioId(listId);
+      const trackId = item.trackId;
 
       if (!trackId) {
         Alert.alert("Error", "ID de canción no disponible.");
@@ -176,7 +184,6 @@ const Explore = () => {
         return;
       }
 
-      // Fetch a la API (Lógica de PostItem)
       const previewUrl = await getDeezerTrackUrl(trackId);
 
       if (!previewUrl) {
@@ -187,7 +194,6 @@ const Explore = () => {
 
       setPlayingId(listId);
       setCurrentSongUrl(previewUrl);
-      // El useEffect se encargará de hacer play() cuando cambie la URL
     } catch (e) {
       console.log(e);
       Alert.alert("Error", "Ocurrió un error al reproducir.");
@@ -218,7 +224,7 @@ const Explore = () => {
         const comments = post.comments ? post.comments.length : 0;
         score += likes * 10;
         score += comments * 15;
-        score += Math.random() * 50; // Random factor para variedad
+        score += Math.random() * 50;
         return { ...post, score };
       })
       .sort((a: any, b: any) => b.score - a.score);
@@ -231,9 +237,11 @@ const Explore = () => {
   ) => {
     const userScores: Record<string, any> = {};
 
+    // 1. Analizar posts para encontrar usuarios activos
     posts.forEach((post) => {
       const creator = getCreatorFromPost(post);
       const id = creator.id;
+      // Excluir usuario actual y "unknown"
       if (id === "unknown" || id === user?.$id) return;
 
       if (!userScores[id]) {
@@ -252,6 +260,7 @@ const Explore = () => {
       userScores[id].score += likes * 5 + 2;
     });
 
+    // 2. Agregar usuarios nuevos recientes
     latestUsers.forEach((u) => {
       const id = u.$id;
       if (id === user?.$id) return;
@@ -262,15 +271,16 @@ const Explore = () => {
           name: u.name,
           avatar: u.pfp,
           totalLikes: 0,
-          score: 1,
+          score: 1, // Score bajo pero presente
           isTrending: false,
           isNew: true,
         };
       }
     });
 
+    // 3. Filtrar estrictamente: SOLO los que NO sigo
     return Object.values(userScores)
-      .filter((u: any) => !myFollows.includes(u.id))
+      .filter((u: any) => !myFollows.includes(u.id)) // <--- FILTRO ESTRICTO
       .sort((a: any, b: any) => b.score - a.score)
       .slice(0, 50);
   };
@@ -279,7 +289,7 @@ const Explore = () => {
     setIsLoading(true);
     try {
       const [rawPosts, myFollowsList] = await Promise.all([
-        getFeedCandidates(),
+        getFeedCandidates(), // Usamos feed candidates o getAllPosts según convenga
         user?.$id ? getFollowedUserIds(user.$id) : Promise.resolve([]),
       ]);
       const safeFollows = Array.isArray(myFollowsList) ? myFollowsList : [];
@@ -309,14 +319,20 @@ const Explore = () => {
       }
 
       if (activeCategory === "music" || activeCategory === "artists") {
+        // Para música, analizamos TODOS los posts públicos recientes
         const allPosts = await getAllPosts(user?.$id || "");
 
         if (activeCategory === "music") {
           const songMap = new Map();
+
           allPosts.forEach((post: any) => {
             const songData = parseSongFromPost(post.songData);
             if (!songData) return;
-            const uniqueKey = `${songData.title}-${songData.artist}`;
+
+            // Clave normalizada para evitar duplicados por mayúsculas/espacios
+            const uniqueKey = `${normalizeString(
+              songData.title
+            )}-${normalizeString(songData.artist)}`;
             const likes = post.likedBy ? post.likedBy.length : 0;
 
             if (songMap.has(uniqueKey)) {
@@ -324,19 +340,21 @@ const Explore = () => {
             } else {
               songMap.set(uniqueKey, {
                 ...songData,
-                id: uniqueKey, // ID para la lista
-                trackId: songData.id || songData.spotifyId, // ID REAL para la API
+                id: uniqueKey,
+                trackId: songData.id || songData.spotifyId,
                 postId: post.$id,
                 likes: likes,
                 type: "music",
               });
             }
           });
+
           const charts = Array.from(songMap.values())
-            .filter((s: any) => s.likes > 0)
-            .sort((a: any, b: any) => b.likes - a.likes)
-            .slice(0, 20) // Top 20
+            .filter((s: any) => s.likes > 0) // Solo canciones con likes
+            .sort((a: any, b: any) => b.likes - a.likes) // Ordenar por likes
+            .slice(0, 10) // 🔥 SOLO TOP 10
             .map((s: any, i) => ({ ...s, rank: i + 1 }));
+
           setTopSongs(charts);
         }
 
@@ -345,15 +363,17 @@ const Explore = () => {
           allPosts.forEach((post: any) => {
             const songData = parseSongFromPost(post.songData);
             if (!songData) return;
-            const artistName = songData.artist;
+            const artistName = normalizeString(songData.artist);
+
             if (artistMap.has(artistName)) {
               const data = artistMap.get(artistName);
               data.count += 1;
+              // Random cover from songs
               if (Math.random() > 0.5) data.cover = songData.cover;
             } else {
               artistMap.set(artistName, {
                 id: artistName,
-                name: artistName,
+                name: songData.artist, // Guardamos nombre original
                 cover: songData.cover,
                 count: 1,
               });
@@ -382,15 +402,30 @@ const Explore = () => {
     fetchCategoryData();
   };
 
-  // --- Handlers de Acciones ---
   const handleOpenOptions = (post: any) => {
     setSelectedPost(post);
     setOptionsVisible(true);
   };
 
-  const handleShare = (postId: string) => {
-    setPostToShare(postId);
-    setShareVisible(true);
+  const handleShare = (post: any) => {
+    setPostToShareData(post);
+    setPostToShare(post.$id);
+    setShareSelectorVisible(true);
+  };
+
+  const getViralPostData = () => {
+    if (!postToShareData) return null;
+    const song = parseSongFromPost(postToShareData.songData);
+    const creator = getCreatorFromPost(postToShareData);
+
+    return {
+      title: song?.title || "Música",
+      artist: song?.artist || "Artista",
+      cover: song?.cover || null,
+      originalPostCreator: creator.username || "usuario",
+      creatorPfp: creator.avatar || null,
+      comment: postToShareData.comment || null,
+    };
   };
 
   const handleDeleteAction = () => {
@@ -435,14 +470,12 @@ const Explore = () => {
     }
   };
 
-  // --- Render Functions ---
-
   const getSectionTitle = () => {
     switch (activeCategory) {
       case "profiles":
         return t("explore.headers.topMooders");
       case "music":
-        return t("explore.headers.topGlobal");
+        return "Top 10 Global 🔥"; // Título mejorado
       case "artists":
         return t("explore.headers.topArtists");
       default:
@@ -518,15 +551,30 @@ const Explore = () => {
     </View>
   );
 
+  // --- COMPONENTE MÚSICA REDISEÑADO (TOP CHART) ---
   const renderMusicItem = ({ item }: { item: any }) => {
     const isThisPlaying = playingId === item.id;
-    const isLoadingThis = loadingAudioId === item.id; // Estado de carga local
+    const isLoadingThis = loadingAudioId === item.id;
     const showPause = isThisPlaying && isPlaying;
 
+    // Colores para el Top 3
     let rankColor = subTextColor;
-    if (item.rank === 1) rankColor = "#FFD700";
-    if (item.rank === 2) rankColor = "#C0C0C0";
-    if (item.rank === 3) rankColor = "#CD7F32";
+    let rankIcon = null;
+    let bgRank = "transparent";
+
+    if (item.rank === 1) {
+      rankColor = "#FFD700"; // Oro
+      rankIcon = "trophy";
+      bgRank = "rgba(255, 215, 0, 0.1)";
+    } else if (item.rank === 2) {
+      rankColor = "#C0C0C0"; // Plata
+      rankIcon = "medal";
+      bgRank = "rgba(192, 192, 192, 0.1)";
+    } else if (item.rank === 3) {
+      rankColor = "#CD7F32"; // Bronce
+      rankIcon = "medal";
+      bgRank = "rgba(205, 127, 50, 0.1)";
+    }
 
     return (
       <TouchableOpacity
@@ -535,12 +583,26 @@ const Explore = () => {
         className="flex-row items-center px-4 py-3 mb-3 mx-4 rounded-2xl border"
         style={{ backgroundColor: cardBg, borderColor: borderColor }}
       >
-        <Text
-          className="text-2xl font-black w-8 text-center mr-3 italic"
-          style={{ color: rankColor }}
-        >
-          {item.rank}
-        </Text>
+        {/* RANKING COLUMN */}
+        <View className="w-10 items-center justify-center mr-3">
+          {item.rank <= 3 ? (
+            <View
+              className="items-center justify-center w-8 h-8 rounded-full"
+              style={{ backgroundColor: bgRank }}
+            >
+              <FontAwesome5
+                name={rankIcon as any}
+                size={14}
+                color={rankColor}
+              />
+            </View>
+          ) : (
+            <Text className="text-lg font-bold" style={{ color: subTextColor }}>
+              {item.rank}
+            </Text>
+          )}
+        </View>
+
         <Image
           source={{ uri: item.cover }}
           className="w-14 h-14 rounded-xl mr-4"
@@ -567,25 +629,30 @@ const Explore = () => {
               className="text-xs ml-1 font-semibold"
               style={{ color: subTextColor }}
             >
-              {item.likes}
+              {item.likes} likes
             </Text>
           </View>
         </View>
 
         <TouchableOpacity
-          className="w-10 h-10 rounded-full items-center justify-center bg-white/10"
+          className="w-10 h-10 rounded-full items-center justify-center"
+          style={{
+            backgroundColor: isThisPlaying
+              ? accentColor
+              : "rgba(255,255,255,0.1)",
+          }}
           onPress={(e) => {
             e.stopPropagation();
-            handlePlayMusicItem(item); // Usamos la nueva función con fetch
+            handlePlayMusicItem(item);
           }}
         >
           {isLoadingThis ? (
-            <ActivityIndicator size="small" color={accentColor} />
+            <ActivityIndicator size="small" color="white" />
           ) : (
             <Ionicons
               name={showPause ? "pause" : "play"}
-              size={22}
-              color={accentColor}
+              size={20}
+              color={isThisPlaying ? "white" : accentColor}
               style={{ marginLeft: showPause ? 0 : 2 }}
             />
           )}
@@ -621,12 +688,14 @@ const Explore = () => {
     </View>
   );
 
+  // --- COMPONENTE PERFIL REDISEÑADO ---
   const renderProfileItem = ({ item }: { item: any }) => {
     const isTrending = item.totalLikes >= 5;
     return (
-      <View
-        className="flex-row items-center px-5 py-4 border-b"
-        style={{ borderColor: borderColor }}
+      <TouchableOpacity
+        onPress={() => router.push(`/user/${item.id}` as any)}
+        className="flex-row items-center px-5 py-4 border-b active:opacity-70"
+        style={{ borderColor: borderColor, backgroundColor: bgColor }}
       >
         <Image
           source={
@@ -635,33 +704,42 @@ const Explore = () => {
           className="w-14 h-14 rounded-full border-2"
           style={{ borderColor: borderColor }}
         />
+
         <View className="ml-4 flex-1">
-          <Text className="font-bold text-[17px]" style={{ color: textColor }}>
-            {item.name || "Usuario"}
-          </Text>
+          <View className="flex-row items-center">
+            <Text
+              className="font-bold text-[17px] mr-2"
+              style={{ color: textColor }}
+            >
+              {item.name || "Usuario"}
+            </Text>
+            {isTrending && (
+              <View className="bg-red-500/10 px-1.5 py-0.5 rounded flex-row items-center">
+                <Ionicons name="flame" size={10} color="#EF4444" />
+              </View>
+            )}
+          </View>
           <Text
-            className="text-sm font-medium mb-1"
+            className="text-sm font-medium mt-0.5"
             style={{ color: subTextColor }}
           >
             @{item.username}
           </Text>
-
-          {isTrending && (
-            <View className="flex-row items-center bg-red-500/10 self-start px-2 py-0.5 rounded-md">
-              <Ionicons name="flame" size={10} color="#EF4444" />
-              <Text className="text-[#EF4444] text-[10px] ml-1 font-bold uppercase">
-                Trending
-              </Text>
-            </View>
-          )}
         </View>
-        <TouchableOpacity
-          onPress={() => router.push(`/user/${item.id}` as any)}
-          className="w-10 h-10 rounded-full items-center justify-center bg-zinc-100 dark:bg-zinc-800"
+
+        {/* BOTÓN NUEVO "VER PERFIL" (Estilo Pill) */}
+        <View
+          className="px-4 py-2 rounded-full border"
+          style={{
+            borderColor: borderColor,
+            backgroundColor: isDark ? "#18181B" : "#F4F4F5",
+          }}
         >
-          <Ionicons name="chevron-forward" size={20} color={textColor} />
-        </TouchableOpacity>
-      </View>
+          <Text className="text-xs font-bold" style={{ color: textColor }}>
+            Ver Perfil
+          </Text>
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -708,7 +786,7 @@ const Explore = () => {
                     onProfilePress={(id) => router.push(`/user/${id}` as any)}
                     onCommentPress={(id) => router.push(`/post/${id}` as any)}
                     onOptionsPress={() => handleOpenOptions(item)}
-                    onSharePress={() => handleShare(item.$id)}
+                    onSharePress={() => handleShare(item)}
                   />
                 </View>
               );
@@ -728,7 +806,7 @@ const Explore = () => {
             </View>
           ) : null
         }
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -755,6 +833,122 @@ const Explore = () => {
             <SafeAreaView className="flex-1" edges={["top"]}>
               <StatusBar style={isDark ? "light" : "dark"} />
               {renderContent()}
+
+              {/* --- MODAL SELECTOR DE COMPARTIR --- */}
+              <Modal
+                animationType="slide"
+                transparent={true}
+                visible={isShareSelectorVisible}
+                onRequestClose={() => setShareSelectorVisible(false)}
+              >
+                <TouchableWithoutFeedback
+                  onPress={() => setShareSelectorVisible(false)}
+                >
+                  <View className="flex-1 justify-end bg-black/60">
+                    <TouchableWithoutFeedback>
+                      <View
+                        className="rounded-t-[32px] p-6 pb-12"
+                        style={{
+                          backgroundColor: isDark ? "#18181B" : "white",
+                        }}
+                      >
+                        <View className="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full self-center mb-6" />
+
+                        <Text
+                          className="text-xl font-bold text-center mb-8"
+                          style={{ color: isDark ? "white" : "black" }}
+                        >
+                          Compartir Publicación
+                        </Text>
+
+                        <View className="flex-row gap-4">
+                          <TouchableOpacity
+                            onPress={() => {
+                              setShareSelectorVisible(false);
+                              setTimeout(() => setShareVisible(true), 300);
+                            }}
+                            className="flex-1 p-5 rounded-3xl items-center border"
+                            style={{
+                              backgroundColor: isDark ? "#27272A" : "#F3F4F6",
+                              borderColor: isDark ? "#3F3F46" : "#E5E5E5",
+                            }}
+                          >
+                            <View className="w-14 h-14 bg-[#5E17EB]/10 rounded-full items-center justify-center mb-3">
+                              <Ionicons
+                                name="repeat"
+                                size={28}
+                                color="#5E17EB"
+                              />
+                            </View>
+                            <Text
+                              className="font-bold text-base mb-1"
+                              style={{ color: isDark ? "white" : "black" }}
+                            >
+                              En Mood
+                            </Text>
+                            <Text
+                              className="text-xs text-center"
+                              style={{ color: subTextColor }}
+                            >
+                              Repostear o enviar a amigos
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() => {
+                              setShareSelectorVisible(false);
+                              setTimeout(() => setViralModalVisible(true), 300);
+                            }}
+                            className="flex-1 p-5 rounded-3xl items-center border"
+                            style={{
+                              backgroundColor: isDark ? "#27272A" : "#F3F4F6",
+                              borderColor: isDark ? "#3F3F46" : "#E5E5E5",
+                            }}
+                          >
+                            <View className="w-14 h-14 bg-pink-500/10 rounded-full items-center justify-center mb-3">
+                              <Ionicons
+                                name="share-social"
+                                size={28}
+                                color="#ec4899"
+                              />
+                            </View>
+                            <Text
+                              className="font-bold text-base mb-1"
+                              style={{ color: isDark ? "white" : "black" }}
+                            >
+                              Viral Card
+                            </Text>
+                            <Text
+                              className="text-xs text-center"
+                              style={{ color: subTextColor }}
+                            >
+                              Stories, Instagram y más
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                          onPress={() => setShareSelectorVisible(false)}
+                          className="mt-6 p-4 rounded-full items-center"
+                        >
+                          <Text
+                            className="font-bold text-base"
+                            style={{ color: subTextColor }}
+                          >
+                            Cancelar
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableWithoutFeedback>
+                  </View>
+                </TouchableWithoutFeedback>
+              </Modal>
+
+              <MoodShareCard
+                isVisible={isViralModalVisible}
+                onClose={() => setViralModalVisible(false)}
+                post={getViralPostData()}
+              />
 
               <ShareModal
                 isVisible={isShareVisible}

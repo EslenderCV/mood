@@ -1166,13 +1166,18 @@ export async function searchUsers(query: string) {
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
       [
-        Query.search("username", query),
-        Query.limit(5),
+        // Usamos Query.or para buscar en (username O name)
+        Query.or([
+          Query.search("username", query),
+          Query.search("name", query),
+        ]),
+        Query.limit(10), // Aumenté un poco el límite para ver más opciones
         Query.notEqual("isBanned", true),
       ]
     );
 
     const filteredUsers = users.documents.filter((doc) => {
+      // Filtrar usuarios que no permiten etiquetas
       return doc.allowTags !== false;
     });
 

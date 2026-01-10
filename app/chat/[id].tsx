@@ -11,8 +11,13 @@ import {
   Alert,
   AlertButton,
 } from "react-native";
-import React, { useEffect, useState, useRef } from "react";
-import { useLocalSearchParams, router, Stack } from "expo-router";
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import {
+  useLocalSearchParams,
+  router,
+  Stack,
+  useFocusEffect,
+} from "expo-router"; // <--- IMPORTANTE: useFocusEffect
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import {
@@ -34,7 +39,7 @@ import {
   getPlaylistById,
   getUser,
   databases,
-  sendPushNotification, // <--- 1. IMPORTADO
+  sendPushNotification,
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -45,6 +50,7 @@ const isValidId = (id: string | null | undefined) => {
   return validChars.test(id);
 };
 
+// ... (PostPreviewBubble se mantiene igual)
 const PostPreviewBubble = ({
   postId,
   onLongPress,
@@ -77,7 +83,6 @@ const PostPreviewBubble = ({
         }
       })
       .catch((e) => {
-        console.log("Post preview error:", e);
         if (isMounted) setError(true);
       });
     return () => {
@@ -141,6 +146,7 @@ const PostPreviewBubble = ({
   );
 };
 
+// ... (ChatPlaylistCard se mantiene igual)
 const ChatPlaylistCard = ({
   playlistId,
   isMyMessage,
@@ -173,7 +179,6 @@ const ChatPlaylistCard = ({
           else setError(true);
         }
       } catch (e) {
-        console.log("Error playlist chat:", e);
         if (isMounted) setError(true);
       } finally {
         if (isMounted) setLoading(false);
@@ -315,7 +320,7 @@ const ChatRoom = () => {
     name: (params.otherUserName as string) || "Usuario",
     avatar: (params.otherUserAvatar as string) || null,
     id: (params.otherUserId as string) || null,
-    expoPushToken: null as string | null, // <--- 2. TOKEN EN EL ESTADO
+    expoPushToken: null as string | null,
   });
 
   const [messages, setMessages] = useState<any[]>([]);
@@ -328,6 +333,60 @@ const ChatRoom = () => {
   const inputRef = useRef<TextInput>(null);
   const rowRefs = useRef(new Map()).current;
 
+  // --- 🔥 LÓGICA DE LECTURA ROBUSTA ---
+  // Esta función se encarga de llamar a la API para actualizar la DB
+  const performReadUpdate = async (userId: string, currentMessages: any[]) => {
+    if (!chatId || !userId) return;
+
+    // 1. Marcar Chat como leído (Nivel Chat - Importante para la lista)
+    try {
+      await markChatAsRead(chatId, userId);
+    } catch (e) {
+      console.log("Error marking chat read:", e);
+    }
+
+    // 2. Marcar Mensajes individuales como leídos (Para el tick azul)
+    const unreadMessages = currentMessages.filter(
+      (m) => !m.isRead && m.senderId !== userId
+    );
+
+    if (unreadMessages.length > 0) {
+      // Actualizamos UI local inmediatamente
+      setMessages((prev) =>
+        prev.map((m) =>
+          !m.isRead && m.senderId !== userId ? { ...m, isRead: true } : m
+        )
+      );
+
+      // Actualizamos DB
+      try {
+        await Promise.all(
+          unreadMessages.map((msg) =>
+            databases.updateDocument(
+              appwriteConfig.databaseId,
+              appwriteConfig.messagesCollectionId,
+              msg.$id,
+              { isRead: true }
+            )
+          )
+        );
+      } catch (e) {
+        console.log("Error marking msgs read in DB:", e);
+      }
+    }
+  };
+
+  // --- 🚀 USE FOCUS EFFECT: SE EJECUTA CADA VEZ QUE ENTRAS ---
+  useFocusEffect(
+    useCallback(() => {
+      if (currentUser?.$id && messages.length > 0) {
+        console.log("👀 Pantalla enfocada, marcando como leído...");
+        performReadUpdate(currentUser.$id, messages);
+      }
+    }, [currentUser, messages.length]) // Se re-ejecuta si cambia el usuario o la cantidad de mensajes
+  );
+
+  // --- EFECTO REALTIME ---
   useEffect(() => {
     loadData();
     const unsubscribe = client.subscribe(
@@ -335,6 +394,7 @@ const ChatRoom = () => {
       (response) => {
         const payload = response.payload as any;
         if (payload.chatId === chatId) {
+          // Si CREAN un mensaje
           if (
             response.events.includes(
               "databases.*.collections.*.documents.*.create"
@@ -344,11 +404,14 @@ const ChatRoom = () => {
               if (prev.find((m) => m.$id === payload.$id)) return prev;
               return [payload, ...prev];
             });
-            getCurrentUser().then((u) => {
-              if (u && payload.senderId !== u.$id)
-                markChatAsRead(chatId, u.$id);
-            });
+
+            // Si llega un mensaje nuevo y estoy en la pantalla (currentUser existe)
+            // lo marco como leído inmediatamente
+            if (currentUser?.$id && payload.senderId !== currentUser.$id) {
+              performReadUpdate(currentUser.$id, [payload]);
+            }
           }
+          // Si ACTUALIZAN (ej: tick azul)
           if (
             response.events.includes(
               "databases.*.collections.*.documents.*.update"
@@ -358,6 +421,7 @@ const ChatRoom = () => {
               prev.map((msg) => (msg.$id === payload.$id ? payload : msg))
             );
           }
+          // Si BORRAN
           if (
             response.events.includes(
               "databases.*.collections.*.documents.*.delete"
@@ -375,15 +439,17 @@ const ChatRoom = () => {
 
   const loadData = async () => {
     try {
-      const user = await getCurrentUser();
-      if (!user) return router.replace("/signIn");
-      setCurrentUser(user);
+      let user = currentUser;
+      if (!user) {
+        user = await getCurrentUser();
+        if (!user) return router.replace("/signIn");
+        setCurrentUser(user);
+      }
 
-      // Lógica para obtener el otro usuario y su TOKEN
-      // Aunque venga por params, tratamos de refrescar para obtener el token
+      // Recuperar info del otro usuario si falta
       if (!chatUser.id || !chatUser.avatar || !chatUser.expoPushToken) {
+        // ... (Tu lógica de recuperación de usuario, igual que antes)
         try {
-          // Opción A: Tenemos el ID en params
           if (chatUser.id) {
             const otherUserData = await getUser(chatUser.id);
             if (otherUserData) {
@@ -391,17 +457,15 @@ const ChatRoom = () => {
                 name: otherUserData.name || otherUserData.username,
                 avatar: otherUserData.pfp,
                 id: otherUserData.$id,
-                expoPushToken: otherUserData.expoPushToken, // Guardar Token
+                expoPushToken: otherUserData.expoPushToken,
               });
             }
           } else {
-            // Opción B: Buscar en el documento del chat
             const chatDoc = await databases.getDocument(
               appwriteConfig.databaseId,
               appwriteConfig.chatsCollectionId,
               chatId
             );
-
             if (chatDoc && chatDoc.participants) {
               const otherId = chatDoc.participants.find(
                 (p: string) => p !== user.$id
@@ -413,20 +477,24 @@ const ChatRoom = () => {
                     name: otherUserData.name || otherUserData.username,
                     avatar: otherUserData.pfp,
                     id: otherUserData.$id,
-                    expoPushToken: otherUserData.expoPushToken, // Guardar Token
+                    expoPushToken: otherUserData.expoPushToken,
                   });
                 }
               }
             }
           }
         } catch (err) {
-          console.log("Error recuperando info del otro usuario:", err);
+          console.log("Info user error:", err);
         }
       }
 
       const msgs = await getChatMessages(chatId);
       setMessages(msgs);
-      markChatAsRead(chatId, user.$id);
+
+      // 🔥 Forzamos marca de lectura al cargar los datos
+      if (msgs.length > 0) {
+        performReadUpdate(user.$id, msgs);
+      }
     } catch (error) {
       console.log("Error loading chat:", error);
     }
@@ -555,7 +623,6 @@ const ChatRoom = () => {
       contentToSend = `${replyName}:::${snippet}:::REPLY:::${newMessage}`;
     }
 
-    // Guardamos el texto limpio para la notificación
     const messageForNotification = newMessage;
     const tempContent = contentToSend;
     setNewMessage("");
@@ -570,17 +637,14 @@ const ChatRoom = () => {
         null
       );
 
-      // --- 3. LÓGICA DE NOTIFICACIÓN PUSH ---
       if (chatUser.expoPushToken) {
-        console.log("🚀 Enviando Push a:", chatUser.name);
         await sendPushNotification(
           chatUser.expoPushToken,
-          currentUser.name || currentUser.username || "Nuevo mensaje", // Título
-          messageForNotification, // Cuerpo: EL MENSAJE LIMPIO
-          { type: "chat", chatId: chatId, url: `/chat/${chatId}` } // Data
+          currentUser.name || currentUser.username || "Nuevo mensaje",
+          messageForNotification,
+          { type: "chat", chatId: chatId, url: `/chat/${chatId}` }
         );
       }
-      // --------------------------------------
     } catch (error) {
       setNewMessage(tempContent);
       Alert.alert("Error", "No se pudo enviar");
