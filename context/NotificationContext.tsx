@@ -29,7 +29,6 @@ export const NotificationProvider = ({
   children: React.ReactNode;
 }) => {
   const [expoPushToken, setExpoPushToken] = useState<string | undefined>("");
-
   const notificationListener = useRef<Notifications.Subscription | undefined>(
     undefined
   );
@@ -59,12 +58,8 @@ export const NotificationProvider = ({
       });
 
     return () => {
-      if (notificationListener.current) {
-        notificationListener.current.remove();
-      }
-      if (responseListener.current) {
-        responseListener.current.remove();
-      }
+      if (notificationListener.current) notificationListener.current.remove();
+      if (responseListener.current) responseListener.current.remove();
     };
   }, []);
 
@@ -98,6 +93,7 @@ async function registerForPushNotificationsAsync() {
       finalStatus = status;
     }
     if (finalStatus !== "granted") {
+      alert("Se requieren permisos para notificaciones push.");
       return;
     }
 
@@ -105,9 +101,6 @@ async function registerForPushNotificationsAsync() {
       const projectId =
         Constants?.expoConfig?.extra?.eas?.projectId ??
         Constants?.easConfig?.projectId;
-      if (!projectId) {
-        console.log("Modo desarrollo: Project ID no encontrado.");
-      }
 
       token = (
         await Notifications.getExpoPushTokenAsync({
@@ -117,9 +110,7 @@ async function registerForPushNotificationsAsync() {
 
       console.log("Mi Push Token:", token);
     } catch (e) {
-      console.log(
-        "No se pudo obtener el token push (probablemente por entorno Expo Go)."
-      );
+      console.log("Error obteniendo token:", e);
     }
   } else {
     console.log("Debes usar un dispositivo físico para Push Notifications");

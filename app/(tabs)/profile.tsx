@@ -16,12 +16,7 @@ import { Ionicons, Feather } from "@expo/vector-icons";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { router, useFocusEffect } from "expo-router";
 import { useColorScheme } from "nativewind";
-import {
-  getUserPosts,
-  getFollowCounts,
-  getFeedCandidates,
-  getFollowedUserIds,
-} from "@/lib/appwrite";
+import { getUserPosts, getFollowCounts } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
 const { width } = Dimensions.get("window");
@@ -37,21 +32,6 @@ const parseSongFromPost = (songDataString: string) => {
   } catch (error) {
     return null;
   }
-};
-
-const getCreatorFromPost = (item: any) => {
-  let userObj = item.creator || item.postedBy || item.users || item.user;
-  if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
-
-  if (userObj && typeof userObj === "object") {
-    return {
-      id: userObj.$id || userObj.accountId,
-      username: userObj.username || "anon",
-      name: userObj.name || "Usuario",
-      avatar: userObj.avatar || userObj.pfp,
-    };
-  }
-  return { id: "unknown", username: "anon", name: "Usuario", avatar: null };
 };
 
 const Profile = () => {
@@ -124,26 +104,6 @@ const Profile = () => {
 
       const counts = await getFollowCounts(myId);
       setStats(counts);
-
-      const feedCandidates = await getFeedCandidates();
-      const myFollows = await getFollowedUserIds(myId);
-
-      const uniqueUsersMap = new Map();
-
-      feedCandidates.forEach((post) => {
-        const creator = getCreatorFromPost(post);
-        if (
-          creator.id !== "unknown" &&
-          creator.id !== myId &&
-          !myFollows.includes(creator.id)
-        ) {
-          if (!uniqueUsersMap.has(creator.id)) {
-            uniqueUsersMap.set(creator.id, creator);
-          }
-        }
-      });
-
-      setSuggestedUsers(Array.from(uniqueUsersMap.values()).slice(0, 10));
     } catch (error) {
       console.log("Error cargando perfil:", error);
     } finally {
@@ -257,51 +217,6 @@ const Profile = () => {
         />
         <Text className="text-xs font-bold" style={{ color: textColor }}>
           {item.likes}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderSuggestedUser = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      className="mr-3 p-3 rounded-2xl border w-[110px] items-center"
-      style={{ backgroundColor: cardBg, borderColor: borderColor }}
-      onPress={() =>
-        router.push({
-          pathname: "/user/[id]",
-          params: {
-            id: item.id,
-            username: item.username,
-            avatar: item.avatar,
-            name: item.name,
-          },
-        } as any)
-      }
-    >
-      <Image
-        source={
-          item.avatar ? { uri: item.avatar } : require("@/assets/noPfp.jpg")
-        }
-        className="w-14 h-14 rounded-full mb-2"
-        style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
-      />
-      <Text
-        className="text-xs font-bold text-center mb-1"
-        numberOfLines={1}
-        style={{ color: textColor }}
-      >
-        {item.name}
-      </Text>
-      <Text
-        className="text-[10px] text-center mb-2"
-        numberOfLines={1}
-        style={{ color: subTextColor }}
-      >
-        @{item.username}
-      </Text>
-      <View className="bg-[#5E17EB]/10 w-full py-1 rounded-lg items-center">
-        <Text className="text-[#5E17EB] text-[10px] font-bold">
-          {t("profile.viewProfile")}
         </Text>
       </View>
     </TouchableOpacity>
@@ -429,24 +344,6 @@ const Profile = () => {
             </Text>
           </TouchableOpacity>
         </View>
-
-        {suggestedUsers.length > 0 && (
-          <View className="mb-6 pl-4">
-            <Text
-              className="text-lg font-bold mb-3"
-              style={{ color: textColor }}
-            >
-              {t("profile.suggested")}
-            </Text>
-            <FlatList
-              horizontal
-              data={suggestedUsers}
-              renderItem={renderSuggestedUser}
-              keyExtractor={(item) => item.id}
-              showsHorizontalScrollIndicator={false}
-            />
-          </View>
-        )}
 
         <View
           className="pt-2 border-t"

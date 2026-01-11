@@ -11,9 +11,9 @@ import {
   LayoutAnimation,
   UIManager,
 } from "react-native";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router"; // <--- Importamos useFocusEffect
 import { Ionicons } from "@expo/vector-icons";
 import {
   Swipeable,
@@ -121,8 +121,8 @@ const NotificationsScreen = () => {
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
-  const borderColor = isDark ? "#27272A" : "#F3F4F6"; // Más sutil
-  const unreadBg = isDark ? "rgba(94, 23, 235, 0.1)" : "#F5F3FF"; // Tinte morado muy suave
+  const borderColor = isDark ? "#27272A" : "#F3F4F6";
+  const unreadBg = isDark ? "rgba(94, 23, 235, 0.1)" : "#F5F3FF";
   const iconBg = isDark ? "#18181B" : "#F4F4F5";
 
   // Estados
@@ -133,12 +133,12 @@ const NotificationsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<"all" | "requests" | "activity">("all");
 
-  const hasUnread = allNotifications.some((n) => !n.isRead);
-
-  // Inicialización
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
+  // Reemplazamos useEffect por useFocusEffect para que se ejecute al entrar
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications();
+    }, [])
+  );
 
   // Filtrado local
   useEffect(() => {
@@ -161,7 +161,6 @@ const NotificationsScreen = () => {
     const channel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.notificationsCollectionId}.documents`;
 
     const unsubscribe = client.subscribe(channel, (response) => {
-      // Configurar animación suave para nuevos items
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
       if (response.events.includes("databases.*.documents.*.create")) {
@@ -196,6 +195,18 @@ const NotificationsScreen = () => {
       setCurrentUser(user);
       const results = await getUserNotifications(user.$id);
       setAllNotifications(results);
+
+      // --- AUTO MARK AS READ ---
+      // Verificamos si hay alguna no leída
+      const hasUnread = results.some((n: any) => !n.isRead);
+
+      if (hasUnread) {
+        // Marcamos todo como leído en la base de datos silenciosamente.
+        // NO actualizamos el estado local 'allNotifications' aquí para que el usuario
+        // siga viendo el fondo morado (highlight) durante esta sesión y sepa cuáles son nuevas.
+        // La próxima vez que entre o recargue, vendrán como leídas desde el servidor.
+        await markAllNotificationsAsRead(user.$id);
+      }
     } catch (error) {
       console.log(error);
     } finally {
@@ -206,21 +217,10 @@ const NotificationsScreen = () => {
 
   // --- HANDLERS ---
 
-  const handleMarkAllRead = async () => {
-    const previousState = [...allNotifications];
-    setAllNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    try {
-      await markAllNotificationsAsRead(currentUser.$id);
-    } catch (error) {
-      setAllNotifications(previousState);
-      Alert.alert("Error", "No se pudo actualizar.");
-    }
-  };
-
   const handlePressNotification = async (item: any) => {
     if (item.type === "follow_request") return;
 
-    // Optimistic UI update
+    // Optimistic UI update para un solo item
     if (!item.isRead) {
       markNotificationAsRead(item.$id);
       setAllNotifications((prev) =>
@@ -322,7 +322,6 @@ const NotificationsScreen = () => {
   };
 
   const renderItem = ({ item }: { item: any }) => {
-    // Configuración visual según tipo
     let iconName = "notifications";
     let iconColor = "#A1A1AA";
     let iconBgColor = isDark ? "#27272A" : "#F4F4F5";
@@ -330,22 +329,22 @@ const NotificationsScreen = () => {
     switch (item.type) {
       case "like":
         iconName = "heart";
-        iconColor = "#EF4444"; // Rojo
+        iconColor = "#EF4444";
         iconBgColor = isDark ? "rgba(239, 68, 68, 0.2)" : "#FEF2F2";
         break;
       case "comment":
         iconName = "chatbubble";
-        iconColor = "#5E17EB"; // Morado
+        iconColor = "#5E17EB";
         iconBgColor = isDark ? "rgba(94, 23, 235, 0.2)" : "#F3E8FF";
         break;
       case "follow":
         iconName = "person-add";
-        iconColor = "#3B82F6"; // Azul
+        iconColor = "#3B82F6";
         iconBgColor = isDark ? "rgba(59, 130, 246, 0.2)" : "#EFF6FF";
         break;
       case "tag":
         iconName = "at";
-        iconColor = "#10B981"; // Verde
+        iconColor = "#10B981";
         iconBgColor = isDark ? "rgba(16, 185, 129, 0.2)" : "#ECFDF5";
         break;
       case "follow_request":
@@ -375,7 +374,6 @@ const NotificationsScreen = () => {
             borderLeftColor: !item.isRead ? "#5E17EB" : borderColor,
           }}
         >
-          {/* Avatar + Icono Superpuesto */}
           <View className="mr-4 relative">
             <Image
               source={{ uri: item.senderAvatar }}
@@ -395,7 +393,6 @@ const NotificationsScreen = () => {
             )}
           </View>
 
-          {/* Contenido Texto */}
           <View className="flex-1 justify-center space-y-1">
             <Text
               className="text-[15px] leading-5"
@@ -408,7 +405,6 @@ const NotificationsScreen = () => {
               </Text>
             </Text>
 
-            {/* Acciones para Follow Request */}
             {isRequest ? (
               <View className="flex-row mt-2 gap-3">
                 <TouchableOpacity
@@ -439,17 +435,14 @@ const NotificationsScreen = () => {
             )}
           </View>
 
-          {/* Indicador o Preview Post (si tuvieras imagen del post) */}
           {!isRequest && (
             <View className="ml-2 justify-center">
               {item.postImage ? (
-                // Si la noti trae imagen del post, la mostramos
                 <Image
                   source={{ uri: item.postImage }}
                   className="w-10 h-10 rounded-lg"
                 />
               ) : !item.isRead ? (
-                // Si no es leída, mostramos un puntito sutil
                 <View className="w-2 h-2 bg-[#5E17EB] rounded-full" />
               ) : null}
             </View>
@@ -462,11 +455,13 @@ const NotificationsScreen = () => {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: bgColor }}>
       <SafeAreaView className="flex-1" edges={["top"]}>
-        
-        {/* HEADER MODERNO */}
+        {/* HEADER LIMPIO (Sin el botón de check) */}
         <View className="px-4 pb-2">
           <View className="flex-row items-center justify-between h-[50px] mb-2">
-            <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+            <TouchableOpacity
+              onPress={() => router.back()}
+              className="p-2 -ml-2"
+            >
               <Ionicons
                 name="arrow-back"
                 size={26}
@@ -474,26 +469,18 @@ const NotificationsScreen = () => {
               />
             </TouchableOpacity>
 
-            <Text
-              className="text-xl font-bold"
-              style={{ color: textColor }}
-            >
+            <Text className="text-xl font-bold" style={{ color: textColor }}>
               {t("notifications.title") || "Actividad"}
             </Text>
 
             <View className="flex-row items-center">
-              {hasUnread && (
-                <TouchableOpacity onPress={handleMarkAllRead} className="p-2">
-                  <Ionicons
-                    name="checkmark-done-outline"
-                    size={24}
-                    color="#5E17EB"
-                  />
-                </TouchableOpacity>
-              )}
               {allNotifications.length > 0 && (
                 <TouchableOpacity onPress={handleClearAll} className="p-2">
-                  <Ionicons name="trash-outline" size={22} color={subTextColor} />
+                  <Ionicons
+                    name="trash-outline"
+                    size={22}
+                    color={subTextColor}
+                  />
                 </TouchableOpacity>
               )}
             </View>
@@ -562,7 +549,10 @@ const NotificationsScreen = () => {
                 >
                   {t("notifications.emptyTitle") || "Sin notificaciones"}
                 </Text>
-                <Text className="text-center text-sm" style={{ color: subTextColor }}>
+                <Text
+                  className="text-center text-sm"
+                  style={{ color: subTextColor }}
+                >
                   {t("notifications.empty") ||
                     "Aquí aparecerán tus likes, comentarios y nuevos seguidores."}
                 </Text>

@@ -572,7 +572,7 @@ const Library = () => {
             <Ionicons
               name={
                 (item.platform === "spotify"
-                  ? "logo-spotify"
+                  ? "spotify"
                   : item.platform === "apple"
                   ? "logo-apple"
                   : "musical-notes") as any
@@ -606,7 +606,7 @@ const Library = () => {
     const myPlatform =
       user?.preferredPlatform === "apple" ? "apple" : "spotify";
     const brandColor = myPlatform === "apple" ? "#FA243C" : "#1DB954";
-    const iconName = myPlatform === "apple" ? "logo-apple" : "logo-spotify";
+    const iconName = myPlatform === "apple" ? "logo-apple" : "spotify";
     const label = myPlatform === "apple" ? "Apple Music" : "Spotify";
 
     return (

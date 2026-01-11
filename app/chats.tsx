@@ -225,6 +225,7 @@ const ChatsList = () => {
     }, [])
   );
 
+  // --- LÓGICA ESPEJO EN TIEMPO REAL ---
   useEffect(() => {
     if (!currentUser || !client) return;
 
@@ -237,16 +238,42 @@ const ChatsList = () => {
       const payload: any = response.payload;
       const event = response.events[0];
 
+      // 1. ESPEJO DE CHATS (Si cambia el documento del chat en la DB, actualizamos aquí)
+      if (event.includes(`collections.${appwriteConfig.chatsCollectionId}`)) {
+        if (event.includes(".update")) {
+          // Si el chat se actualiza (ej: lastMessageIsRead cambia en el backend),
+          // reemplazamos el item local con la data fresca del servidor.
+          setChats((prevChats) =>
+            prevChats.map((chat) => {
+              if (chat.$id === payload.$id) {
+                // Mantenemos la estructura pero actualizamos los campos cambiados
+                return { ...chat, ...payload };
+              }
+              return chat;
+            })
+          );
+        }
+
+        // Si se crea un nuevo chat para mí
+        if (event.includes(".create")) {
+          if (payload.users && payload.users.includes(currentUser.$id)) {
+            loadChats(); // Recargar para traer datos completos (populados)
+          }
+        }
+      }
+
+      // 2. ESPEJO DE MENSAJES
       if (
         event.includes(`collections.${appwriteConfig.messagesCollectionId}`)
       ) {
+        // Si un mensaje se marca como LEÍDO
         if (event.includes(".update") && payload.isRead === true) {
           setChats((prevChats) =>
             prevChats.map((chat) => {
+              // Si este mensaje es el último del chat, actualizamos el chat a leído
               if (
-                chat.lastMessage &&
-                (chat.lastMessage === payload.content ||
-                  chat.$id === payload.chatId)
+                chat.$id === payload.chatId ||
+                chat.lastMessage === payload.content
               ) {
                 return { ...chat, lastMessageIsRead: true };
               }
@@ -255,23 +282,14 @@ const ChatsList = () => {
           );
         }
 
+        // Si llega un mensaje NUEVO
         if (event.includes(".create")) {
           if (
             payload.senderId === currentUser.$id ||
-            payload.receiverId === currentUser.$id ||
-            (payload.users && payload.users.includes(currentUser.$id))
+            payload.receiverId === currentUser.$id
           ) {
-            loadChats();
+            loadChats(); // Recargar para reordenar la lista
           }
-        }
-      }
-
-      if (event.includes(`collections.${appwriteConfig.chatsCollectionId}`)) {
-        if (
-          payload.search_params &&
-          payload.search_params.includes(currentUser.$id)
-        ) {
-          loadChats();
         }
       }
     });
@@ -295,6 +313,7 @@ const ChatsList = () => {
           (c: any) => c.lastMessage && c.lastMessage.trim() !== ""
         );
 
+        // Mapeo inicial para consistencia visual inmediata
         const fixedChats = activeChats.map((c: any) => {
           if (c.otherUser && lastVisitedUserId.current === c.otherUser.$id) {
             return {
@@ -361,6 +380,7 @@ const ChatsList = () => {
     prevOpenedRow = row[index];
   };
 
+  // --- CORRECCIÓN DEL BUG ---
   const handleOpenChat = async (
     otherUserId: string,
     otherUserFixedData?: any
@@ -377,16 +397,23 @@ const ChatsList = () => {
     if (existingChat) {
       targetChatId = existingChat.$id;
 
-      const updatedChats = chats.map((c) => {
-        if (c.$id === existingChat.$id)
-          return { ...c, lastMessageIsRead: true };
-        return c;
-      });
-      setChats(updatedChats);
+      // 1. Actualización Optimista (Visual Inmediata)
+      setChats((prev) =>
+        prev.map((c) =>
+          c.$id === existingChat.$id ? { ...c, lastMessageIsRead: true } : c
+        )
+      );
 
-      markChatAsRead(existingChat.$id, currentUser.$id).catch((e) => {});
+      // 2. Actualización en Servidor (CORREGIDO: Solo 2 argumentos)
+      try {
+        // Await para asegurar persistencia antes de salir de la pantalla
+        await markChatAsRead(existingChat.$id, currentUser.$id);
+      } catch (e) {
+        console.error("Error al marcar leído en servidor:", e);
+      }
     }
 
+    // 3. Navegación
     router.push({
       pathname: "/chat/[id]",
       params: {
@@ -430,6 +457,11 @@ const ChatsList = () => {
 
   const renderChatItem = ({ item, index }: { item: any; index: number }) => {
     const justVisited = item.otherUser?.$id === lastVisitedUserId.current;
+
+    // Un chat es "no leído" si:
+    // 1. No lo acabo de visitar.
+    // 2. La propiedad lastMessageIsRead es falsa.
+    // 3. El último mensaje fue enviado por el otro usuario.
     const isUnread =
       !justVisited &&
       !item.lastMessageIsRead &&
@@ -537,7 +569,6 @@ const ChatsList = () => {
         style={{ backgroundColor: bgColor }}
       >
         <View className="px-5 pt-3 pb-2">
-          {/* HEADER MODIFICADO CON BOTÓN ATRÁS */}
           <View className="flex-row items-center mb-4 gap-2">
             <TouchableOpacity
               onPress={() => router.push("/home")}

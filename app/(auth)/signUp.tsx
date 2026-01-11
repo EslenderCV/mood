@@ -64,7 +64,8 @@ const SignUp = () => {
 
         setUser(result as unknown as User);
         setLoggedIn(true);
-        router.replace("/home");
+        // CAMBIO: Redirigir a /search en lugar de /home al crear cuenta
+        router.replace("/explore");
       }
     } catch (error) {
       const appwriteError = error as AppwriteException;
@@ -94,10 +95,11 @@ const SignUp = () => {
           setLoggedIn(true);
 
           // 3. SOLUCIÓN CLAVE: Esperar a que el navegador se cierre por completo
-          // antes de intentar montar la pantalla de Home que usa recursos nativos.
+          // antes de intentar montar la pantalla.
           setTimeout(() => {
-            router.replace("/home");
-          }, 500); // Aumentamos a 500ms para mayor seguridad en Android físico
+            // CAMBIO: Redirigir a /search en lugar de /home al registrarse con RRSS
+            router.replace("/explore");
+          }, 500);
         } else {
           Alert.alert("Error", "No se pudo sincronizar el perfil del usuario.");
         }

@@ -292,7 +292,15 @@ const Explore = () => {
         getFeedCandidates(), // Usamos feed candidates o getAllPosts según convenga
         user?.$id ? getFollowedUserIds(user.$id) : Promise.resolve([]),
       ]);
-      const safeFollows = Array.isArray(myFollowsList) ? myFollowsList : [];
+
+      // --- MODIFICADO: Aseguramos que sea un array de strings (IDs) ---
+      // Si myFollowsList trae objetos (relaciones), extraemos el $id.
+      const safeFollows = Array.isArray(myFollowsList)
+        ? myFollowsList.map((f: any) =>
+            typeof f === "object" && f?.$id ? f.$id : f
+          )
+        : [];
+      // -------------------------------------------------------------
 
       const publicAndVisiblePosts = rawPosts.filter((post: any) => {
         let userObj = post.creator || post.postedBy;
@@ -305,7 +313,10 @@ const Explore = () => {
         const filteredPosts = publicAndVisiblePosts.filter((post: any) => {
           const creator = getCreatorFromPost(post);
           const isMe = creator.id === user?.$id;
+
+          // Ahora safeFollows son solo Strings, por lo que includes funcionará correctamente
           const isFollowing = safeFollows.includes(creator.id);
+
           return !isMe && !isFollowing;
         });
         setExplorePosts(rankExplorePosts(filteredPosts));
@@ -475,7 +486,7 @@ const Explore = () => {
       case "profiles":
         return t("explore.headers.topMooders");
       case "music":
-        return "Top 10 Global 🔥"; // Título mejorado
+        return "Top 10 Global"; // Título mejorado
       case "artists":
         return t("explore.headers.topArtists");
       default:

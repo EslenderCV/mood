@@ -17,9 +17,9 @@ import {
   router,
   Stack,
   useFocusEffect,
-} from "expo-router"; // <--- IMPORTANTE: useFocusEffect
+} from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import {
   GestureHandlerRootView,
   Swipeable,
@@ -39,7 +39,7 @@ import {
   getPlaylistById,
   getUser,
   databases,
-  sendPushNotification,
+  sendPushNotification, // Asegúrate de que esto venga de tu appwrite.ts actualizado
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -334,31 +334,26 @@ const ChatRoom = () => {
   const rowRefs = useRef(new Map()).current;
 
   // --- 🔥 LÓGICA DE LECTURA ROBUSTA ---
-  // Esta función se encarga de llamar a la API para actualizar la DB
   const performReadUpdate = async (userId: string, currentMessages: any[]) => {
     if (!chatId || !userId) return;
 
-    // 1. Marcar Chat como leído (Nivel Chat - Importante para la lista)
     try {
       await markChatAsRead(chatId, userId);
     } catch (e) {
       console.log("Error marking chat read:", e);
     }
 
-    // 2. Marcar Mensajes individuales como leídos (Para el tick azul)
     const unreadMessages = currentMessages.filter(
       (m) => !m.isRead && m.senderId !== userId
     );
 
     if (unreadMessages.length > 0) {
-      // Actualizamos UI local inmediatamente
       setMessages((prev) =>
         prev.map((m) =>
           !m.isRead && m.senderId !== userId ? { ...m, isRead: true } : m
         )
       );
 
-      // Actualizamos DB
       try {
         await Promise.all(
           unreadMessages.map((msg) =>
@@ -376,17 +371,14 @@ const ChatRoom = () => {
     }
   };
 
-  // --- 🚀 USE FOCUS EFFECT: SE EJECUTA CADA VEZ QUE ENTRAS ---
   useFocusEffect(
     useCallback(() => {
       if (currentUser?.$id && messages.length > 0) {
-        console.log("👀 Pantalla enfocada, marcando como leído...");
         performReadUpdate(currentUser.$id, messages);
       }
-    }, [currentUser, messages.length]) // Se re-ejecuta si cambia el usuario o la cantidad de mensajes
+    }, [currentUser, messages.length])
   );
 
-  // --- EFECTO REALTIME ---
   useEffect(() => {
     loadData();
     const unsubscribe = client.subscribe(
@@ -394,7 +386,6 @@ const ChatRoom = () => {
       (response) => {
         const payload = response.payload as any;
         if (payload.chatId === chatId) {
-          // Si CREAN un mensaje
           if (
             response.events.includes(
               "databases.*.collections.*.documents.*.create"
@@ -405,13 +396,10 @@ const ChatRoom = () => {
               return [payload, ...prev];
             });
 
-            // Si llega un mensaje nuevo y estoy en la pantalla (currentUser existe)
-            // lo marco como leído inmediatamente
             if (currentUser?.$id && payload.senderId !== currentUser.$id) {
               performReadUpdate(currentUser.$id, [payload]);
             }
           }
-          // Si ACTUALIZAN (ej: tick azul)
           if (
             response.events.includes(
               "databases.*.collections.*.documents.*.update"
@@ -421,7 +409,6 @@ const ChatRoom = () => {
               prev.map((msg) => (msg.$id === payload.$id ? payload : msg))
             );
           }
-          // Si BORRAN
           if (
             response.events.includes(
               "databases.*.collections.*.documents.*.delete"
@@ -446,9 +433,7 @@ const ChatRoom = () => {
         setCurrentUser(user);
       }
 
-      // Recuperar info del otro usuario si falta
       if (!chatUser.id || !chatUser.avatar || !chatUser.expoPushToken) {
-        // ... (Tu lógica de recuperación de usuario, igual que antes)
         try {
           if (chatUser.id) {
             const otherUserData = await getUser(chatUser.id);
@@ -491,7 +476,6 @@ const ChatRoom = () => {
       const msgs = await getChatMessages(chatId);
       setMessages(msgs);
 
-      // 🔥 Forzamos marca de lectura al cargar los datos
       if (msgs.length > 0) {
         performReadUpdate(user.$id, msgs);
       }
@@ -623,8 +607,10 @@ const ChatRoom = () => {
       contentToSend = `${replyName}:::${snippet}:::REPLY:::${newMessage}`;
     }
 
+    // Guardamos el mensaje limpio para la notificación
     const messageForNotification = newMessage;
     const tempContent = contentToSend;
+
     setNewMessage("");
     setReplyingTo(null);
 
@@ -638,10 +624,16 @@ const ChatRoom = () => {
       );
 
       if (chatUser.expoPushToken) {
+        // Título: Nombre del remitente
+        const notiTitle =
+          currentUser.name || currentUser.username || "Mood Chat";
+        // Cuerpo: El mensaje tal cual lo escribió el usuario
+        const notiBody = messageForNotification;
+
         await sendPushNotification(
           chatUser.expoPushToken,
-          currentUser.name || currentUser.username || "Nuevo mensaje",
-          messageForNotification,
+          notiTitle,
+          notiBody,
           { type: "chat", chatId: chatId, url: `/chat/${chatId}` }
         );
       }

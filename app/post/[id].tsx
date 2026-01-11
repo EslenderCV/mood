@@ -30,11 +30,8 @@ import {
   deletePost,
   reportPost,
   getDeezerTrackUrl,
-  getUser,
-  databases,
-  sendPushNotification,
+  createNotification, // Importamos esto para notificar respuestas
 } from "@/lib/appwrite";
-import { Query } from "react-native-appwrite";
 import CommentItem from "@/components/CommentItem";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
@@ -45,90 +42,26 @@ import MoodShareCard from "@/components/MoodShareCard";
 
 const { width } = Dimensions.get("window");
 
-const getUserByUsername = async (username: string) => {
-  try {
-    const result = await databases.listDocuments(
-      "6689e7cc002bf2740136",
-      "6689e818000ae6ccbdec",
-      [Query.equal("username", username)]
-    );
-    return result.documents[0] || null;
-  } catch (e) {
-    return null;
-  }
-};
-
-const sendCommentNotifications = async (
+// Función simplificada: Solo maneja la notificación de RESPUESTA a otro comentario.
+// (El dueño del post y las menciones se manejan en otras funciones).
+const sendReplyNotification = async (
   post: any,
-  commentText: string,
   currentUser: any,
-  replyingToUser: any = null
+  replyingToUser: any
 ) => {
-  const notifiedUsers = new Set();
-
-  const creatorId = post.postedBy?.$id || post.creator?.$id;
-
-  if (creatorId && creatorId !== currentUser.$id) {
-    try {
-      const postOwner = await getUser(creatorId);
-      if (postOwner?.expoPushToken) {
-        await sendPushNotification(
-          postOwner.expoPushToken,
-          "Nuevo comentario 💬",
-          `@${currentUser.username} comentó tu publicación.`,
-          { type: "post", postId: post.$id }
-        );
-        notifiedUsers.add(creatorId);
-      }
-    } catch (e) {
-      console.error("Error notificando dueño:", e);
-    }
-  }
-
   if (replyingToUser && replyingToUser.$id !== currentUser.$id) {
-    if (!notifiedUsers.has(replyingToUser.$id)) {
-      try {
-        const targetUser = await getUser(replyingToUser.$id);
-        if (targetUser?.expoPushToken) {
-          await sendPushNotification(
-            targetUser.expoPushToken,
-            "Te respondieron ↩️",
-            `@${currentUser.username} respondió tu comentario.`,
-            { type: "post", postId: post.$id }
-          );
-          notifiedUsers.add(targetUser.$id);
-        }
-      } catch (e) {
-        console.error("Error notificando respuesta:", e);
-      }
-    }
-  }
-
-  const mentions = commentText.match(/@(\w+)/g);
-  if (mentions) {
-    for (const mention of mentions) {
-      const username = mention.substring(1);
-      if (username === currentUser.username) continue;
-
-      try {
-        const mentionedUser = await getUserByUsername(username);
-
-        if (
-          mentionedUser &&
-          mentionedUser.expoPushToken &&
-          !notifiedUsers.has(mentionedUser.$id)
-        ) {
-          await sendPushNotification(
-            mentionedUser.expoPushToken,
-            "Te mencionaron 📣",
-            `@${currentUser.username} te mencionó en un comentario.`,
-            { type: "post", postId: post.$id }
-          );
-          notifiedUsers.add(mentionedUser.$id);
-        }
-      } catch (e) {
-        console.error(`Error buscando mención @${username}:`, e);
-      }
+    try {
+      await createNotification({
+        userId: replyingToUser.$id,
+        type: "comment", // Reusamos el tipo comment
+        message: "respondió tu comentario ↩️",
+        senderId: currentUser.$id,
+        senderName: currentUser.username,
+        senderAvatar: currentUser.pfp,
+        postId: post.$id,
+      });
+    } catch (e) {
+      console.error("Error notificando respuesta:", e);
     }
   }
 };
@@ -190,7 +123,7 @@ const PostDetails = () => {
   const textColor = isDark ? "#FAFAFA" : "#18181B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
-  const songCardBg = isDark ? "#18181B" : "#F8FAFC"; // Fondo tarjeta más limpio
+  const songCardBg = isDark ? "#18181B" : "#F8FAFC";
   const inputBg = isDark ? "#27272A" : "#F3F4F6";
   const backIconColor = isDark ? "#FFFFFF" : "#000000";
   const suggestionBg = isDark ? "#18181B" : "#FFFFFF";
@@ -209,9 +142,9 @@ const PostDetails = () => {
 
   // --- ESTADOS PARA COMPARTIR ---
   const [isOptionsVisible, setOptionsVisible] = useState(false);
-  const [isShareVisible, setShareVisible] = useState(false); // Interno
-  const [isViralModalVisible, setViralModalVisible] = useState(false); // Externo
-  const [isShareSelectorVisible, setShareSelectorVisible] = useState(false); // Selector
+  const [isShareVisible, setShareVisible] = useState(false);
+  const [isViralModalVisible, setViralModalVisible] = useState(false);
+  const [isShareSelectorVisible, setShareSelectorVisible] = useState(false);
 
   const [replyingTo, setReplyingTo] = useState<{
     rootId: string;
@@ -424,6 +357,7 @@ const PostDetails = () => {
       const users = await searchUsers(username);
       const targetUser = users.find((u) => u.username === username);
       if (targetUser) {
+        // Esto envía la notificación de "Tag" (DB + Push)
         await sendTagNotification(user.$id, targetUser.$id, postId);
       }
     });
@@ -456,6 +390,8 @@ const PostDetails = () => {
 
     try {
       const parentId = replyingTo ? replyingTo.rootId : null;
+
+      // 1. crear comentario (Appwrite.ts se encarga de notificar al dueño del post)
       const newComment = await createComment(
         postId,
         {
@@ -467,13 +403,14 @@ const PostDetails = () => {
         parentId
       );
 
-      sendCommentNotifications(
+      // 2. Notificar si es una respuesta a OTRO usuario (no al dueño del post)
+      await sendReplyNotification(
         post,
-        commentText,
         user,
         replyingTo ? { $id: replyingTo.userId } : null
       );
 
+      // 3. Notificar menciones
       await processMentions(commentText, postId);
 
       setAllComments((prev) => [newComment, ...prev]);
@@ -490,6 +427,7 @@ const PostDetails = () => {
   const handleLike = async () => {
     if (!post || !user) return;
 
+    // UI Optimista
     const originalPost = { ...post };
     const originalLikes = post.likedBy || [];
     const isLiked = originalLikes.includes(user.$id);
@@ -501,28 +439,11 @@ const PostDetails = () => {
     setPost({ ...post, likedBy: newLikes });
 
     try {
+      // 1. Llamada a Appwrite (Esto actualiza DB y envía Push automáticamente)
       await toggleLikePost(post.$id, user.$id, originalLikes);
-
-      if (!isLiked) {
-        const creator = post.postedBy || post.creator;
-        if (creator && creator.$id !== user.$id) {
-          const creatorToken = creator.expoPushToken;
-          if (creatorToken) {
-            await sendPushNotification(
-              creatorToken,
-              "¡Le gustó tu post! ❤️",
-              `A @${user.username || "alguien"} le gustó tu publicación.`,
-              {
-                type: "post",
-                postId: post.$id,
-                userId: user.$id,
-              }
-            );
-          }
-        }
-      }
     } catch (error) {
       console.error("Error like:", error);
+      // Revertir si falla
       setPost(originalPost);
     }
   };
@@ -541,7 +462,7 @@ const PostDetails = () => {
     } catch (e) {}
   };
 
-  // --- RENDERIZADO DEL POST (REDISEÑADO) ---
+  // --- RENDERIZADO DEL POST ---
   const renderHeader = () => {
     if (!post) return null;
     const songData = parseSongData(post.songData);
@@ -605,7 +526,7 @@ const PostDetails = () => {
           </Text>
         )}
 
-        {/* SONG CARD REDISEÑADA (Estilo Player Premium) */}
+        {/* SONG CARD */}
         {songData && (
           <View
             className="rounded-[24px] p-4 flex-row items-center mb-6 border relative overflow-hidden"
@@ -614,7 +535,6 @@ const PostDetails = () => {
               borderColor: borderColor,
             }}
           >
-            {/* Visualizer Background Effect */}
             {isPlaying && (
               <View className="absolute inset-0 bg-[#5E17EB] opacity-5" />
             )}

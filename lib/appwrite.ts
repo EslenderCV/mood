@@ -10,14 +10,13 @@ import {
 } from "react-native-appwrite";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
-import { Platform } from "react-native";
 
 export const appwriteConfig = {
   endpoint: "https://fra.cloud.appwrite.io/v1",
   platform: "com.Gammes.Mood",
   projectId: "6689e59b000acd6caf6f",
   databaseId: "6689e7cc002bf2740136",
-  usersCollectionId: "6689e818000ae6ccbdec",
+  usersCollectionId: "6962f488000f10f39b70",
   postsCollectionId: "6689e9a5003e7426666e",
   storageId: "66a51c310032319c09d0",
   followsCollectionId: "6949a7500026f2cf2850",
@@ -27,8 +26,7 @@ export const appwriteConfig = {
   messagesCollectionId: "6949c1b6000d070ff309",
   reportsCollectionId: "6959a194002105f44c03",
   playlistsCollectionId: "6959a8460009615dfbcb",
-  providerIdAndroid: "695f237d001c17a72dcc",
-  providerIdIos: "",
+  storiesCollectionId: "69631b240013f47f559f",
 };
 
 const client = new Client();
@@ -41,6 +39,104 @@ client
 export const account = new Account(client);
 const databases = new Databases(client);
 const storage = new Storage(client);
+
+export async function sendPushNotification(
+  expoPushToken: string,
+  title: string,
+  body: string,
+  data = {}
+) {
+  if (!expoPushToken || !expoPushToken.startsWith("ExponentPushToken")) {
+    console.log("⚠️ Token inválido o inexistente para push:", expoPushToken);
+    return;
+  }
+
+  const message = {
+    to: expoPushToken,
+    sound: "default",
+    title: title,
+    body: body,
+    data: data,
+  };
+
+  try {
+    await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Accept-encoding": "gzip, deflate",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(message),
+    });
+  } catch (error) {
+    console.log("Error enviando notificación push:", error);
+  }
+}
+
+export async function updateUserPushToken(userId: string, token: string) {
+  try {
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId,
+      {
+        expoPushToken: token,
+      }
+    );
+    console.log("✅ Expo Push Token actualizado en DB");
+  } catch (error: any) {
+    console.log("Error actualizando push token:", error.message);
+  }
+}
+
+export async function createNotification(data: {
+  userId: string;
+  type: "like" | "comment" | "follow" | "follow_request" | "tag";
+  message: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  postId?: string;
+}) {
+  try {
+    if (data.userId === data.senderId) return;
+
+    await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.notificationsCollectionId,
+      ID.unique(),
+      {
+        userId: data.userId,
+        type: data.type,
+        message: data.message,
+        senderId: data.senderId,
+        senderName: data.senderName,
+        senderAvatar: data.senderAvatar,
+        postId: data.postId,
+        isRead: false,
+      }
+    );
+
+    const targetUser = await getUser(data.userId);
+
+    if (targetUser && targetUser.expoPushToken) {
+      let title = "Mood";
+      if (data.type === "like") title = "❤️ Nuevo Like";
+      if (data.type === "comment") title = "💬 Nuevo Comentario";
+      if (data.type === "follow") title = "👤 Nuevo Seguidor";
+      if (data.type === "tag") title = "🏷️ Te etiquetaron";
+
+      const body = `${data.senderName} ${data.message}`;
+
+      await sendPushNotification(targetUser.expoPushToken, title, body, {
+        postId: data.postId,
+      });
+    }
+  } catch (error) {
+    console.log("Error creando notificación:", error);
+  }
+}
 
 export const signInWithOAuth = async (provider: "google" | "apple") => {
   try {
@@ -226,6 +322,67 @@ export async function getUser(userId: string) {
   }
 }
 
+export const syncOrCreateUserDocument = async () => {
+  try {
+    const currentAccount = await account.get();
+    if (!currentAccount) throw new Error("No hay cuenta activa");
+
+    const userContext = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      [Query.equal("accId", currentAccount.$id)]
+    );
+
+    if (userContext.documents.length > 0) {
+      return userContext.documents[0];
+    }
+
+    const avatarUrl = `https://fra.cloud.appwrite.io/v1/avatars/initials?name=${encodeURIComponent(
+      currentAccount.name
+    )}&project=${appwriteConfig.projectId}`;
+
+    const newUser = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      ID.unique(),
+      {
+        accId: currentAccount.$id,
+        email: currentAccount.email,
+        name: currentAccount.name,
+        pfp: avatarUrl,
+        username:
+          currentAccount.name.replace(/\s+/g, "").toLowerCase() +
+          Math.floor(Math.random() * 1000),
+        preferredPlatform: "spotify",
+        allowTags: true,
+        blockedUsers: [],
+        isBanned: false,
+        isPrivate: false,
+      }
+    );
+
+    return newUser;
+  } catch (error) {
+    console.log("Error sincronizando usuario:", error);
+    return null;
+  }
+};
+
+export async function deleteUserAccount(userId: string) {
+  try {
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId
+    );
+    await account.deleteSession("current");
+    return true;
+  } catch (error: any) {
+    console.error("Error deleting account:", error);
+    throw new Error(error.message);
+  }
+}
+
 export async function updateProfile(userId: string, form: any) {
   try {
     const hasFile = form.pfp && typeof form.pfp !== "string";
@@ -329,6 +486,48 @@ export const getDeezerTrackUrl = async (trackId: string | number) => {
   }
 };
 
+export async function saveSpotifyTokens(
+  userId: string,
+  accessToken: string,
+  refreshToken: string,
+  expiration: string
+) {
+  try {
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId,
+      {
+        spotifyAccessToken: accessToken,
+        spotifyRefreshToken: refreshToken,
+        spotifyTokenExpiration: expiration,
+        preferredPlatform: "spotify",
+      }
+    );
+    return true;
+  } catch (error: any) {
+    console.error("Error guardando tokens:", error);
+    throw new Error("No se pudo conectar con Spotify");
+  }
+}
+
+export async function setPreferredPlatform(
+  userId: string,
+  platform: "spotify" | "apple" | "mood"
+) {
+  try {
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId,
+      { preferredPlatform: platform }
+    );
+    return true;
+  } catch (error) {
+    throw new Error("No se pudo cambiar la preferencia");
+  }
+}
+
 export async function getPostById(postId: string) {
   try {
     const post = await databases.getDocument(
@@ -338,12 +537,9 @@ export async function getPostById(postId: string) {
     );
     if (post.postedBy && typeof post.postedBy === "string") {
       const user = await getUser(post.postedBy);
-
       if (!user) return null;
-
       return { ...post, postedBy: user };
     }
-
     if (
       post.postedBy &&
       typeof post.postedBy === "object" &&
@@ -351,7 +547,6 @@ export async function getPostById(postId: string) {
     ) {
       return null;
     }
-
     return post;
   } catch (error) {
     console.log("Error getting post by ID:", error);
@@ -1025,37 +1220,6 @@ export async function deleteFollowRequest(
   }
 }
 
-export async function createNotification(data: {
-  userId: string;
-  type: "like" | "comment" | "follow" | "follow_request" | "tag";
-  message: string;
-  senderId: string;
-  senderName: string;
-  senderAvatar: string;
-  postId?: string;
-}) {
-  try {
-    if (data.userId === data.senderId) return;
-    await databases.createDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.notificationsCollectionId,
-      ID.unique(),
-      {
-        userId: data.userId,
-        type: data.type,
-        message: data.message,
-        senderId: data.senderId,
-        senderName: data.senderName,
-        senderAvatar: data.senderAvatar,
-        postId: data.postId,
-        isRead: false,
-      }
-    );
-  } catch (error) {
-    console.log("Error creando notificación:", error);
-  }
-}
-
 export async function getUserNotifications(userId: string) {
   try {
     const result = await databases.listDocuments(
@@ -1166,18 +1330,16 @@ export async function searchUsers(query: string) {
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
       [
-        // Usamos Query.or para buscar en (username O name)
         Query.or([
           Query.search("username", query),
           Query.search("name", query),
         ]),
-        Query.limit(10), // Aumenté un poco el límite para ver más opciones
+        Query.limit(10),
         Query.notEqual("isBanned", true),
       ]
     );
 
     const filteredUsers = users.documents.filter((doc) => {
-      // Filtrar usuarios que no permiten etiquetas
       return doc.allowTags !== false;
     });
 
@@ -1485,34 +1647,6 @@ export async function getBlockedUsersList(currentUserId: string) {
   }
 }
 
-export async function getUserSessions() {
-  try {
-    const sessions = await account.listSessions();
-    return sessions.sessions;
-  } catch (error: any) {
-    return [];
-  }
-}
-export async function deleteSession(sessionId: string) {
-  try {
-    await account.deleteSession(sessionId);
-    return true;
-  } catch (error: any) {
-    throw new Error(error.message);
-  }
-}
-export async function deleteAllSessions() {
-  try {
-    const sessions = await account.listSessions();
-    await Promise.all(
-      sessions.sessions.map((s) => account.deleteSession(s.$id))
-    );
-    return true;
-  } catch (error: any) {
-    throw new Error(error.message);
-  }
-}
-
 export async function reportPost(
   postId: string,
   reporterId: string,
@@ -1538,45 +1672,31 @@ export async function reportPost(
   }
 }
 
-export async function saveSpotifyTokens(
-  userId: string,
-  accessToken: string,
-  refreshToken: string,
-  expiration: string
-) {
+export async function getUserSessions() {
   try {
-    await databases.updateDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      userId,
-      {
-        spotifyAccessToken: accessToken,
-        spotifyRefreshToken: refreshToken,
-        spotifyTokenExpiration: expiration,
-        preferredPlatform: "spotify",
-      }
+    const sessions = await account.listSessions();
+    return sessions.sessions;
+  } catch (error: any) {
+    return [];
+  }
+}
+export async function deleteSession(sessionId: string) {
+  try {
+    await account.deleteSession(sessionId);
+    return true;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+}
+export async function deleteAllSessions() {
+  try {
+    const sessions = await account.listSessions();
+    await Promise.all(
+      sessions.sessions.map((s) => account.deleteSession(s.$id))
     );
     return true;
   } catch (error: any) {
-    console.error("Error guardando tokens:", error);
-    throw new Error("No se pudo conectar con Spotify");
-  }
-}
-
-export async function setPreferredPlatform(
-  userId: string,
-  platform: "spotify" | "apple" | "mood"
-) {
-  try {
-    await databases.updateDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      userId,
-      { preferredPlatform: platform }
-    );
-    return true;
-  } catch (error) {
-    throw new Error("No se pudo cambiar la preferencia");
+    throw new Error(error.message);
   }
 }
 
@@ -1721,165 +1841,64 @@ export async function getPlaylistById(playlistId: string) {
   }
 }
 
-export async function updateUserPushToken(userId: string, token: string) {
+export async function createStory(songData: string, userId: string) {
   try {
-    await databases.updateDocument(
+    const newStory = await databases.createDocument(
       appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      userId,
+      appwriteConfig.storiesCollectionId,
+      ID.unique(),
       {
-        expoPushToken: token,
+        user: userId,
+        songData: songData,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       }
     );
-    console.log("Push Token actualizado en Appwrite");
+    return newStory;
   } catch (error) {
-    console.log("Error actualizando push token:", error);
+    console.log("Error creando historia:", error);
+    throw error;
   }
 }
 
-export async function sendPushNotification(
-  expoPushToken: string,
-  title: string,
-  body: string,
-  data = {}
-) {
-  const message = {
-    to: expoPushToken,
-    sound: "default",
-    title: title,
-    body: body,
-    data: data,
-  };
-
+export async function getStories(currentUserId: string) {
   try {
-    await fetch("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Accept-encoding": "gzip, deflate",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(message),
-    });
+    const posts = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.storiesCollectionId,
+      [
+        Query.orderDesc("$createdAt"),
+        Query.greaterThan("expiresAt", new Date().toISOString()),
+      ]
+    );
+
+    return posts.documents;
   } catch (error) {
-    console.log("Error enviando notificación:", error);
+    console.log("Error obteniendo historias:", error);
+    return [];
+  }
+}
+
+export async function viewStory(
+  storyId: string,
+  userId: string,
+  currentViewers: string[] = []
+) {
+  try {
+    if (currentViewers.includes(userId)) return;
+
+    const updatedViewers = [...currentViewers, userId];
+
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.storiesCollectionId,
+      storyId,
+      {
+        viewers: updatedViewers,
+      }
+    );
+  } catch (error) {
+    console.log("Error marcando vista:", error);
   }
 }
 
 export { client, databases };
-
-export async function deleteUserAccount(userId: string) {
-  try {
-    await databases.deleteDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      userId
-    );
-
-    await account.deleteSession("current");
-
-    return true;
-  } catch (error: any) {
-    console.error("Error deleting account:", error);
-    throw new Error(error.message);
-  }
-}
-
-export const syncOrCreateUserDocument = async () => {
-  try {
-    const currentAccount = await account.get();
-    if (!currentAccount) throw new Error("No hay cuenta activa");
-
-    const userContext = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      [Query.equal("accId", currentAccount.$id)]
-    );
-
-    if (userContext.documents.length > 0) {
-      return userContext.documents[0];
-    }
-
-    const avatarUrl = `https://fra.cloud.appwrite.io/v1/avatars/initials?name=${encodeURIComponent(
-      currentAccount.name
-    )}&project=${appwriteConfig.projectId}`;
-
-    const newUser = await databases.createDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      ID.unique(),
-      {
-        accId: currentAccount.$id,
-        email: currentAccount.email,
-        name: currentAccount.name,
-        pfp: avatarUrl,
-        username:
-          currentAccount.name.replace(/\s+/g, "").toLowerCase() +
-          Math.floor(Math.random() * 1000),
-        preferredPlatform: "spotify",
-        allowTags: true,
-        blockedUsers: [],
-        isBanned: false,
-        isPrivate: false,
-      }
-    );
-
-    return newUser;
-  } catch (error) {
-    console.log("Error sincronizando usuario:", error);
-    return null;
-  }
-};
-
-export async function registerPushTokenInAppwrite(token: string) {
-  try {
-    // 1. Determinar el proveedor según el dispositivo
-    let providerId = "";
-    if (Platform.OS === "android") {
-      providerId = appwriteConfig.providerIdAndroid;
-    } else {
-      providerId = appwriteConfig.providerIdIos;
-    }
-
-    if (!providerId || providerId.includes("TU_ID")) {
-      console.log("⚠️ Faltan configurar los Provider IDs en appwriteConfig");
-      return;
-    }
-
-    // 2. Verificar sesión actual
-    try {
-      await account.get();
-    } catch (e) {
-      console.log("No hay sesión activa, no se puede registrar el push token");
-      return;
-    }
-
-    // 3. Crear el Target
-    // Usamos ID.unique() para el targetId, pero Appwrite es inteligente:
-    // Si el mismo token ya existe para este usuario, lanzará error (que ignoramos)
-    await account.createPushTarget(ID.unique(), token, providerId);
-
-    console.log("✅ Push Target registrado en Appwrite exitosamente.");
-  } catch (error: any) {
-    // Si el error es que ya existe, no nos importa.
-    if (error.message && error.message.includes("Target already exists")) {
-      console.log("El dispositivo ya estaba registrado.");
-      return;
-    }
-    console.log("Error registrando push token en Appwrite:", error);
-  }
-}
-
-export async function updateUserToken(userId: string, token: string) {
-  try {
-    // Crea un "Target" de mensajería para este usuario
-    // Reemplaza "TU_PROVIDER_ID" con el ID de tu proveedor FCM en Appwrite (Messaging > Providers)
-    // Si no sabes el ID, ve a Appwrite Console > Messaging > Providers y copia el ID del que dice "FCM".
-    // Si aún no tienes provider, puedes comentar esta línea por ahora para que no de error.
-
-    // await account.createPushTarget(ID.unique(), token, "TU_PROVIDER_ID_AQUI");
-    console.log("Token procesado para usuario:", userId);
-  } catch (error: any) {
-    console.log("Error guardando token:", error.message);
-  }
-}

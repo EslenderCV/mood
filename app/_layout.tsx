@@ -7,30 +7,11 @@ import { ModalProvider } from "@/context/ModalContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 
-// 🟢 1. Importa tu función de registro aquí.
-// (Ajusta la ruta si tu archivo está en otra carpeta, ej: "@/lib/notifications")
-import { registerForPushNotificationsAsync } from "../lib/usePushNotifications";
-
 const StackLayout = () => {
-  // 🟢 2. Agregamos 'user' a la desestructuración para saber cuándo existen los datos
-  const { loggedIn, loading, user } = useGlobalContext();
+  const { loggedIn, loading } = useGlobalContext();
   const segments = useSegments();
   const router = useRouter();
 
-  // 🟢 3. NUEVO EFECTO: Este es el "guardián" que soluciona la Condición de Carrera
-  useEffect(() => {
-    // Solo entramos aquí si ya terminó de cargar, el usuario está logueado y tenemos sus datos
-    if (!loading && loggedIn && user) {
-      console.log(
-        "✅ Sesión confirmada y lista. Iniciando registro de Push Token..."
-      );
-
-      // Llamamos a la función. Si tu función requiere el ID del usuario, pásaselo.
-      registerForPushNotificationsAsync(user.$id);
-    }
-  }, [loading, loggedIn, user]); // <--- Se ejecuta automáticamente cuando 'user' se llena
-
-  // Efecto de Navegación (Tu código original, intacto)
   useEffect(() => {
     if (loading) return;
 

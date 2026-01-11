@@ -23,8 +23,6 @@ const TopBar = ({ notificationCount = 0, messageCount = 0 }: TopBarProps) => {
       className="flex-row items-center justify-between w-full px-5 py-2 border-b"
       style={{
         backgroundColor: bgColor,
-        borderColor: borderColor,
-        borderBottomWidth: isDark ? 1 : 0,
       }}
     >
       <View className="h-[45px] w-[80px] justify-center">
@@ -43,7 +41,6 @@ const TopBar = ({ notificationCount = 0, messageCount = 0 }: TopBarProps) => {
           }}
           className="p-2.5 rounded-full relative"
           style={{
-            backgroundColor: btnBg,
             shadowColor: "#000",
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: isDark ? 0 : 0.05,
@@ -65,7 +62,6 @@ const TopBar = ({ notificationCount = 0, messageCount = 0 }: TopBarProps) => {
             activeOpacity={0.7}
             className="p-2.5 rounded-full relative"
             style={{
-              backgroundColor: btnBg,
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: isDark ? 0 : 0.05,

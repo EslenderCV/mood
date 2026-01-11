@@ -14,9 +14,7 @@ import {
   toggleLikePost,
   toggleSavePost,
   getDeezerTrackUrl,
-  getUser,
-  sendPushNotification,
-  getCurrentUser,
+  // sendPushNotification, <-- ELIMINADO: Ya no lo necesitas aquí
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
@@ -76,15 +74,13 @@ const PostItem: React.FC<PostItemProps> = ({
   onSharePress,
 }) => {
   if (!post) return null;
-  const { user } = useGlobalContext();
+  const { user } = useGlobalContext(); // Aunque no lo usamos para notificar, puede servir para otras cosas
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
   // Paleta de colores Premium
   const textColor = isDark ? "#FAFAFA" : "#18181B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
-
-  // Fondo de la tarjeta de canción (Sutil contraste)
   const songCardBg = isDark ? "#18181B" : "#F4F4F5";
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
   const accentColor = "#5E17EB";
@@ -121,7 +117,7 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const player = useAudioPlayer(currentUrl);
 
-  // Lógica de Audio (igual que antes)
+  // Lógica de Audio
   useEffect(() => {
     if (
       currentPlayingId &&
@@ -201,7 +197,9 @@ const PostItem: React.FC<PostItemProps> = ({
     }
   };
 
+  // --- LÓGICA DE LIKE SIMPLIFICADA ---
   const handleLike = async () => {
+    // 1. Optimistic Update (Actualizar UI inmediatamente)
     const prevLiked = isLiked;
     const prevCount = likesCount;
 
@@ -210,30 +208,15 @@ const PostItem: React.FC<PostItemProps> = ({
 
     try {
       const currentLikesArray = post.likedBy || [];
+
+      // 2. Llamada a Appwrite
+      // NOTA: toggleLikePost en appwrite.ts ya se encarga de:
+      // - Actualizar la DB
+      // - Verificar si es un like nuevo
+      // - Enviar la Push Notification al dueño del post
       await toggleLikePost(post.$id, currentUserId, currentLikesArray);
-
-      const isNewLike = !prevLiked;
-      const creatorId = post.postedBy?.$id;
-      const isNotSelf = creatorId !== currentUserId;
-      if (isNewLike && isNotSelf) {
-        const creatorToken = post.postedBy?.expoPushToken;
-
-        if (creatorToken) {
-          await sendPushNotification(
-            creatorToken,
-            "¡Le gustó tu post! ❤️",
-            `A @${user?.username || "alguien"} le gustó tu publicación.`,
-            {
-              type: "post",
-              postId: post.$id,
-              userId: currentUserId,
-            }
-          );
-        } else {
-        }
-      } else {
-      }
     } catch (error) {
+      // Revertir si falla
       setIsLiked(prevLiked);
       setLikesCount(prevCount);
     }
@@ -324,7 +307,6 @@ const PostItem: React.FC<PostItemProps> = ({
           className="rounded-2xl p-3 flex-row items-center mb-4"
           style={{
             backgroundColor: songCardBg,
-            // Quitamos el borde para un look más "Clean"
           }}
         >
           <Image
