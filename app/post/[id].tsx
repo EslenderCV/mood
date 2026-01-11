@@ -12,12 +12,24 @@ import {
   Dimensions,
   Modal,
   TouchableWithoutFeedback,
+  Share as SystemShare,
+  Clipboard,
+  ScrollView,
+  LayoutAnimation,
+  Keyboard,
+  useWindowDimensions, // <--- Importado
 } from "react-native";
 import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { Ionicons, Feather, MaterialIcons } from "@expo/vector-icons";
 import { useAudioPlayer } from "expo-audio";
+import { LinearGradient } from "expo-linear-gradient";
+import { Databases, Query, ID } from "react-native-appwrite";
+
 import { useGlobalContext } from "@/context/GlobalProvider";
 import {
   getPostById,
@@ -30,7 +42,12 @@ import {
   deletePost,
   reportPost,
   getDeezerTrackUrl,
-  createNotification, // Importamos esto para notificar respuestas
+  createNotification,
+  client,
+  appwriteConfig,
+  getFollowedUserIds,
+  getUser,
+  createStory,
 } from "@/lib/appwrite";
 import CommentItem from "@/components/CommentItem";
 import { useColorScheme } from "nativewind";
@@ -40,10 +57,97 @@ import ShareModal from "@/components/ShareModal";
 import OptionsModal from "@/components/OptionsModal";
 import MoodShareCard from "@/components/MoodShareCard";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
+const databases = new Databases(client);
 
-// Función simplificada: Solo maneja la notificación de RESPUESTA a otro comentario.
-// (El dueño del post y las menciones se manejan en otras funciones).
+// --- SKELETON LOADER (NUEVO) ---
+const PostDetailSkeleton = ({ isDark }: { isDark: boolean }) => {
+  const bg = isDark ? "bg-zinc-900" : "bg-zinc-100";
+  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
+  const cardBg = isDark ? "bg-zinc-800" : "bg-zinc-200";
+
+  return (
+    <View className="flex-1 animate-pulse">
+      {/* Post Content */}
+      <View className="px-5 pt-4 pb-2">
+        {/* User Header */}
+        <View className="flex-row items-center mb-6">
+          <View className={`w-12 h-12 rounded-full ${elementBg} mr-3`} />
+          <View className="space-y-2">
+            <View className={`w-32 h-4 rounded ${elementBg}`} />
+            <View className={`w-24 h-3 rounded ${elementBg}`} />
+          </View>
+        </View>
+
+        {/* Caption */}
+        <View className={`w-3/4 h-4 rounded ${elementBg} mb-2`} />
+        <View className={`w-1/2 h-4 rounded ${elementBg} mb-6`} />
+
+        {/* Song Card (Simulando el reproductor) */}
+        <View
+          className={`w-full h-28 rounded-[24px] ${cardBg} p-4 flex-row items-center mb-6`}
+        >
+          <View className={`w-20 h-20 rounded-2xl ${elementBg} mr-4`} />
+          <View className="flex-1 space-y-3">
+            <View className={`w-40 h-5 rounded ${elementBg}`} />
+            <View className={`w-24 h-4 rounded ${elementBg}`} />
+          </View>
+          <View className={`w-12 h-12 rounded-full ${elementBg}`} />
+        </View>
+
+        {/* Actions Row */}
+        <View className="flex-row justify-between items-center px-2 mb-4">
+          <View className="flex-row gap-6">
+            <View className={`w-6 h-6 rounded-full ${elementBg}`} />
+            <View className={`w-6 h-6 rounded-full ${elementBg}`} />
+          </View>
+          <View className="flex-row gap-6">
+            <View className={`w-6 h-6 rounded-full ${elementBg}`} />
+            <View className={`w-6 h-6 rounded-full ${elementBg}`} />
+          </View>
+        </View>
+
+        <View className={`h-[1px] w-full ${elementBg} mb-6`} />
+      </View>
+
+      {/* Comments List Simulator */}
+      <View className="px-5">
+        {[1, 2, 3].map((i) => (
+          <View key={i} className="flex-row mb-6">
+            <View className={`w-8 h-8 rounded-full ${elementBg} mr-3`} />
+            <View className="flex-1 space-y-2">
+              <View className={`w-20 h-3 rounded ${elementBg}`} />
+              <View className={`w-full h-10 rounded-xl ${elementBg}`} />
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+// --- HELPERS ---
+
+const searchSongs = async (query: string) => {
+  try {
+    const response = await fetch(
+      `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=15`
+    );
+    const data = await response.json();
+    return data.data.map((track: any) => ({
+      id: track.id.toString(),
+      title: track.title,
+      artist: track.artist.name,
+      cover: track.album.cover_medium || track.album.cover_big,
+      preview: track.preview,
+      duration: track.duration,
+    }));
+  } catch (e) {
+    console.error("Error buscando canciones:", e);
+    return [];
+  }
+};
+
 const sendReplyNotification = async (
   post: any,
   currentUser: any,
@@ -53,7 +157,7 @@ const sendReplyNotification = async (
     try {
       await createNotification({
         userId: replyingToUser.$id,
-        type: "comment", // Reusamos el tipo comment
+        type: "comment",
         message: "respondió tu comentario ↩️",
         senderId: currentUser.$id,
         senderName: currentUser.username,
@@ -91,6 +195,8 @@ const parseSongData = (songDataString: string) => {
   }
 };
 
+// --- COMPONENTES AUXILIARES ---
+
 const AudioVisualizer = ({
   isPlaying,
   color,
@@ -113,6 +219,624 @@ const AudioVisualizer = ({
     </View>
   );
 };
+
+// --- COMPONENTE: Hoja de Compartir Directo ---
+const DirectShareSheet = ({
+  visible,
+  onClose,
+  contacts,
+  onSend,
+  onAddToStory,
+  onViralCard,
+  onSystemShare,
+  onCopyLink,
+  isDark,
+  onSearch,
+  isLoadingContacts,
+}: any) => {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const insets = useSafeAreaInsets();
+
+  const bgColor = isDark ? "#18181B" : "#ffffff";
+  const textColor = isDark ? "white" : "black";
+  const placeholderColor = isDark ? "#A1A1AA" : "#71717A";
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (onSearch) onSearch(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUsers((prev) => {
+      if (prev.includes(userId)) {
+        return prev.filter((id) => id !== userId);
+      } else {
+        return [...prev, userId];
+      }
+    });
+  };
+
+  const handleSend = () => {
+    onSend(selectedUsers, searchQuery);
+    setSelectedUsers([]);
+    setSearchQuery("");
+    onClose();
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="flex-1 justify-end bg-black/50">
+          <TouchableWithoutFeedback>
+            <View
+              className="rounded-t-[32px] overflow-hidden"
+              style={{
+                backgroundColor: bgColor,
+                paddingBottom: insets.bottom + 20,
+                maxHeight: height * 0.8,
+              }}
+            >
+              <View className="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full self-center mt-4 mb-4" />
+
+              {/* Search Bar */}
+              <View className="px-5 mb-4">
+                <View
+                  className={`flex-row items-center px-4 py-3 rounded-2xl ${
+                    isDark ? "bg-zinc-800" : "bg-zinc-100"
+                  }`}
+                >
+                  <Ionicons name="search" size={20} color={placeholderColor} />
+                  <TextInput
+                    placeholder="Buscar persona..."
+                    placeholderTextColor={placeholderColor}
+                    className="flex-1 ml-3 text-base"
+                    style={{ color: textColor }}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery("")}>
+                      <Ionicons
+                        name="close-circle"
+                        size={18}
+                        color={placeholderColor}
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* Suggested Users Horizontal List */}
+              <View className="h-28 pl-5 mb-4">
+                {isLoadingContacts ? (
+                  <View className="flex-1 justify-center items-center mr-5">
+                    <ActivityIndicator color="#5E17EB" />
+                  </View>
+                ) : (
+                  <FlatList
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    data={contacts}
+                    keyExtractor={(item) => item.$id}
+                    ListEmptyComponent={
+                      <Text className="text-zinc-500 mt-8 ml-2">
+                        No se encontraron usuarios.
+                      </Text>
+                    }
+                    renderItem={({ item }) => {
+                      const isSelected = selectedUsers.includes(item.$id);
+                      return (
+                        <TouchableOpacity
+                          onPress={() => toggleUserSelection(item.$id)}
+                          className="mr-6 items-center w-18"
+                          activeOpacity={0.8}
+                        >
+                          <View className="relative">
+                            <Image
+                              source={{
+                                uri:
+                                  item.avatar ||
+                                  item.pfp ||
+                                  "https://cloud.appwrite.io/v1/avatars/initials?name=" +
+                                    item.username,
+                              }}
+                              className="w-16 h-16 rounded-full bg-zinc-700"
+                            />
+                            {isSelected && (
+                              <View
+                                className="absolute bottom-0 right-0 bg-[#5E17EB] rounded-full w-6 h-6 items-center justify-center border-2"
+                                style={{ borderColor: bgColor }}
+                              >
+                                <Ionicons
+                                  name="checkmark"
+                                  size={14}
+                                  color="white"
+                                />
+                              </View>
+                            )}
+                          </View>
+                          <Text
+                            className="text-xs mt-2 text-center w-20"
+                            numberOfLines={1}
+                            style={{ color: textColor }}
+                          >
+                            {item.name || item.username}
+                          </Text>
+                          <Text
+                            className="text-[10px] text-zinc-500 text-center w-20"
+                            numberOfLines={1}
+                          >
+                            @{item.username}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    }}
+                  />
+                )}
+              </View>
+
+              <View
+                className={`h-[1px] w-full ${
+                  isDark ? "bg-zinc-800" : "bg-zinc-200"
+                } mb-4`}
+              />
+
+              {/* Action Buttons Row */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="px-5 mb-4"
+              >
+                <TouchableOpacity
+                  onPress={onAddToStory}
+                  className="items-center mr-8"
+                >
+                  <View
+                    className={`w-14 h-14 rounded-full items-center justify-center border-2 border-dashed ${
+                      isDark ? "border-zinc-600" : "border-zinc-400"
+                    }`}
+                  >
+                    <Ionicons
+                      name="add"
+                      size={28}
+                      color={isDark ? "white" : "black"}
+                    />
+                  </View>
+                  <Text className="text-xs mt-2" style={{ color: textColor }}>
+                    Tu historia
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={onViralCard}
+                  className="items-center mr-8"
+                >
+                  <View
+                    className={`w-14 h-14 rounded-full items-center justify-center ${
+                      isDark ? "bg-zinc-800" : "bg-zinc-100"
+                    }`}
+                  >
+                    <Ionicons name="share-social" size={24} color="#ec4899" />
+                  </View>
+                  <Text className="text-xs mt-2" style={{ color: textColor }}>
+                    Viral Card
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={onSystemShare}
+                  className="items-center mr-8"
+                >
+                  <View
+                    className={`w-14 h-14 rounded-full items-center justify-center ${
+                      isDark ? "bg-zinc-800" : "bg-zinc-100"
+                    }`}
+                  >
+                    <Feather name="share" size={24} color={textColor} />
+                  </View>
+                  <Text className="text-xs mt-2" style={{ color: textColor }}>
+                    Compartir via...
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={onCopyLink}
+                  className="items-center mr-8"
+                >
+                  <View
+                    className={`w-14 h-14 rounded-full items-center justify-center ${
+                      isDark ? "bg-zinc-800" : "bg-zinc-100"
+                    }`}
+                  >
+                    <Feather name="link" size={24} color={textColor} />
+                  </View>
+                  <Text className="text-xs mt-2" style={{ color: textColor }}>
+                    Copiar enlace
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+
+              {selectedUsers.length > 0 && (
+                <View className="px-5 pt-2">
+                  <TouchableOpacity
+                    onPress={handleSend}
+                    className="w-full bg-[#5E17EB] py-4 rounded-full items-center"
+                  >
+                    <Text className="text-white font-bold text-base">
+                      Enviar ({selectedUsers.length})
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+};
+
+// --- COMPONENTE: Modal de Creación de Historias (Igual a Home) ---
+const StoryCreationModal = ({
+  visible,
+  onClose,
+  currentUser,
+  onSuccess,
+  initialSongData = null,
+}: any) => {
+  const [step, setStep] = useState<"search" | "preview">("search");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [selectedSong, setSelectedSong] = useState<any>(null);
+  const [caption, setCaption] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [searching, setSearching] = useState(false);
+
+  const [previewTrackUrl, setPreviewTrackUrl] = useState<string | null>(null);
+
+  const activeAudioSource =
+    step === "preview" && selectedSong?.preview
+      ? selectedSong.preview
+      : previewTrackUrl || "";
+
+  const player = useAudioPlayer(activeAudioSource);
+
+  useEffect(() => {
+    if (visible && initialSongData) {
+      setSelectedSong(initialSongData);
+      setStep("preview");
+      setPreviewTrackUrl(null);
+    } else if (visible && !initialSongData) {
+      resetForm();
+    }
+  }, [visible, initialSongData]);
+
+  useEffect(() => {
+    try {
+      if (activeAudioSource && player) {
+        if (player.playing) player.pause();
+        player.replace(activeAudioSource);
+        player.play();
+        player.loop = step === "preview";
+      } else if (player) {
+        player.pause();
+      }
+    } catch (e) {
+      console.log("Audio Error:", e);
+    }
+  }, [activeAudioSource, step]);
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (query.length > 2) {
+        setSearching(true);
+        const songs = await searchSongs(query);
+        setResults(songs);
+        setSearching(false);
+      } else {
+        setResults([]);
+      }
+    }, 500);
+    return () => clearTimeout(delayDebounceFn);
+  }, [query]);
+
+  const resetForm = () => {
+    setStep("search");
+    setQuery("");
+    setResults([]);
+    setSelectedSong(null);
+    setCaption("");
+    setPreviewTrackUrl(null);
+    try {
+      if (player) player.pause();
+    } catch (e) {}
+  };
+
+  const handlePlayPreview = (url: string | null) => {
+    if (!url) return;
+    try {
+      if (previewTrackUrl === url) {
+        if (player.playing) {
+          player.pause();
+          setPreviewTrackUrl(null);
+        } else {
+          player.play();
+        }
+      } else {
+        setPreviewTrackUrl(url);
+      }
+    } catch (e) {}
+  };
+
+  const handleSelectSong = (song: any) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSelectedSong(song);
+    setPreviewTrackUrl(null);
+    setStep("preview");
+  };
+
+  const handleUpload = async () => {
+    if (!selectedSong || !currentUser) return;
+    setLoading(true);
+    try {
+      if (player) player.pause();
+    } catch (e) {}
+
+    try {
+      const songData = JSON.stringify({
+        title: selectedSong.title,
+        artist: selectedSong.artist,
+        cover: selectedSong.cover,
+        preview: selectedSong.preview,
+        spotifyId: selectedSong.id,
+        caption: caption,
+      });
+
+      await createStory(songData, currentUser.$id);
+
+      Alert.alert("¡Publicado!", "Tu historia está en vivo.");
+      onSuccess();
+      onClose();
+    } catch (error) {
+      Alert.alert("Error", "No se pudo subir la historia.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBack = () => {
+    if (step === "preview") {
+      if (initialSongData) {
+        onClose();
+      } else {
+        setStep("search");
+        setSelectedSong(null);
+        setPreviewTrackUrl(null);
+      }
+    } else {
+      onClose();
+    }
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="flex-1 justify-end bg-black/80">
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View
+              className="w-full bg-[#121212] rounded-t-[32px] overflow-hidden"
+              style={{ height: "92%" }}
+            >
+              {/* Header */}
+              <View className="flex-row items-center justify-between px-5 py-4 border-b border-zinc-800 z-10 bg-[#121212]">
+                <TouchableOpacity onPress={handleBack} className="p-2 -ml-2">
+                  <Text className="text-zinc-400 text-lg">Cancelar</Text>
+                </TouchableOpacity>
+                <Text className="text-white font-bold text-lg">
+                  {step === "search" ? "Nueva Historia" : "Vista Previa"}
+                </Text>
+                {step === "preview" ? (
+                  <TouchableOpacity
+                    onPress={handleUpload}
+                    disabled={loading}
+                    className="p-2 -mr-2"
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#5E17EB" />
+                    ) : (
+                      <Text className="text-[#5E17EB] font-bold text-lg">
+                        Publicar
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <View style={{ width: 70 }} />
+                )}
+              </View>
+
+              {step === "search" ? (
+                <View className="flex-1 px-4 pt-2">
+                  <View className="bg-[#1E1E1E] flex-row items-center px-4 py-3.5 rounded-2xl mb-4 border border-zinc-800">
+                    <Ionicons name="search" size={20} color="#71717A" />
+                    <TextInput
+                      placeholder="Buscar canciones..."
+                      placeholderTextColor="#71717A"
+                      className="flex-1 ml-3 text-white text-base"
+                      value={query}
+                      onChangeText={setQuery}
+                      autoFocus
+                      returnKeyType="search"
+                    />
+                    {query.length > 0 && (
+                      <TouchableOpacity onPress={() => setQuery("")}>
+                        <Ionicons
+                          name="close-circle"
+                          size={18}
+                          color="#71717A"
+                        />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {searching ? (
+                    <View className="mt-20">
+                      <ActivityIndicator size="large" color="#5E17EB" />
+                    </View>
+                  ) : (
+                    <FlatList
+                      data={results}
+                      keyExtractor={(item) => item.id}
+                      contentContainerStyle={{ paddingBottom: 40 }}
+                      keyboardShouldPersistTaps="handled"
+                      renderItem={({ item }) => {
+                        const isPlaying =
+                          previewTrackUrl === item.preview && player.playing;
+                        return (
+                          <TouchableOpacity
+                            onPress={() => handleSelectSong(item)}
+                            className="flex-row items-center py-3 border-b border-zinc-900"
+                            activeOpacity={0.7}
+                          >
+                            <Image
+                              source={{ uri: item.cover }}
+                              className="w-14 h-14 rounded-lg bg-zinc-800"
+                            />
+                            <View className="ml-3 flex-1 pr-2">
+                              <Text
+                                className="text-white font-bold text-[15px] mb-0.5"
+                                numberOfLines={1}
+                              >
+                                {item.title}
+                              </Text>
+                              <Text
+                                className="text-zinc-400 text-xs"
+                                numberOfLines={1}
+                              >
+                                {item.artist}
+                              </Text>
+                            </View>
+                            {item.preview && (
+                              <TouchableOpacity
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  handlePlayPreview(item.preview);
+                                }}
+                                className="p-2"
+                              >
+                                <Ionicons
+                                  name={
+                                    isPlaying ? "pause-circle" : "play-circle"
+                                  }
+                                  size={32}
+                                  color={isPlaying ? "#5E17EB" : "#71717A"}
+                                />
+                              </TouchableOpacity>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      }}
+                    />
+                  )}
+                </View>
+              ) : (
+                <View className="flex-1 bg-black items-center pt-6 px-4">
+                  <View
+                    className="w-full max-w-[340px] aspect-[4/5] rounded-[32px] overflow-hidden relative shadow-2xl items-center justify-between p-6 border border-white/10"
+                    style={{
+                      shadowColor: selectedSong ? "#5E17EB" : "transparent",
+                      shadowOpacity: 0.6,
+                      shadowRadius: 40,
+                      backgroundColor: "#18181B",
+                    }}
+                  >
+                    <LinearGradient
+                      colors={["#1a0b2e", "#000000"]}
+                      className="absolute w-full h-full"
+                    />
+                    <Image
+                      source={{ uri: selectedSong.cover }}
+                      className="absolute w-full h-full opacity-30"
+                      blurRadius={60}
+                    />
+
+                    <View className="w-full flex-1 items-center justify-center">
+                      <View
+                        className="rounded-2xl shadow-2xl bg-zinc-900 mb-6"
+                        style={{
+                          shadowColor: "black",
+                          shadowOffset: { width: 0, height: 12 },
+                          shadowOpacity: 0.6,
+                          shadowRadius: 20,
+                          elevation: 20,
+                        }}
+                      >
+                        <Image
+                          source={{ uri: selectedSong.cover }}
+                          className="w-60 h-60 rounded-2xl"
+                        />
+                      </View>
+                      <Text className="text-white text-[26px] font-black text-center mb-2 leading-8 shadow-sm">
+                        {selectedSong.title}
+                      </Text>
+                      <Text className="text-zinc-300 text-lg font-medium text-center">
+                        {selectedSong.artist}
+                      </Text>
+                    </View>
+
+                    <View className="w-full">
+                      <View className="bg-white/10 px-4 py-2 rounded-full flex-row items-center border border-white/5 backdrop-blur-md mb-2">
+                        <Ionicons
+                          name="musical-notes"
+                          size={14}
+                          color="#5E17EB"
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text className="text-white/90 font-bold text-xs tracking-widest uppercase">
+                          Mood
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View className="w-full mt-8">
+                    <TextInput
+                      placeholder="Agrega un comentario..."
+                      placeholderTextColor="rgba(255,255,255,0.5)"
+                      className="bg-zinc-800/80 text-white px-5 py-4 rounded-full text-center text-base border border-zinc-700"
+                      value={caption}
+                      onChangeText={setCaption}
+                      maxLength={80}
+                      returnKeyType="done"
+                    />
+                  </View>
+                </View>
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+};
+
+// --- POST DETAILS COMPONENT ---
 
 const PostDetails = () => {
   const { colorScheme } = useColorScheme();
@@ -140,11 +864,17 @@ const PostDetails = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
-  // --- ESTADOS PARA COMPARTIR ---
+  // --- ESTADOS PARA COMPARTIR ACTUALIZADOS ---
   const [isOptionsVisible, setOptionsVisible] = useState(false);
   const [isShareVisible, setShareVisible] = useState(false);
   const [isViralModalVisible, setViralModalVisible] = useState(false);
   const [isShareSelectorVisible, setShareSelectorVisible] = useState(false);
+  const [isCreationVisible, setCreationVisible] = useState(false);
+  const [storyInitialSongData, setStoryInitialSongData] = useState<any>(null);
+
+  // Estados para compartir (Lista de usuarios)
+  const [shareContacts, setShareContacts] = useState<any[]>([]);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
 
   const [replyingTo, setReplyingTo] = useState<{
     rootId: string;
@@ -357,7 +1087,6 @@ const PostDetails = () => {
       const users = await searchUsers(username);
       const targetUser = users.find((u) => u.username === username);
       if (targetUser) {
-        // Esto envía la notificación de "Tag" (DB + Push)
         await sendTagNotification(user.$id, targetUser.$id, postId);
       }
     });
@@ -390,8 +1119,6 @@ const PostDetails = () => {
 
     try {
       const parentId = replyingTo ? replyingTo.rootId : null;
-
-      // 1. crear comentario (Appwrite.ts se encarga de notificar al dueño del post)
       const newComment = await createComment(
         postId,
         {
@@ -403,14 +1130,11 @@ const PostDetails = () => {
         parentId
       );
 
-      // 2. Notificar si es una respuesta a OTRO usuario (no al dueño del post)
       await sendReplyNotification(
         post,
         user,
         replyingTo ? { $id: replyingTo.userId } : null
       );
-
-      // 3. Notificar menciones
       await processMentions(commentText, postId);
 
       setAllComments((prev) => [newComment, ...prev]);
@@ -426,8 +1150,6 @@ const PostDetails = () => {
 
   const handleLike = async () => {
     if (!post || !user) return;
-
-    // UI Optimista
     const originalPost = { ...post };
     const originalLikes = post.likedBy || [];
     const isLiked = originalLikes.includes(user.$id);
@@ -439,11 +1161,9 @@ const PostDetails = () => {
     setPost({ ...post, likedBy: newLikes });
 
     try {
-      // 1. Llamada a Appwrite (Esto actualiza DB y envía Push automáticamente)
       await toggleLikePost(post.$id, user.$id, originalLikes);
     } catch (error) {
       console.error("Error like:", error);
-      // Revertir si falla
       setPost(originalPost);
     }
   };
@@ -460,6 +1180,137 @@ const PostDetails = () => {
     try {
       await toggleSavePost(post.$id, user.$id);
     } catch (e) {}
+  };
+
+  // --- LOGICA DE COMPARTIR ACTUALIZADA (Igual a Home) ---
+
+  const fetchFollowedUsers = async (userId: string) => {
+    try {
+      const followedIds = await getFollowedUserIds(userId);
+      if (followedIds.length > 0) {
+        const promises = followedIds.map((id) => getUser(id));
+        const users = await Promise.all(promises);
+        return users.filter((u) => u !== null);
+      }
+    } catch (error) {
+      console.log("Error fetching share contacts", error);
+    }
+    return [];
+  };
+
+  const searchUsersInAppwrite = async (query: string) => {
+    try {
+      const response = await databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.usersCollectionId,
+        [
+          Query.or([
+            Query.search("username", query),
+            Query.search("name", query),
+          ]),
+          Query.limit(10),
+        ]
+      );
+      return response.documents;
+    } catch (error) {
+      console.log("Search error:", error);
+      return [];
+    }
+  };
+
+  const openShare = async () => {
+    setShareSelectorVisible(true);
+    if (user?.$id && shareContacts.length === 0) {
+      setIsLoadingContacts(true);
+      const contacts = await fetchFollowedUsers(user.$id);
+      setShareContacts(contacts);
+      setIsLoadingContacts(false);
+    }
+  };
+
+  const handleShareSearch = async (text: string) => {
+    setIsLoadingContacts(true);
+    if (text.length > 0) {
+      const results = await searchUsersInAppwrite(text);
+      setShareContacts(results);
+    } else if (user?.$id) {
+      const contacts = await fetchFollowedUsers(user.$id);
+      setShareContacts(contacts);
+    }
+    setIsLoadingContacts(false);
+  };
+
+  const handleSendShare = async (userIds: string[], message: string) => {
+    if (!user?.$id || !post) return;
+
+    try {
+      const promises = userIds.map((targetId) =>
+        databases.createDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.messagesCollectionId,
+          ID.unique(),
+          {
+            senderId: user.$id,
+            receiverId: targetId,
+            content: message || "Compartió una publicación",
+            sharedPostId: post.$id,
+            createdAt: new Date().toISOString(),
+          }
+        )
+      );
+
+      await Promise.all(promises);
+      Alert.alert("Enviado", "El post se ha compartido correctamente.");
+    } catch (error) {
+      console.error("Error compartiendo post:", error);
+      Alert.alert("Error", "No se pudo compartir el post.");
+    }
+  };
+
+  const handleAddToStoryFromPost = async () => {
+    if (!post) return;
+    const songData = parseSongData(post.songData);
+
+    if (songData) {
+      let freshPreview = songData.preview;
+      const trackId = songData.id || songData.spotifyId;
+
+      if (trackId) {
+        try {
+          const freshUrl = await getDeezerTrackUrl(trackId);
+          if (freshUrl) freshPreview = freshUrl;
+        } catch (e) {
+          console.log("Could not refresh track url for story");
+        }
+      }
+
+      setStoryInitialSongData({ ...songData, preview: freshPreview });
+      setShareSelectorVisible(false);
+      setTimeout(() => setCreationVisible(true), 300);
+    }
+  };
+
+  const handleSystemShare = async () => {
+    if (!post) return;
+    const link = `https://moodapp.com/post/${post.$id}`;
+    try {
+      await SystemShare.share({
+        message: `¡Mira esta canción en Mood! ${link}`,
+        url: link,
+        title: "Compartir desde Mood",
+      });
+    } catch (error) {
+      console.log("Error sharing:", error);
+    }
+    setShareSelectorVisible(false);
+  };
+
+  const handleCopyLink = () => {
+    if (!post) return;
+    const link = `https://moodapp.com/post/${post.$id}`;
+    Clipboard.setString(link);
+    Alert.alert("Enlace copiado", "Enlace copiado al portapapeles.");
+    setShareSelectorVisible(false);
   };
 
   // --- RENDERIZADO DEL POST ---
@@ -494,12 +1345,24 @@ const PostDetails = () => {
               className="w-12 h-12 rounded-full border border-zinc-200 dark:border-zinc-800"
             />
             <View className="ml-3 flex-1">
-              <Text
-                className="font-bold text-[17px] leading-5"
-                style={{ color: textColor }}
-              >
-                {creator.name}
-              </Text>
+              <View className="flex-row items-center">
+                <Text
+                  className="font-bold text-[17px] leading-5"
+                  style={{ color: textColor }}
+                >
+                  {creator.name}
+                </Text>
+
+                {/* CAMBIO: Badge Verificado en el Post */}
+                {creator.isVerified && (
+                  <MaterialIcons
+                    name="verified"
+                    size={14}
+                    color="#5E17EB"
+                    style={{ marginLeft: 4 }}
+                  />
+                )}
+              </View>
               <Text
                 className="text-xs font-medium mt-0.5"
                 style={{ color: subTextColor }}
@@ -633,7 +1496,7 @@ const PostDetails = () => {
           </View>
 
           <View className="flex-row gap-6">
-            <TouchableOpacity onPress={() => setShareSelectorVisible(true)}>
+            <TouchableOpacity onPress={openShare}>
               <Ionicons
                 name="share-social-outline"
                 size={24}
@@ -659,13 +1522,32 @@ const PostDetails = () => {
     );
   };
 
+  // --- REEMPLAZO: Skeleton inteligente en lugar de ActivityIndicator ---
   if (loading) {
     return (
       <SafeAreaView
-        className="flex-1 justify-center items-center"
+        className="flex-1"
+        edges={["top"]}
         style={{ backgroundColor: bgColor }}
       >
-        <ActivityIndicator color={accentColor} size="large" />
+        {/* Header simple para mantener la navegación si se quiere salir */}
+        <View
+          className="flex-row items-center justify-between px-4 h-[50px] border-b"
+          style={{ backgroundColor: bgColor, borderColor: borderColor }}
+        >
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="p-2 -ml-2 rounded-full"
+          >
+            <Ionicons name="arrow-back" size={24} color={backIconColor} />
+          </TouchableOpacity>
+          <Text className="font-bold text-base" style={{ color: textColor }}>
+            Vibe
+          </Text>
+          <View className="w-10" />
+        </View>
+
+        <PostDetailSkeleton isDark={isDark} />
       </SafeAreaView>
     );
   }
@@ -855,93 +1737,34 @@ const PostDetails = () => {
         </View>
       </KeyboardAvoidingView>
 
-      {/* MODAL SELECTOR DE COMPARTIR (Bottom Sheet) */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      {/* --- NUEVO MODAL SELECTOR DE COMPARTIR (DirectShareSheet) --- */}
+      <DirectShareSheet
         visible={isShareSelectorVisible}
-        onRequestClose={() => setShareSelectorVisible(false)}
-      >
-        <TouchableWithoutFeedback
-          onPress={() => setShareSelectorVisible(false)}
-        >
-          <View className="flex-1 justify-end bg-black/60">
-            <TouchableWithoutFeedback>
-              <View
-                className="rounded-t-[32px] p-6 pb-12"
-                style={{ backgroundColor: isDark ? "#18181B" : "white" }}
-              >
-                <View className="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full self-center mb-6" />
-                <Text
-                  className="text-xl font-bold text-center mb-8"
-                  style={{ color: isDark ? "white" : "black" }}
-                >
-                  Compartir Vibe
-                </Text>
+        onClose={() => setShareSelectorVisible(false)}
+        contacts={shareContacts}
+        isDark={isDark}
+        isLoadingContacts={isLoadingContacts}
+        onSearch={handleShareSearch}
+        onSend={handleSendShare}
+        onAddToStory={handleAddToStoryFromPost}
+        onViralCard={() => {
+          setShareSelectorVisible(false);
+          setTimeout(() => setViralModalVisible(true), 300);
+        }}
+        onSystemShare={handleSystemShare}
+        onCopyLink={handleCopyLink}
+      />
 
-                <View className="flex-row gap-4">
-                  {/* OPCIÓN INTERNA */}
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShareSelectorVisible(false);
-                      setTimeout(() => setShareVisible(true), 300);
-                    }}
-                    className="flex-1 p-5 rounded-3xl items-center border"
-                    style={{
-                      backgroundColor: isDark ? "#27272A" : "#F3F4F6",
-                      borderColor: isDark ? "#3F3F46" : "#E5E5E5",
-                    }}
-                  >
-                    <View className="w-14 h-14 bg-[#5E17EB]/10 rounded-full items-center justify-center mb-3">
-                      <Ionicons name="repeat" size={28} color="#5E17EB" />
-                    </View>
-                    <Text
-                      className="font-bold text-base mb-1"
-                      style={{ color: isDark ? "white" : "black" }}
-                    >
-                      En Mood
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* OPCIÓN EXTERNA */}
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShareSelectorVisible(false);
-                      setTimeout(() => setViralModalVisible(true), 300);
-                    }}
-                    className="flex-1 p-5 rounded-3xl items-center border"
-                    style={{
-                      backgroundColor: isDark ? "#27272A" : "#F3F4F6",
-                      borderColor: isDark ? "#3F3F46" : "#E5E5E5",
-                    }}
-                  >
-                    <View className="w-14 h-14 bg-pink-500/10 rounded-full items-center justify-center mb-3">
-                      <Ionicons name="share-social" size={28} color="#ec4899" />
-                    </View>
-                    <Text
-                      className="font-bold text-base mb-1"
-                      style={{ color: isDark ? "white" : "black" }}
-                    >
-                      Viral Card
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <TouchableOpacity
-                  onPress={() => setShareSelectorVisible(false)}
-                  className="mt-6 p-4 rounded-full items-center"
-                >
-                  <Text
-                    className="font-bold text-base"
-                    style={{ color: subTextColor }}
-                  >
-                    Cancelar
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+      <StoryCreationModal
+        visible={isCreationVisible}
+        onClose={() => setCreationVisible(false)}
+        currentUser={user}
+        onSuccess={() => {
+          // No necesitamos recargar feed en detalles, pero cerramos modal
+          setCreationVisible(false);
+        }}
+        initialSongData={storyInitialSongData}
+      />
 
       <OptionsModal
         isVisible={isOptionsVisible}

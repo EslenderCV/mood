@@ -10,6 +10,7 @@ import {
   Animated,
   Modal,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import React, {
   useState,
@@ -20,7 +21,7 @@ import React, {
 } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Swipeable from "react-native-gesture-handler/Swipeable";
@@ -37,6 +38,24 @@ import {
   getOrCreateChat,
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
+
+// --- SKELETON LOADER ---
+const ChatSkeleton = ({ isDark }: { isDark: boolean }) => {
+  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
+
+  return (
+    <View className="flex-row items-center px-5 py-3.5 animate-pulse w-full">
+      <View className={`w-[52px] h-[52px] rounded-full ${elementBg}`} />
+      <View className="ml-4 flex-1 justify-center space-y-2">
+        <View className="flex-row justify-between items-center w-full">
+          <View className={`w-32 h-4 rounded ${elementBg}`} />
+          <View className={`w-10 h-3 rounded ${elementBg}`} />
+        </View>
+        <View className={`w-48 h-3 rounded ${elementBg}`} />
+      </View>
+    </View>
+  );
+};
 
 // --- COMPONENTE MODAL PARA NUEVO CHAT ---
 const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
@@ -163,13 +182,23 @@ const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
                     className="w-12 h-12 rounded-full bg-zinc-700"
                   />
                   <View className="ml-4 flex-1">
-                    <Text
-                      className="font-bold text-base"
-                      numberOfLines={1}
-                      style={{ color: textColor }}
-                    >
-                      {item.name || item.username || "Usuario"}
-                    </Text>
+                    <View className="flex-row items-center">
+                      <Text
+                        className="font-bold text-base"
+                        numberOfLines={1}
+                        style={{ color: textColor }}
+                      >
+                        {item.name || item.username || "Usuario"}
+                      </Text>
+                      {item.isVerified && (
+                        <MaterialIcons
+                          name="verified"
+                          size={14}
+                          color="#5E17EB"
+                          style={{ marginLeft: 4 }}
+                        />
+                      )}
+                    </View>
                     <Text
                       className="text-sm"
                       numberOfLines={1}
@@ -198,6 +227,7 @@ const ChatsList = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
+  const { height } = useWindowDimensions();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
@@ -214,10 +244,18 @@ const ChatsList = () => {
   const [localSearchQuery, setLocalSearchQuery] = useState("");
   const [isNewChatVisible, setIsNewChatVisible] = useState(false);
 
+  const skeletonItems = useMemo(() => {
+    const ESTIMATED_ITEM_HEIGHT = 80;
+    const HEADER_HEIGHT = 140;
+    const itemsToFillScreen = Math.ceil(
+      (height - HEADER_HEIGHT) / ESTIMATED_ITEM_HEIGHT
+    );
+    const count = Math.max(itemsToFillScreen, 8);
+    return Array.from({ length: count }, (_, i) => i);
+  }, [height]);
+
   let row: Array<Swipeable | null> = [];
   let prevOpenedRow: Swipeable | null;
-
-  const lastVisitedUserId = useRef<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -225,7 +263,7 @@ const ChatsList = () => {
     }, [])
   );
 
-  // --- LÓGICA ESPEJO EN TIEMPO REAL ---
+  // --- 🔥 LOGICA REALTIME CORREGIDA 🔥 ---
   useEffect(() => {
     if (!currentUser || !client) return;
 
@@ -238,58 +276,59 @@ const ChatsList = () => {
       const payload: any = response.payload;
       const event = response.events[0];
 
-      // 1. ESPEJO DE CHATS (Si cambia el documento del chat en la DB, actualizamos aquí)
+      // 1. EVENTO DE SALA DE CHAT (Cuando se marca como leído o cambia algo en la sala)
       if (event.includes(`collections.${appwriteConfig.chatsCollectionId}`)) {
         if (event.includes(".update")) {
-          // Si el chat se actualiza (ej: lastMessageIsRead cambia en el backend),
-          // reemplazamos el item local con la data fresca del servidor.
+          // Actualizamos la tarjeta del chat INMEDIATAMENTE
           setChats((prevChats) =>
             prevChats.map((chat) => {
               if (chat.$id === payload.$id) {
-                // Mantenemos la estructura pero actualizamos los campos cambiados
-                return { ...chat, ...payload };
+                // Preservamos la info del usuario (otherUser) que no viene en el payload del evento
+                return { ...chat, ...payload, otherUser: chat.otherUser };
               }
               return chat;
             })
           );
         }
-
-        // Si se crea un nuevo chat para mí
         if (event.includes(".create")) {
           if (payload.users && payload.users.includes(currentUser.$id)) {
-            loadChats(); // Recargar para traer datos completos (populados)
+            loadChats(); // Nuevo chat, recargamos lista
           }
         }
       }
 
-      // 2. ESPEJO DE MENSAJES
+      // 2. EVENTO DE MENSAJE NUEVO
       if (
         event.includes(`collections.${appwriteConfig.messagesCollectionId}`)
       ) {
-        // Si un mensaje se marca como LEÍDO
-        if (event.includes(".update") && payload.isRead === true) {
-          setChats((prevChats) =>
-            prevChats.map((chat) => {
-              // Si este mensaje es el último del chat, actualizamos el chat a leído
-              if (
-                chat.$id === payload.chatId ||
-                chat.lastMessage === payload.content
-              ) {
-                return { ...chat, lastMessageIsRead: true };
-              }
-              return chat;
-            })
-          );
-        }
-
-        // Si llega un mensaje NUEVO
         if (event.includes(".create")) {
-          if (
-            payload.senderId === currentUser.$id ||
-            payload.receiverId === currentUser.$id
-          ) {
-            loadChats(); // Recargar para reordenar la lista
-          }
+          const chatId = payload.chatId;
+          const isMyMsg = payload.senderId === currentUser.$id;
+
+          setChats((prevChats) => {
+            const chatIndex = prevChats.findIndex((c) => c.$id === chatId);
+
+            // Si el chat no existe en la lista local, recargar todo
+            if (chatIndex === -1) {
+              loadChats();
+              return prevChats;
+            }
+
+            // Crear el objeto chat actualizado
+            const updatedChat = {
+              ...prevChats[chatIndex],
+              lastMessage: payload.content,
+              lastMessageAt: payload.$createdAt,
+              lastSenderId: payload.senderId,
+              // Si lo envié yo, obviamente está leído por mí. Si no, es no leído.
+              lastMessageIsRead: isMyMsg,
+            };
+
+            // Mover el chat al principio de la lista
+            const newChats = [...prevChats];
+            newChats.splice(chatIndex, 1);
+            return [updatedChat, ...newChats];
+          });
         }
       }
     });
@@ -308,22 +347,11 @@ const ChatsList = () => {
       }
       if (user) {
         const res = await getUserChats(user.$id);
-
+        // Filtrar chats vacíos
         const activeChats = res.filter(
           (c: any) => c.lastMessage && c.lastMessage.trim() !== ""
         );
-
-        // Mapeo inicial para consistencia visual inmediata
-        const fixedChats = activeChats.map((c: any) => {
-          if (c.otherUser && lastVisitedUserId.current === c.otherUser.$id) {
-            return {
-              ...c,
-              lastMessageIsRead: true,
-            };
-          }
-          return c;
-        });
-        setChats(fixedChats);
+        setChats(activeChats);
       }
     } catch (e) {
       console.log(e);
@@ -380,40 +408,24 @@ const ChatsList = () => {
     prevOpenedRow = row[index];
   };
 
-  // --- CORRECCIÓN DEL BUG ---
   const handleOpenChat = async (
     otherUserId: string,
     otherUserFixedData?: any
   ) => {
     if (!currentUser) return;
 
-    lastVisitedUserId.current = otherUserId;
     setIsNewChatVisible(false);
 
+    // Optimistic UI: Marcar leído localmente instantáneo para feedback visual
+    setChats((prev) =>
+      prev.map((c) =>
+        c.otherUser?.$id === otherUserId ? { ...c, lastMessageIsRead: true } : c
+      )
+    );
+
     const existingChat = chats.find((c) => c.otherUser?.$id === otherUserId);
+    let targetChatId = existingChat ? existingChat.$id : "new";
 
-    let targetChatId = "new";
-
-    if (existingChat) {
-      targetChatId = existingChat.$id;
-
-      // 1. Actualización Optimista (Visual Inmediata)
-      setChats((prev) =>
-        prev.map((c) =>
-          c.$id === existingChat.$id ? { ...c, lastMessageIsRead: true } : c
-        )
-      );
-
-      // 2. Actualización en Servidor (CORREGIDO: Solo 2 argumentos)
-      try {
-        // Await para asegurar persistencia antes de salir de la pantalla
-        await markChatAsRead(existingChat.$id, currentUser.$id);
-      } catch (e) {
-        console.error("Error al marcar leído en servidor:", e);
-      }
-    }
-
-    // 3. Navegación
     router.push({
       pathname: "/chat/[id]",
       params: {
@@ -456,16 +468,10 @@ const ChatsList = () => {
   };
 
   const renderChatItem = ({ item, index }: { item: any; index: number }) => {
-    const justVisited = item.otherUser?.$id === lastVisitedUserId.current;
-
-    // Un chat es "no leído" si:
-    // 1. No lo acabo de visitar.
-    // 2. La propiedad lastMessageIsRead es falsa.
-    // 3. El último mensaje fue enviado por el otro usuario.
+    // 🔥 LÓGICA DE UNREAD:
+    // Si lastMessageIsRead es false Y el último que envió NO fui yo... entonces es no leído.
     const isUnread =
-      !justVisited &&
-      !item.lastMessageIsRead &&
-      item.lastSenderId !== currentUser?.$id;
+      !item.lastMessageIsRead && item.lastSenderId !== currentUser?.$id;
 
     const displayName =
       item.otherUser?.name || item.otherUser?.username || "Usuario";
@@ -503,7 +509,7 @@ const ChatsList = () => {
             style={{ borderColor: borderColor }}
           >
             <View className="flex-row justify-between items-center mb-1">
-              <View className="flex-1 mr-2">
+              <View className="flex-1 mr-2 flex-row items-center">
                 <Text
                   className="text-[16px] font-bold"
                   style={{ color: textColor }}
@@ -512,6 +518,14 @@ const ChatsList = () => {
                 >
                   {displayName}
                 </Text>
+                {item.otherUser?.isVerified && (
+                  <MaterialIcons
+                    name="verified"
+                    size={14}
+                    color="#5E17EB"
+                    style={{ marginLeft: 4 }}
+                  />
+                )}
               </View>
 
               <Text
@@ -600,20 +614,26 @@ const ChatsList = () => {
           </View>
         </View>
 
-        <FlatList
-          data={filteredChats}
-          keyExtractor={(item) => item.$id}
-          renderItem={renderChatItem}
-          contentContainerStyle={{ paddingBottom: 100 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={loading}
-              onRefresh={loadChats}
-              tintColor={unreadColor}
-            />
-          }
-          ListEmptyComponent={
-            !loading ? (
+        {loading ? (
+          <View className="flex-1 mt-2">
+            {skeletonItems.map((i) => (
+              <ChatSkeleton key={i} isDark={isDark} />
+            ))}
+          </View>
+        ) : (
+          <FlatList
+            data={filteredChats}
+            keyExtractor={(item) => item.$id}
+            renderItem={renderChatItem}
+            contentContainerStyle={{ paddingBottom: 100 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={loading}
+                onRefresh={loadChats}
+                tintColor={unreadColor}
+              />
+            }
+            ListEmptyComponent={
               <View className="flex-1 justify-center items-center mt-32 px-10 opacity-60">
                 <Ionicons
                   name="chatbubbles-outline"
@@ -635,9 +655,9 @@ const ChatsList = () => {
                   Toca el botón + para empezar una conversación.
                 </Text>
               </View>
-            ) : null
-          }
-        />
+            }
+          />
+        )}
 
         <TouchableOpacity
           onPress={() => setIsNewChatVisible(true)}

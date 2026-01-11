@@ -93,22 +93,22 @@ export const translations = {
       tabs: {
         music: "Música",
         posts: "Posts",
-        songs: "Canciones", // NUEVO
-        playlists: "Playlists", // NUEVO
+        songs: "Canciones",
+        playlists: "Playlists",
       },
-      createBtn: "Crear Playlist", // NUEVO
-      syncText: "Sincroniza con", // NUEVO
-      orLocal: "o crea local", // NUEVO
-      newPlaylist: "Nueva Playlist", // NUEVO
-      nameLabel: "NOMBRE", // NUEVO
-      platformLabel: "PLATAFORMA", // NUEVO
-      local: "Local", // NUEVO
-      cancel: "Cancelar", // NUEVO
-      create: "Crear", // NUEVO
-      addTo: "Agregar a Playlist", // NUEVO
-      songsCount: "canciones", // NUEVO
+      createBtn: "Crear Playlist",
+      syncText: "Sincroniza con",
+      orLocal: "o crea local",
+      newPlaylist: "Nueva Playlist",
+      nameLabel: "NOMBRE",
+      platformLabel: "PLATAFORMA",
+      local: "Local",
+      cancel: "Cancelar",
+      create: "Crear",
+      addTo: "Agregar a Playlist",
+      songsCount: "canciones",
       emptySubtitle:
-        "Guarda publicaciones con música para crear tu colección personal.", // NUEVO
+        "Guarda publicaciones con música para crear tu colección personal.",
       open: "ABRIR",
       via: "Vía",
       empty: {
@@ -207,7 +207,13 @@ export const translations = {
     },
     notifications: {
       title: "Notificaciones",
-      empty: "Sin notificaciones",
+      filters: {
+        all: "Todas",
+        requests: "Solicitudes",
+        activity: "Actividad",
+      },
+      emptyTitle: "Sin notificaciones",
+      emptyMsg: "Aquí aparecerán tus likes, comentarios y nuevos seguidores.",
       confirm: "Confirmar",
       delete: "Eliminar",
       clearTitle: "Limpiar Notificaciones",
@@ -354,11 +360,11 @@ export const translations = {
     },
     help: {
       title: "Ayuda",
-      subtitle: "¿En qué podemos ayudarte?", // NUEVO
-      modalTitle: "Selecciona un Agente", // NUEVO
-      modalSubtitle: "Elige una línea de atención", // NUEVO
-      supportMain: "Soporte Principal", // NUEVO
-      supportTech: "Soporte Técnico", // NUEVO
+      subtitle: "¿En qué podemos ayudarte?",
+      modalTitle: "Selecciona un Agente",
+      modalSubtitle: "Elige una línea de atención",
+      supportMain: "Soporte Principal",
+      supportTech: "Soporte Técnico",
       searchPlaceholder: "Buscar ayuda...",
       chatSupport: "Chat Soporte",
       email: "Email",
@@ -534,22 +540,22 @@ export const translations = {
       tabs: {
         music: "Music",
         posts: "Posts",
-        songs: "Songs", // NUEVO
-        playlists: "Playlists", // NUEVO
+        songs: "Songs",
+        playlists: "Playlists",
       },
-      createBtn: "Create Playlist", // NUEVO
-      syncText: "Sync with", // NUEVO
-      orLocal: "or create local", // NUEVO
-      newPlaylist: "New Playlist", // NUEVO
-      nameLabel: "NAME", // NUEVO
-      platformLabel: "PLATFORM", // NUEVO
-      local: "Local", // NUEVO
-      cancel: "Cancel", // NUEVO
-      create: "Create", // NUEVO
-      addTo: "Add to Playlist", // NUEVO
-      songsCount: "songs", // NUEVO
+      createBtn: "Create Playlist",
+      syncText: "Sync with",
+      orLocal: "or create local",
+      newPlaylist: "New Playlist",
+      nameLabel: "NAME",
+      platformLabel: "PLATFORM",
+      local: "Local",
+      cancel: "Cancel",
+      create: "Create",
+      addTo: "Add to Playlist",
+      songsCount: "songs",
       emptySubtitle:
-        "Save posts with music to create your personal collection.", // NUEVO
+        "Save posts with music to create your personal collection.",
       open: "OPEN",
       via: "Via",
       empty: {
@@ -648,7 +654,13 @@ export const translations = {
     },
     notifications: {
       title: "Notifications",
-      empty: "No notifications",
+      filters: {
+        all: "All",
+        requests: "Requests",
+        activity: "Activity",
+      },
+      emptyTitle: "No notifications",
+      emptyMsg: "Your likes, comments, and new followers will appear here.",
       confirm: "Confirm",
       delete: "Delete",
       clearTitle: "Clear Notifications",
@@ -796,11 +808,11 @@ export const translations = {
     },
     help: {
       title: "Help Center",
-      subtitle: "How can we help you today?", // NUEVO
-      modalTitle: "Select an Agent", // NUEVO
-      modalSubtitle: "Choose a support line", // NUEVO
-      supportMain: "Main Support", // NUEVO
-      supportTech: "Tech Support", // NUEVO
+      subtitle: "How can we help you today?",
+      modalTitle: "Select an Agent",
+      modalSubtitle: "Choose a support line",
+      supportMain: "Main Support",
+      supportTech: "Tech Support",
       searchPlaceholder: "Search help...",
       chatSupport: "Chat Support",
       email: "Email",
@@ -976,22 +988,22 @@ export const translations = {
       tabs: {
         music: "Musique",
         posts: "Posts",
-        songs: "Chansons", // NUEVO
-        playlists: "Playlists", // NUEVO
+        songs: "Chansons",
+        playlists: "Playlists",
       },
-      createBtn: "Créer une Playlist", // NUEVO
-      syncText: "Synchroniser avec", // NUEVO
-      orLocal: "ou créer localement", // NUEVO
-      newPlaylist: "Nouvelle Playlist", // NUEVO
-      nameLabel: "NOM", // NUEVO
-      platformLabel: "PLATEFORME", // NUEVO
-      local: "Local", // NUEVO
-      cancel: "Annuler", // NUEVO
-      create: "Créer", // NUEVO
-      addTo: "Ajouter à la Playlist", // NUEVO
-      songsCount: "chansons", // NUEVO
+      createBtn: "Créer une Playlist",
+      syncText: "Synchroniser avec",
+      orLocal: "ou créer localement",
+      newPlaylist: "Nouvelle Playlist",
+      nameLabel: "NOM",
+      platformLabel: "PLATEFORME",
+      local: "Local",
+      cancel: "Annuler",
+      create: "Créer",
+      addTo: "Ajouter à la Playlist",
+      songsCount: "chansons",
       emptySubtitle:
-        "Enregistrez des publications avec de la musique pour créer votre collection personnelle.", // NUEVO
+        "Enregistrez des publications avec de la musique pour créer votre collection personnelle.",
       open: "OUVRIR",
       via: "Via",
       empty: {
@@ -1091,7 +1103,13 @@ export const translations = {
     },
     notifications: {
       title: "Notifications",
-      empty: "Aucune notification",
+      filters: {
+        all: "Toutes",
+        requests: "Demandes",
+        activity: "Activité",
+      },
+      emptyTitle: "Aucune notification",
+      emptyMsg: "Vos likes, commentaires et nouveaux abonnés apparaîtront ici.",
       confirm: "Confirmer",
       delete: "Supprimer",
       clearTitle: "Effacer les notifications",
@@ -1239,11 +1257,11 @@ export const translations = {
     },
     help: {
       title: "Centre d'aide",
-      subtitle: "Comment pouvons-nous vous aider ?", // NUEVO
-      modalTitle: "Sélectionnez un agent", // NUEVO
-      modalSubtitle: "Choisissez une ligne d'assistance", // NUEVO
-      supportMain: "Support Principal", // NUEVO
-      supportTech: "Support Technique", // NUEVO
+      subtitle: "Comment pouvons-nous vous aider ?",
+      modalTitle: "Sélectionnez un agent",
+      modalSubtitle: "Choisissez une ligne d'assistance",
+      supportMain: "Support Principal",
+      supportTech: "Support Technique",
       searchPlaceholder: "Rechercher de l'aide...",
       chatSupport: "Support par chat",
       email: "E-mail",
@@ -1420,21 +1438,21 @@ export const translations = {
       tabs: {
         music: "Música",
         posts: "Posts",
-        songs: "Músicas", // NUEVO
-        playlists: "Playlists", // NUEVO
+        songs: "Músicas",
+        playlists: "Playlists",
       },
-      createBtn: "Criar Playlist", // NUEVO
-      syncText: "Sincronizar com", // NUEVO
-      orLocal: "ou criar local", // NUEVO
-      newPlaylist: "Nova Playlist", // NUEVO
-      nameLabel: "NOME", // NUEVO
-      platformLabel: "PLATAFORMA", // NUEVO
-      local: "Local", // NUEVO
-      cancel: "Cancelar", // NUEVO
-      create: "Criar", // NUEVO
-      addTo: "Adicionar à Playlist", // NUEVO
-      songsCount: "músicas", // NUEVO
-      emptySubtitle: "Salve posts com música para criar sua coleção pessoal.", // NUEVO
+      createBtn: "Criar Playlist",
+      syncText: "Sincronizar com",
+      orLocal: "ou criar local",
+      newPlaylist: "Nova Playlist",
+      nameLabel: "NOME",
+      platformLabel: "PLATAFORMA",
+      local: "Local",
+      cancel: "Cancelar",
+      create: "Criar",
+      addTo: "Adicionar à Playlist",
+      songsCount: "músicas",
+      emptySubtitle: "Salve posts com música para criar sua coleção pessoal.",
       open: "ABRIR",
       via: "Via",
       empty: {
@@ -1495,7 +1513,7 @@ export const translations = {
       titleLine1: "Vibe",
       titleLine2: "Juntos.",
       subtitle:
-        "Música não é apenas para ouvir, é para sentir e compartilhar com os seus.",
+        "Música não é apenas para ouvir, é para sentir e compartilhar com os tuyos.",
       startButton: "Começar Agora",
       footer: "Mood App © 2024",
     },
@@ -1533,7 +1551,13 @@ export const translations = {
     },
     notifications: {
       title: "Notificações",
-      empty: "Sem notificações",
+      filters: {
+        all: "Todas",
+        requests: "Solicitações",
+        activity: "Atividade",
+      },
+      emptyTitle: "Sem notificações",
+      emptyMsg: "Seus likes, comentários e novos seguidores aparecerão aqui.",
       confirm: "Confirmar",
       delete: "Excluir",
       clearTitle: "Limpar Notificações",
@@ -1679,11 +1703,11 @@ export const translations = {
     },
     help: {
       title: "Central de Ajuda",
-      subtitle: "Como podemos ajudar?", // NUEVO
-      modalTitle: "Selecione um Agente", // NUEVO
-      modalSubtitle: "Escolha uma linha de atendimento", // NUEVO
-      supportMain: "Suporte Principal", // NUEVO
-      supportTech: "Suporte Técnico", // NUEVO
+      subtitle: "Como podemos ajudar?",
+      modalTitle: "Selecione um Agente",
+      modalSubtitle: "Escolha uma linha de atendimento",
+      supportMain: "Suporte Principal",
+      supportTech: "Suporte Técnico",
       searchPlaceholder: "Buscar ajuda...",
       chatSupport: "Suporte via Chat",
       email: "E-mail",
@@ -1858,22 +1882,22 @@ export const translations = {
       tabs: {
         music: "Musica",
         posts: "Post",
-        songs: "Canzoni", // NUEVO
-        playlists: "Playlist", // NUEVO
+        songs: "Canzoni",
+        playlists: "Playlist",
       },
-      createBtn: "Crea Playlist", // NUEVO
-      syncText: "Sincronizza con", // NUEVO
-      orLocal: "o crea locale", // NUEVO
-      newPlaylist: "Nuova Playlist", // NUEVO
-      nameLabel: "NOME", // NUEVO
-      platformLabel: "PIATTAFORMA", // NUEVO
-      local: "Locale", // NUEVO
-      cancel: "Annulla", // NUEVO
-      create: "Crea", // NUEVO
-      addTo: "Aggiungi a Playlist", // NUEVO
-      songsCount: "canzoni", // NUEVO
+      createBtn: "Crea Playlist",
+      syncText: "Sincronizza con",
+      orLocal: "o crea locale",
+      newPlaylist: "Nuova Playlist",
+      nameLabel: "NOME",
+      platformLabel: "PIATTAFORMA",
+      local: "Locale",
+      cancel: "Annulla",
+      create: "Crea",
+      addTo: "Aggiungi a Playlist",
+      songsCount: "canzoni",
       emptySubtitle:
-        "Salva post con musica per creare la tua collezione personale.", // NUEVO
+        "Salva post con musica per creare la tua collezione personale.",
       open: "APRI",
       via: "Via",
       empty: {
@@ -1972,7 +1996,13 @@ export const translations = {
     },
     notifications: {
       title: "Notifiche",
-      empty: "Nessuna notifica",
+      filters: {
+        all: "Tutte",
+        requests: "Richieste",
+        activity: "Attività",
+      },
+      emptyTitle: "Nessuna notifica",
+      emptyMsg: "I tuoi like, commenti e nuovi follower appariranno qui.",
       confirm: "Conferma",
       delete: "Elimina",
       clearTitle: "Pulisci Notifiche",
@@ -2119,11 +2149,11 @@ export const translations = {
     },
     help: {
       title: "Centro Assistenza",
-      subtitle: "Come possiamo aiutarti?", // NUEVO
-      modalTitle: "Seleziona un Agente", // NUEVO
-      modalSubtitle: "Scegli una linea di supporto", // NUEVO
-      supportMain: "Supporto Principale", // NUEVO
-      supportTech: "Supporto Tecnico", // NUEVO
+      subtitle: "Come possiamo aiutarti?",
+      modalTitle: "Seleziona un Agente",
+      modalSubtitle: "Scegli una linea di supporto",
+      supportMain: "Supporto Principale",
+      supportTech: "Supporto Tecnico",
       searchPlaceholder: "Cerca aiuto...",
       chatSupport: "Supporto Chat",
       email: "Email",

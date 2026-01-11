@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   AlertButton,
+  useWindowDimensions, // <--- Importado
 } from "react-native";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
@@ -19,7 +20,7 @@ import {
   useFocusEffect,
 } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
   GestureHandlerRootView,
   Swipeable,
@@ -39,7 +40,7 @@ import {
   getPlaylistById,
   getUser,
   databases,
-  sendPushNotification, // Asegúrate de que esto venga de tu appwrite.ts actualizado
+  sendPushNotification,
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -48,6 +49,72 @@ const isValidId = (id: string | null | undefined) => {
   if (id.length > 36) return false;
   const validChars = /^[a-zA-Z0-9_.-]+$/;
   return validChars.test(id);
+};
+
+// --- SKELETON LOADER (NUEVO) ---
+const ChatRoomSkeleton = ({ isDark }: { isDark: boolean }) => {
+  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
+  const myBubbleBg = isDark ? "bg-zinc-700" : "bg-zinc-400"; // Un poco más oscuro para simular "mis" mensajes
+  const otherBubbleBg = isDark ? "bg-zinc-800" : "bg-zinc-200";
+
+  return (
+    <View className="flex-1 animate-pulse">
+      {/* Header Skeleton */}
+      <View
+        className={`flex-row items-center px-2 py-2 border-b ${
+          isDark ? "border-zinc-800" : "border-zinc-200"
+        }`}
+      >
+        <View className={`w-10 h-10 rounded-full ${elementBg} m-2`} />
+        <View className={`w-9 h-9 rounded-full ${elementBg}`} />
+        <View className="ml-3 flex-1">
+          <View className={`w-32 h-4 rounded ${elementBg} mb-1`} />
+        </View>
+      </View>
+
+      {/* Messages Area Skeleton (Simulando conversación desde abajo) */}
+      <View className="flex-1 px-4 py-4 justify-end">
+        {/* Mensaje Recibido (Otro) */}
+        <View className="flex-row items-end mb-6">
+          <View className={`w-7 h-7 rounded-full ${elementBg} mr-2 mb-1`} />
+          <View
+            className={`w-48 h-12 rounded-[18px] rounded-tl-none ${otherBubbleBg}`}
+          />
+        </View>
+
+        {/* Mensaje Enviado (Yo) */}
+        <View className="flex-row justify-end items-end mb-6">
+          <View
+            className={`w-64 h-20 rounded-[18px] rounded-tr-none ${myBubbleBg}`}
+          />
+        </View>
+
+        {/* Mensaje Recibido (Otro) */}
+        <View className="flex-row items-end mb-6">
+          <View className={`w-7 h-7 rounded-full ${elementBg} mr-2 mb-1`} />
+          <View
+            className={`w-32 h-10 rounded-[18px] rounded-tl-none ${otherBubbleBg}`}
+          />
+        </View>
+
+        {/* Mensaje Enviado (Yo) */}
+        <View className="flex-row justify-end items-end mb-6">
+          <View
+            className={`w-40 h-10 rounded-[18px] rounded-tr-none ${myBubbleBg}`}
+          />
+        </View>
+      </View>
+
+      {/* Input Bar Skeleton */}
+      <View
+        className={`px-3 py-3 border-t ${
+          isDark ? "border-zinc-800" : "border-zinc-200"
+        }`}
+      >
+        <View className={`h-[45px] rounded-3xl ${elementBg}`} />
+      </View>
+    </View>
+  );
 };
 
 // ... (PostPreviewBubble se mantiene igual)
@@ -316,11 +383,15 @@ const ChatRoom = () => {
   const params = useLocalSearchParams();
   const chatId = params.id as string;
 
+  // Estado de carga inicial
+  const [isLoading, setIsLoading] = useState(true);
+
   const [chatUser, setChatUser] = useState({
     name: (params.otherUserName as string) || "Usuario",
     avatar: (params.otherUserAvatar as string) || null,
     id: (params.otherUserId as string) || null,
     expoPushToken: null as string | null,
+    isVerified: false as boolean,
   });
 
   const [messages, setMessages] = useState<any[]>([]);
@@ -443,6 +514,7 @@ const ChatRoom = () => {
                 avatar: otherUserData.pfp,
                 id: otherUserData.$id,
                 expoPushToken: otherUserData.expoPushToken,
+                isVerified: otherUserData.isVerified,
               });
             }
           } else {
@@ -463,6 +535,7 @@ const ChatRoom = () => {
                     avatar: otherUserData.pfp,
                     id: otherUserData.$id,
                     expoPushToken: otherUserData.expoPushToken,
+                    isVerified: otherUserData.isVerified,
                   });
                 }
               }
@@ -481,6 +554,8 @@ const ChatRoom = () => {
       }
     } catch (error) {
       console.log("Error loading chat:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -607,7 +682,6 @@ const ChatRoom = () => {
       contentToSend = `${replyName}:::${snippet}:::REPLY:::${newMessage}`;
     }
 
-    // Guardamos el mensaje limpio para la notificación
     const messageForNotification = newMessage;
     const tempContent = contentToSend;
 
@@ -624,10 +698,8 @@ const ChatRoom = () => {
       );
 
       if (chatUser.expoPushToken) {
-        // Título: Nombre del remitente
         const notiTitle =
           currentUser.name || currentUser.username || "Mood Chat";
-        // Cuerpo: El mensaje tal cual lo escribió el usuario
         const notiBody = messageForNotification;
 
         await sendPushNotification(
@@ -825,6 +897,21 @@ const ChatRoom = () => {
     );
   };
 
+  // --- REEMPLAZO: Mostrar Skeleton mientras carga ---
+  if (isLoading) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaView
+          className="flex-1"
+          edges={["top"]}
+          style={{ backgroundColor: bgColor }}
+        >
+          <ChatRoomSkeleton isDark={isDark} />
+        </SafeAreaView>
+      </GestureHandlerRootView>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView
@@ -850,13 +937,24 @@ const ChatRoom = () => {
             style={{ backgroundColor: inputBg }}
           />
           <View className="ml-3 flex-1">
-            <Text
-              className="font-bold text-base"
-              numberOfLines={1}
-              style={{ color: textColor }}
-            >
-              {chatUser.name}
-            </Text>
+            <View className="flex-row items-center">
+              <Text
+                className="font-bold text-base"
+                numberOfLines={1}
+                style={{ color: textColor }}
+              >
+                {chatUser.name}
+              </Text>
+              {/* BADGE EN EL HEADER DEL CHAT */}
+              {chatUser.isVerified && (
+                <MaterialIcons
+                  name="verified"
+                  size={14}
+                  color="#5E17EB"
+                  style={{ marginLeft: 4 }}
+                />
+              )}
+            </View>
             {isOtherUserOnline && (
               <Text className="text-xs text-green-500">{t("chat.online")}</Text>
             )}

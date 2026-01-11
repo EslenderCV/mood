@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   View,
   Text,
@@ -14,12 +20,27 @@ import {
   TextInput,
   Keyboard,
   LayoutAnimation,
+  Animated,
+  Pressable,
+  ScrollView,
+  Share as SystemShare,
+  Clipboard,
+  useWindowDimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAudioPlayer } from "expo-audio";
+import {
+  PanGestureHandler,
+  State,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
+import { Databases, Query, ID } from "react-native-appwrite";
 
 import { useGlobalContext } from "@/context/GlobalProvider";
 import TopBar from "@/components/TopBar";
@@ -35,8 +56,10 @@ import {
   getStories,
   viewStory,
   getUser,
-  client, // Importante para el tiempo real
-  appwriteConfig, // Importante para IDs de colecciones
+  client,
+  appwriteConfig,
+  getDeezerTrackUrl,
+  getOrCreateChat, // Importado para la lógica de chat
 } from "@/lib/appwrite";
 import OptionsModal from "@/components/OptionsModal";
 import PostItem from "@/components/PostItem";
@@ -47,6 +70,7 @@ import ShareModal from "@/components/ShareModal";
 
 const { height, width } = Dimensions.get("window");
 const ADMIN_USERS = [".angel", "whoseslender"];
+const databases = new Databases(client);
 
 const MOOD_OFFICIAL_ID = "official_mood_team";
 const OFFICIAL_MOOD_STORY = {
@@ -64,12 +88,11 @@ const OFFICIAL_MOOD_STORY = {
       $id: "mood_welcome_story_01",
       user: MOOD_OFFICIAL_ID,
       songData: JSON.stringify({
-        title: "Welcome to Mood! 💜",
+        title: "Welcome to Mood",
         artist: "The Official Guide",
-        cover:
-          "https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2670&auto=format&fit=crop",
+        cover: null,
         preview: "",
-        caption: "Share your music, express your feelings. Tap here to start!",
+        caption: "Experience music differently.",
         spotifyId: "mood_official",
       }),
       viewers: [],
@@ -119,6 +142,465 @@ const searchSongs = async (query: string) => {
     console.error("Error buscando canciones:", e);
     return [];
   }
+};
+
+const formatTimeAgo = (dateString: string) => {
+  if (!dateString) return "";
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return "Just now";
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `${diffInMinutes}m`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours}h`;
+  return "1d";
+};
+
+// --- SKELETON LOADERS ---
+
+const StoriesSkeleton = ({ isDark }: { isDark: boolean }) => {
+  const bg = isDark ? "bg-zinc-800" : "bg-zinc-200";
+  return (
+    <View className="flex-row py-4 pl-4 border-b border-zinc-900/50 bg-black">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <View key={i} className="items-center mr-5">
+          <View
+            className={`w-[68px] h-[68px] rounded-full ${bg} mb-2 animate-pulse`}
+          />
+          <View className={`w-14 h-2.5 rounded-md ${bg} animate-pulse`} />
+        </View>
+      ))}
+    </View>
+  );
+};
+
+const PostSkeleton = ({ isDark }: { isDark: boolean }) => {
+  const cardBg = isDark ? "bg-zinc-900" : "bg-zinc-100";
+  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
+
+  return (
+    <View
+      className={`py-4 px-4 mb-2 animate-pulse ${
+        isDark ? "border-b border-zinc-900/50" : "border-b border-zinc-200"
+      }`}
+    >
+      <View className="flex-row items-center mb-3">
+        <View className={`w-10 h-10 rounded-full ${elementBg} mr-3`} />
+        <View className="space-y-1.5">
+          <View className={`w-24 h-3.5 rounded ${elementBg}`} />
+          <View className={`w-32 h-2.5 rounded ${elementBg}`} />
+        </View>
+        <View className="flex-1 items-end">
+          <View className={`w-6 h-1 rounded ${elementBg}`} />
+        </View>
+      </View>
+
+      <View
+        className={`w-full h-[100px] rounded-[24px] ${cardBg} mb-4 flex-row items-center p-3 overflow-hidden`}
+      >
+        <View
+          className={`w-[76px] h-[76px] rounded-[18px] ${elementBg} mr-3`}
+        />
+        <View className="flex-1 justify-center space-y-2">
+          <View className={`w-3/4 h-4 rounded ${elementBg}`} />
+          <View className={`w-1/2 h-3 rounded ${elementBg}`} />
+          <View className="flex-row gap-1 mt-1">
+            <View className={`w-1 h-1 rounded-full ${elementBg}`} />
+            <View className={`w-1 h-1 rounded-full ${elementBg}`} />
+            <View className={`w-1 h-1 rounded-full ${elementBg}`} />
+          </View>
+        </View>
+        <View className={`w-10 h-10 rounded-full ${elementBg} mr-2`} />
+      </View>
+
+      <View className="flex-row items-center justify-between px-2">
+        <View className="flex-row items-center space-x-6">
+          <View className={`w-6 h-6 rounded-full ${elementBg}`} />
+          <View className={`w-6 h-6 rounded-full ${elementBg}`} />
+          <View className={`w-6 h-6 rounded-full ${elementBg}`} />
+        </View>
+        <View className={`w-6 h-6 rounded-full ${elementBg}`} />
+      </View>
+    </View>
+  );
+};
+
+const FeedSkeleton = ({ isDark }: { isDark: boolean }) => {
+  const { height } = useWindowDimensions();
+  const POST_HEIGHT_ESTIMATE = 220;
+  const itemCount = Math.ceil(height / POST_HEIGHT_ESTIMATE) + 1;
+
+  return (
+    <View className="flex-1">
+      <StoriesSkeleton isDark={isDark} />
+      <ScrollView showsVerticalScrollIndicator={false} scrollEnabled={false}>
+        {[...Array(itemCount)].map((_, i) => (
+          <PostSkeleton key={i} isDark={isDark} />
+        ))}
+      </ScrollView>
+    </View>
+  );
+};
+
+// --- COMPONENTE: Hoja de Compartir Directo ---
+const DirectShareSheet = ({
+  visible,
+  onClose,
+  contacts,
+  onSend,
+  onAddToStory,
+  onViralCard,
+  onSystemShare,
+  onCopyLink,
+  isDark,
+  onSearch,
+  isLoadingContacts,
+}: any) => {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const insets = useSafeAreaInsets();
+
+  const bgColor = isDark ? "#18181B" : "#ffffff";
+  const textColor = isDark ? "white" : "black";
+  const placeholderColor = isDark ? "#A1A1AA" : "#71717A";
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (onSearch) onSearch(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUsers((prev) => {
+      if (prev.includes(userId)) {
+        return prev.filter((id) => id !== userId);
+      } else {
+        return [...prev, userId];
+      }
+    });
+  };
+
+  const handleSend = () => {
+    onSend(selectedUsers, searchQuery);
+    setSelectedUsers([]);
+    setSearchQuery("");
+    onClose();
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="flex-1 justify-end bg-black/50">
+          <TouchableWithoutFeedback>
+            <View
+              className="rounded-t-[32px] overflow-hidden"
+              style={{
+                backgroundColor: bgColor,
+                paddingBottom: insets.bottom + 20,
+                maxHeight: height * 0.8,
+              }}
+            >
+              <View className="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full self-center mt-4 mb-4" />
+
+              {/* Search Bar */}
+              <View className="px-5 mb-4">
+                <View
+                  className={`flex-row items-center px-4 py-3 rounded-2xl ${
+                    isDark ? "bg-zinc-800" : "bg-zinc-100"
+                  }`}
+                >
+                  <Ionicons name="search" size={20} color={placeholderColor} />
+                  <TextInput
+                    placeholder="Buscar persona..."
+                    placeholderTextColor={placeholderColor}
+                    className="flex-1 ml-3 text-base"
+                    style={{ color: textColor }}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery("")}>
+                      <Ionicons
+                        name="close-circle"
+                        size={18}
+                        color={placeholderColor}
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* Suggested Users Horizontal List */}
+              <View className="h-28 pl-5 mb-4">
+                {isLoadingContacts ? (
+                  <View className="flex-1 justify-center items-center mr-5">
+                    <ActivityIndicator color="#5E17EB" />
+                  </View>
+                ) : (
+                  <FlatList
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    data={contacts}
+                    keyExtractor={(item) => item.$id}
+                    ListEmptyComponent={
+                      <Text className="text-zinc-500 mt-8 ml-2">
+                        No se encontraron usuarios.
+                      </Text>
+                    }
+                    renderItem={({ item }) => {
+                      const isSelected = selectedUsers.includes(item.$id);
+                      return (
+                        <TouchableOpacity
+                          onPress={() => toggleUserSelection(item.$id)}
+                          className="mr-6 items-center w-18"
+                          activeOpacity={0.8}
+                        >
+                          <View className="relative">
+                            <Image
+                              source={{
+                                uri:
+                                  item.avatar ||
+                                  item.pfp ||
+                                  "https://cloud.appwrite.io/v1/avatars/initials?name=" +
+                                    item.username,
+                              }}
+                              className="w-16 h-16 rounded-full bg-zinc-700"
+                            />
+                            {isSelected && (
+                              <View
+                                className="absolute bottom-0 right-0 bg-[#5E17EB] rounded-full w-6 h-6 items-center justify-center border-2"
+                                style={{ borderColor: bgColor }}
+                              >
+                                <Ionicons
+                                  name="checkmark"
+                                  size={14}
+                                  color="white"
+                                />
+                              </View>
+                            )}
+                          </View>
+                          <Text
+                            className="text-xs mt-2 text-center w-20"
+                            numberOfLines={1}
+                            style={{ color: textColor }}
+                          >
+                            {item.name || item.username}
+                          </Text>
+                          <Text
+                            className="text-[10px] text-zinc-500 text-center w-20"
+                            numberOfLines={1}
+                          >
+                            @{item.username}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    }}
+                  />
+                )}
+              </View>
+
+              <View
+                className={`h-[1px] w-full ${
+                  isDark ? "bg-zinc-800" : "bg-zinc-200"
+                } mb-4`}
+              />
+
+              {/* Action Buttons Row */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="px-5 mb-4"
+              >
+                <TouchableOpacity
+                  onPress={onAddToStory}
+                  className="items-center mr-8"
+                >
+                  <View
+                    className={`w-14 h-14 rounded-full items-center justify-center border-2 border-dashed ${
+                      isDark ? "border-zinc-600" : "border-zinc-400"
+                    }`}
+                  >
+                    <Ionicons
+                      name="add"
+                      size={28}
+                      color={isDark ? "white" : "black"}
+                    />
+                  </View>
+                  <Text className="text-xs mt-2" style={{ color: textColor }}>
+                    Tu historia
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={onViralCard}
+                  className="items-center mr-8"
+                >
+                  <View
+                    className={`w-14 h-14 rounded-full items-center justify-center ${
+                      isDark ? "bg-zinc-800" : "bg-zinc-100"
+                    }`}
+                  >
+                    <Ionicons name="share-social" size={24} color="#ec4899" />
+                  </View>
+                  <Text className="text-xs mt-2" style={{ color: textColor }}>
+                    Viral Card
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={onSystemShare}
+                  className="items-center mr-8"
+                >
+                  <View
+                    className={`w-14 h-14 rounded-full items-center justify-center ${
+                      isDark ? "bg-zinc-800" : "bg-zinc-100"
+                    }`}
+                  >
+                    <Feather name="share" size={24} color={textColor} />
+                  </View>
+                  <Text className="text-xs mt-2" style={{ color: textColor }}>
+                    Compartir via...
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={onCopyLink}
+                  className="items-center mr-8"
+                >
+                  <View
+                    className={`w-14 h-14 rounded-full items-center justify-center ${
+                      isDark ? "bg-zinc-800" : "bg-zinc-100"
+                    }`}
+                  >
+                    <Feather name="link" size={24} color={textColor} />
+                  </View>
+                  <Text className="text-xs mt-2" style={{ color: textColor }}>
+                    Copiar enlace
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+
+              {selectedUsers.length > 0 && (
+                <View className="px-5 pt-2">
+                  <TouchableOpacity
+                    onPress={handleSend}
+                    className="w-full bg-[#5E17EB] py-4 rounded-full items-center"
+                  >
+                    <Text className="text-white font-bold text-base">
+                      Enviar ({selectedUsers.length})
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+};
+
+// --- COMPONENTE: Modal de Vistos (Viewers) ---
+const ViewersModal = ({ visible, onClose, viewerIds }: any) => {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchViewers = async () => {
+      if (!visible || !viewerIds || viewerIds.length === 0) {
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const promises = viewerIds.map((id: string) => getUser(id));
+        const results = await Promise.all(promises);
+        setUsers(results.filter((u) => u !== null));
+      } catch (error) {
+        console.log("Error fetching viewers", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchViewers();
+  }, [visible, viewerIds]);
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="flex-1 justify-end bg-black/50">
+          <TouchableWithoutFeedback>
+            <View className="bg-[#18181B] rounded-t-[32px] h-[60%] w-full overflow-hidden">
+              <View className="w-12 h-1.5 bg-zinc-700 rounded-full self-center mt-4 mb-4" />
+              <Text className="text-white text-center font-bold text-lg mb-4 border-b border-zinc-800 pb-4">
+                Visto por {users.length} personas
+              </Text>
+
+              {loading ? (
+                <ActivityIndicator
+                  color="#5E17EB"
+                  size="large"
+                  className="mt-10"
+                />
+              ) : (
+                <FlatList
+                  data={users}
+                  keyExtractor={(item) => item.$id}
+                  contentContainerStyle={{ padding: 20 }}
+                  ListEmptyComponent={
+                    <Text className="text-zinc-500 text-center mt-10">
+                      Aún nadie ha visto tu historia.
+                    </Text>
+                  }
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      onPress={() => {
+                        onClose();
+                        router.push(`/user/${item.$id}` as any);
+                      }}
+                      className="flex-row items-center mb-5"
+                    >
+                      <Image
+                        source={{ uri: item.avatar || item.pfp }}
+                        className="w-12 h-12 rounded-full bg-zinc-800 mr-4"
+                      />
+                      <View>
+                        <Text className="text-white font-bold text-base">
+                          {item.username}
+                        </Text>
+                        {item.name && (
+                          <Text className="text-zinc-400 text-xs">
+                            {item.name}
+                          </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                />
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
 };
 
 // --- COMPONENTE: Riel de Historias ---
@@ -255,6 +737,7 @@ const StoriesRail = ({
                 </View>
               </LinearGradient>
 
+              {/* AQUI ESTA LA CORRECCION DEL BADGE EN STORIES */}
               <View className="flex-row items-center justify-center mt-1.5 w-20">
                 <Text
                   className="text-[11px] font-medium text-white text-center mr-0.5"
@@ -265,8 +748,9 @@ const StoriesRail = ({
                 {isVerified && (
                   <MaterialIcons
                     name="verified"
-                    size={10}
-                    color={isOfficialMood ? "#5E17EB" : "#00C2FF"}
+                    size={12}
+                    color="#5E17EB" // Morado Mood
+                    style={{ marginLeft: 2 }}
                   />
                 )}
               </View>
@@ -278,7 +762,7 @@ const StoriesRail = ({
   );
 };
 
-// --- NUEVO COMPONENTE: Estado Vacío con Sugerencias (PREMIUM DESIGN) ---
+// --- COMPONENTE: Estado Vacío con Sugerencias ---
 const EmptyStateWithSuggestions = ({ suggestions, onGoToExplore }: any) => {
   return (
     <View className="px-4 py-12 items-center justify-center">
@@ -389,12 +873,13 @@ const EmptyStateWithSuggestions = ({ suggestions, onGoToExplore }: any) => {
   );
 };
 
-// --- COMPONENTE: Modal de Creación ---
+// --- COMPONENTE: Modal de Creación (MODIFICADO) ---
 const StoryCreationModal = ({
   visible,
   onClose,
   currentUser,
   onSuccess,
+  initialSongData = null,
 }: any) => {
   const [step, setStep] = useState<"search" | "preview">("search");
   const [query, setQuery] = useState("");
@@ -413,26 +898,32 @@ const StoryCreationModal = ({
 
   const player = useAudioPlayer(activeAudioSource);
 
+  // Efecto para manejar la inicialización rápida si se comparte desde un post
+  useEffect(() => {
+    if (visible && initialSongData) {
+      setSelectedSong(initialSongData);
+      setStep("preview");
+      setPreviewTrackUrl(null);
+    } else if (visible && !initialSongData) {
+      resetForm();
+    }
+  }, [visible, initialSongData]);
+
+  // Audio Playback Effect
   useEffect(() => {
     try {
       if (activeAudioSource && player) {
+        if (player.playing) player.pause();
+        player.replace(activeAudioSource);
         player.play();
-        if (step === "preview") {
-          player.loop = true;
-        } else {
-          player.loop = false;
-        }
+        player.loop = step === "preview";
       } else if (player) {
         player.pause();
       }
     } catch (e) {
       console.log("Audio Error:", e);
     }
-  }, [activeAudioSource, player, step]);
-
-  useEffect(() => {
-    if (!visible) resetForm();
-  }, [visible]);
+  }, [activeAudioSource, step]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
@@ -514,9 +1005,13 @@ const StoryCreationModal = ({
 
   const handleBack = () => {
     if (step === "preview") {
-      setStep("search");
-      setSelectedSong(null);
-      setPreviewTrackUrl(null);
+      if (initialSongData) {
+        onClose();
+      } else {
+        setStep("search");
+        setSelectedSong(null);
+        setPreviewTrackUrl(null);
+      }
     } else {
       onClose();
     }
@@ -730,32 +1225,125 @@ const StoryCreationModal = ({
   );
 };
 
-// --- COMPONENTE: Visor de Historias (CON CORRECCION DE AUDIO) ---
+// --- COMPONENTE: Visor de Historias (CORREGIDO) ---
 const StoryViewer = ({
   visible,
   onClose,
   group,
   currentUserId,
   onAddMore,
+  onRefreshFeed,
 }: any) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [liveAudioUrl, setLiveAudioUrl] = useState<string | null>(null);
 
-  // FIX VISUAL
-  const cardWidth = width * 0.9;
-  const cardHeight = height * 0.6;
+  // Estados para Gestos
+  const [isPaused, setIsPaused] = useState(false);
+  const [viewersModalVisible, setViewersModalVisible] = useState(false);
+  // [NUEVO] Referencia para medir la duración del toque y evitar conflictos
+  const pressStartTime = useRef<number>(0);
+
+  // Insets (Safe Area)
+  const insets = useSafeAreaInsets();
+
+  // Animaciones
+  const translateY = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
 
   const currentStory = group?.stories ? group.stories[currentIndex] : null;
   const songData = currentStory ? parseSongData(currentStory.songData) : null;
   const isOwner = group?.userId === currentUserId;
-  const viewersCount = currentStory?.viewers?.length || 0;
+  const viewersList = currentStory?.viewers || [];
+  const viewersCount = viewersList.length;
 
-  // VERIFICACION
   const isOfficialMood = group?.userId === MOOD_OFFICIAL_ID;
   const isVerified = group?.user?.isVerified || isOfficialMood;
 
-  const player = useAudioPlayer(songData?.preview || "");
+  const player = useAudioPlayer(liveAudioUrl || "");
   const STORY_DURATION = 30000;
+
+  // --- Animaciones Oficiales (Mood Team) ---
+  useEffect(() => {
+    if (isOfficialMood) {
+      fadeAnim.setValue(0);
+      slideAnim.setValue(20);
+
+      Animated.parallel([
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(logoScale, {
+              toValue: 1.1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(logoScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ),
+        Animated.stagger(300, [
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            friction: 6,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+    }
+  }, [isOfficialMood, currentIndex]);
+
+  // --- GESTO: Swipe Down ---
+  const onGestureEvent = Animated.event(
+    [{ nativeEvent: { translationY: translateY } }],
+    { useNativeDriver: true }
+  );
+
+  const onHandlerStateChange = ({ nativeEvent }: any) => {
+    if (nativeEvent.oldState === State.ACTIVE) {
+      if (nativeEvent.translationY > 100) {
+        onClose();
+      } else {
+        Animated.spring(translateY, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      }
+    }
+  };
+
+  // --- AUDIO LOGIC ---
+  useEffect(() => {
+    const fetchFreshAudio = async () => {
+      if (!songData) return;
+      setLiveAudioUrl(null);
+
+      try {
+        const trackId = songData.id || songData.spotifyId;
+        if (trackId) {
+          const url = await getDeezerTrackUrl(trackId);
+          setLiveAudioUrl(url);
+        } else {
+          setLiveAudioUrl(songData.preview);
+        }
+      } catch (e) {
+        console.log("Error fetching story audio", e);
+      }
+    };
+
+    if (visible) {
+      fetchFreshAudio();
+    }
+  }, [currentIndex, visible, group]);
 
   useEffect(() => {
     if (visible && currentStory && currentUserId && !isOwner) {
@@ -767,6 +1355,9 @@ const StoryViewer = ({
     if (visible) {
       setCurrentIndex(0);
       setProgress(0);
+      translateY.setValue(0);
+      setIsPaused(false);
+      setViewersModalVisible(false);
     }
   }, [visible, group]);
 
@@ -780,39 +1371,54 @@ const StoryViewer = ({
       return;
     }
 
-    try {
-      if (player) {
-        player.play();
-        player.loop = false;
+    if (liveAudioUrl) {
+      try {
+        if (player && !isPaused && !viewersModalVisible) {
+          player.play();
+          player.loop = false;
+        } else if (player && (isPaused || viewersModalVisible)) {
+          player.pause();
+        }
+      } catch (e) {
+        console.log("Error playing story audio:", e);
       }
-    } catch (e) {
-      console.log("Error playing story audio:", e);
     }
 
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-      const elapsedTime = Date.now() - startTime;
-      const newProgress = (elapsedTime / STORY_DURATION) * 100;
+    if (isPaused || viewersModalVisible) return;
 
-      if (newProgress >= 100) {
-        clearInterval(interval);
-        handleNext();
-      } else {
-        setProgress(newProgress);
-      }
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          handleNext();
+          return 0;
+        }
+        return prev + 100 / (STORY_DURATION / 100);
+      });
     }, 100);
 
     return () => {
       clearInterval(interval);
     };
-  }, [currentIndex, visible, currentStory, player]);
+  }, [
+    currentIndex,
+    visible,
+    currentStory,
+    player,
+    liveAudioUrl,
+    isPaused,
+    viewersModalVisible,
+  ]);
 
+  // --- LOGICA DE NAVEGACIÓN Y BORRADO ---
   const handleNext = () => {
     if (currentIndex < (group?.stories.length || 0) - 1) {
       setCurrentIndex((prev) => prev + 1);
       setProgress(0);
     } else {
-      onClose();
+      setTimeout(() => {
+        onClose();
+      }, 0);
     }
   };
 
@@ -825,6 +1431,53 @@ const StoryViewer = ({
     }
   };
 
+  const handleDeleteStory = async () => {
+    setIsPaused(true);
+    Alert.alert(
+      "Eliminar historia",
+      "¿Seguro que quieres eliminar esta historia?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+          onPress: () => setIsPaused(false),
+        },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await databases.deleteDocument(
+                appwriteConfig.databaseId,
+                appwriteConfig.storiesCollectionId,
+                currentStory.$id
+              );
+
+              // Remover localmente
+              const updatedStories = group.stories.filter(
+                (s: any) => s.$id !== currentStory.$id
+              );
+              if (updatedStories.length > 0) {
+                group.stories = updatedStories;
+                if (currentIndex >= updatedStories.length) {
+                  setCurrentIndex(updatedStories.length - 1);
+                }
+                setIsPaused(false);
+              } else {
+                onClose();
+                if (onRefreshFeed) onRefreshFeed();
+              }
+            } catch (error) {
+              console.log("Error deleting story:", error);
+              Alert.alert("Error", "No se pudo eliminar la historia.");
+              setIsPaused(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (!visible || !currentStory || !songData) return null;
 
   return (
@@ -834,205 +1487,341 @@ const StoryViewer = ({
       visible={visible}
       onRequestClose={onClose}
     >
-      <View className="flex-1 bg-black">
-        <Image
-          source={{ uri: songData.cover }}
-          className="absolute w-full h-full opacity-40"
-          blurRadius={50}
-        />
-        <View className="absolute w-full h-full bg-black/40" />
-
-        <SafeAreaView className="flex-1 justify-between">
-          <View className="absolute w-full h-full flex-row z-0 top-0">
-            <TouchableOpacity style={{ flex: 1 }} onPress={handlePrev} />
-            <TouchableOpacity style={{ flex: 2 }} onPress={handleNext} />
-          </View>
-
-          <View pointerEvents="box-none" className="pt-2">
-            <View className="flex-row gap-1 px-2 mb-4 z-20">
-              {group.stories.map((_: any, index: number) => (
-                <View
-                  key={index}
-                  className="flex-1 h-[3px] bg-white/30 rounded-full overflow-hidden"
-                >
-                  <View
-                    style={{
-                      width:
-                        index < currentIndex
-                          ? "100%"
-                          : index === currentIndex
-                          ? `${progress}%`
-                          : "0%",
-                    }}
-                    className="h-full bg-white rounded-full"
-                  />
-                </View>
-              ))}
-            </View>
-
-            <View className="flex-row items-center justify-between px-4 z-20">
-              <View className="flex-row items-center gap-2.5">
-                {isOfficialMood ? (
-                  <Image
-                    source={require("@/assets/images/icon.png")}
-                    className="w-9 h-9 rounded-full border border-white/10"
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Image
-                    source={{ uri: group.user?.pfp }}
-                    className="w-9 h-9 rounded-full border border-white/10"
-                  />
-                )}
-
-                <View>
-                  <View className="flex-row items-center">
-                    <Text className="text-white font-bold text-[15px] leading-4 mr-1">
-                      {group.user?.name || group.user?.username}
-                    </Text>
-                    {isVerified && (
-                      <MaterialIcons
-                        name="verified"
-                        size={14}
-                        color={isOfficialMood ? "#5E17EB" : "#00C2FF"}
-                      />
-                    )}
-                  </View>
-                  <Text className="text-white/60 text-xs">Mood Story</Text>
-                </View>
-              </View>
-              <View className="flex-row items-center gap-4">
-                {isOwner && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      onClose();
-                      setTimeout(onAddMore, 300);
-                    }}
-                    className="bg-white/10 p-2 rounded-full backdrop-blur-md"
-                  >
-                    <Ionicons name="add" size={24} color="white" />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity onPress={onClose}>
-                  <Ionicons name="close" size={28} color="white" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          <View className="flex-1 justify-center items-center px-6 pointer-events-none">
-            <View
-              className="bg-zinc-900/80 rounded-[32px] overflow-hidden border border-white/10 items-center justify-between p-6 relative shadow-2xl"
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View className="flex-1 bg-black">
+          <PanGestureHandler
+            onGestureEvent={onGestureEvent}
+            onHandlerStateChange={onHandlerStateChange}
+            activeOffsetY={[-10, 10]}
+            failOffsetX={[-5, 5]}
+          >
+            <Animated.View
               style={{
-                width: cardWidth,
-                height: cardHeight,
-                maxHeight: height * 0.65,
+                flex: 1,
+                transform: [
+                  {
+                    translateY: translateY.interpolate({
+                      inputRange: [0, 500],
+                      outputRange: [0, 500],
+                      extrapolateLeft: "clamp",
+                    }),
+                  },
+                ],
               }}
             >
-              <Image
-                source={{ uri: songData.cover }}
-                className="absolute w-full h-full opacity-20"
-                blurRadius={30}
-              />
-              <View className="w-full items-center flex-1 justify-center py-4">
-                {isOfficialMood ? (
+              {isOfficialMood ? (
+                <LinearGradient
+                  colors={["#5E17EB", "#000000"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  className="absolute w-full h-full"
+                />
+              ) : (
+                <View className="absolute w-full h-full">
                   <Image
                     source={{ uri: songData.cover }}
-                    className="w-full h-full absolute opacity-80"
-                    resizeMode="cover"
+                    className="absolute w-full h-full opacity-60"
+                    blurRadius={40}
                   />
-                ) : (
-                  <Image
-                    source={{ uri: songData.cover }}
-                    className="w-48 h-48 rounded-2xl shadow-2xl mb-6"
-                    style={{ width: cardWidth * 0.6, height: cardWidth * 0.6 }}
+                  <LinearGradient
+                    colors={[
+                      "rgba(0,0,0,0.6)",
+                      "transparent",
+                      "transparent",
+                      "rgba(0,0,0,0.9)",
+                    ]}
+                    locations={[0, 0.2, 0.7, 1]}
+                    className="absolute w-full h-full"
                   />
-                )}
-
-                <View className="items-center px-4 z-10">
-                  <Text
-                    className="text-white text-[28px] font-black text-center mb-1 leading-8 shadow-sm"
-                    style={{
-                      textShadowColor: "rgba(0,0,0,0.8)",
-                      textShadowOffset: { width: 0, height: 2 },
-                      textShadowRadius: 4,
-                    }}
-                  >
-                    {songData.title}
-                  </Text>
-                  <Text
-                    className="text-white/90 text-lg font-bold text-center shadow-sm"
-                    style={{
-                      textShadowColor: "rgba(0,0,0,0.8)",
-                      textShadowOffset: { width: 0, height: 1 },
-                      textShadowRadius: 3,
-                    }}
-                  >
-                    {songData.artist}
-                  </Text>
-                </View>
-              </View>
-              {songData.caption && (
-                <View className="bg-black/60 px-4 py-2 rounded-xl mb-4 z-10 backdrop-blur-sm">
-                  <Text className="text-white font-medium text-center text-sm">
-                    {songData.caption}
-                  </Text>
                 </View>
               )}
-              {!isOfficialMood && (
-                <View className="w-full">
-                  <View className="bg-[#5E17EB] w-full py-3 rounded-full flex-row items-center justify-center gap-2">
-                    <Ionicons name="musical-notes" size={16} color="white" />
-                    <Text className="text-white font-bold text-sm tracking-wide">
-                      Escuchar en Mood
-                    </Text>
+
+              <View
+                className="flex-1 justify-between relative"
+                style={{
+                  paddingTop: insets.top > 0 ? insets.top : 40,
+                  paddingBottom: insets.bottom,
+                }}
+              >
+                {/* --- ÁREAS DE TOQUE PARA NAVEGACIÓN [CORREGIDO BUG DE GESTOS] --- */}
+                <View
+                  className="absolute w-full h-full flex-row z-10"
+                  pointerEvents="box-none"
+                >
+                  <Pressable
+                    className="h-full w-[30%]"
+                    onPress={() => {
+                      // Solo navegar si el toque fue rápido (menos de 200ms)
+                      if (Date.now() - pressStartTime.current < 200)
+                        handlePrev();
+                    }}
+                    onPressIn={() => {
+                      pressStartTime.current = Date.now();
+                      setIsPaused(true);
+                    }}
+                    onPressOut={() => setIsPaused(false)}
+                  />
+                  <Pressable
+                    className="h-full w-[70%]"
+                    onPress={() => {
+                      // Solo navegar si el toque fue rápido (menos de 200ms)
+                      if (Date.now() - pressStartTime.current < 200)
+                        handleNext();
+                    }}
+                    onPressIn={() => {
+                      pressStartTime.current = Date.now();
+                      setIsPaused(true);
+                    }}
+                    onPressOut={() => setIsPaused(false)}
+                  />
+                </View>
+
+                {/* HEADER: Progress + User Info */}
+                <View pointerEvents="box-none" className="pt-2 z-20 px-2">
+                  <View className="flex-row gap-1 px-1 mb-4">
+                    {group.stories.map((_: any, index: number) => (
+                      <View
+                        key={index}
+                        className="flex-1 h-[2px] bg-white/30 rounded-full overflow-hidden"
+                      >
+                        <View
+                          style={{
+                            width:
+                              index < currentIndex
+                                ? "100%"
+                                : index === currentIndex
+                                ? `${progress}%`
+                                : "0%",
+                          }}
+                          className="h-full bg-white rounded-full"
+                        />
+                      </View>
+                    ))}
+                  </View>
+
+                  <View className="flex-row items-center justify-between px-2">
+                    <View className="flex-row items-center gap-3">
+                      <Image
+                        source={
+                          isOfficialMood
+                            ? require("@/assets/images/icon.png")
+                            : group.user?.pfp
+                            ? { uri: group.user?.pfp }
+                            : require("@/assets/noPfp.jpg")
+                        }
+                        className="w-10 h-10 rounded-full border border-white/20"
+                      />
+
+                      <View>
+                        <View className="flex-row items-center">
+                          <Text className="text-white font-bold text-[15px] leading-4 mr-1 shadow-sm">
+                            {group.user?.name || group.user?.username}
+                          </Text>
+
+                          {/* CORREGIDO: BADGE EN STORY VIEWER */}
+                          {isVerified && (
+                            <MaterialIcons
+                              name="verified"
+                              size={16}
+                              color="#5E17EB" // Morado Mood
+                              style={{ marginLeft: 4 }}
+                            />
+                          )}
+
+                          <Text className="text-zinc-400 text-xs ml-2 font-medium">
+                            {formatTimeAgo(currentStory.$createdAt)}
+                          </Text>
+                        </View>
+                        <Text className="text-white/70 text-xs font-medium">
+                          Mood Story
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* [MODIFICADO] Botón de eliminar movido al header */}
+                    <View className="flex-row items-center gap-4">
+                      {isOwner && (
+                        <TouchableOpacity
+                          onPress={handleDeleteStory}
+                          className="p-1"
+                        >
+                          <Ionicons
+                            name="trash-outline"
+                            size={22}
+                            color="white"
+                          />
+                        </TouchableOpacity>
+                      )}
+
+                      {isOwner && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            onClose();
+                            setTimeout(onAddMore, 300);
+                          }}
+                          className="bg-white/10 p-2 rounded-full backdrop-blur-md border border-white/5"
+                        >
+                          <Ionicons name="add" size={24} color="white" />
+                        </TouchableOpacity>
+                      )}
+
+                      <TouchableOpacity onPress={onClose} className="p-1">
+                        <Ionicons name="close" size={28} color="white" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
-              )}
-            </View>
-          </View>
 
-          <View className="px-4 pb-6 z-20">
-            {isOwner ? (
-              <View className="flex-row items-center justify-between">
-                <TouchableOpacity className="flex-row items-center gap-2 px-4 py-2 bg-black/40 rounded-full">
-                  <Ionicons name="eye" size={20} color="white" />
-                  <Text className="text-white font-bold">
-                    {viewersCount} Vistos
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity className="p-2">
-                  <Ionicons
-                    name="ellipsis-horizontal"
-                    size={24}
-                    color="white"
-                  />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View className="flex-row items-center gap-4">
-                <View className="flex-1 h-12 rounded-full border border-white/30 px-5 justify-center bg-black/20 backdrop-blur-sm">
-                  <TextInput
-                    placeholder="Enviar mensaje..."
-                    placeholderTextColor="rgba(255,255,255,0.7)"
-                    className="text-white font-medium"
-                  />
+                {/* CONTENIDO PRINCIPAL */}
+                <View className="flex-1 justify-center items-center px-8 pointer-events-none z-0">
+                  {isOfficialMood ? (
+                    <View className="items-center justify-center w-full">
+                      <Animated.Image
+                        source={require("@/assets/images/icon.png")}
+                        style={{
+                          width: 150,
+                          height: 150,
+                          borderRadius: 30,
+                          transform: [{ scale: logoScale }],
+                        }}
+                        resizeMode="contain"
+                      />
+
+                      <Animated.View
+                        style={{
+                          opacity: fadeAnim,
+                          transform: [{ translateY: slideAnim }],
+                        }}
+                      >
+                        <Text className="text-white font-black text-4xl mt-10 text-center tracking-tight leading-10">
+                          Welcome to the{"\n"}
+                          <Text className="text-[#a882ff]">
+                            Future of Sound
+                          </Text>
+                        </Text>
+                      </Animated.View>
+
+                      <Animated.View
+                        style={{
+                          opacity: fadeAnim,
+                          transform: [{ translateY: slideAnim }],
+                          marginTop: 30,
+                        }}
+                      >
+                        <View className="bg-white/10 p-6 rounded-3xl border border-white/5 backdrop-blur-md">
+                          <Text className="text-zinc-200 text-center text-lg leading-7 font-medium">
+                            Share your vibe. Connect through rhythm.{"\n"}
+                            Experience music like never before.
+                          </Text>
+                        </View>
+                      </Animated.View>
+                    </View>
+                  ) : (
+                    <>
+                      <Image
+                        source={{ uri: songData.cover }}
+                        style={{ width: width - 60, height: width - 60 }}
+                        className="rounded-2xl shadow-2xl mb-8"
+                        resizeMode="cover"
+                      />
+
+                      <View className="items-center w-full">
+                        <Text
+                          className="text-white font-black text-center text-3xl mb-2 leading-8"
+                          style={{
+                            textShadowColor: "rgba(0,0,0,0.5)",
+                            textShadowOffset: { width: 0, height: 2 },
+                            textShadowRadius: 4,
+                          }}
+                        >
+                          {songData.title}
+                        </Text>
+                        <Text
+                          className="text-white/80 font-bold text-center text-lg mb-6"
+                          style={{
+                            textShadowColor: "rgba(0,0,0,0.5)",
+                            textShadowOffset: { width: 0, height: 1 },
+                            textShadowRadius: 3,
+                          }}
+                        >
+                          {songData.artist}
+                        </Text>
+
+                        {songData.caption && (
+                          <Text className="text-white font-medium text-center text-base mb-6 px-4 leading-6 shadow-sm">
+                            "{songData.caption}"
+                          </Text>
+                        )}
+                      </View>
+                    </>
+                  )}
                 </View>
-                <TouchableOpacity>
-                  <Ionicons name="heart-outline" size={32} color="white" />
-                </TouchableOpacity>
-                <TouchableOpacity className="-ml-1">
-                  <Ionicons
-                    name="paper-plane-outline"
-                    size={30}
-                    color="white"
-                  />
-                </TouchableOpacity>
+
+                {/* FOOTER ACTIONS */}
+                <View className="px-4 pb-6 z-20 w-full items-center">
+                  {isOwner ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setIsPaused(true);
+                        setViewersModalVisible(true);
+                      }}
+                      activeOpacity={0.8}
+                      className="flex-row items-center justify-center gap-2 px-6 py-3 bg-black/40 rounded-full backdrop-blur-md border border-white/10"
+                    >
+                      <Ionicons name="eye" size={20} color="white" />
+                      <Text className="text-white font-bold text-base">
+                        {viewersCount} Viewers
+                      </Text>
+                      <Ionicons
+                        name="chevron-up"
+                        size={16}
+                        color="rgba(255,255,255,0.5)"
+                      />
+                    </TouchableOpacity>
+                  ) : (
+                    !isOfficialMood && (
+                      <View className="flex-row items-center gap-3 w-full">
+                        <View className="flex-1 h-12 rounded-full border border-white/20 px-5 justify-center bg-black/30 backdrop-blur-md">
+                          <TextInput
+                            placeholder="Send Message..."
+                            placeholderTextColor="rgba(255,255,255,0.6)"
+                            className="text-white font-medium text-base"
+                          />
+                        </View>
+                        <TouchableOpacity className="bg-black/30 p-3 rounded-full border border-white/20 backdrop-blur-md">
+                          <Ionicons
+                            name="heart-outline"
+                            size={24}
+                            color="white"
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity className="bg-black/30 p-3 rounded-full border border-white/20 backdrop-blur-md">
+                          <Ionicons
+                            name="paper-plane-outline"
+                            size={24}
+                            color="white"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    )
+                  )}
+                </View>
               </View>
-            )}
-          </View>
-        </SafeAreaView>
-      </View>
+
+              {/* [ELIMINADO] Se ha quitado el botón flotante rojo de aquí */}
+            </Animated.View>
+          </PanGestureHandler>
+        </View>
+
+        <ViewersModal
+          visible={viewersModalVisible}
+          onClose={() => {
+            setViewersModalVisible(false);
+            setIsPaused(false);
+          }}
+          viewerIds={viewersList}
+        />
+      </GestureHandlerRootView>
     </Modal>
   );
 };
@@ -1052,8 +1841,9 @@ const Home = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  // Nuevo Estado para sugerencias
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
+  const [shareContacts, setShareContacts] = useState<any[]>([]); // Contactos para compartir directo
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
 
   // Modales
   const [isViralModalVisible, setViralModalVisible] = useState(false);
@@ -1067,6 +1857,7 @@ const Home = () => {
   const [postToShareData, setPostToShareData] = useState<any>(null);
   const [sharePostId, setSharePostId] = useState<string>("");
   const [selectedPost, setSelectedPost] = useState<any>(null);
+  const [storyInitialSongData, setStoryInitialSongData] = useState<any>(null); // Para compartir post a historia
   const [notiCount, setNotiCount] = useState(0);
   const [msgCount, setMsgCount] = useState(0);
 
@@ -1100,7 +1891,6 @@ const Home = () => {
         return creatorId === activeId || followedIds.includes(creatorId);
       });
 
-      // LÓGICA DE SUGERENCIAS
       if (timelinePosts.length === 0 && activeId) {
         const uniqueCreators = new Map();
         rawPosts.forEach((post: any) => {
@@ -1135,11 +1925,9 @@ const Home = () => {
     }
   };
 
-  // --- REALTIME SUBSCRIPTION FOR TOPBAR ICONS ---
   useEffect(() => {
     if (!user?.$id) return;
 
-    // Canales de suscripción: Notificaciones y Mensajes
     const channels = [
       `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.notificationsCollectionId}.documents`,
       `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`,
@@ -1149,23 +1937,21 @@ const Home = () => {
       const event = response.events[0];
       const payload: any = response.payload;
 
-      // 1. Notificaciones: Si se crea, elimina o actualiza una notificación para mí
       if (
         event.includes(
           `collections.${appwriteConfig.notificationsCollectionId}`
         )
       ) {
         if (payload.userId === user.$id) {
-          updateCounts(user.$id); // Recalcular count
+          updateCounts(user.$id);
         }
       }
 
-      // 2. Mensajes: Si llega un mensaje para mí o leo uno
       if (
         event.includes(`collections.${appwriteConfig.messagesCollectionId}`)
       ) {
         if (payload.receiverId === user.$id || payload.senderId === user.$id) {
-          updateCounts(user.$id); // Recalcular count
+          updateCounts(user.$id);
         }
       }
     });
@@ -1175,7 +1961,6 @@ const Home = () => {
     };
   }, [user]);
 
-  // --- USE FOCUS EFFECT: ACTUALIZAR CONTADORES AL VOLVER (Seguridad extra) ---
   useFocusEffect(
     useCallback(() => {
       if (user?.$id) {
@@ -1187,10 +1972,17 @@ const Home = () => {
   const fetchStories = async (userId: string) => {
     try {
       const storiesDocs = await getStories(userId);
+      // FILTRO 24H: Aseguramos que solo pasen historias de las últimas 24h
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const recentStories = storiesDocs.filter(
+        (doc: any) => new Date(doc.$createdAt) > oneDayAgo
+      );
+
       const groups: Record<string, any> = {};
 
       await Promise.all(
-        storiesDocs.map(async (doc: any) => {
+        recentStories.map(async (doc: any) => {
           let docUserId = null;
           let docUserData = null;
 
@@ -1300,10 +2092,161 @@ const Home = () => {
     setOptionsVisible(true);
   };
 
-  const openShare = (post: any) => {
+  // --- Lógica para obtener usuarios seguidos (Sugeridos) ---
+  const fetchFollowedUsers = async (userId: string) => {
+    try {
+      const followedIds = await getFollowedUserIds(userId);
+      if (followedIds.length > 0) {
+        // Obtener detalles de usuarios
+        const promises = followedIds.map((id) => getUser(id));
+        const users = await Promise.all(promises);
+        return users.filter((u) => u !== null);
+      }
+    } catch (error) {
+      console.log("Error fetching share contacts", error);
+    }
+    return [];
+  };
+
+  // --- BUSQUEDA REAL EN APPWRITE ---
+  const searchUsersInAppwrite = async (query: string) => {
+    try {
+      const response = await databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.usersCollectionId,
+        [
+          Query.or([
+            Query.search("username", query),
+            Query.search("name", query),
+          ]),
+          Query.limit(10),
+        ]
+      );
+      return response.documents;
+    } catch (error) {
+      console.log("Search error:", error);
+      return [];
+    }
+  };
+
+  // --- NUEVA LÓGICA DE COMPARTIR ---
+  const openShare = async (post: any) => {
     setPostToShareData(post);
     setSharePostId(post.$id);
     setShareSelectorVisible(true);
+
+    // Cargar contactos iniciales (seguidos)
+    if (user?.$id && shareContacts.length === 0) {
+      setIsLoadingContacts(true);
+      const contacts = await fetchFollowedUsers(user.$id);
+      setShareContacts(contacts);
+      setIsLoadingContacts(false);
+    }
+  };
+
+  // Manejador del buscador en el modal
+  const handleShareSearch = async (text: string) => {
+    setIsLoadingContacts(true);
+    if (text.length > 0) {
+      const results = await searchUsersInAppwrite(text);
+      setShareContacts(results);
+    } else if (user?.$id) {
+      // Volver a seguidos si borra texto
+      const contacts = await fetchFollowedUsers(user.$id);
+      setShareContacts(contacts);
+    }
+    setIsLoadingContacts(false);
+  };
+
+  // [MODIFICADO] Solución completa: Texto vacío por defecto y sin createdAt
+  const handleSendShare = async (userIds: string[], message: string) => {
+    if (!user?.$id || !postToShareData) return;
+
+    try {
+      const promises = userIds.map(async (targetId) => {
+        // 1. Obtener o crear el chat entre los dos usuarios
+        const chatDoc = await getOrCreateChat(user.$id, targetId);
+
+        if (!chatDoc) {
+          throw new Error("No se pudo crear el chat para " + targetId);
+        }
+
+        // 2. Crear el mensaje dentro de ese CHAT (con chatId)
+        return databases.createDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.messagesCollectionId,
+          ID.unique(),
+          {
+            chatId: chatDoc.$id,
+            senderId: user.$id,
+            receiverId: targetId,
+            content: message || "", // <--- CAMBIO AQUÍ: Cadena vacía en vez de texto por defecto
+            sharedPostId: postToShareData.$id,
+            isRead: false,
+            // createdAt eliminado para evitar error de Appwrite
+          }
+        );
+      });
+
+      await Promise.all(promises);
+
+      Alert.alert("Enviado", "El post se ha compartido correctamente.");
+    } catch (error) {
+      console.error("Error compartiendo post:", error);
+      Alert.alert("Error", "No se pudo compartir el post.");
+    }
+  };
+
+  // CORRECCIÓN: FETCH FRESCO PARA HISTORIAS
+  const handleAddToStoryFromPost = async () => {
+    if (!postToShareData) return;
+    const songData = parseSongData(postToShareData.songData);
+
+    if (songData) {
+      // Intentar refrescar la URL del audio para que suene
+      let freshPreview = songData.preview;
+      const trackId = songData.id || songData.spotifyId;
+
+      if (trackId) {
+        try {
+          const freshUrl = await getDeezerTrackUrl(trackId);
+          if (freshUrl) freshPreview = freshUrl;
+        } catch (e) {
+          console.log("Could not refresh track url for story");
+        }
+      }
+
+      setStoryInitialSongData({ ...songData, preview: freshPreview });
+      setShareSelectorVisible(false);
+      setTimeout(() => setCreationVisible(true), 300);
+    }
+  };
+
+  const handleSystemShare = async () => {
+    if (!postToShareData) return;
+    // Aquí generarías un enlace profundo a tu app
+    const link = `https://moodapp.com/post/${postToShareData.$id}`;
+    try {
+      await SystemShare.share({
+        message: `¡Mira esta canción en Mood! ${link}`,
+        url: link, // iOS
+        title: "Compartir desde Mood", // Android
+      });
+    } catch (error) {
+      console.log("Error sharing:", error);
+    }
+    setShareSelectorVisible(false);
+  };
+
+  const handleCopyLink = () => {
+    if (!postToShareData) return;
+    const link = `https://moodapp.com/post/${postToShareData.$id}`;
+    Clipboard.setString(link);
+    Alert.alert(
+      "Enlace copiado",
+      "El enlace al post ha sido copiado al portapapeles."
+    );
+    setShareSelectorVisible(false);
   };
 
   const getViralPostData = () => {
@@ -1354,8 +2297,9 @@ const Home = () => {
       style={{ backgroundColor: isDark ? "#000000" : "#FFFFFF" }}
     >
       <TopBar notificationCount={notiCount} messageCount={msgCount} />
+      {/* CAMBIO: Implementación del Skeleton Loader Inteligente */}
       {isLoading ? (
-        <ActivityIndicator size="large" color="#5E17EB" className="flex-1" />
+        <FeedSkeleton isDark={isDark} />
       ) : (
         <FlatList
           data={feedPosts}
@@ -1368,7 +2312,10 @@ const Home = () => {
                 setActiveStoryGroup(g);
                 setStoryViewerVisible(true);
               }}
-              onAddStory={() => setCreationVisible(true)}
+              onAddStory={() => {
+                setStoryInitialSongData(null); // Resetear datos iniciales
+                setCreationVisible(true);
+              }}
             />
           }
           renderItem={renderItem}
@@ -1388,107 +2335,23 @@ const Home = () => {
         />
       )}
 
-      {/* --- MODAL SELECTOR DE COMPARTIR --- */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      {/* --- NUEVO MODAL SELECTOR DE COMPARTIR (ESTILO INSTAGRAM) --- */}
+      <DirectShareSheet
         visible={isShareSelectorVisible}
-        onRequestClose={() => setShareSelectorVisible(false)}
-      >
-        <TouchableWithoutFeedback
-          onPress={() => setShareSelectorVisible(false)}
-        >
-          <View className="flex-1 justify-end bg-black/60">
-            <TouchableWithoutFeedback>
-              <View
-                className="rounded-t-[32px] p-6 pb-12"
-                style={{
-                  backgroundColor: isDark ? "#18181B" : "white",
-                }}
-              >
-                <View className="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full self-center mb-6" />
-
-                <Text
-                  className="text-xl font-bold text-center mb-8"
-                  style={{ color: isDark ? "white" : "black" }}
-                >
-                  Compartir Publicación
-                </Text>
-
-                <View className="flex-row gap-4">
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShareSelectorVisible(false);
-                      setTimeout(() => setShareVisible(true), 300);
-                    }}
-                    className="flex-1 p-5 rounded-3xl items-center border"
-                    style={{
-                      backgroundColor: isDark ? "#27272A" : "#F3F4F6",
-                      borderColor: isDark ? "#3F3F46" : "#E5E5E5",
-                    }}
-                  >
-                    <View className="w-14 h-14 bg-[#5E17EB]/10 rounded-full items-center justify-center mb-3">
-                      <Ionicons name="repeat" size={28} color="#5E17EB" />
-                    </View>
-                    <Text
-                      className="font-bold text-base mb-1"
-                      style={{ color: isDark ? "white" : "black" }}
-                    >
-                      En Mood
-                    </Text>
-                    <Text
-                      className="text-xs text-center"
-                      style={{ color: subTextColor }}
-                    >
-                      Repostear o enviar a amigos
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShareSelectorVisible(false);
-                      setTimeout(() => setViralModalVisible(true), 300);
-                    }}
-                    className="flex-1 p-5 rounded-3xl items-center border"
-                    style={{
-                      backgroundColor: isDark ? "#27272A" : "#F3F4F6",
-                      borderColor: isDark ? "#3F3F46" : "#E5E5E5",
-                    }}
-                  >
-                    <View className="w-14 h-14 bg-pink-500/10 rounded-full items-center justify-center mb-3">
-                      <Ionicons name="share-social" size={28} color="#ec4899" />
-                    </View>
-                    <Text
-                      className="font-bold text-base mb-1"
-                      style={{ color: isDark ? "white" : "black" }}
-                    >
-                      Viral Card
-                    </Text>
-                    <Text
-                      className="text-xs text-center"
-                      style={{ color: subTextColor }}
-                    >
-                      Stories, Instagram y más
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                  onPress={() => setShareSelectorVisible(false)}
-                  className="mt-6 p-4 rounded-full items-center"
-                >
-                  <Text
-                    className="font-bold text-base"
-                    style={{ color: subTextColor }}
-                  >
-                    Cancelar
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        onClose={() => setShareSelectorVisible(false)}
+        contacts={shareContacts}
+        isDark={isDark}
+        isLoadingContacts={isLoadingContacts}
+        onSearch={handleShareSearch} // Conectado al buscador real
+        onSend={handleSendShare} // [MODIFICADO] Conectado a la función real
+        onAddToStory={handleAddToStoryFromPost}
+        onViralCard={() => {
+          setShareSelectorVisible(false);
+          setTimeout(() => setViralModalVisible(true), 300);
+        }}
+        onSystemShare={handleSystemShare}
+        onCopyLink={handleCopyLink}
+      />
 
       <StoryCreationModal
         visible={isCreationVisible}
@@ -1497,13 +2360,21 @@ const Home = () => {
         onSuccess={() => {
           if (currentUserId) fetchStories(currentUserId);
         }}
+        initialSongData={storyInitialSongData}
       />
       <StoryViewer
         visible={isStoryViewerVisible}
         onClose={() => setStoryViewerVisible(false)}
         group={activeStoryGroup}
         currentUserId={currentUserId}
-        onAddMore={() => setCreationVisible(true)}
+        onAddMore={() => {
+          setStoryInitialSongData(null);
+          setCreationVisible(true);
+        }}
+        onRefreshFeed={() => {
+          // Si borramos la ultima historia, refrescamos el feed
+          if (currentUserId) fetchStories(currentUserId);
+        }}
       />
 
       <OptionsModal

@@ -8,11 +8,12 @@ import {
   RefreshControl,
   ActivityIndicator,
   FlatList,
+  useWindowDimensions, // <--- Importado
 } from "react-native";
 import React, { useState, useRef, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { Ionicons, Feather } from "@expo/vector-icons";
+import { Ionicons, Feather, MaterialIcons } from "@expo/vector-icons";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { router, useFocusEffect } from "expo-router";
 import { useColorScheme } from "nativewind";
@@ -34,6 +35,69 @@ const parseSongFromPost = (songDataString: string) => {
   }
 };
 
+// --- SKELETON LOADER (NUEVO) ---
+const ProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
+  const bg = isDark ? "bg-zinc-900" : "bg-zinc-100";
+  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
+  const { width } = useWindowDimensions();
+  const itemSize = width / 3;
+
+  return (
+    <View className="flex-1 animate-pulse">
+      {/* Header Title */}
+      <View className="flex-row justify-between items-center px-6 py-2 mb-6">
+        <View className={`w-32 h-8 rounded ${elementBg}`} />
+        <View className={`w-10 h-10 rounded-2xl ${elementBg}`} />
+      </View>
+
+      {/* Avatar & Name */}
+      <View className="items-center mb-8">
+        <View className={`w-32 h-32 rounded-full ${elementBg} mb-4`} />
+        <View className={`w-40 h-6 rounded ${elementBg} mb-2`} />
+        <View className={`w-24 h-4 rounded ${elementBg}`} />
+      </View>
+
+      {/* Stats Bar */}
+      <View
+        className={`mx-4 h-[70px] mb-6 rounded-3xl ${bg} flex-row items-center justify-between px-6`}
+      >
+        <View className="items-center gap-2">
+          <View className={`w-8 h-5 rounded ${elementBg}`} />
+          <View className={`w-12 h-3 rounded ${elementBg}`} />
+        </View>
+        <View className={`w-[1px] h-8 ${elementBg}`} />
+        <View className="items-center gap-2">
+          <View className={`w-8 h-5 rounded ${elementBg}`} />
+          <View className={`w-12 h-3 rounded ${elementBg}`} />
+        </View>
+        <View className={`w-[1px] h-8 ${elementBg}`} />
+        <View className="items-center gap-2">
+          <View className={`w-8 h-5 rounded ${elementBg}`} />
+          <View className={`w-12 h-3 rounded ${elementBg}`} />
+        </View>
+      </View>
+
+      {/* Tabs */}
+      <View className="flex-row px-4 mb-4 gap-4">
+        <View className={`flex-1 h-10 rounded-xl ${elementBg}`} />
+        <View className={`flex-1 h-10 rounded-xl ${bg}`} />
+      </View>
+
+      {/* Grid Content */}
+      <View className="flex-row flex-wrap">
+        {[...Array(12)].map((_, i) => (
+          <View
+            key={i}
+            style={{ width: itemSize, height: itemSize, padding: 1 }}
+          >
+            <View className={`w-full h-full ${elementBg}`} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
 const Profile = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -51,7 +115,6 @@ const Profile = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [posts, setPosts] = useState<any[]>([]);
   const [topSongs, setTopSongs] = useState<any[]>([]);
-  const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
   const [stats, setStats] = useState({ followersCount: 0, followingCount: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -222,6 +285,19 @@ const Profile = () => {
     </TouchableOpacity>
   );
 
+  // --- REEMPLAZO: Mostrar Skeleton mientras carga ---
+  if (isLoading) {
+    return (
+      <SafeAreaView
+        className="flex-1"
+        edges={["top"]}
+        style={{ backgroundColor: bgColor }}
+      >
+        <ProfileSkeleton isDark={isDark} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView
       className="flex-1"
@@ -268,12 +344,21 @@ const Profile = () => {
               style={{ backgroundColor: cardBg }}
             />
           </View>
-          <Text
-            className="text-2xl font-bold mt-4"
-            style={{ color: textColor }}
-          >
-            {user?.name || "Usuario"}
-          </Text>
+
+          <View className="flex-row items-center mt-4">
+            <Text className="text-2xl font-bold" style={{ color: textColor }}>
+              {user?.name || "Usuario"}
+            </Text>
+            {(user as any)?.isVerified && (
+              <MaterialIcons
+                name="verified"
+                size={22}
+                color="#5E17EB"
+                style={{ marginLeft: 6 }}
+              />
+            )}
+          </View>
+
           <Text className="text-[#5E17EB] font-medium mt-1">
             @{user?.username || "usuario"}
           </Text>
@@ -404,11 +489,7 @@ const Profile = () => {
           scrollEventThrottle={16}
         >
           <View style={{ width }} className="min-h-[200px]">
-            {isLoading ? (
-              <View className="flex-1 justify-center items-center py-10">
-                <ActivityIndicator size="large" color="#5E17EB" />
-              </View>
-            ) : posts.length === 0 ? (
+            {posts.length === 0 ? (
               <View className="flex-1 justify-center items-center py-10">
                 <Text style={{ color: subTextColor }}>
                   {t("profile.empty.posts")}
@@ -422,11 +503,7 @@ const Profile = () => {
           </View>
 
           <View style={{ width }} className="min-h-[200px]">
-            {isLoading ? (
-              <View className="flex-1 justify-center items-center py-10">
-                <ActivityIndicator size="large" color="#5E17EB" />
-              </View>
-            ) : topSongs.length === 0 ? (
+            {topSongs.length === 0 ? (
               <View className="flex-1 justify-center items-center py-10">
                 <Ionicons
                   name="musical-note"

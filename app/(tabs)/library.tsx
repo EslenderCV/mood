@@ -16,8 +16,9 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   Dimensions,
+  useWindowDimensions,
 } from "react-native";
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
@@ -46,7 +47,51 @@ import { useLanguage } from "@/context/LanguageContext";
 
 const { width } = Dimensions.get("window");
 
-// --- COMPONENTE VISUALIZADOR DE AUDIO ---
+// --- SKELETONS ---
+
+const SongSkeleton = ({ isDark }: { isDark: boolean }) => {
+  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
+  const containerBg = isDark ? "bg-[#18181B]" : "bg-[#FFFFFF]";
+
+  return (
+    <View
+      className={`flex-row items-center p-3 mb-3 rounded-2xl animate-pulse`}
+      style={{
+        backgroundColor: containerBg,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: isDark ? 0 : 0.05,
+        shadowRadius: 3,
+        elevation: isDark ? 0 : 1,
+      }}
+    >
+      <View className={`w-14 h-14 rounded-xl mr-4 ${elementBg}`} />
+      <View className="flex-1 mr-2 space-y-2">
+        <View className={`w-32 h-4 rounded ${elementBg}`} />
+        <View className={`w-24 h-3 rounded ${elementBg}`} />
+        <View className={`w-20 h-2.5 rounded ${elementBg} mt-1`} />
+      </View>
+      <View className={`w-9 h-9 rounded-full ${elementBg}`} />
+    </View>
+  );
+};
+
+const PlaylistSkeleton = ({ isDark }: { isDark: boolean }) => {
+  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
+
+  return (
+    <View
+      className="flex-1 m-1.5 mb-4 animate-pulse"
+      style={{ maxWidth: "48%" }}
+    >
+      <View className={`w-full aspect-square rounded-xl mb-2 ${elementBg}`} />
+      <View className={`w-24 h-4 rounded ml-1 mb-1 ${elementBg}`} />
+      <View className={`w-12 h-3 rounded ml-1 ${elementBg}`} />
+    </View>
+  );
+};
+
+// --- VISUALIZADOR DE AUDIO ---
 const AudioVisualizer = ({
   isPlaying,
   color,
@@ -78,8 +123,6 @@ const Library = () => {
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#09090B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
-  // Cambio: Fondo de tarjeta más sutil o transparente para diseño moderno
-  const cardBg = isDark ? "#18181B" : "#F4F4F5";
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
   const emptyIconColor = isDark ? "#27272A" : "#E4E4E7";
   const accentColor = "#5E17EB";
@@ -95,6 +138,9 @@ const Library = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // --- SKELETON DATA ---
+  const skeletonData = useMemo(() => Array.from({ length: 8 }), []);
+
   const [isCreateModalVisible, setCreateModalVisible] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [importPlatform, setImportPlatform] = useState<
@@ -105,7 +151,6 @@ const Library = () => {
     useState(false);
   const [songToAdd, setSongToAdd] = useState<any>(null);
 
-  // --- AUDIO STATES ---
   const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
@@ -113,7 +158,6 @@ const Library = () => {
 
   const player = useAudioPlayer(currentSongUrl);
 
-  // Auto-play
   useEffect(() => {
     if (currentSongUrl && player) {
       if (!player.playing) {
@@ -162,8 +206,8 @@ const Library = () => {
                 post.postedBy.username || post.postedBy.name || "Usuario";
             return {
               ...song,
-              id: post.$id, // ID del post guardado
-              trackId: song.id || song.spotifyId, // ID REAL de la canción
+              id: post.$id,
+              trackId: song.id || song.spotifyId,
               originalPostCreator: creatorName,
               postId: post.$id,
             };
@@ -200,9 +244,8 @@ const Library = () => {
     if (nativeEvent.state === State.ACTIVE) router.push("/explore");
   };
 
-  // --- LÓGICA DE REPRODUCCIÓN (FETCH + FALLBACK) ---
   const handlePlaySong = async (item: any) => {
-    const songIdKey = item.id; // ID único en la lista (Post ID)
+    const songIdKey = item.id;
 
     if (playingId === songIdKey) {
       if (isPlaying) {
@@ -408,12 +451,9 @@ const Library = () => {
     );
   };
 
-  // --- AQUÍ ESTÁ EL CAMBIO PRINCIPAL DE DISEÑO ---
   const renderCollectionItem = ({ item }: { item: any }) => {
     const platform = user?.preferredPlatform || "spotify";
     const iconName = platform === "apple" ? "apple" : "spotify";
-
-    // Colores oficiales
     const brandColor = platform === "apple" ? "#FA243C" : "#1DB954";
 
     const isThisPlaying = playingId === item.id;
@@ -432,16 +472,14 @@ const Library = () => {
         overshootLeft={false}
         onSwipeableRightOpen={() => handleUnsave(item)}
         onSwipeableLeftOpen={() => openAddToPlaylistModal(item)}
-        containerStyle={{ marginBottom: 12 }} // Espaciado entre items
+        containerStyle={{ marginBottom: 12 }}
       >
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => router.push(`/post/${item.postId}` as any)}
-          // DISEÑO NUEVO: Sin bordes duros, fondo más limpio, rounded-xl
           className="flex-row items-center p-3 rounded-2xl"
           style={{
             backgroundColor: isDark ? "#18181B" : "#FFFFFF",
-            // Sombra sutil solo en modo claro para profundidad
             shadowColor: "#000",
             shadowOffset: { width: 0, height: 1 },
             shadowOpacity: isDark ? 0 : 0.05,
@@ -449,14 +487,12 @@ const Library = () => {
             elevation: isDark ? 0 : 1,
           }}
         >
-          {/* 1. IMAGEN DE PORTADA */}
           <View className="relative mr-4 shadow-sm">
             <Image
               source={{ uri: item.cover }}
               className="w-14 h-14 rounded-xl bg-zinc-800"
               resizeMode="cover"
             />
-            {/* Overlay Play/Pause mejorado */}
             <TouchableOpacity
               onPress={(e) => {
                 e.stopPropagation();
@@ -479,8 +515,6 @@ const Library = () => {
                   </View>
                 )
               )}
-              {/* Si no está sonando ni cargando, no mostramos nada sobre la foto para que se vea limpia, 
-                  o puedes descomentar abajo para mostrar siempre el play */}
               {!isLoadingThis && !isThisPlaying && (
                 <View className="bg-black/20 w-8 h-8 rounded-full items-center justify-center">
                   <Ionicons
@@ -494,7 +528,6 @@ const Library = () => {
             </TouchableOpacity>
           </View>
 
-          {/* 2. INFORMACIÓN TEXTO */}
           <View className="flex-1 justify-center mr-2">
             <Text
               className="font-bold text-[16px] mb-1"
@@ -512,13 +545,11 @@ const Library = () => {
               >
                 {item.artist}
               </Text>
-              {/* Visualizador al lado del artista si suena */}
               {isThisPlaying && isPlaying && (
                 <AudioVisualizer isPlaying={true} color={accentColor} />
               )}
             </View>
 
-            {/* "Via User" más discreto */}
             <View className="flex-row items-center mt-1">
               <Ionicons
                 name="arrow-redo"
@@ -536,22 +567,15 @@ const Library = () => {
             </View>
           </View>
 
-          {/* 3. BOTÓN DE PLATAFORMA (CORREGIDO) */}
           <TouchableOpacity
             onPress={(e) => {
               e.stopPropagation();
               openExternalMusic(item);
             }}
-            // Aquí está la magia: Fondo del COLOR DE LA MARCA, Icono BLANCO.
-            // Se ve mucho mejor que el fondo gris con icono de color.
             className="w-9 h-9 rounded-full items-center justify-center shadow-sm"
             style={{ backgroundColor: brandColor }}
           >
-            <FontAwesome5
-              name={iconName}
-              size={16}
-              color="white" // Icono siempre blanco para contraste perfecto
-            />
+            <FontAwesome5 name={iconName} size={16} color="white" />
           </TouchableOpacity>
         </TouchableOpacity>
       </Swipeable>
@@ -717,12 +741,16 @@ const Library = () => {
 
             {activeTab === "songs" ? (
               <FlatList
-                data={musicCollection}
-                keyExtractor={(item) => item.id || Math.random().toString()}
-                renderItem={renderCollectionItem}
+                // Solución al crash: Si carga usamos skeletonData, keyExtractor maneja items undefined
+                data={isLoading ? skeletonData : musicCollection}
+                keyExtractor={(item, index) => item?.id || `skeleton-${index}`}
+                renderItem={({ item }) => {
+                  if (isLoading) return <SongSkeleton isDark={isDark} />;
+                  return renderCollectionItem({ item });
+                }}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
-                  paddingHorizontal: 20, // Ajustado padding horizontal
+                  paddingHorizontal: 20,
                   paddingTop: 10,
                   paddingBottom: 20,
                 }}
@@ -741,13 +769,7 @@ const Library = () => {
                       subTextColor={subTextColor}
                       emptyIconColor={emptyIconColor}
                     />
-                  ) : (
-                    <ActivityIndicator
-                      color={accentColor}
-                      size="large"
-                      className="mt-20"
-                    />
-                  )
+                  ) : null
                 }
               />
             ) : (
@@ -781,9 +803,15 @@ const Library = () => {
                 </TouchableOpacity>
 
                 <FlatList
-                  data={playlists}
-                  keyExtractor={(item) => item.$id}
-                  renderItem={renderPlaylistItem}
+                  // Solución al crash: keyExtractor maneja items undefined
+                  data={isLoading ? skeletonData : playlists}
+                  keyExtractor={(item, index) =>
+                    item?.$id || `skeleton-playlist-${index}`
+                  }
+                  renderItem={({ item }) => {
+                    if (isLoading) return <PlaylistSkeleton isDark={isDark} />;
+                    return renderPlaylistItem({ item });
+                  }}
                   numColumns={2}
                   showsVerticalScrollIndicator={false}
                   contentContainerStyle={{ paddingBottom: 100 }}
@@ -802,9 +830,7 @@ const Library = () => {
                       >
                         {t("library.empty.title")}
                       </Text>
-                    ) : (
-                      <ActivityIndicator color={accentColor} size="large" />
-                    )
+                    ) : null
                   }
                 />
               </View>

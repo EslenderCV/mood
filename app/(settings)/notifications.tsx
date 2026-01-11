@@ -10,10 +10,11 @@ import {
   Platform,
   LayoutAnimation,
   UIManager,
+  useWindowDimensions, // <--- 1. Importamos esto
 } from "react-native";
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useFocusEffect } from "expo-router"; // <--- Importamos useFocusEffect
+import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Swipeable,
@@ -63,12 +64,13 @@ const formatTimeAgo = (dateString: string, t: (key: string) => string) => {
 
 const NotificationSkeleton = ({ isDark }: { isDark: boolean }) => {
   const bg = isDark ? "bg-zinc-800" : "bg-gray-200";
+  // Ajustamos un poco la opacidad o el color para que se vea sutil
   return (
-    <View className="flex-row px-4 py-4 items-center animate-pulse">
+    <View className="flex-row px-4 py-4 items-center animate-pulse border-b border-transparent">
       <View className={`w-12 h-12 rounded-full ${bg} mr-3`} />
       <View className="flex-1 space-y-2">
         <View className={`w-3/4 h-4 rounded ${bg}`} />
-        <View className={`w-1/4 h-3 rounded ${bg}`} />
+        <View className={`w-1/2 h-3 rounded ${bg}`} />
       </View>
     </View>
   );
@@ -116,6 +118,7 @@ const NotificationsScreen = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
+  const { height } = useWindowDimensions(); // <--- 2. Obtenemos altura de pantalla
 
   // Colores dinámicos
   const bgColor = isDark ? "#000000" : "#FFFFFF";
@@ -133,7 +136,26 @@ const NotificationsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<"all" | "requests" | "activity">("all");
 
-  // Reemplazamos useEffect por useFocusEffect para que se ejecute al entrar
+  // --- CALCULO INTELIGENTE DE SKELETONS ---
+  const skeletonItems = useMemo(() => {
+    // Altura estimada de una fila de notificación (incluyendo padding) ~ 80px
+    const ESTIMATED_ITEM_HEIGHT = 80;
+    // Altura del Header (Título + Pills) ~ 120px
+    const HEADER_HEIGHT = 120;
+
+    // Calculamos cuántos items caben en la pantalla restante
+    const itemsToFillScreen = Math.ceil(
+      (height - HEADER_HEIGHT) / ESTIMATED_ITEM_HEIGHT
+    );
+
+    // Aseguramos que al menos haya 6 items, por si acaso
+    const count = Math.max(itemsToFillScreen, 6);
+
+    // Creamos un array de índices [0, 1, 2, ..., count]
+    return Array.from({ length: count }, (_, i) => i);
+  }, [height]);
+
+  // UseFocusEffect para cargar al entrar
   useFocusEffect(
     useCallback(() => {
       fetchNotifications();
@@ -196,15 +218,9 @@ const NotificationsScreen = () => {
       const results = await getUserNotifications(user.$id);
       setAllNotifications(results);
 
-      // --- AUTO MARK AS READ ---
-      // Verificamos si hay alguna no leída
       const hasUnread = results.some((n: any) => !n.isRead);
 
       if (hasUnread) {
-        // Marcamos todo como leído en la base de datos silenciosamente.
-        // NO actualizamos el estado local 'allNotifications' aquí para que el usuario
-        // siga viendo el fondo morado (highlight) durante esta sesión y sepa cuáles son nuevas.
-        // La próxima vez que entre o recargue, vendrán como leídas desde el servidor.
         await markAllNotificationsAsRead(user.$id);
       }
     } catch (error) {
@@ -220,7 +236,6 @@ const NotificationsScreen = () => {
   const handlePressNotification = async (item: any) => {
     if (item.type === "follow_request") return;
 
-    // Optimistic UI update para un solo item
     if (!item.isRead) {
       markNotificationAsRead(item.$id);
       setAllNotifications((prev) =>
@@ -455,7 +470,7 @@ const NotificationsScreen = () => {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: bgColor }}>
       <SafeAreaView className="flex-1" edges={["top"]}>
-        {/* HEADER LIMPIO (Sin el botón de check) */}
+        {/* HEADER LIMPIO */}
         <View className="px-4 pb-2">
           <View className="flex-row items-center justify-between h-[50px] mb-2">
             <TouchableOpacity
@@ -489,19 +504,19 @@ const NotificationsScreen = () => {
           {/* FILTROS (PILLS) */}
           <View className="flex-row pb-2">
             <FilterPill
-              label="Todas"
+              label={t("notifications.filters.all") || "Todas"}
               isActive={filter === "all"}
               onPress={() => setFilter("all")}
               isDark={isDark}
             />
             <FilterPill
-              label="Solicitudes"
+              label={t("notifications.filters.requests") || "Solicitudes"}
               isActive={filter === "requests"}
               onPress={() => setFilter("requests")}
               isDark={isDark}
             />
             <FilterPill
-              label="Actividad"
+              label={t("notifications.filters.activity") || "Actividad"}
               isActive={filter === "activity"}
               onPress={() => setFilter("activity")}
               isDark={isDark}
@@ -511,8 +526,9 @@ const NotificationsScreen = () => {
 
         {/* LISTA */}
         {isLoading ? (
-          <View>
-            {[1, 2, 3, 4, 5].map((i) => (
+          <View className="flex-1">
+            {/* 3. Mapeamos usando el array calculado dinámicamente */}
+            {skeletonItems.map((i) => (
               <NotificationSkeleton key={i} isDark={isDark} />
             ))}
           </View>
@@ -553,7 +569,7 @@ const NotificationsScreen = () => {
                   className="text-center text-sm"
                   style={{ color: subTextColor }}
                 >
-                  {t("notifications.empty") ||
+                  {t("notifications.emptyMsg") ||
                     "Aquí aparecerán tus likes, comentarios y nuevos seguidores."}
                 </Text>
               </View>

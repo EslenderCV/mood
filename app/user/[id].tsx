@@ -12,12 +12,13 @@ import {
   TouchableWithoutFeedback,
   Share,
   FlatList,
+  useWindowDimensions, // <--- Importado
 } from "react-native";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useColorScheme } from "nativewind";
 import {
   getUser,
@@ -31,7 +32,9 @@ import {
   createChat,
   getFeedCandidates,
   getFollowedUserIds,
-  // sendPushNotification <-- ELIMINADO
+  getLatestUsers,
+  client,
+  appwriteConfig,
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -49,6 +52,72 @@ const parseSongFromPost = (songDataString: string) => {
   } catch (error) {
     return null;
   }
+};
+
+// --- SKELETON LOADER (NUEVO) ---
+const UserProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
+  const bg = isDark ? "bg-zinc-900" : "bg-zinc-100";
+  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
+  const { width } = useWindowDimensions();
+  const itemSize = width / 3;
+
+  return (
+    <View className="flex-1 animate-pulse">
+      {/* Header NavBar */}
+      <View className="flex-row justify-between items-center px-6 py-2 mb-6">
+        <View className={`w-10 h-10 rounded-full ${elementBg}`} />
+        <View className="flex-row gap-3">
+          <View className={`w-10 h-10 rounded-full ${elementBg}`} />
+          <View className={`w-10 h-10 rounded-full ${elementBg}`} />
+        </View>
+      </View>
+
+      {/* Profile Info */}
+      <View className="items-center mb-6">
+        <View className={`w-32 h-32 rounded-full ${elementBg} mb-4`} />
+        <View className={`w-48 h-6 rounded ${elementBg} mb-2`} />
+        <View className={`w-28 h-4 rounded ${elementBg}`} />
+      </View>
+
+      {/* Action Buttons (Follow/Chat) */}
+      <View className="px-6 mb-6 flex-row gap-3">
+        <View className={`flex-1 h-12 rounded-2xl ${elementBg}`} />
+        <View className={`w-12 h-12 rounded-2xl ${elementBg}`} />
+      </View>
+
+      {/* Stats Bar */}
+      <View
+        className={`mx-4 h-[70px] mb-6 rounded-3xl ${bg} flex-row items-center justify-between px-6`}
+      >
+        <View className="items-center gap-2">
+          <View className={`w-8 h-5 rounded ${elementBg}`} />
+          <View className={`w-12 h-3 rounded ${elementBg}`} />
+        </View>
+        <View className={`w-[1px] h-8 ${elementBg}`} />
+        <View className="items-center gap-2">
+          <View className={`w-8 h-5 rounded ${elementBg}`} />
+          <View className={`w-12 h-3 rounded ${elementBg}`} />
+        </View>
+        <View className={`w-[1px] h-8 ${elementBg}`} />
+        <View className="items-center gap-2">
+          <View className={`w-8 h-5 rounded ${elementBg}`} />
+          <View className={`w-12 h-3 rounded ${elementBg}`} />
+        </View>
+      </View>
+
+      {/* Grid Content */}
+      <View className="flex-row flex-wrap">
+        {[...Array(12)].map((_, i) => (
+          <View
+            key={i}
+            style={{ width: itemSize, height: itemSize, padding: 1 }}
+          >
+            <View className={`w-full h-full ${elementBg}`} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
 };
 
 const UserProfile = () => {
@@ -86,47 +155,56 @@ const UserProfile = () => {
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showFullImageModal, setShowFullImageModal] = useState(false);
-  const getCreatorFromPost = (item: any) => {
-    let userObj = item.creator || item.postedBy || item.users || item.user;
-    if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
 
-    if (userObj && typeof userObj === "object") {
-      return {
-        id: userObj.$id || userObj.accountId,
-        username: userObj.username || "anon",
-        name: userObj.name || "Usuario",
-        avatar: userObj.avatar || userObj.pfp,
-      };
-    }
-    return { id: "unknown", username: "anon", name: "Usuario", avatar: null };
-  };
+  // --- LÓGICA REALTIME ---
+  useEffect(() => {
+    const unsubscribe = client.subscribe(
+      `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.postsCollectionId}.documents`,
+      (response) => {
+        const event = response.events[0];
+        const payload = response.payload as any;
+
+        if (event.includes(".update")) {
+          setPosts((prevPosts) =>
+            prevPosts.map((post) => {
+              if (post.$id === payload.$id) {
+                return { ...post, likedBy: payload.likedBy };
+              }
+              return post;
+            })
+          );
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
   const fetchData = async () => {
     if (!userId) return;
 
     try {
-      const feedCandidates = await getFeedCandidates();
-      const myFollows = await getFollowedUserIds(userId);
+      const myUser = await getCurrentUser();
+      if (!myUser) return;
+      setCurrentUser(myUser);
 
-      const uniqueUsersMap = new Map();
+      const myFollowsIds = await getFollowedUserIds(myUser.$id);
+      const candidates = await getLatestUsers();
 
-      feedCandidates.forEach((post) => {
-        const creator = getCreatorFromPost(post);
-        if (
-          creator.id !== "unknown" &&
-          creator.id !== userId &&
-          !myFollows.includes(creator.id)
-        ) {
-          if (!uniqueUsersMap.has(creator.id)) {
-            uniqueUsersMap.set(creator.id, creator);
-          }
-        }
+      const filteredSuggestions = candidates.filter((candidate: any) => {
+        const cId = candidate.$id || candidate.accountId;
+        const isMe = cId === myUser.$id;
+        const isVisitedProfile = cId === userId;
+        const amIFollowing = myFollowsIds.includes(cId);
+
+        return !isMe && !isVisitedProfile && !amIFollowing;
       });
 
-      setSuggestedUsers(Array.from(uniqueUsersMap.values()).slice(0, 10));
-      const myUser = await getCurrentUser();
-      const userData = await getUser(userId);
+      setSuggestedUsers(filteredSuggestions.slice(0, 10));
 
-      setCurrentUser(myUser);
+      const userData = await getUser(userId);
       setVisitedUser(userData);
 
       let currentStatus = null;
@@ -189,9 +267,11 @@ const UserProfile = () => {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [userId]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [userId])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -250,9 +330,6 @@ const UserProfile = () => {
           }));
         }
       } else {
-        // La función followUser en appwrite.ts ya maneja:
-        // 1. Crear el documento de follow
-        // 2. Enviar la Push Notification automáticamente
         await followUser(currentUser.$id, visitedUser.$id);
 
         if (visitedUser.isPrivate) {
@@ -306,9 +383,9 @@ const UserProfile = () => {
         router.push({
           pathname: "/user/[id]",
           params: {
-            id: item.id,
+            id: item.$id,
             username: item.username,
-            avatar: item.avatar,
+            avatar: item.pfp || item.avatar,
             name: item.name,
           },
         } as any)
@@ -316,7 +393,9 @@ const UserProfile = () => {
     >
       <Image
         source={
-          item.avatar ? { uri: item.avatar } : require("@/assets/noPfp.jpg")
+          item.pfp || item.avatar
+            ? { uri: item.pfp || item.avatar }
+            : require("@/assets/noPfp.jpg")
         }
         className="w-14 h-14 rounded-full mb-2"
         style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
@@ -365,6 +444,14 @@ const UserProfile = () => {
           }}
           resizeMode="cover"
         />
+        {item.likedBy && item.likedBy.length > 0 && (
+          <View className="absolute bottom-1 right-1 bg-black/60 px-1 rounded flex-row items-center">
+            <Ionicons name="heart" size={10} color="white" />
+            <Text className="text-white text-[10px] ml-1">
+              {item.likedBy.length}
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
@@ -420,17 +507,20 @@ const UserProfile = () => {
     </TouchableOpacity>
   );
 
+  // --- REEMPLAZO: Mostrar Skeleton mientras carga ---
   if (isLoading) {
     return (
       <SafeAreaView
-        className="flex-1 justify-center items-center"
+        className="flex-1"
+        edges={["top"]}
         style={{ backgroundColor: bgColor }}
       >
-        <ActivityIndicator size="large" color={activeColor} />
+        <UserProfileSkeleton isDark={isDark} />
       </SafeAreaView>
     );
   }
 
+  // --- CODIGO EXISTENTE PARA USUARIO BLOQUEADO/NO DISPONIBLE ---
   if (
     !visitedUser ||
     currentUser?.blockedUsers?.includes(visitedUser?.$id) ||
@@ -474,6 +564,7 @@ const UserProfile = () => {
       style={{ backgroundColor: bgColor }}
     >
       <StatusBar style={isDark ? "light" : "dark"} />
+      {/* ... MODALES (Sin Cambios) ... */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -579,10 +670,11 @@ const UserProfile = () => {
           </SafeAreaView>
         </View>
       </Modal>
+
       <ScrollView
         ref={mainScrollRef}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[4]}
+        stickyHeaderIndices={[1]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -591,201 +683,232 @@ const UserProfile = () => {
           />
         }
       >
-        <View className="flex-row justify-between items-center px-6 py-2 mb-6">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="p-2 rounded-full"
-            style={{ backgroundColor: cardBg }}
-          >
-            <Ionicons name="arrow-back" size={24} color={iconColor} />
-          </TouchableOpacity>
-
-          <View className="flex-row gap-3">
+        <View>
+          {/* Header NavBar */}
+          <View className="flex-row justify-between items-center px-6 py-2 mb-6">
             <TouchableOpacity
-              onPress={handleShare}
+              onPress={() => router.back()}
               className="p-2 rounded-full"
               style={{ backgroundColor: cardBg }}
             >
-              <Ionicons name="share-outline" size={22} color={iconColor} />
+              <Ionicons name="arrow-back" size={24} color={iconColor} />
             </TouchableOpacity>
 
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                onPress={handleShare}
+                className="p-2 rounded-full"
+                style={{ backgroundColor: cardBg }}
+              >
+                <Ionicons name="share-outline" size={22} color={iconColor} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleOptionsPress}
+                className="p-2 rounded-full"
+                style={{ backgroundColor: cardBg }}
+              >
+                <Ionicons
+                  name={isMe ? "settings-outline" : "shield-checkmark-outline"}
+                  size={22}
+                  color={iconColor}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Profile Info */}
+          <View className="items-center">
             <TouchableOpacity
-              onPress={handleOptionsPress}
-              className="p-2 rounded-full"
-              style={{ backgroundColor: cardBg }}
+              activeOpacity={0.9}
+              onPress={() => setShowFullImageModal(true)}
+              className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/30"
             >
-              <Ionicons
-                name={isMe ? "settings-outline" : "shield-checkmark-outline"}
-                size={22}
-                color={iconColor}
+              <Image
+                source={
+                  pfpUrl ? { uri: pfpUrl } : require("@/assets/noPfp.jpg")
+                }
+                className="w-32 h-32 rounded-full"
+                style={{ backgroundColor: cardBg }}
               />
             </TouchableOpacity>
+
+            <View className="flex-row items-center mt-4 justify-center">
+              <Text
+                className="text-2xl font-bold text-center"
+                style={{ color: textColor }}
+              >
+                {visitedUser?.name || "Usuario"}
+              </Text>
+              {visitedUser?.isVerified && (
+                <MaterialIcons
+                  name="verified"
+                  size={24}
+                  color="#5E17EB"
+                  style={{ marginLeft: 6 }}
+                />
+              )}
+            </View>
+
+            <Text className="font-medium mt-1" style={{ color: activeColor }}>
+              @{visitedUser?.username || "usuario"}
+            </Text>
           </View>
-        </View>
-        <View className="items-center">
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => setShowFullImageModal(true)}
-            className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/30"
-          >
-            <Image
-              source={pfpUrl ? { uri: pfpUrl } : require("@/assets/noPfp.jpg")}
-              className="w-32 h-32 rounded-full"
-              style={{ backgroundColor: cardBg }}
-            />
-          </TouchableOpacity>
-          <Text
-            className="text-2xl font-bold mt-4"
-            style={{ color: textColor }}
-          >
-            {visitedUser?.name || "Usuario"}
-          </Text>
-          <Text className="font-medium mt-1" style={{ color: activeColor }}>
-            @{visitedUser?.username || "usuario"}
-          </Text>
-        </View>
-        <View className="px-6 mt-6 min-h-[50px]">
+
+          {/* Botones de Acción (Si no soy yo) */}
           {currentUser && currentUser.$id !== visitedUser.$id && (
-            <View className="flex-row items-center gap-3 w-full">
-              <TouchableOpacity
-                onPress={handleFollowAction}
-                disabled={followLoading}
-                className="flex-1 py-3 rounded-2xl items-center justify-center border"
-                style={{
-                  backgroundColor: followStatus ? cardBg : activeColor,
-                  borderColor: followStatus ? borderColor : activeColor,
-                }}
+            <View className="px-6 mt-6 min-h-[50px]">
+              <View className="flex-row items-center gap-3 w-full">
+                <TouchableOpacity
+                  onPress={handleFollowAction}
+                  disabled={followLoading}
+                  className="flex-1 py-3 rounded-2xl items-center justify-center border"
+                  style={{
+                    backgroundColor: followStatus ? cardBg : activeColor,
+                    borderColor: followStatus ? borderColor : activeColor,
+                  }}
+                >
+                  {followLoading ? (
+                    <ActivityIndicator
+                      color={followStatus ? iconColor : "white"}
+                      size="small"
+                    />
+                  ) : (
+                    <Text
+                      className="font-bold text-base"
+                      style={{ color: followStatus ? subTextColor : "white" }}
+                    >
+                      {followStatus === "accepted"
+                        ? isFollowingMe
+                          ? "Friends"
+                          : "Following"
+                        : followStatus === "pending"
+                        ? "Requested"
+                        : isFollowingMe
+                        ? "Follow Back"
+                        : "Follow"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleChatPress}
+                  disabled={isChatLoading}
+                  className="p-3 rounded-2xl border justify-center items-center aspect-square"
+                  style={{ backgroundColor: cardBg, borderColor: borderColor }}
+                >
+                  {isChatLoading ? (
+                    <ActivityIndicator color={activeColor} size="small" />
+                  ) : (
+                    <Ionicons
+                      name="chatbubble-ellipses-outline"
+                      size={24}
+                      color={activeColor}
+                    />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Espaciador si soy yo */}
+          {currentUser && currentUser.$id === visitedUser.$id && (
+            <View className="h-6" />
+          )}
+
+          {/* Stats */}
+          <View
+            className="flex-row justify-between items-center mx-4 h-[70px] mt-2 mb-3 px-2 rounded-3xl border shadow-sm"
+            style={{
+              backgroundColor: isDark ? "#121212" : "#FFFFFF",
+              borderColor: borderColor,
+            }}
+          >
+            <TouchableOpacity
+              className="flex-1 items-center py-4"
+              disabled={!showContent}
+              onPress={() =>
+                router.push({
+                  pathname: "/user-list",
+                  params: { userId: visitedUser.$id, type: "followers" },
+                } as any)
+              }
+            >
+              <Text className="text-xl font-bold" style={{ color: textColor }}>
+                {stats.followersCount}
+              </Text>
+              <Text
+                className="text-[10px] font-bold mt-1"
+                style={{ color: subTextColor }}
               >
-                {followLoading ? (
-                  <ActivityIndicator
-                    color={followStatus ? iconColor : "white"}
-                    size="small"
-                  />
-                ) : (
-                  <Text
-                    className="font-bold text-base"
-                    style={{ color: followStatus ? subTextColor : "white" }}
-                  >
-                    {followStatus === "accepted"
-                      ? isFollowingMe
-                        ? "Friends"
-                        : "Following"
-                      : followStatus === "pending"
-                      ? "Requested"
-                      : isFollowingMe
-                      ? "Follow Back"
-                      : "Follow"}
-                  </Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleChatPress}
-                disabled={isChatLoading}
-                className="p-3 rounded-2xl border justify-center items-center aspect-square"
-                style={{ backgroundColor: cardBg, borderColor: borderColor }}
+                {t("profile.stats.followers") || "Followers"}
+              </Text>
+            </TouchableOpacity>
+            <View
+              className="h-8 w-[1px]"
+              style={{ backgroundColor: borderColor }}
+            />
+            <TouchableOpacity
+              onPress={scrollToMoods}
+              disabled={!showContent}
+              className="flex-1 items-center py-4"
+            >
+              <Text className="text-xl font-bold" style={{ color: textColor }}>
+                {posts.length}
+              </Text>
+              <Text
+                className="text-[10px] font-bold mt-1"
+                style={{ color: subTextColor }}
               >
-                {isChatLoading ? (
-                  <ActivityIndicator color={activeColor} size="small" />
-                ) : (
-                  <Ionicons
-                    name="chatbubble-ellipses-outline"
-                    size={24}
-                    color={activeColor}
-                  />
-                )}
-              </TouchableOpacity>
+                {t("profile.stats.moods") || "Moods"}
+              </Text>
+            </TouchableOpacity>
+            <View
+              className="h-8 w-[1px]"
+              style={{ backgroundColor: borderColor }}
+            />
+            <TouchableOpacity
+              className="flex-1 items-center py-4"
+              disabled={!showContent}
+              onPress={() =>
+                router.push({
+                  pathname: "/user-list",
+                  params: { userId: visitedUser.$id, type: "following" },
+                } as any)
+              }
+            >
+              <Text className="text-xl font-bold" style={{ color: textColor }}>
+                {stats.followingCount}
+              </Text>
+              <Text
+                className="text-[10px] font-bold mt-1"
+                style={{ color: subTextColor }}
+              >
+                {t("profile.stats.following") || "Following"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Sugerencias (Ocultas si es mi perfil) */}
+          {!isMe && suggestedUsers.length > 0 && (
+            <View className="mb-6 pl-4">
+              <Text
+                className="text-lg font-bold mb-3"
+                style={{ color: textColor }}
+              >
+                {t("profile.suggested")}
+              </Text>
+              <FlatList
+                horizontal
+                data={suggestedUsers}
+                renderItem={renderSuggestedUser}
+                keyExtractor={(item) => item.$id || item.accountId}
+                showsHorizontalScrollIndicator={false}
+              />
             </View>
           )}
         </View>
-        <View
-          className="flex-row justify-between items-center mx-4 h-[70px] mt-6 mb-3 px-2 rounded-3xl border shadow-sm"
-          style={{
-            backgroundColor: isDark ? "#121212" : "#FFFFFF",
-            borderColor: borderColor,
-          }}
-        >
-          <TouchableOpacity
-            className="flex-1 items-center py-4"
-            disabled={!showContent}
-            onPress={() =>
-              router.push({
-                pathname: "/user-list",
-                params: { userId: visitedUser.$id, type: "followers" },
-              } as any)
-            }
-          >
-            <Text className="text-xl font-bold" style={{ color: textColor }}>
-              {stats.followersCount}
-            </Text>
-            <Text
-              className="text-[10px] font-bold mt-1"
-              style={{ color: subTextColor }}
-            >
-              {t("profile.stats.followers") || "Followers"}
-            </Text>
-          </TouchableOpacity>
-          <View
-            className="h-8 w-[1px]"
-            style={{ backgroundColor: borderColor }}
-          />
-          <TouchableOpacity
-            onPress={scrollToMoods}
-            disabled={!showContent}
-            className="flex-1 items-center py-4"
-          >
-            <Text className="text-xl font-bold" style={{ color: textColor }}>
-              {posts.length}
-            </Text>
-            <Text
-              className="text-[10px] font-bold mt-1"
-              style={{ color: subTextColor }}
-            >
-              {t("profile.stats.moods") || "Moods"}
-            </Text>
-          </TouchableOpacity>
-          <View
-            className="h-8 w-[1px]"
-            style={{ backgroundColor: borderColor }}
-          />
-          <TouchableOpacity
-            className="flex-1 items-center py-4"
-            disabled={!showContent}
-            onPress={() =>
-              router.push({
-                pathname: "/user-list",
-                params: { userId: visitedUser.$id, type: "following" },
-              } as any)
-            }
-          >
-            <Text className="text-xl font-bold" style={{ color: textColor }}>
-              {stats.followingCount}
-            </Text>
-            <Text
-              className="text-[10px] font-bold mt-1"
-              style={{ color: subTextColor }}
-            >
-              {t("profile.stats.following") || "Following"}
-            </Text>
-          </TouchableOpacity>
-        </View>
 
-        {suggestedUsers.length > 0 && (
-          <View className="mb-6 pl-4">
-            <Text
-              className="text-lg font-bold mb-3"
-              style={{ color: textColor }}
-            >
-              {t("profile.suggested")}
-            </Text>
-            <FlatList
-              horizontal
-              data={suggestedUsers}
-              renderItem={renderSuggestedUser}
-              keyExtractor={(item) => item.id}
-              showsHorizontalScrollIndicator={false}
-            />
-          </View>
-        )}
+        {/* TABS */}
         <View
           className="pt-4"
           style={{

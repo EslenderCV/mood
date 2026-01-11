@@ -7,14 +7,13 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useAudioPlayer } from "expo-audio";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons"; // MaterialIcons ya estaba importado
 import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
 import {
   toggleLikePost,
   toggleSavePost,
   getDeezerTrackUrl,
-  // sendPushNotification, <-- ELIMINADO: Ya no lo necesitas aquí
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
@@ -74,7 +73,7 @@ const PostItem: React.FC<PostItemProps> = ({
   onSharePress,
 }) => {
   if (!post) return null;
-  const { user } = useGlobalContext(); // Aunque no lo usamos para notificar, puede servir para otras cosas
+  const { user } = useGlobalContext();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
@@ -109,9 +108,16 @@ const PostItem: React.FC<PostItemProps> = ({
         username: userObj.username || "anon",
         name: userObj.name || "Usuario",
         avatar: userObj.avatar || userObj.pfp,
+        isVerified: userObj.isVerified, // [MODIFICADO] Leemos si está verificado
       };
     }
-    return { id: "unknown", username: "anon", name: "Usuario", avatar: null };
+    return {
+      id: "unknown",
+      username: "anon",
+      name: "Usuario",
+      avatar: null,
+      isVerified: false,
+    };
   };
   const creator = getCreator();
 
@@ -199,7 +205,6 @@ const PostItem: React.FC<PostItemProps> = ({
 
   // --- LÓGICA DE LIKE SIMPLIFICADA ---
   const handleLike = async () => {
-    // 1. Optimistic Update (Actualizar UI inmediatamente)
     const prevLiked = isLiked;
     const prevCount = likesCount;
 
@@ -208,15 +213,8 @@ const PostItem: React.FC<PostItemProps> = ({
 
     try {
       const currentLikesArray = post.likedBy || [];
-
-      // 2. Llamada a Appwrite
-      // NOTA: toggleLikePost en appwrite.ts ya se encarga de:
-      // - Actualizar la DB
-      // - Verificar si es un like nuevo
-      // - Enviar la Push Notification al dueño del post
       await toggleLikePost(post.$id, currentUserId, currentLikesArray);
     } catch (error) {
-      // Revertir si falla
       setIsLiked(prevLiked);
       setLikesCount(prevCount);
     }
@@ -261,6 +259,7 @@ const PostItem: React.FC<PostItemProps> = ({
           </TouchableOpacity>
 
           <View className="ml-3 flex-1">
+            {/* [MODIFICADO] Nombre + Badge Verificado */}
             <View className="flex-row items-center">
               <Text
                 className="font-bold text-[15px] leading-5"
@@ -268,6 +267,17 @@ const PostItem: React.FC<PostItemProps> = ({
               >
                 {creator.name}
               </Text>
+
+              {/* Aquí se renderiza el Badge si el usuario está verificado */}
+              {creator.isVerified && (
+                <MaterialIcons
+                  name="verified"
+                  size={14}
+                  color={accentColor} // #5E17EB
+                  style={{ marginLeft: 4 }}
+                />
+              )}
+
               {!!post.isPrivate && (
                 <Ionicons
                   name="lock-closed"
@@ -331,7 +341,7 @@ const PostItem: React.FC<PostItemProps> = ({
               {songData.artist}
             </Text>
 
-            {/* Visualizador de Audio (Estética) */}
+            {/* Visualizador de Audio */}
             <View className="mt-1 flex-row items-center">
               <Ionicons name="musical-notes" size={10} color={accentColor} />
               <AudioVisualizer isPlaying={isPlaying} color={subTextColor} />
