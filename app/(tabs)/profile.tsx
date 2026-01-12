@@ -8,7 +8,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   FlatList,
-  useWindowDimensions, // <--- Importado
+  useWindowDimensions,
+  Modal,
 } from "react-native";
 import React, { useState, useRef, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -35,7 +36,7 @@ const parseSongFromPost = (songDataString: string) => {
   }
 };
 
-// --- SKELETON LOADER (NUEVO) ---
+// --- SKELETON LOADER ---
 const ProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
   const bg = isDark ? "bg-zinc-900" : "bg-zinc-100";
   const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
@@ -44,20 +45,15 @@ const ProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
 
   return (
     <View className="flex-1 animate-pulse">
-      {/* Header Title */}
       <View className="flex-row justify-between items-center px-6 py-2 mb-6">
         <View className={`w-32 h-8 rounded ${elementBg}`} />
         <View className={`w-10 h-10 rounded-2xl ${elementBg}`} />
       </View>
-
-      {/* Avatar & Name */}
       <View className="items-center mb-8">
         <View className={`w-32 h-32 rounded-full ${elementBg} mb-4`} />
         <View className={`w-40 h-6 rounded ${elementBg} mb-2`} />
         <View className={`w-24 h-4 rounded ${elementBg}`} />
       </View>
-
-      {/* Stats Bar */}
       <View
         className={`mx-4 h-[70px] mb-6 rounded-3xl ${bg} flex-row items-center justify-between px-6`}
       >
@@ -76,14 +72,10 @@ const ProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
           <View className={`w-12 h-3 rounded ${elementBg}`} />
         </View>
       </View>
-
-      {/* Tabs */}
       <View className="flex-row px-4 mb-4 gap-4">
         <View className={`flex-1 h-10 rounded-xl ${elementBg}`} />
         <View className={`flex-1 h-10 rounded-xl ${bg}`} />
       </View>
-
-      {/* Grid Content */}
       <View className="flex-row flex-wrap">
         {[...Array(12)].map((_, i) => (
           <View
@@ -101,10 +93,10 @@ const ProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
 const Profile = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
   const { t } = useLanguage();
-
   const { user } = useGlobalContext();
+
+  // Colores
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -112,13 +104,15 @@ const Profile = () => {
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
   const iconColor = isDark ? "#FFFFFF" : "#000000";
   const statBorder = isDark ? "#3F3F46" : "#E4E4E7";
+
   const [activeTab, setActiveTab] = useState(0);
   const [posts, setPosts] = useState<any[]>([]);
   const [topSongs, setTopSongs] = useState<any[]>([]);
   const [stats, setStats] = useState({ followersCount: 0, followingCount: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const horizontalScrollRef = useRef<ScrollView>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+
   const mainScrollRef = useRef<ScrollView>(null);
 
   const rankPosts = (postsToSort: any[]) => {
@@ -140,7 +134,6 @@ const Profile = () => {
     if (!user) return;
     try {
       const myId = user.$id;
-
       const rawMyPosts = await getUserPosts(myId);
       const rankedMyPosts = rankPosts(rawMyPosts);
       setPosts(rankedMyPosts);
@@ -188,11 +181,10 @@ const Profile = () => {
 
   const handleTabPress = (index: number) => {
     setActiveTab(index);
-    horizontalScrollRef.current?.scrollTo({ x: index * width, animated: true });
   };
 
   const scrollToMoods = () => {
-    mainScrollRef.current?.scrollTo({ y: 500, animated: true });
+    mainScrollRef.current?.scrollTo({ y: 400, animated: true });
     handleTabPress(0);
   };
 
@@ -215,11 +207,7 @@ const Profile = () => {
       >
         <Image
           source={{ uri: imageUrl }}
-          style={{
-            width: "100%",
-            height: "100%",
-            backgroundColor: cardBg,
-          }}
+          style={{ width: "100%", height: "100%", backgroundColor: cardBg }}
           className="border-[0.5px] border-black/10 dark:border-white/10"
           resizeMode="cover"
         />
@@ -285,7 +273,6 @@ const Profile = () => {
     </TouchableOpacity>
   );
 
-  // --- REEMPLAZO: Mostrar Skeleton mientras carga ---
   if (isLoading) {
     return (
       <SafeAreaView
@@ -306,11 +293,35 @@ const Profile = () => {
     >
       <StatusBar style={isDark ? "light" : "dark"} />
 
+      {/* --- MODAL FOTO COMPLETA --- */}
+      <Modal
+        visible={showImageModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowImageModal(false)}
+      >
+        <View className="flex-1 bg-black/95 justify-center items-center">
+          <TouchableOpacity
+            onPress={() => setShowImageModal(false)}
+            className="absolute top-12 right-6 z-50 p-2"
+          >
+            <Ionicons name="close-circle" size={32} color="white" />
+          </TouchableOpacity>
+          <Image
+            source={
+              user?.pfp ? { uri: user.pfp } : require("@/assets/noPfp.jpg")
+            }
+            style={{ width: width, height: width }}
+            resizeMode="contain"
+          />
+        </View>
+      </Modal>
+
       <ScrollView
         ref={mainScrollRef}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[4]}
-        contentContainerStyle={{ paddingBottom: 0 }}
+        // Se ha eliminado stickyHeaderIndices para que las tabs no bajen
+        contentContainerStyle={{ paddingBottom: 50 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -319,6 +330,7 @@ const Profile = () => {
           />
         }
       >
+        {/* Header */}
         <View className="flex-row justify-between items-center px-6 py-2 mb-6">
           <Text className="text-3xl font-bold" style={{ color: textColor }}>
             {t("profile.title")}
@@ -334,8 +346,13 @@ const Profile = () => {
           </View>
         </View>
 
+        {/* Avatar */}
         <View className="items-center">
-          <View className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/50">
+          <TouchableOpacity
+            onPress={() => setShowImageModal(true)}
+            activeOpacity={0.8}
+            className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/50"
+          >
             <Image
               source={
                 user?.pfp ? { uri: user.pfp } : require("@/assets/noPfp.jpg")
@@ -343,7 +360,7 @@ const Profile = () => {
               className="w-32 h-32 rounded-full"
               style={{ backgroundColor: cardBg }}
             />
-          </View>
+          </TouchableOpacity>
 
           <View className="flex-row items-center mt-4">
             <Text className="text-2xl font-bold" style={{ color: textColor }}>
@@ -364,6 +381,7 @@ const Profile = () => {
           </Text>
         </View>
 
+        {/* Stats */}
         <View
           className="flex-row justify-between items-center mx-4 h-[70px] mt-8 mb-6 px-2 rounded-3xl border shadow-sm"
           style={{ backgroundColor: cardBg, borderColor: borderColor }}
@@ -430,6 +448,7 @@ const Profile = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Tabs (NO Sticky) */}
         <View
           className="pt-2 border-t"
           style={{ backgroundColor: bgColor, borderColor: borderColor }}
@@ -478,49 +497,45 @@ const Profile = () => {
           </View>
         </View>
 
-        <ScrollView
-          ref={horizontalScrollRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={(e) =>
-            setActiveTab(Math.round(e.nativeEvent.contentOffset.x / width))
-          }
-          scrollEventThrottle={16}
-        >
-          <View style={{ width }} className="min-h-[200px]">
-            {posts.length === 0 ? (
-              <View className="flex-1 justify-center items-center py-10">
-                <Text style={{ color: subTextColor }}>
-                  {t("profile.empty.posts")}
-                </Text>
-              </View>
-            ) : (
-              <View className="flex-row flex-wrap">
-                {posts.map(renderMoodItem)}
-              </View>
-            )}
-          </View>
+        {/* Content */}
+        <View className="min-h-[200px]">
+          {activeTab === 0 ? (
+            <View>
+              {posts.length === 0 ? (
+                <View className="flex-1 justify-center items-center py-10">
+                  <Text style={{ color: subTextColor }}>
+                    {t("profile.empty.posts")}
+                  </Text>
+                </View>
+              ) : (
+                <View className="flex-row flex-wrap">
+                  {posts.map(renderMoodItem)}
+                </View>
+              )}
+            </View>
+          ) : (
+            <View>
+              {topSongs.length === 0 ? (
+                <View className="flex-1 justify-center items-center py-10">
+                  <Ionicons
+                    name="musical-note"
+                    size={40}
+                    color={isDark ? "#3f3f46" : "#E4E4E7"}
+                  />
+                  <Text className="mt-2" style={{ color: subTextColor }}>
+                    {t("profile.empty.songs")}
+                  </Text>
+                </View>
+              ) : (
+                <View>
+                  {topSongs.map((song, index) => renderMusicItem(song, index))}
+                </View>
+              )}
+            </View>
+          )}
+        </View>
 
-          <View style={{ width }} className="min-h-[200px]">
-            {topSongs.length === 0 ? (
-              <View className="flex-1 justify-center items-center py-10">
-                <Ionicons
-                  name="musical-note"
-                  size={40}
-                  color={isDark ? "#3f3f46" : "#E4E4E7"}
-                />
-                <Text className="mt-2" style={{ color: subTextColor }}>
-                  {t("profile.empty.songs")}
-                </Text>
-              </View>
-            ) : (
-              <View>
-                {topSongs.map((song, index) => renderMusicItem(song, index))}
-              </View>
-            )}
-          </View>
-        </ScrollView>
+        {/* Spacer */}
         <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
