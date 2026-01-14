@@ -2,10 +2,13 @@
   "expo": {
     "name": "Mood",
     "slug": "mood",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": ["mood", "appwrite-callback-6689e59b000acd6caf6f"],
+    "scheme": [
+      "mood",
+      "appwrite-callback-6689e59b000acd6caf6f"
+    ],
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/images/splash-icon.png",
