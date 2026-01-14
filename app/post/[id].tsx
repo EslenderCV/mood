@@ -17,7 +17,7 @@ import {
   ScrollView,
   LayoutAnimation,
   Keyboard,
-  useWindowDimensions, // <--- Importado
+  useWindowDimensions,
 } from "react-native";
 import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router } from "expo-router";
@@ -48,8 +48,8 @@ import {
   getFollowedUserIds,
   getUser,
   createStory,
+  toggleCommentLike, 
 } from "@/lib/appwrite";
-import CommentItem from "@/components/CommentItem";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -60,7 +60,172 @@ import MoodShareCard from "@/components/MoodShareCard";
 const { width, height } = Dimensions.get("window");
 const databases = new Databases(client);
 
-// --- SKELETON LOADER (NUEVO) ---
+// --- COMPONENTE COMMENT ITEM INTELIGENTE ---
+const CommentItem = ({
+  item,
+  currentUserId,
+  onReply,
+  allComments,
+}: {
+  item: any;
+  currentUserId: string;
+  onReply: (item: any) => void;
+  allComments: any[];
+}) => {
+  const { t } = useLanguage();
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
+  const textColor = isDark ? "#FAFAFA" : "#18181B";
+  const subTextColor = isDark ? "#A1A1AA" : "#71717A";
+
+  const [isLiked, setIsLiked] = useState(item.likedBy?.includes(currentUserId));
+  const [likesCount, setLikesCount] = useState(item.likedBy?.length || 0);
+  
+  // Estado para guardar la info fresca del usuario (nombre real, verificado, etc.)
+  const [userData, setUserData] = useState<any>(item.user || null);
+
+  // EFECTO DE RECUPERACIÓN: Si es un comentario viejo o falta info, buscamos al usuario real
+  useEffect(() => {
+    let isMounted = true;
+    // Si no tenemos objeto usuario (comentario viejo) y tenemos un ID
+    if (!userData && item.userId) {
+      getUser(item.userId)
+        .then((res) => {
+          if (isMounted && res) {
+            setUserData(res);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => { isMounted = false; };
+  }, [item.userId]);
+
+  // Filtramos respuestas (threading)
+  const replies = allComments.filter((c) => c.parentId === item.$id);
+
+  // Lógica Prioritaria:
+  // 1. Usamos datos frescos de la BD (userData)
+  // 2. Si no, usamos lo que haya en el comentario (item)
+  const displayName = userData?.name || item.username || "Usuario";
+  const isVerified = userData?.isVerified || item.isVerified;
+  const avatarUrl = userData?.pfp || item.avatar;
+
+  const handleLike = async () => {
+    const prevLiked = isLiked;
+    const prevCount = likesCount;
+    setIsLiked(!isLiked);
+    setLikesCount(isLiked ? likesCount - 1 : likesCount + 1);
+
+    try {
+      await toggleCommentLike(item.$id, currentUserId, item.likedBy || []);
+    } catch (error) {
+      setIsLiked(prevLiked);
+      setLikesCount(prevCount);
+    }
+  };
+
+  const timeAgo = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diff = (now.getTime() - date.getTime()) / 1000;
+    if (diff < 60) return "Just now";
+    const m = Math.floor(diff / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    return `${Math.floor(h / 24)}d`;
+  };
+
+  return (
+    <View className="mb-4 pl-4 pr-3">
+      <View className="flex-row">
+        <TouchableOpacity
+          onPress={() => router.push(`/user/${item.userId}` as any)}
+        >
+          <Image
+            source={{
+              uri:
+                avatarUrl ||
+                "https://cloud.appwrite.io/v1/avatars/initials?name=" +
+                  displayName,
+            }}
+            className="w-9 h-9 rounded-full bg-zinc-700 mr-3"
+          />
+        </TouchableOpacity>
+
+        <View className="flex-1">
+          <View className="flex-row items-center mb-0.5">
+            <Text
+              className="font-bold text-[13px] mr-1"
+              style={{ color: textColor }}
+            >
+              {displayName}
+            </Text>
+            
+            {/* BADGE DE VERIFICACIÓN */}
+            {isVerified && (
+              <MaterialIcons
+                name="verified"
+                size={12}
+                color="#5E17EB"
+                style={{ marginRight: 4 }}
+              />
+            )}
+
+            <Text className="text-[11px]" style={{ color: subTextColor }}>
+              {timeAgo(item.$createdAt)}
+            </Text>
+          </View>
+
+          <Text
+            className="text-[14px] leading-5 mb-1.5"
+            style={{ color: textColor }}
+          >
+            {item.content}
+          </Text>
+
+          <TouchableOpacity onPress={() => onReply(item)}>
+            <Text className="text-[12px] font-semibold text-zinc-500">
+              Responder
+            </Text>
+          </TouchableOpacity>
+
+          {/* Renderizado Recursivo de Respuestas */}
+          {replies.length > 0 && (
+            <View className="mt-3 pl-2 border-l border-zinc-700/50">
+              {replies.map((reply) => (
+                <CommentItem
+                  key={reply.$id}
+                  item={reply}
+                  currentUserId={currentUserId}
+                  onReply={onReply}
+                  allComments={allComments}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View className="items-center pl-2 pt-1">
+          <TouchableOpacity onPress={handleLike} className="p-1">
+            <Ionicons
+              name={isLiked ? "heart" : "heart-outline"}
+              size={14}
+              color={isLiked ? "#EF4444" : subTextColor}
+            />
+          </TouchableOpacity>
+          {likesCount > 0 && (
+            <Text className="text-[10px]" style={{ color: subTextColor }}>
+              {likesCount}
+            </Text>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+};
+
+// --- SKELETON LOADER ---
 const PostDetailSkeleton = ({ isDark }: { isDark: boolean }) => {
   const bg = isDark ? "bg-zinc-900" : "bg-zinc-100";
   const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
@@ -68,9 +233,7 @@ const PostDetailSkeleton = ({ isDark }: { isDark: boolean }) => {
 
   return (
     <View className="flex-1 animate-pulse">
-      {/* Post Content */}
       <View className="px-5 pt-4 pb-2">
-        {/* User Header */}
         <View className="flex-row items-center mb-6">
           <View className={`w-12 h-12 rounded-full ${elementBg} mr-3`} />
           <View className="space-y-2">
@@ -78,12 +241,8 @@ const PostDetailSkeleton = ({ isDark }: { isDark: boolean }) => {
             <View className={`w-24 h-3 rounded ${elementBg}`} />
           </View>
         </View>
-
-        {/* Caption */}
         <View className={`w-3/4 h-4 rounded ${elementBg} mb-2`} />
         <View className={`w-1/2 h-4 rounded ${elementBg} mb-6`} />
-
-        {/* Song Card (Simulando el reproductor) */}
         <View
           className={`w-full h-28 rounded-[24px] ${cardBg} p-4 flex-row items-center mb-6`}
         >
@@ -94,8 +253,6 @@ const PostDetailSkeleton = ({ isDark }: { isDark: boolean }) => {
           </View>
           <View className={`w-12 h-12 rounded-full ${elementBg}`} />
         </View>
-
-        {/* Actions Row */}
         <View className="flex-row justify-between items-center px-2 mb-4">
           <View className="flex-row gap-6">
             <View className={`w-6 h-6 rounded-full ${elementBg}`} />
@@ -106,11 +263,8 @@ const PostDetailSkeleton = ({ isDark }: { isDark: boolean }) => {
             <View className={`w-6 h-6 rounded-full ${elementBg}`} />
           </View>
         </View>
-
         <View className={`h-[1px] w-full ${elementBg} mb-6`} />
       </View>
-
-      {/* Comments List Simulator */}
       <View className="px-5">
         {[1, 2, 3].map((i) => (
           <View key={i} className="flex-row mb-6">
@@ -1096,15 +1250,16 @@ const PostDetails = () => {
     const rootId = targetComment.parentId
       ? targetComment.parentId
       : targetComment.$id;
-    const username = targetComment.username;
+    // Preferimos usar el nombre si está disponible, sino el username como fallback para el tag
+    const replyName = targetComment.user?.username || targetComment.username;
 
     setReplyingTo({
       rootId: rootId,
-      username: username,
+      username: replyName,
       userId: targetComment.userId,
     });
 
-    setCommentText(`@${username} `);
+    setCommentText(`@${replyName} `);
     inputRef.current?.focus();
   };
 
@@ -1119,13 +1274,21 @@ const PostDetails = () => {
 
     try {
       const parentId = replyingTo ? replyingTo.rootId : null;
+      
+      // Obtenemos el nombre real
+      const displayName = user?.name || user?.username;
+      // Verificamos estado de verificado de forma segura
+      const isUserVerified = (user as any)?.isVerified;
+
       const newComment = await createComment(
         postId,
         {
           content: commentText,
           userId: user?.$id,
-          username: user?.username,
+          // Guardamos el NOMBRE REAL en el campo 'username' para consistencia futura
+          username: displayName,
           avatar: user?.pfp,
+          isVerified: isUserVerified 
         },
         parentId
       );
@@ -1353,7 +1516,7 @@ const PostDetails = () => {
                   {creator.name}
                 </Text>
 
-                {/* CAMBIO: Badge Verificado en el Post */}
+                {/* Badge Verificado en el Post */}
                 {creator.isVerified && (
                   <MaterialIcons
                     name="verified"
@@ -1530,7 +1693,6 @@ const PostDetails = () => {
         edges={["top"]}
         style={{ backgroundColor: bgColor }}
       >
-        {/* Header simple para mantener la navegación si se quiere salir */}
         <View
           className="flex-row items-center justify-between px-4 h-[50px] border-b"
           style={{ backgroundColor: bgColor, borderColor: borderColor }}
@@ -1621,7 +1783,6 @@ const PostDetails = () => {
         className="absolute bottom-0 w-full"
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
-        {/* Sugerencias de mención */}
         {showSuggestions && (
           <View
             className="w-full border-t border-b"
@@ -1657,7 +1818,6 @@ const PostDetails = () => {
           </View>
         )}
 
-        {/* Input Container Moderno */}
         <View
           className="border-t pb-6 pt-2 px-2"
           style={{ backgroundColor: bgColor, borderColor: borderColor }}
@@ -1737,7 +1897,6 @@ const PostDetails = () => {
         </View>
       </KeyboardAvoidingView>
 
-      {/* --- NUEVO MODAL SELECTOR DE COMPARTIR (DirectShareSheet) --- */}
       <DirectShareSheet
         visible={isShareSelectorVisible}
         onClose={() => setShareSelectorVisible(false)}
@@ -1760,7 +1919,6 @@ const PostDetails = () => {
         onClose={() => setCreationVisible(false)}
         currentUser={user}
         onSuccess={() => {
-          // No necesitamos recargar feed en detalles, pero cerramos modal
           setCreationVisible(false);
         }}
         initialSongData={storyInitialSongData}

@@ -10,12 +10,12 @@ import {
   Platform,
   LayoutAnimation,
   UIManager,
-  useWindowDimensions, // <--- 1. Importamos esto
+  useWindowDimensions,
 } from "react-native";
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
   Swipeable,
   GestureHandlerRootView,
@@ -32,6 +32,7 @@ import {
   deleteFollowRequest,
   deleteNotification,
   clearAllNotifications,
+  getUser, // <--- Importado para obtener datos frescos
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -64,7 +65,6 @@ const formatTimeAgo = (dateString: string, t: (key: string) => string) => {
 
 const NotificationSkeleton = ({ isDark }: { isDark: boolean }) => {
   const bg = isDark ? "bg-zinc-800" : "bg-gray-200";
-  // Ajustamos un poco la opacidad o el color para que se vea sutil
   return (
     <View className="flex-row px-4 py-4 items-center animate-pulse border-b border-transparent">
       <View className={`w-12 h-12 rounded-full ${bg} mr-3`} />
@@ -111,6 +111,212 @@ const FilterPill = ({
   );
 };
 
+// --- COMPONENTE NOTIFICATION ITEM INTELIGENTE ---
+const NotificationItem = ({
+  item,
+  currentUser,
+  isDark,
+  t,
+  onPress,
+  onAccept,
+  onDeleteRequest,
+  onDeleteSingle,
+}: any) => {
+  const [userData, setUserData] = useState<any>(null);
+
+  // Colores locales para el item
+  const bgColor = isDark ? "#000000" : "#FFFFFF";
+  const textColor = isDark ? "#FFFFFF" : "#000000";
+  const subTextColor = isDark ? "#A1A1AA" : "#71717A";
+  const borderColor = isDark ? "#27272A" : "#F3F4F6";
+  const unreadBg = isDark ? "rgba(94, 23, 235, 0.1)" : "#F5F3FF";
+  const iconBg = isDark ? "#18181B" : "#F4F4F5";
+
+  // Efecto para cargar datos frescos del usuario (Nombre real y Verificación)
+  useEffect(() => {
+    let isMounted = true;
+    if (item.senderId) {
+      getUser(item.senderId)
+        .then((user) => {
+          if (isMounted && user) {
+            setUserData(user);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [item.senderId]);
+
+  // Datos visuales prioritarios
+  const displayName = userData?.name || item.senderName || "Usuario";
+  const isVerified = userData?.isVerified;
+  const avatarUrl = userData?.pfp || item.senderAvatar;
+
+  // Configuración de Iconos
+  let iconName = "notifications";
+  let iconColor = "#A1A1AA";
+  let iconBgColor = isDark ? "#27272A" : "#F4F4F5";
+
+  switch (item.type) {
+    case "like":
+      iconName = "heart";
+      iconColor = "#EF4444";
+      iconBgColor = isDark ? "rgba(239, 68, 68, 0.2)" : "#FEF2F2";
+      break;
+    case "comment":
+      iconName = "chatbubble";
+      iconColor = "#5E17EB";
+      iconBgColor = isDark ? "rgba(94, 23, 235, 0.2)" : "#F3E8FF";
+      break;
+    case "follow":
+      iconName = "person-add";
+      iconColor = "#3B82F6";
+      iconBgColor = isDark ? "rgba(59, 130, 246, 0.2)" : "#EFF6FF";
+      break;
+    case "tag":
+      iconName = "at";
+      iconColor = "#10B981";
+      iconBgColor = isDark ? "rgba(16, 185, 129, 0.2)" : "#ECFDF5";
+      break;
+    case "follow_request":
+      iconName = "lock-closed";
+      iconColor = isDark ? "#FFFFFF" : "#000000";
+      break;
+  }
+
+  const isRequest = item.type === "follow_request";
+
+  const renderRightActions = (progress: any, dragX: any) => {
+    if (isRequest) return null;
+    const scale = dragX.interpolate({
+      inputRange: [-80, 0],
+      outputRange: [1, 0],
+      extrapolate: "clamp",
+    });
+
+    return (
+      <TouchableOpacity
+        onPress={() => onDeleteSingle(item)}
+        className="bg-red-500 w-[80px] justify-center items-center"
+      >
+        <Animated.View style={{ transform: [{ scale }] }}>
+          <Ionicons name="trash-outline" size={24} color="white" />
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <Swipeable
+      renderRightActions={renderRightActions}
+      overshootRight={false}
+    >
+      <TouchableOpacity
+        activeOpacity={isRequest ? 1 : 0.7}
+        onPress={() => onPress(item)}
+        className={`flex-row p-4 border-b ${
+          !item.isRead ? "border-l-4" : ""
+        }`}
+        style={{
+          backgroundColor: !item.isRead ? unreadBg : bgColor,
+          borderColor: borderColor,
+          borderLeftColor: !item.isRead ? "#5E17EB" : borderColor,
+        }}
+      >
+        <View className="mr-4 relative">
+          <Image
+            source={{ uri: avatarUrl }}
+            className="w-12 h-12 rounded-full border"
+            style={{ borderColor: borderColor }}
+          />
+          {!isRequest && (
+            <View
+              className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full items-center justify-center border-2"
+              style={{
+                backgroundColor: iconBgColor,
+                borderColor: bgColor,
+              }}
+            >
+              <Ionicons name={iconName as any} size={12} color={iconColor} />
+            </View>
+          )}
+        </View>
+
+        <View className="flex-1 justify-center space-y-1">
+          <Text
+            className="text-[15px] leading-5"
+            style={{ color: textColor }}
+            numberOfLines={2}
+          >
+            <Text className="font-bold">{displayName}</Text>{" "}
+            
+            {/* Badge Verificación Inline */}
+            {isVerified && (
+              <Text>
+                 <MaterialIcons
+                  name="verified"
+                  size={14}
+                  color="#5E17EB"
+                  style={{ marginLeft: 4, top: 2 }} // Ajuste visual ligero
+                />{" "}
+              </Text>
+            )}
+
+            <Text style={{ color: isDark ? "#D4D4D8" : "#4B5563" }}>
+              {/* Intentamos remover el nombre viejo si está en el mensaje, si no mostramos el mensaje tal cual */}
+              {item.message.replace(item.senderName, "").trim()}
+            </Text>
+          </Text>
+
+          {isRequest ? (
+            <View className="flex-row mt-2 gap-3">
+              <TouchableOpacity
+                onPress={() => onAccept(item)}
+                className="bg-[#5E17EB] px-6 py-2 rounded-xl flex-1 items-center shadow-sm"
+              >
+                <Text className="text-white font-bold text-xs">
+                  {t("notifications.confirm") || "Confirmar"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onDeleteRequest(item)}
+                className="px-6 py-2 rounded-xl flex-1 items-center border"
+                style={{ borderColor: borderColor, backgroundColor: iconBg }}
+              >
+                <Text
+                  className="font-bold text-xs"
+                  style={{ color: textColor }}
+                >
+                  {t("notifications.delete") || "Eliminar"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Text className="text-xs" style={{ color: subTextColor }}>
+              {formatTimeAgo(item.$createdAt, t)}
+            </Text>
+          )}
+        </View>
+
+        {!isRequest && (
+          <View className="ml-2 justify-center">
+            {item.postImage ? (
+              <Image
+                source={{ uri: item.postImage }}
+                className="w-10 h-10 rounded-lg"
+              />
+            ) : !item.isRead ? (
+              <View className="w-2 h-2 bg-[#5E17EB] rounded-full" />
+            ) : null}
+          </View>
+        )}
+      </TouchableOpacity>
+    </Swipeable>
+  );
+};
+
 // --- PANTALLA PRINCIPAL ---
 
 const NotificationsScreen = () => {
@@ -118,15 +324,12 @@ const NotificationsScreen = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
-  const { height } = useWindowDimensions(); // <--- 2. Obtenemos altura de pantalla
+  const { height } = useWindowDimensions();
 
-  // Colores dinámicos
+  // Colores principales
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
-  const borderColor = isDark ? "#27272A" : "#F3F4F6";
-  const unreadBg = isDark ? "rgba(94, 23, 235, 0.1)" : "#F5F3FF";
-  const iconBg = isDark ? "#18181B" : "#F4F4F5";
 
   // Estados
   const [allNotifications, setAllNotifications] = useState<any[]>([]);
@@ -136,33 +339,22 @@ const NotificationsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<"all" | "requests" | "activity">("all");
 
-  // --- CALCULO INTELIGENTE DE SKELETONS ---
   const skeletonItems = useMemo(() => {
-    // Altura estimada de una fila de notificación (incluyendo padding) ~ 80px
     const ESTIMATED_ITEM_HEIGHT = 80;
-    // Altura del Header (Título + Pills) ~ 120px
     const HEADER_HEIGHT = 120;
-
-    // Calculamos cuántos items caben en la pantalla restante
     const itemsToFillScreen = Math.ceil(
       (height - HEADER_HEIGHT) / ESTIMATED_ITEM_HEIGHT
     );
-
-    // Aseguramos que al menos haya 6 items, por si acaso
     const count = Math.max(itemsToFillScreen, 6);
-
-    // Creamos un array de índices [0, 1, 2, ..., count]
     return Array.from({ length: count }, (_, i) => i);
   }, [height]);
 
-  // UseFocusEffect para cargar al entrar
   useFocusEffect(
     useCallback(() => {
       fetchNotifications();
     }, [])
   );
 
-  // Filtrado local
   useEffect(() => {
     if (filter === "all") {
       setFilteredNotifications(allNotifications);
@@ -177,7 +369,6 @@ const NotificationsScreen = () => {
     }
   }, [filter, allNotifications]);
 
-  // Realtime Subscription
   useEffect(() => {
     if (!currentUser) return;
     const channel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.notificationsCollectionId}.documents`;
@@ -230,8 +421,6 @@ const NotificationsScreen = () => {
       setRefreshing(false);
     }
   };
-
-  // --- HANDLERS ---
 
   const handlePressNotification = async (item: any) => {
     if (item.type === "follow_request") return;
@@ -314,159 +503,6 @@ const NotificationsScreen = () => {
     ]);
   };
 
-  // --- RENDERERS ---
-
-  const renderRightActions = (progress: any, dragX: any, item: any) => {
-    if (item.type === "follow_request") return null;
-    const scale = dragX.interpolate({
-      inputRange: [-80, 0],
-      outputRange: [1, 0],
-      extrapolate: "clamp",
-    });
-
-    return (
-      <TouchableOpacity
-        onPress={() => handleDeleteSingle(item)}
-        className="bg-red-500 w-[80px] justify-center items-center"
-      >
-        <Animated.View style={{ transform: [{ scale }] }}>
-          <Ionicons name="trash-outline" size={24} color="white" />
-        </Animated.View>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderItem = ({ item }: { item: any }) => {
-    let iconName = "notifications";
-    let iconColor = "#A1A1AA";
-    let iconBgColor = isDark ? "#27272A" : "#F4F4F5";
-
-    switch (item.type) {
-      case "like":
-        iconName = "heart";
-        iconColor = "#EF4444";
-        iconBgColor = isDark ? "rgba(239, 68, 68, 0.2)" : "#FEF2F2";
-        break;
-      case "comment":
-        iconName = "chatbubble";
-        iconColor = "#5E17EB";
-        iconBgColor = isDark ? "rgba(94, 23, 235, 0.2)" : "#F3E8FF";
-        break;
-      case "follow":
-        iconName = "person-add";
-        iconColor = "#3B82F6";
-        iconBgColor = isDark ? "rgba(59, 130, 246, 0.2)" : "#EFF6FF";
-        break;
-      case "tag":
-        iconName = "at";
-        iconColor = "#10B981";
-        iconBgColor = isDark ? "rgba(16, 185, 129, 0.2)" : "#ECFDF5";
-        break;
-      case "follow_request":
-        iconName = "lock-closed";
-        iconColor = isDark ? "#FFFFFF" : "#000000";
-        break;
-    }
-
-    const isRequest = item.type === "follow_request";
-
-    return (
-      <Swipeable
-        renderRightActions={(progress, dragX) =>
-          renderRightActions(progress, dragX, item)
-        }
-        overshootRight={false}
-      >
-        <TouchableOpacity
-          activeOpacity={isRequest ? 1 : 0.7}
-          onPress={() => handlePressNotification(item)}
-          className={`flex-row p-4 border-b ${
-            !item.isRead ? "border-l-4" : ""
-          }`}
-          style={{
-            backgroundColor: !item.isRead ? unreadBg : bgColor,
-            borderColor: borderColor,
-            borderLeftColor: !item.isRead ? "#5E17EB" : borderColor,
-          }}
-        >
-          <View className="mr-4 relative">
-            <Image
-              source={{ uri: item.senderAvatar }}
-              className="w-12 h-12 rounded-full border"
-              style={{ borderColor: borderColor }}
-            />
-            {!isRequest && (
-              <View
-                className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full items-center justify-center border-2"
-                style={{
-                  backgroundColor: iconBgColor,
-                  borderColor: bgColor,
-                }}
-              >
-                <Ionicons name={iconName as any} size={12} color={iconColor} />
-              </View>
-            )}
-          </View>
-
-          <View className="flex-1 justify-center space-y-1">
-            <Text
-              className="text-[15px] leading-5"
-              style={{ color: textColor }}
-              numberOfLines={2}
-            >
-              <Text className="font-bold">{item.senderName}</Text>{" "}
-              <Text style={{ color: isDark ? "#D4D4D8" : "#4B5563" }}>
-                {item.message.replace(item.senderName, "")}
-              </Text>
-            </Text>
-
-            {isRequest ? (
-              <View className="flex-row mt-2 gap-3">
-                <TouchableOpacity
-                  onPress={() => handleAcceptRequest(item)}
-                  className="bg-[#5E17EB] px-6 py-2 rounded-xl flex-1 items-center shadow-sm"
-                >
-                  <Text className="text-white font-bold text-xs">
-                    {t("notifications.confirm") || "Confirmar"}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleDeleteRequest(item)}
-                  className="px-6 py-2 rounded-xl flex-1 items-center border"
-                  style={{ borderColor: borderColor, backgroundColor: iconBg }}
-                >
-                  <Text
-                    className="font-bold text-xs"
-                    style={{ color: textColor }}
-                  >
-                    {t("notifications.delete") || "Eliminar"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <Text className="text-xs" style={{ color: subTextColor }}>
-                {formatTimeAgo(item.$createdAt, t)}
-              </Text>
-            )}
-          </View>
-
-          {!isRequest && (
-            <View className="ml-2 justify-center">
-              {item.postImage ? (
-                <Image
-                  source={{ uri: item.postImage }}
-                  className="w-10 h-10 rounded-lg"
-                />
-              ) : !item.isRead ? (
-                <View className="w-2 h-2 bg-[#5E17EB] rounded-full" />
-              ) : null}
-            </View>
-          )}
-        </TouchableOpacity>
-      </Swipeable>
-    );
-  };
-
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: bgColor }}>
       <SafeAreaView className="flex-1" edges={["top"]}>
@@ -527,7 +563,6 @@ const NotificationsScreen = () => {
         {/* LISTA */}
         {isLoading ? (
           <View className="flex-1">
-            {/* 3. Mapeamos usando el array calculado dinámicamente */}
             {skeletonItems.map((i) => (
               <NotificationSkeleton key={i} isDark={isDark} />
             ))}
@@ -535,7 +570,18 @@ const NotificationsScreen = () => {
         ) : (
           <FlatList
             data={filteredNotifications}
-            renderItem={renderItem}
+            renderItem={({ item }) => (
+              <NotificationItem
+                item={item}
+                currentUser={currentUser}
+                isDark={isDark}
+                t={t}
+                onPress={handlePressNotification}
+                onAccept={handleAcceptRequest}
+                onDeleteRequest={handleDeleteRequest}
+                onDeleteSingle={handleDeleteSingle}
+              />
+            )}
             keyExtractor={(item) => item.$id}
             contentContainerStyle={{ paddingBottom: 20 }}
             showsVerticalScrollIndicator={false}
