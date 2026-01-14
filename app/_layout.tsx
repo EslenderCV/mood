@@ -6,11 +6,32 @@ import GlobalProvider, { useGlobalContext } from "@/context/GlobalProvider";
 import { ModalProvider } from "@/context/ModalContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { NotificationProvider } from "@/context/NotificationContext";
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from "expo-av";
 
 const StackLayout = () => {
   const { loggedIn, loading } = useGlobalContext();
   const segments = useSegments();
   const router = useRouter();
+
+  useEffect(() => {
+    const configureAudioSession = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+          shouldDuckAndroid: true,
+          interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+          playThroughEarpieceAndroid: false,
+          staysActiveInBackground: false,
+        });
+        console.log("✅ Audio configurado: Categoría Playback forzada.");
+      } catch (error) {
+        console.error("❌ Error configurando audio:", error);
+      }
+    };
+    configureAudioSession();
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -52,6 +73,21 @@ const StackLayout = () => {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
+
+      {/* 🔥 CAMBIOS CLAVE AQUÍ: */}
+      <Stack.Screen
+        name="chats"
+        options={{
+          headerShown: false,
+          // 1. transparentModal: Mantiene Home visible debajo
+          presentation: "transparentModal",
+          // 2. animation: 'none': Elimina el delay/brinco nativo
+          animation: "none",
+          // 3. gestureEnabled: false: Desactiva el gesto nativo para usar el nuestro
+          gestureEnabled: false,
+        }}
+      />
+
       <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
     </Stack>
   );

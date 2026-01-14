@@ -6,8 +6,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { useAudioPlayer } from "expo-audio";
-import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons"; // MaterialIcons ya estaba importado
+// 🔥 CAMBIO: Usamos solo Audio de expo-av para todo (config y reproducción)
+import { Audio } from "expo-av";
+
+import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
 import {
@@ -77,7 +79,6 @@ const PostItem: React.FC<PostItemProps> = ({
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // Paleta de colores Premium
   const textColor = isDark ? "#FAFAFA" : "#18181B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const songCardBg = isDark ? "#18181B" : "#F4F4F5";
@@ -86,9 +87,11 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const { t, language } = useLanguage();
   const { currentPlayingId, setPlayingId } = useAudioContext();
+
+  // Estado local del sonido (expo-av)
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
-  const [currentUrl, setCurrentUrl] = useState<string | null>(null);
 
   const [isLiked, setIsLiked] = useState(post.likedBy.includes(currentUserId));
   const [isSaved, setIsSaved] = useState(
@@ -108,7 +111,7 @@ const PostItem: React.FC<PostItemProps> = ({
         username: userObj.username || "anon",
         name: userObj.name || "Usuario",
         avatar: userObj.avatar || userObj.pfp,
-        isVerified: userObj.isVerified, // [MODIFICADO] Leemos si está verificado
+        isVerified: userObj.isVerified,
       };
     }
     return {
@@ -121,89 +124,105 @@ const PostItem: React.FC<PostItemProps> = ({
   };
   const creator = getCreator();
 
-  const player = useAudioPlayer(currentUrl);
-
-  // Lógica de Audio
+  // --- EFECTO: Limpieza al desmontar ---
   useEffect(() => {
-    if (
-      currentPlayingId &&
-      currentPlayingId !== post.$id &&
-      isPlaying &&
-      player
-    ) {
-      player.pause();
-      setIsPlaying(false);
-    }
-  }, [currentPlayingId, isPlaying, player, post.$id]);
-
-  useEffect(() => {
-    if (currentUrl && player) {
-      if (!player.playing && currentPlayingId === post.$id) {
-        player.play();
-        setIsPlaying(true);
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
       }
-      const statusListener = (status: any) => {
-        if (status.didJustFinish) {
+    };
+  }, [sound]);
+
+  // --- EFECTO: Control Global (Pausar si otro empieza a sonar) ---
+  useEffect(() => {
+    const manageGlobalAudio = async () => {
+      if (currentPlayingId && currentPlayingId !== post.$id && sound) {
+        // Si hay otro ID sonando y yo tengo sonido cargado -> Pausar
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded && status.isPlaying) {
+          await sound.pauseAsync();
           setIsPlaying(false);
-          player.seekTo(0);
-          player.pause();
-          if (currentPlayingId === post.$id) {
-            setPlayingId(null);
-          }
         }
-      };
-      if (player.addListener) {
-        player.addListener("playbackStatusUpdate", statusListener);
-      } else if ((player as any).setOnPlaybackStatusUpdate) {
-        (player as any).setOnPlaybackStatusUpdate(statusListener);
       }
-      return () => {
-        if (player.removeListener) {
-          player.removeListener("playbackStatusUpdate", statusListener);
-        }
-      };
-    }
-  }, [currentUrl, player, currentPlayingId, post.$id, setPlayingId]);
+    };
+    manageGlobalAudio();
+  }, [currentPlayingId, post.$id, sound]);
 
   const handlePlayPause = async () => {
-    if (currentUrl && player) {
-      if (player.playing) {
-        player.pause();
-        setIsPlaying(false);
-        setPlayingId(null);
-      } else {
-        if (player.currentTime >= player.duration) {
-          player.seekTo(0);
-        }
-        setPlayingId(post.$id);
-        player.play();
-        setIsPlaying(true);
-      }
-      return;
-    }
     try {
+      // 1. Si ya tengo el sonido cargado
+      if (sound) {
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded) {
+          if (status.isPlaying) {
+            await sound.pauseAsync();
+            setIsPlaying(false);
+            setPlayingId(null); // Liberar contexto global
+          } else {
+            // Si la canción terminó, reiniciar
+            if (status.positionMillis >= status.durationMillis!) {
+              await sound.replayAsync();
+            } else {
+              await sound.playAsync();
+            }
+            setPlayingId(post.$id); // Tomar control global
+            setIsPlaying(true);
+          }
+        }
+        return;
+      }
+
+      // 2. Si NO tengo sonido, cargarlo
       setIsLoadingAudio(true);
-      setPlayingId(post.$id);
+
       const trackId = songData?.id || songData?.spotifyId;
       if (!trackId) {
         setIsLoadingAudio(false);
         return;
       }
+
       const previewUrl = await getDeezerTrackUrl(trackId);
       if (!previewUrl) {
         setIsLoadingAudio(false);
-        setPlayingId(null);
         return;
       }
-      setCurrentUrl(previewUrl);
+
+      // IMPORTANTE: Aquí configuramos que el sonido suene aunque esté en silencio
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        allowsRecordingIOS: false,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: previewUrl },
+        { shouldPlay: true }
+      );
+
+      setSound(newSound);
+      setIsPlaying(true);
+      setPlayingId(post.$id);
+
+      // Listener para detectar fin de canción
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded) {
+          if (status.didJustFinish) {
+            setIsPlaying(false);
+            setPlayingId(null);
+            // Opcional: newSound.unloadAsync(); para ahorrar memoria
+          }
+        }
+      });
+
       setIsLoadingAudio(false);
     } catch (error) {
+      console.log("Error playing audio:", error);
       setIsLoadingAudio(false);
       setPlayingId(null);
     }
   };
 
-  // --- LÓGICA DE LIKE SIMPLIFICADA ---
   const handleLike = async () => {
     const prevLiked = isLiked;
     const prevCount = likesCount;
@@ -237,7 +256,7 @@ const PostItem: React.FC<PostItemProps> = ({
 
   return (
     <View className="px-5">
-      {/* 1. HEADER: Avatar + Name + Time + Options */}
+      {/* 1. HEADER */}
       <View className="flex-row items-start justify-between mb-2">
         <View className="flex-row items-center flex-1">
           <TouchableOpacity
@@ -259,7 +278,6 @@ const PostItem: React.FC<PostItemProps> = ({
           </TouchableOpacity>
 
           <View className="ml-3 flex-1">
-            {/* [MODIFICADO] Nombre + Badge Verificado */}
             <View className="flex-row items-center">
               <Text
                 className="font-bold text-[15px] leading-5"
@@ -267,17 +285,14 @@ const PostItem: React.FC<PostItemProps> = ({
               >
                 {creator.name}
               </Text>
-
-              {/* Aquí se renderiza el Badge si el usuario está verificado */}
               {creator.isVerified && (
                 <MaterialIcons
                   name="verified"
                   size={14}
-                  color={accentColor} // #5E17EB
+                  color={accentColor}
                   style={{ marginLeft: 4 }}
                 />
               )}
-
               {!!post.isPrivate && (
                 <Ionicons
                   name="lock-closed"
@@ -301,7 +316,7 @@ const PostItem: React.FC<PostItemProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* 2. CONTENIDO (Texto) */}
+      {/* 2. CONTENIDO */}
       <View className="pl-[52px]">
         {!!post.comment && post.comment.trim() !== "" && (
           <Text
@@ -312,19 +327,15 @@ const PostItem: React.FC<PostItemProps> = ({
           </Text>
         )}
 
-        {/* 3. SONG CARD REDISEÑADA */}
         <View
           className="rounded-2xl p-3 flex-row items-center mb-4"
-          style={{
-            backgroundColor: songCardBg,
-          }}
+          style={{ backgroundColor: songCardBg }}
         >
           <Image
             source={{ uri: songData.cover }}
             className="w-14 h-14 rounded-xl shadow-sm"
             style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
           />
-
           <View className="flex-1 ml-3 mr-2 justify-center">
             <Text
               className="font-bold text-[15px] mb-0.5"
@@ -340,8 +351,6 @@ const PostItem: React.FC<PostItemProps> = ({
             >
               {songData.artist}
             </Text>
-
-            {/* Visualizador de Audio */}
             <View className="mt-1 flex-row items-center">
               <Ionicons name="musical-notes" size={10} color={accentColor} />
               <AudioVisualizer isPlaying={isPlaying} color={subTextColor} />
@@ -367,9 +376,8 @@ const PostItem: React.FC<PostItemProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* 4. FOOTER (Acciones) */}
+        {/* 3. FOOTER */}
         <View className="flex-row justify-between items-center pr-2">
-          {/* Comments */}
           <TouchableOpacity
             className="flex-row items-center gap-2"
             onPress={() =>
@@ -389,7 +397,6 @@ const PostItem: React.FC<PostItemProps> = ({
             )}
           </TouchableOpacity>
 
-          {/* Likes */}
           <TouchableOpacity
             onPress={handleLike}
             className="flex-row items-center gap-2"
@@ -409,7 +416,6 @@ const PostItem: React.FC<PostItemProps> = ({
             )}
           </TouchableOpacity>
 
-          {/* Saves */}
           <TouchableOpacity
             onPress={handleSave}
             className="flex-row items-center gap-2"
@@ -429,7 +435,6 @@ const PostItem: React.FC<PostItemProps> = ({
             )}
           </TouchableOpacity>
 
-          {/* Share */}
           <TouchableOpacity onPress={onSharePress}>
             <Ionicons name="share-social-outline" size={22} color={iconColor} />
           </TouchableOpacity>

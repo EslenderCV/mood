@@ -6,6 +6,8 @@ import {
   ReactNode,
   Dispatch,
   SetStateAction,
+  useCallback,
+  useMemo,
 } from "react";
 import { getCurrentUser } from "@/lib/appwrite";
 import { Models } from "react-native-appwrite";
@@ -39,6 +41,9 @@ interface GlobalContextType {
   isLogged: boolean;
   setIsLogged: Dispatch<SetStateAction<boolean>>;
   checkAuth: () => Promise<void>;
+  // 🔥 NUEVO: Estado global de chats
+  chats: any[];
+  setChats: Dispatch<SetStateAction<any[]>>;
 }
 
 const GlobalContext = createContext<GlobalContextType>({
@@ -50,6 +55,8 @@ const GlobalContext = createContext<GlobalContextType>({
   isLogged: false,
   setIsLogged: () => {},
   checkAuth: async () => {},
+  chats: [],
+  setChats: () => {},
 });
 
 export const useGlobalContext = () => useContext(GlobalContext);
@@ -59,18 +66,12 @@ const GlobalProvider = ({ children }: Props) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // 🔥 Estado compartido para evitar recargas visuales
+  const [chats, setChats] = useState<any[]>([]);
+
   const { colorScheme, setColorScheme } = useColorScheme();
 
-  useEffect(() => {
-    if (colorScheme !== "dark") {
-      console.log("🌑 Forzando Modo Oscuro...");
-      setColorScheme("dark");
-    }
-
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     try {
       const res = await getCurrentUser();
       if (res) {
@@ -87,21 +88,33 @@ const GlobalProvider = ({ children }: Props) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (colorScheme !== "dark") {
+      setColorScheme("dark");
+    }
+    checkAuth();
+  }, []);
+
+  const contextValue = useMemo(
+    () => ({
+      loggedIn,
+      setLoggedIn,
+      user,
+      setUser,
+      loading,
+      isLogged: loggedIn,
+      setIsLogged: setLoggedIn,
+      checkAuth,
+      chats, // <--- Exportamos
+      setChats, // <--- Exportamos
+    }),
+    [loggedIn, user, loading, checkAuth, chats]
+  );
 
   return (
-    <GlobalContext.Provider
-      value={{
-        loggedIn,
-        setLoggedIn,
-        user,
-        setUser,
-        loading,
-        isLogged: loggedIn,
-        setIsLogged: setLoggedIn,
-        checkAuth,
-      }}
-    >
+    <GlobalContext.Provider value={contextValue}>
       {children}
     </GlobalContext.Provider>
   );

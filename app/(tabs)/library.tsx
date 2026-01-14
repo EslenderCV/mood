@@ -25,6 +25,7 @@ import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { useFocusEffect, router } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { useAudioPlayer } from "expo-audio";
+import { Databases, Query } from "react-native-appwrite";
 
 import {
   GestureHandlerRootView,
@@ -41,11 +42,14 @@ import {
   createPlaylist,
   addSongToPlaylist,
   getDeezerTrackUrl,
+  client,
+  appwriteConfig,
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useLanguage } from "@/context/LanguageContext";
 
 const { width } = Dimensions.get("window");
+const databases = new Databases(client);
 
 // --- SKELETONS ---
 
@@ -191,8 +195,23 @@ const Library = () => {
     if (!user) return;
     setIsLoading(true);
     try {
-      const savedDocs = await getSavedPosts(user.$id);
-      const musicOnly = savedDocs
+      // 1. Obtener POSTS guardados
+      const savedPostsPromise = getSavedPosts(user.$id);
+
+      // 2. Obtener HISTORIAS guardadas (Query manual)
+      const savedStoriesPromise = databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.storiesCollectionId,
+        [Query.equal("savedBy", user.$id)]
+      );
+
+      const [savedPosts, savedStoriesRes] = await Promise.all([
+        savedPostsPromise,
+        savedStoriesPromise,
+      ]);
+
+      // Procesar Posts
+      const musicFromPosts = savedPosts
         .map((post) => {
           try {
             if (!post.songData) return null;
@@ -206,18 +225,62 @@ const Library = () => {
                 post.postedBy.username || post.postedBy.name || "Usuario";
             return {
               ...song,
-              id: post.$id,
+              id: post.$id, // ID único para key
               trackId: song.id || song.spotifyId,
               originalPostCreator: creatorName,
               postId: post.$id,
+              isStory: false,
+              createdAt: post.$createdAt, // IMPORTANTE: Fecha para ordenar
             };
           } catch (e) {
             return null;
           }
         })
         .filter((item) => item !== null);
-      setMusicCollection(musicOnly);
 
+      // Procesar Historias
+      const musicFromStories = savedStoriesRes.documents
+        .map((story) => {
+          try {
+            if (!story.songData) return null;
+            const song = JSON.parse(story.songData);
+            if (song.cover && song.cover.includes("100x100bb")) {
+              song.cover = song.cover.replace("100x100bb", "600x600bb");
+            }
+
+            let creatorName = "Mood Story";
+            if (story.user && typeof story.user === "object") {
+              creatorName = story.user.username || story.user.name || "Usuario";
+            }
+
+            return {
+              ...song,
+              id: story.$id,
+              trackId: song.id || song.spotifyId,
+              originalPostCreator: creatorName,
+              postId: story.$id,
+              isStory: true,
+              originalDoc: story,
+              createdAt: story.$createdAt, // IMPORTANTE: Fecha para ordenar
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter((item) => item !== null);
+
+      // 3. COMBINAR Y ORDENAR POR FECHA DESCENDENTE (Lo más nuevo arriba)
+      const combinedMusic = [...musicFromPosts, ...musicFromStories].sort(
+        (a, b) => {
+          return (
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        }
+      );
+
+      setMusicCollection(combinedMusic);
+
+      // Playlists
       const userPlaylists = await getUserPlaylists(user.$id);
       setPlaylists(userPlaylists);
     } catch (error) {
@@ -241,7 +304,7 @@ const Library = () => {
   };
 
   const handleFlingRight = ({ nativeEvent }: any) => {
-    if (nativeEvent.state === State.ACTIVE) router.push("/explore");
+    if (nativeEvent.state === State.ACTIVE) router.push("/explore" as any);
   };
 
   const handlePlaySong = async (item: any) => {
@@ -376,11 +439,32 @@ const Library = () => {
     if (!user) return;
     const previousList = [...musicCollection];
     setMusicCollection((prev) => prev.filter((i) => i.id !== item.id));
+
     try {
-      await toggleSavePost(item.postId, user.$id);
+      if (item.isStory) {
+        // Lógica especial para historias: Update manual del array savedBy
+        const storyDoc = item.originalDoc;
+        const currentSavedBy = storyDoc.savedBy || [];
+        const newSavedBy = currentSavedBy.filter(
+          (id: string) => id !== user.$id
+        );
+
+        await databases.updateDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.storiesCollectionId,
+          item.postId, // ID de la historia
+          {
+            savedBy: newSavedBy,
+          }
+        );
+      } else {
+        // Lógica estándar para posts
+        await toggleSavePost(item.postId, user.$id);
+      }
     } catch (error) {
       setMusicCollection(previousList);
       Alert.alert("Error", "Fallo al eliminar.");
+      console.log(error);
     }
   };
 
@@ -476,7 +560,14 @@ const Library = () => {
       >
         <TouchableOpacity
           activeOpacity={0.9}
-          onPress={() => router.push(`/post/${item.postId}` as any)}
+          onPress={() => {
+            // Solo navegar si es POST. Si es historia, solo reproducir (o mostrar alerta?)
+            if (!item.isStory) {
+              router.push(`/post/${item.postId}` as any);
+            } else {
+              handlePlaySong(item);
+            }
+          }}
           className="flex-row items-center p-3 rounded-2xl"
           style={{
             backgroundColor: isDark ? "#18181B" : "#FFFFFF",
@@ -551,18 +642,30 @@ const Library = () => {
             </View>
 
             <View className="flex-row items-center mt-1">
-              <Ionicons
-                name="arrow-redo"
-                size={10}
-                color={subTextColor}
-                style={{ opacity: 0.6 }}
-              />
+              {item.isStory ? (
+                <Ionicons
+                  name="time-outline"
+                  size={10}
+                  color={accentColor}
+                  style={{ opacity: 0.8 }}
+                />
+              ) : (
+                <Ionicons
+                  name="arrow-redo"
+                  size={10}
+                  color={subTextColor}
+                  style={{ opacity: 0.6 }}
+                />
+              )}
+
               <Text
                 className="text-[10px] ml-1 font-medium opacity-60"
-                style={{ color: subTextColor }}
+                style={{ color: item.isStory ? accentColor : subTextColor }}
                 numberOfLines={1}
               >
-                Agregado por {item.originalPostCreator}
+                {item.isStory
+                  ? "Guardado de Historia"
+                  : `Agregado por ${item.originalPostCreator}`}
               </Text>
             </View>
           </View>
@@ -741,7 +844,6 @@ const Library = () => {
 
             {activeTab === "songs" ? (
               <FlatList
-                // Solución al crash: Si carga usamos skeletonData, keyExtractor maneja items undefined
                 data={isLoading ? skeletonData : musicCollection}
                 keyExtractor={(item, index) => item?.id || `skeleton-${index}`}
                 renderItem={({ item }) => {
@@ -803,7 +905,6 @@ const Library = () => {
                 </TouchableOpacity>
 
                 <FlatList
-                  // Solución al crash: keyExtractor maneja items undefined
                   data={isLoading ? skeletonData : playlists}
                   keyExtractor={(item, index) =>
                     item?.$id || `skeleton-playlist-${index}`

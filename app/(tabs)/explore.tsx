@@ -17,6 +17,8 @@ import {
   LayoutAnimation,
   Keyboard,
   useWindowDimensions,
+  Pressable,
+  Platform,
 } from "react-native";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
@@ -55,10 +57,10 @@ import {
   appwriteConfig,
   getUser,
   createStory,
-  getOrCreateChat, // <--- IMPORTADO
+  getOrCreateChat,
 } from "@/lib/appwrite";
-import { useGlobalContext } from "@/context/GlobalProvider";
 
+import { useGlobalContext } from "@/context/GlobalProvider";
 import { useLanguage } from "@/context/LanguageContext";
 import ShareModal from "@/components/ShareModal";
 import OptionsModal from "@/components/OptionsModal";
@@ -68,19 +70,16 @@ import MoodShareCard from "@/components/MoodShareCard";
 const { width, height } = Dimensions.get("window");
 const databases = new Databases(client);
 
-// --- SKELETONS (NUEVOS) ---
-
+// --- SKELETONS ---
 const ExplorePostSkeleton = ({ isDark }: { isDark: boolean }) => {
   const cardBg = isDark ? "bg-zinc-900" : "bg-zinc-100";
   const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
-
   return (
     <View
       className={`py-4 px-4 mb-2 animate-pulse ${
         isDark ? "border-b border-zinc-900/50" : "border-b border-zinc-200"
       }`}
     >
-      {/* Header */}
       <View className="flex-row items-center mb-3">
         <View className={`w-10 h-10 rounded-full ${elementBg} mr-3`} />
         <View className="space-y-1.5">
@@ -88,7 +87,6 @@ const ExplorePostSkeleton = ({ isDark }: { isDark: boolean }) => {
           <View className={`w-32 h-2.5 rounded ${elementBg}`} />
         </View>
       </View>
-      {/* Card */}
       <View
         className={`w-full h-[100px] rounded-[24px] ${cardBg} mb-4 flex-row items-center p-3`}
       >
@@ -101,7 +99,6 @@ const ExplorePostSkeleton = ({ isDark }: { isDark: boolean }) => {
         </View>
         <View className={`w-10 h-10 rounded-full ${elementBg} mr-2`} />
       </View>
-      {/* Footer */}
       <View className="flex-row items-center justify-between px-2">
         <View className="flex-row items-center space-x-6">
           <View className={`w-6 h-6 rounded-full ${elementBg}`} />
@@ -118,7 +115,6 @@ const MusicSkeleton = ({ isDark }: { isDark: boolean }) => {
   const cardBg = isDark ? "bg-[#18181B]" : "bg-[#F8FAFC]";
   const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
   const borderColor = isDark ? "border-zinc-800" : "border-zinc-200";
-
   return (
     <View
       className={`flex-row items-center px-4 py-3 mb-3 mx-4 rounded-2xl border ${borderColor} ${cardBg} animate-pulse`}
@@ -138,7 +134,6 @@ const ArtistSkeleton = ({ isDark }: { isDark: boolean }) => {
   const cardBg = isDark ? "bg-[#18181B]" : "bg-[#F8FAFC]";
   const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
   const borderColor = isDark ? "border-zinc-800" : "border-zinc-200";
-
   return (
     <View
       className={`flex-1 m-2 p-3 rounded-3xl border items-center justify-center ${borderColor} ${cardBg} animate-pulse`}
@@ -154,7 +149,6 @@ const ArtistSkeleton = ({ isDark }: { isDark: boolean }) => {
 const ProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
   const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
   const borderColor = isDark ? "border-zinc-800" : "border-zinc-200";
-
   return (
     <View
       className={`flex-row items-center px-5 py-4 border-b ${borderColor} animate-pulse`}
@@ -190,7 +184,6 @@ const parseSongFromPost = (songDataString: string) => {
 const getCreatorFromPost = (item: any) => {
   let userObj = item.creator || item.postedBy || item.users || item.user;
   if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
-
   if (userObj && typeof userObj === "object") {
     return {
       id: userObj.$id || userObj.accountId,
@@ -224,7 +217,6 @@ const searchSongs = async (query: string) => {
       duration: track.duration,
     }));
   } catch (e) {
-    console.error("Error buscando canciones:", e);
     return [];
   }
 };
@@ -235,11 +227,7 @@ const CATEGORIES = [
     labelKey: "explore.categories.posts",
     icon: "compass-outline",
   },
-  {
-    id: "music",
-    labelKey: "explore.categories.music",
-    icon: "musical-notes",
-  },
+  { id: "music", labelKey: "explore.categories.music", icon: "musical-notes" },
   {
     id: "artists",
     labelKey: "explore.categories.artists",
@@ -252,7 +240,28 @@ const CATEGORIES = [
   },
 ];
 
-// --- COMPONENTE: Hoja de Compartir Directo ---
+// --- NUEVOS HELPERS PARA EXPLORAR ---
+
+// Algoritmo de mezcla aleatoria (Fisher-Yates)
+const shuffleArray = (array: any[]) => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+};
+
+// Verificar si el post es reciente (menos de 5 minutos)
+const isFreshPost = (createdAt: string) => {
+  if (!createdAt) return false;
+  const now = new Date();
+  const created = new Date(createdAt);
+  const diffMs = now.getTime() - created.getTime();
+  const diffMins = Math.round(diffMs / 60000); // Diferencia en minutos
+  return diffMins <= 5 && diffMins >= 0;
+};
+
 const DirectShareSheet = ({
   visible,
   onClose,
@@ -269,11 +278,9 @@ const DirectShareSheet = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const insets = useSafeAreaInsets();
-
   const bgColor = isDark ? "#18181B" : "#ffffff";
   const textColor = isDark ? "white" : "black";
   const placeholderColor = isDark ? "#A1A1AA" : "#71717A";
-
   const { height } = useWindowDimensions();
 
   useEffect(() => {
@@ -282,24 +289,19 @@ const DirectShareSheet = ({
     }, 500);
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
   const toggleUserSelection = (userId: string) => {
-    setSelectedUsers((prev) => {
-      if (prev.includes(userId)) {
-        return prev.filter((id) => id !== userId);
-      } else {
-        return [...prev, userId];
-      }
-    });
+    setSelectedUsers((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId]
+    );
   };
-
   const handleSend = () => {
     onSend(selectedUsers, searchQuery);
     setSelectedUsers([]);
     setSearchQuery("");
     onClose();
   };
-
   if (!visible) return null;
 
   return (
@@ -321,7 +323,6 @@ const DirectShareSheet = ({
               }}
             >
               <View className="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full self-center mt-4 mb-4" />
-
               <View className="px-5 mb-4">
                 <View
                   className={`flex-row items-center px-4 py-3 rounded-2xl ${
@@ -348,7 +349,6 @@ const DirectShareSheet = ({
                   )}
                 </View>
               </View>
-
               <View className="h-28 pl-5 mb-4">
                 {isLoadingContacts ? (
                   <View className="flex-1 justify-center items-center mr-5">
@@ -416,13 +416,11 @@ const DirectShareSheet = ({
                   />
                 )}
               </View>
-
               <View
                 className={`h-[1px] w-full ${
                   isDark ? "bg-zinc-800" : "bg-zinc-200"
                 } mb-4`}
               />
-
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -447,7 +445,6 @@ const DirectShareSheet = ({
                     Tu historia
                   </Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
                   onPress={onViralCard}
                   className="items-center mr-8"
@@ -463,7 +460,6 @@ const DirectShareSheet = ({
                     Viral Card
                   </Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
                   onPress={onSystemShare}
                   className="items-center mr-8"
@@ -479,7 +475,6 @@ const DirectShareSheet = ({
                     Compartir via...
                   </Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
                   onPress={onCopyLink}
                   className="items-center mr-8"
@@ -496,7 +491,6 @@ const DirectShareSheet = ({
                   </Text>
                 </TouchableOpacity>
               </ScrollView>
-
               {selectedUsers.length > 0 && (
                 <View className="px-5 pt-2">
                   <TouchableOpacity
@@ -517,7 +511,6 @@ const DirectShareSheet = ({
   );
 };
 
-// --- COMPONENTE: Modal de Creación de Historias ---
 const StoryCreationModal = ({
   visible,
   onClose,
@@ -525,11 +518,6 @@ const StoryCreationModal = ({
   onSuccess,
   initialSongData = null,
 }: any) => {
-  // ... (código existente del modal de historias, sin cambios lógicos)
-  // Nota: Lo incluyo resumido o completo según tu preferencia,
-  // pero para no alargar demasiado, asumo que este bloque está OK tal cual el anterior.
-  // Voy a mantener el bloque completo para que el copy-paste sea directo.
-
   const [step, setStep] = useState<"search" | "preview">("search");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
@@ -537,14 +525,11 @@ const StoryCreationModal = ({
   const [caption, setCaption] = useState("");
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
-
   const [previewTrackUrl, setPreviewTrackUrl] = useState<string | null>(null);
-
   const activeAudioSource =
     step === "preview" && selectedSong?.preview
       ? selectedSong.preview
       : previewTrackUrl || "";
-
   const player = useAudioPlayer(activeAudioSource);
 
   useEffect(() => {
@@ -556,7 +541,6 @@ const StoryCreationModal = ({
       resetForm();
     }
   }, [visible, initialSongData]);
-
   useEffect(() => {
     try {
       if (activeAudioSource && player) {
@@ -567,11 +551,8 @@ const StoryCreationModal = ({
       } else if (player) {
         player.pause();
       }
-    } catch (e) {
-      console.log("Audio Error:", e);
-    }
+    } catch (e) {}
   }, [activeAudioSource, step]);
-
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (query.length > 2) {
@@ -585,7 +566,6 @@ const StoryCreationModal = ({
     }, 500);
     return () => clearTimeout(delayDebounceFn);
   }, [query]);
-
   const resetForm = () => {
     setStep("search");
     setQuery("");
@@ -597,7 +577,6 @@ const StoryCreationModal = ({
       if (player) player.pause();
     } catch (e) {}
   };
-
   const handlePlayPreview = (url: string | null) => {
     if (!url) return;
     try {
@@ -613,21 +592,18 @@ const StoryCreationModal = ({
       }
     } catch (e) {}
   };
-
   const handleSelectSong = (song: any) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSelectedSong(song);
     setPreviewTrackUrl(null);
     setStep("preview");
   };
-
   const handleUpload = async () => {
     if (!selectedSong || !currentUser) return;
     setLoading(true);
     try {
       if (player) player.pause();
     } catch (e) {}
-
     try {
       const songData = JSON.stringify({
         title: selectedSong.title,
@@ -637,9 +613,7 @@ const StoryCreationModal = ({
         spotifyId: selectedSong.id,
         caption: caption,
       });
-
       await createStory(songData, currentUser.$id);
-
       Alert.alert("¡Publicado!", "Tu historia está en vivo.");
       onSuccess();
       onClose();
@@ -649,7 +623,6 @@ const StoryCreationModal = ({
       setLoading(false);
     }
   };
-
   const handleBack = () => {
     if (step === "preview") {
       if (initialSongData) {
@@ -663,9 +636,7 @@ const StoryCreationModal = ({
       onClose();
     }
   };
-
   if (!visible) return null;
-
   return (
     <Modal
       animationType="slide"
@@ -705,7 +676,6 @@ const StoryCreationModal = ({
                   <View style={{ width: 70 }} />
                 )}
               </View>
-
               {step === "search" ? (
                 <View className="flex-1 px-4 pt-2">
                   <View className="bg-[#1E1E1E] flex-row items-center px-4 py-3.5 rounded-2xl mb-4 border border-zinc-800">
@@ -729,7 +699,6 @@ const StoryCreationModal = ({
                       </TouchableOpacity>
                     )}
                   </View>
-
                   {searching ? (
                     <View className="mt-20">
                       <ActivityIndicator size="large" color="#5E17EB" />
@@ -810,7 +779,6 @@ const StoryCreationModal = ({
                       className="absolute w-full h-full opacity-30"
                       blurRadius={60}
                     />
-
                     <View className="w-full flex-1 items-center justify-center">
                       <View
                         className="rounded-2xl shadow-2xl bg-zinc-900 mb-6"
@@ -834,7 +802,6 @@ const StoryCreationModal = ({
                         {selectedSong.artist}
                       </Text>
                     </View>
-
                     <View className="w-full">
                       <View className="bg-white/10 px-4 py-2 rounded-full flex-row items-center border border-white/5 backdrop-blur-md mb-2">
                         <Ionicons
@@ -849,7 +816,6 @@ const StoryCreationModal = ({
                       </View>
                     </View>
                   </View>
-
                   <View className="w-full mt-8">
                     <TextInput
                       placeholder="Agrega un comentario..."
@@ -876,6 +842,7 @@ const Explore = () => {
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
   const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets(); // Importante para el Modal de búsqueda
 
   const bgColor = isDark ? "#000" : "#FFFFFF";
   const textColor = isDark ? "#FAFAFA" : "#18181B";
@@ -887,21 +854,34 @@ const Explore = () => {
 
   const { user } = useGlobalContext();
 
-  const [activeCategory, setActiveCategory] = useState("posts");
+  // 🔥 NUEVO ESTADO PARA EL MODO DE BÚSQUEDA
+  const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [searchResults, setSearchResults] = useState({
+    users: [] as any[],
+    posts: [] as any[],
+    isLoading: false,
+  });
 
-  const [explorePosts, setExplorePosts] = useState<any[]>([]);
-  const [rankedUsers, setRankedUsers] = useState<any[]>([]);
-  const [topSongs, setTopSongs] = useState<any[]>([]);
-  const [topArtists, setTopArtists] = useState<any[]>([]);
+  // SUGERENCIAS ALEATORIAS (SHUFFLE)
+  const [searchSuggestions, setSearchSuggestions] = useState({
+    trendingUsers: [] as any[],
+    vibesPosts: [] as any[],
+    extraSuggestions: [] as any[],
+  });
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("posts");
+  const [data, setData] = useState({
+    posts: [] as any[],
+    users: [] as any[],
+    songs: [] as any[],
+    artists: [] as any[],
+    isLoading: false,
+    refreshing: false,
+  });
 
-  // --- SKELETON CALCULATION ---
   const skeletonData = useMemo(() => Array.from({ length: 8 }), []);
 
-  // --- MODALES Y COMPARTIR ---
   const [isOptionsVisible, setOptionsVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState<any>(null);
 
@@ -911,15 +891,12 @@ const Explore = () => {
   const [postToShare, setPostToShare] = useState<string>("");
   const [postToShareData, setPostToShareData] = useState<any>(null);
 
-  // Estados para compartir (Lista de usuarios)
   const [shareContacts, setShareContacts] = useState<any[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
 
-  // Estados para historia desde explore
   const [isCreationVisible, setCreationVisible] = useState(false);
   const [storyInitialSongData, setStoryInitialSongData] = useState<any>(null);
 
-  // Audio Player
   const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
@@ -934,10 +911,47 @@ const Explore = () => {
     }
   }, [currentSongUrl, player]);
 
-  // --- Lógica de Reproducción ---
+  // 🔥 NUEVO EFFECT: CARGA SUGERENCIAS ALEATORIAS AL ABRIR BUSCADOR 🔥
+  useEffect(() => {
+    const loadSuggestions = async () => {
+      if (isSearchActive) {
+        try {
+          // 1. Obtener usuarios recientes y posts candidatos frescos
+          const [latestUsers, feedPosts] = await Promise.all([
+            getLatestUsers(),
+            getFeedCandidates(),
+          ]);
+
+          // 2. Filtrar usuarios (quitarse a uno mismo y repetidos simple)
+          const validUsers = latestUsers
+            .filter((u: any) => u.$id !== user?.$id)
+            .map((u: any) => ({
+              ...u,
+              id: u.$id, // Normalize ID
+              avatar: u.pfp || u.avatar, // FIX: Asegurar que avatar exista
+            }));
+
+          // 3. Mezclar todo (SHUFFLE REAL)
+          const shuffledUsers = shuffleArray(validUsers);
+          const shuffledPosts = shuffleArray(feedPosts);
+
+          // 4. Asignar a secciones
+          setSearchSuggestions({
+            trendingUsers: shuffledUsers.slice(0, 10), // Top 10 users
+            vibesPosts: shuffledPosts.slice(0, 5), // Top 5 posts
+            extraSuggestions: shuffledUsers.slice(10, 18), // Siguientes 8 users para "Quizás conozcas"
+          });
+        } catch (e) {
+          console.log("Error loading suggestions", e);
+        }
+      }
+    };
+
+    loadSuggestions();
+  }, [isSearchActive]);
+
   const handlePlayMusicItem = async (item: any) => {
     const listId = item.id;
-
     if (playingId === listId) {
       if (isPlaying) {
         player.pause();
@@ -948,41 +962,33 @@ const Explore = () => {
       }
       return;
     }
-
     if (isPlaying) {
       player.pause();
       setIsPlaying(false);
     }
-
     try {
       setLoadingAudioId(listId);
       const trackId = item.trackId;
-
       if (!trackId) {
         Alert.alert("Error", "ID de canción no disponible.");
         setLoadingAudioId(null);
         return;
       }
-
       const previewUrl = await getDeezerTrackUrl(trackId);
-
       if (!previewUrl) {
         Alert.alert("Error", "No se pudo obtener el audio.");
         setLoadingAudioId(null);
         return;
       }
-
       setPlayingId(listId);
       setCurrentSongUrl(previewUrl);
     } catch (e) {
-      console.log(e);
       Alert.alert("Error", "Ocurrió un error al reproducir.");
     } finally {
       setLoadingAudioId(null);
     }
   };
 
-  // --- Navegación por Gestos ---
   const handleFlingRight = ({ nativeEvent }: any) => {
     if (nativeEvent.state === State.ACTIVE) {
       router.push("/home");
@@ -995,33 +1001,87 @@ const Explore = () => {
     }
   };
 
-  // --- Lógica de Ranking y Filtrado ---
-  const rankExplorePosts = (posts: any[]) => {
-    return posts
-      .map((post) => {
-        let score = 0;
-        const likes = post.likedBy ? post.likedBy.length : 0;
-        const comments = post.comments ? post.comments.length : 0;
-        score += likes * 10;
-        score += comments * 15;
-        score += Math.random() * 50;
-        return { ...post, score };
-      })
-      .sort((a: any, b: any) => b.score - a.score);
-  };
+  // --- Lógica de Búsqueda Global ---
+  useEffect(() => {
+    const delayDebounce = setTimeout(async () => {
+      if (!searchText.trim()) {
+        setSearchResults((prev) => ({
+          ...prev,
+          users: [],
+          posts: [],
+          isLoading: false,
+        }));
+        return;
+      }
 
+      setSearchResults((prev) => ({ ...prev, isLoading: true }));
+
+      try {
+        // 1. Buscar Usuarios
+        const usersRes = await databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.usersCollectionId,
+          [
+            Query.or([
+              Query.search("username", searchText),
+              Query.search("name", searchText),
+            ]),
+            Query.limit(5),
+          ]
+        );
+
+        // Mapear resultados para arreglar avatar
+        const mappedUsers = usersRes.documents.map((doc: any) => ({
+          ...doc,
+          id: doc.$id,
+          avatar: doc.pfp || doc.avatar, // FIX: Fallback
+        }));
+
+        // 2. Buscar en posts locales (Full Text Search Manual)
+        const queryWords = searchText
+          .toLowerCase()
+          .split(/\s+/)
+          .filter((w) => w.length > 0);
+
+        const filteredPosts = data.posts.filter((post) => {
+          const song = parseSongFromPost(post.songData);
+          if (!song) return false;
+
+          const title = normalizeString(song.title);
+          const artist = normalizeString(song.artist);
+          const caption = normalizeString(post.caption || "");
+
+          return queryWords.some(
+            (w) =>
+              title.includes(w) || artist.includes(w) || caption.includes(w)
+          );
+        });
+
+        setSearchResults({
+          users: mappedUsers,
+          posts: filteredPosts,
+          isLoading: false,
+        });
+      } catch (error) {
+        console.log("Error buscando:", error);
+        setSearchResults((prev) => ({ ...prev, isLoading: false }));
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchText, data.posts]);
+
+  // --- Algoritmo Principal de Explorar ---
   const calculateTopMooders = (
     posts: any[],
     latestUsers: any[],
     myFollows: any[]
   ) => {
     const userScores: Record<string, any> = {};
-
     posts.forEach((post) => {
       const creator = getCreatorFromPost(post);
       const id = creator.id;
       if (id === "unknown" || id === user?.$id) return;
-
       if (!userScores[id]) {
         userScores[id] = {
           ...creator,
@@ -1031,13 +1091,11 @@ const Explore = () => {
           isTrending: true,
         };
       }
-
       const likes = post.likedBy ? post.likedBy.length : 0;
       userScores[id].totalLikes += likes;
       userScores[id].postCount += 1;
       userScores[id].score += likes * 5 + 2;
     });
-
     latestUsers.forEach((u) => {
       const id = u.$id;
       if (id === user?.$id) return;
@@ -1055,7 +1113,6 @@ const Explore = () => {
         };
       }
     });
-
     return Object.values(userScores)
       .filter((u: any) => !myFollows.includes(u.id))
       .sort((a: any, b: any) => b.score - a.score)
@@ -1063,58 +1120,76 @@ const Explore = () => {
   };
 
   const fetchCategoryData = async () => {
-    setIsLoading(true);
+    setData((prev) => ({ ...prev, isLoading: true }));
     try {
-      const [rawPosts, myFollowsList] = await Promise.all([
-        getFeedCandidates(),
-        user?.$id ? getFollowedUserIds(user.$id) : Promise.resolve([]),
-      ]);
-
-      const safeFollows = Array.isArray(myFollowsList)
-        ? myFollowsList.map((f: any) =>
-            typeof f === "object" && f?.$id ? f.$id : f
-          )
-        : [];
-
-      const publicAndVisiblePosts = rawPosts.filter((post: any) => {
-        let userObj = post.creator || post.postedBy;
-        if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
-        const isPrivate = userObj?.isPrivate || false;
-        return !isPrivate;
-      });
+      const myFollowsListPromise = user?.$id
+        ? getFollowedUserIds(user.$id)
+        : Promise.resolve([]);
+      let newData = { ...data };
 
       if (activeCategory === "posts") {
-        const filteredPosts = publicAndVisiblePosts.filter((post: any) => {
+        const [rawPosts, myFollowsList] = await Promise.all([
+          getFeedCandidates(),
+          myFollowsListPromise,
+        ]);
+        const safeFollows = Array.isArray(myFollowsList)
+          ? myFollowsList.map((f: any) =>
+              typeof f === "object" && f?.$id ? f.$id : f
+            )
+          : [];
+        const filteredPosts = rawPosts.filter((post: any) => {
           const creator = getCreatorFromPost(post);
           const isMe = creator.id === user?.$id;
           const isFollowing = safeFollows.includes(creator.id);
-          return !isMe && !isFollowing;
+          const isPrivate =
+            post.creator?.isPrivate || post.postedBy?.isPrivate || false;
+          return !isMe && !isFollowing && !isPrivate;
         });
-        setExplorePosts(rankExplorePosts(filteredPosts));
+
+        // 🔥 FRESH SHUFFLE LOGIC
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const recentPosts: any[] = [];
+        const olderPosts: any[] = [];
+
+        filteredPosts.forEach((post: any) => {
+          const postDate = new Date(post.$createdAt);
+          if (postDate > oneDayAgo) {
+            recentPosts.push(post);
+          } else {
+            olderPosts.push(post);
+          }
+        });
+
+        const shuffledRecent = shuffleArray(recentPosts);
+        const shuffledOlder = shuffleArray(olderPosts);
+        newData.posts = [...shuffledRecent, ...shuffledOlder];
       }
 
       if (activeCategory === "profiles") {
-        const latestUsers = await getLatestUsers();
-        setRankedUsers(
-          calculateTopMooders(publicAndVisiblePosts, latestUsers, safeFollows)
-        );
+        const [rawPosts, latestUsers, myFollowsList] = await Promise.all([
+          getFeedCandidates(),
+          getLatestUsers(),
+          myFollowsListPromise,
+        ]);
+        const safeFollows = Array.isArray(myFollowsList)
+          ? myFollowsList.map((f: any) =>
+              typeof f === "object" && f?.$id ? f.$id : f
+            )
+          : [];
+        newData.users = calculateTopMooders(rawPosts, latestUsers, safeFollows);
       }
 
       if (activeCategory === "music" || activeCategory === "artists") {
         const allPosts = await getAllPosts(user?.$id || "");
-
         if (activeCategory === "music") {
           const songMap = new Map();
-
           allPosts.forEach((post: any) => {
             const songData = parseSongFromPost(post.songData);
             if (!songData) return;
-
             const uniqueKey = `${normalizeString(
               songData.title
             )}-${normalizeString(songData.artist)}`;
             const likes = post.likedBy ? post.likedBy.length : 0;
-
             if (songMap.has(uniqueKey)) {
               songMap.get(uniqueKey).likes += likes;
             } else {
@@ -1128,23 +1203,18 @@ const Explore = () => {
               });
             }
           });
-
-          const charts = Array.from(songMap.values())
+          newData.songs = Array.from(songMap.values())
             .filter((s: any) => s.likes > 0)
             .sort((a: any, b: any) => b.likes - a.likes)
             .slice(0, 10)
             .map((s: any, i) => ({ ...s, rank: i + 1 }));
-
-          setTopSongs(charts);
         }
-
         if (activeCategory === "artists") {
           const artistMap = new Map();
           allPosts.forEach((post: any) => {
             const songData = parseSongFromPost(post.songData);
             if (!songData) return;
             const artistName = normalizeString(songData.artist);
-
             if (artistMap.has(artistName)) {
               const data = artistMap.get(artistName);
               data.count += 1;
@@ -1158,34 +1228,39 @@ const Explore = () => {
               });
             }
           });
-          const trendingArtists = Array.from(artistMap.values())
+          newData.artists = Array.from(artistMap.values())
             .sort((a: any, b: any) => b.count - a.count)
             .slice(0, 16);
-          setTopArtists(trendingArtists);
         }
       }
+      setData({ ...newData, isLoading: false, refreshing: false });
     } catch (error) {
-      console.log("Error cargando explorar:", error);
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
+      setData((prev) => ({ ...prev, isLoading: false, refreshing: false }));
     }
   };
 
   useEffect(() => {
     fetchCategoryData();
   }, [activeCategory, user]);
-
   const onRefresh = () => {
-    setRefreshing(true);
+    setData((prev) => ({ ...prev, refreshing: true }));
     fetchCategoryData();
   };
-
   const handleOpenOptions = (post: any) => {
     setSelectedPost(post);
     setOptionsVisible(true);
   };
-
+  const openShare = async (post: any) => {
+    setPostToShareData(post);
+    setPostToShare(post.$id);
+    setShareSelectorVisible(true);
+    if (user?.$id && shareContacts.length === 0) {
+      setIsLoadingContacts(true);
+      const contacts = await fetchFollowedUsers(user.$id);
+      setShareContacts(contacts);
+      setIsLoadingContacts(false);
+    }
+  };
   const fetchFollowedUsers = async (userId: string) => {
     try {
       const followedIds = await getFollowedUserIds(userId);
@@ -1194,45 +1269,28 @@ const Explore = () => {
         const users = await Promise.all(promises);
         return users.filter((u) => u !== null);
       }
-    } catch (error) {
-      console.log("Error fetching share contacts", error);
-    }
+    } catch (error) {}
     return [];
   };
-
   const searchUsersInAppwrite = async (query: string) => {
     try {
-      const response = await databases.listDocuments(
-        appwriteConfig.databaseId,
-        appwriteConfig.usersCollectionId,
-        [
-          Query.or([
-            Query.search("username", query),
-            Query.search("name", query),
-          ]),
-          Query.limit(10),
-        ]
-      );
-      return response.documents;
+      return (
+        await databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.usersCollectionId,
+          [
+            Query.or([
+              Query.search("username", query),
+              Query.search("name", query),
+            ]),
+            Query.limit(10),
+          ]
+        )
+      ).documents;
     } catch (error) {
-      console.log("Search error:", error);
       return [];
     }
   };
-
-  const openShare = async (post: any) => {
-    setPostToShareData(post);
-    setPostToShare(post.$id);
-    setShareSelectorVisible(true);
-
-    if (user?.$id && shareContacts.length === 0) {
-      setIsLoadingContacts(true);
-      const contacts = await fetchFollowedUsers(user.$id);
-      setShareContacts(contacts);
-      setIsLoadingContacts(false);
-    }
-  };
-
   const handleShareSearch = async (text: string) => {
     setIsLoadingContacts(true);
     if (text.length > 0) {
@@ -1244,21 +1302,13 @@ const Explore = () => {
     }
     setIsLoadingContacts(false);
   };
-
-  // [MODIFICADO] Lógica robusta para compartir con chatId en Explore
   const handleSendShare = async (userIds: string[], message: string) => {
     if (!user?.$id || !postToShareData) return;
-
     try {
       const promises = userIds.map(async (targetId) => {
-        // 1. Obtener o crear el CHAT primero
         const chatDoc = await getOrCreateChat(user.$id, targetId);
-
-        if (!chatDoc) {
+        if (!chatDoc)
           throw new Error("No se pudo crear el chat para " + targetId);
-        }
-
-        // 2. Crear el mensaje dentro de ese CHAT (con chatId)
         return databases.createDocument(
           appwriteConfig.databaseId,
           appwriteConfig.messagesCollectionId,
@@ -1267,45 +1317,35 @@ const Explore = () => {
             chatId: chatDoc.$id,
             senderId: user.$id,
             receiverId: targetId,
-            content: message || "", // Cadena vacía en vez de texto por defecto
+            content: message || "",
             sharedPostId: postToShareData.$id,
             isRead: false,
-            // createdAt eliminado para evitar error de Appwrite
           }
         );
       });
-
       await Promise.all(promises);
       Alert.alert("Enviado", "El post se ha compartido correctamente.");
     } catch (error) {
-      console.error("Error compartiendo post:", error);
       Alert.alert("Error", "No se pudo compartir el post.");
     }
   };
-
   const handleAddToStoryFromPost = async () => {
     if (!postToShareData) return;
     const songData = parseSongFromPost(postToShareData.songData);
-
     if (songData) {
       let freshPreview = songData.preview;
       const trackId = songData.id || songData.spotifyId;
-
       if (trackId) {
         try {
           const freshUrl = await getDeezerTrackUrl(trackId);
           if (freshUrl) freshPreview = freshUrl;
-        } catch (e) {
-          console.log("Could not refresh track url for story");
-        }
+        } catch (e) {}
       }
-
       setStoryInitialSongData({ ...songData, preview: freshPreview });
       setShareSelectorVisible(false);
       setTimeout(() => setCreationVisible(true), 300);
     }
   };
-
   const handleSystemShare = async () => {
     if (!postToShareData) return;
     const link = `https://moodapp.com/post/${postToShareData.$id}`;
@@ -1315,12 +1355,9 @@ const Explore = () => {
         url: link,
         title: "Compartir desde Mood",
       });
-    } catch (error) {
-      console.log("Error sharing:", error);
-    }
+    } catch (error) {}
     setShareSelectorVisible(false);
   };
-
   const handleCopyLink = () => {
     if (!postToShareData) return;
     const link = `https://moodapp.com/post/${postToShareData.$id}`;
@@ -1328,12 +1365,10 @@ const Explore = () => {
     Alert.alert("Enlace copiado", "El enlace al post ha sido copiado.");
     setShareSelectorVisible(false);
   };
-
   const getViralPostData = () => {
     if (!postToShareData) return null;
     const song = parseSongFromPost(postToShareData.songData);
     const creator = getCreatorFromPost(postToShareData);
-
     return {
       title: song?.title || "Música",
       artist: song?.artist || "Artista",
@@ -1343,7 +1378,6 @@ const Explore = () => {
       comment: postToShareData.comment || null,
     };
   };
-
   const handleDeleteAction = () => {
     if (!selectedPost) return;
     setOptionsVisible(false);
@@ -1354,9 +1388,10 @@ const Explore = () => {
         style: "destructive",
         onPress: async () => {
           try {
-            setExplorePosts((prev) =>
-              prev.filter((p) => p.$id !== selectedPost.$id)
-            );
+            setData((prev) => ({
+              ...prev,
+              posts: prev.posts.filter((p) => p.$id !== selectedPost.$id),
+            }));
             await deletePost(selectedPost.$id);
           } catch (e) {
             Alert.alert("Error", "No se pudo eliminar");
@@ -1366,7 +1401,6 @@ const Explore = () => {
       },
     ]);
   };
-
   const handleReportAction = () => {
     setOptionsVisible(false);
     Alert.alert("Reportar", "Selecciona una razón:", [
@@ -1375,7 +1409,6 @@ const Explore = () => {
       { text: "Otro", onPress: () => submitReport("other") },
     ]);
   };
-
   const submitReport = async (reason: string) => {
     if (!user || !selectedPost) return;
     try {
@@ -1385,13 +1418,12 @@ const Explore = () => {
       Alert.alert("Error", "Inténtalo más tarde.");
     }
   };
-
   const getSectionTitle = () => {
     switch (activeCategory) {
       case "profiles":
         return t("explore.headers.topMooders");
       case "music":
-        return "Top 10 Global";
+        return t("explore.headers.topGlobal");
       case "artists":
         return t("explore.headers.topArtists");
       default:
@@ -1399,29 +1431,71 @@ const Explore = () => {
     }
   };
 
+  // --- SUB-PAGINA DE BÚSQUEDA (MODAL HEADER) ---
+  const renderSearchHeader = () => (
+    <View
+      className="flex-row items-center justify-between px-5 py-4 border-b border-zinc-800"
+      style={{
+        backgroundColor: bgColor,
+        paddingTop: Platform.OS === "android" ? 20 : 0, // Ajuste para Android si es necesario
+      }}
+    >
+      {/* Input Field with AutoFocus */}
+      <View
+        className="flex-1 flex-row items-center h-12 rounded-2xl px-4"
+        style={{ backgroundColor: inputBg }}
+      >
+        <Ionicons name="search" size={20} color={subTextColor} />
+        <TextInput
+          autoFocus
+          value={searchText}
+          onChangeText={setSearchText}
+          placeholder={t("explore.search.instruction")}
+          placeholderTextColor={subTextColor}
+          className="flex-1 ml-3 text-base font-medium"
+          style={{ color: textColor }}
+          returnKeyType="search"
+        />
+        {searchText.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchText("")}>
+            <Ionicons name="close-circle" size={18} color={subTextColor} />
+          </TouchableOpacity>
+        )}
+      </View>
+      {/* Cancel Button */}
+      <TouchableOpacity
+        onPress={() => {
+          setIsSearchActive(false);
+          setSearchText("");
+        }}
+        className="ml-3"
+      >
+        <Text className="text-[#5E17EB] font-bold text-base">{"cancel"}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   const renderHeader = () => (
     <View style={{ backgroundColor: bgColor }} className="pb-2">
       <View className="px-5 pt-2 pb-4">
         <Text className="text-3xl font-bold mb-4" style={{ color: textColor }}>
           {t("explore.title")}
         </Text>
-
-        <View
+        {/* FAKE SEARCH BAR (TRIGGER) */}
+        <Pressable
+          onPress={() => setIsSearchActive(true)}
           className="flex-row items-center h-12 rounded-2xl px-4 border"
           style={{ backgroundColor: inputBg, borderColor: "transparent" }}
         >
           <Ionicons name="search" size={20} color={subTextColor} />
-          <TextInput
-            placeholder={t("explore.searchPlaceholder")}
-            placeholderTextColor={subTextColor}
+          <Text
             className="flex-1 ml-3 text-base font-medium"
-            style={{ color: textColor }}
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-        </View>
+            style={{ color: subTextColor }}
+          >
+            {t("explore.searchPlaceholder")}
+          </Text>
+        </Pressable>
       </View>
-
       <FlatList
         horizontal
         data={CATEGORIES}
@@ -1457,7 +1531,6 @@ const Explore = () => {
           );
         }}
       />
-
       <View className="px-5 mt-6 mb-2 flex-row justify-between items-end">
         <Text className="font-bold text-xl" style={{ color: textColor }}>
           {getSectionTitle()}
@@ -1470,11 +1543,9 @@ const Explore = () => {
     const isThisPlaying = playingId === item.id;
     const isLoadingThis = loadingAudioId === item.id;
     const showPause = isThisPlaying && isPlaying;
-
     let rankColor = subTextColor;
     let rankIcon = null;
     let bgRank = "transparent";
-
     if (item.rank === 1) {
       rankColor = "#FFD700";
       rankIcon = "trophy";
@@ -1488,7 +1559,6 @@ const Explore = () => {
       rankIcon = "medal";
       bgRank = "rgba(205, 127, 50, 0.1)";
     }
-
     return (
       <TouchableOpacity
         key={item.id}
@@ -1514,7 +1584,6 @@ const Explore = () => {
             </Text>
           )}
         </View>
-
         <Image
           source={{ uri: item.cover }}
           className="w-14 h-14 rounded-xl mr-4"
@@ -1545,7 +1614,6 @@ const Explore = () => {
             </Text>
           </View>
         </View>
-
         <TouchableOpacity
           className="w-10 h-10 rounded-full items-center justify-center"
           style={{
@@ -1604,7 +1672,10 @@ const Explore = () => {
     const isTrending = item.totalLikes >= 5;
     return (
       <TouchableOpacity
-        onPress={() => router.push(`/user/${item.id}` as any)}
+        onPress={() => {
+          setIsSearchActive(false);
+          router.push(`/user/${item.id}` as any);
+        }}
         className="flex-row items-center px-5 py-4 border-b active:opacity-70"
         style={{ borderColor: borderColor, backgroundColor: bgColor }}
       >
@@ -1615,7 +1686,6 @@ const Explore = () => {
           className="w-14 h-14 rounded-full border-2"
           style={{ borderColor: borderColor }}
         />
-
         <View className="ml-4 flex-1">
           <View className="flex-row items-center">
             <Text
@@ -1645,7 +1715,6 @@ const Explore = () => {
             @{item.username}
           </Text>
         </View>
-
         <View
           className="px-4 py-2 rounded-full border"
           style={{
@@ -1654,46 +1723,283 @@ const Explore = () => {
           }}
         >
           <Text className="text-xs font-bold" style={{ color: textColor }}>
-            Ver Perfil
+            {t("explore.actions.view")}
           </Text>
         </View>
       </TouchableOpacity>
     );
   };
 
+  // --- RENDER DE RESULTADOS DE BÚSQUEDA (MODAL BODY) ---
+  const renderSearchResults = () => {
+    // ESTADO VACIO: SUGERENCIAS DINÁMICAS (FIX DEL "ERROR")
+    if (searchText.trim() === "") {
+      return (
+        <ScrollView className="flex-1 pt-6" keyboardShouldPersistTaps="handled">
+          {/* 1. Gente Trending - Carrusel Horizontal */}
+          {searchSuggestions.trendingUsers.length > 0 && (
+            <View className="mb-8">
+              <Text
+                className="px-5 mb-4 font-bold text-lg"
+                style={{ color: textColor }}
+              >
+                {t("explore.suggestions.people")}
+              </Text>
+              <FlatList
+                horizontal
+                data={searchSuggestions.trendingUsers} // Mostrar top 8 random
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 20 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsSearchActive(false);
+                      router.push(`/user/${item.id}` as any);
+                    }}
+                    className="mr-5 items-center"
+                  >
+                    <Image
+                      source={
+                        item.avatar
+                          ? { uri: item.avatar }
+                          : require("@/assets/noPfp.jpg")
+                      }
+                      className="w-16 h-16 rounded-full border-2 bg-zinc-800"
+                      style={{
+                        borderColor: item.isTrending ? "#EF4444" : borderColor,
+                      }}
+                    />
+                    <Text
+                      className="mt-2 text-xs font-bold text-center w-16"
+                      numberOfLines={1}
+                      style={{ color: textColor }}
+                    >
+                      {item.name || item.username}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          )}
+
+          {/* 2. Vibras del Momento - Lista Vertical Simple */}
+          {searchSuggestions.vibesPosts.length > 0 && (
+            <View className="mb-12">
+              <Text
+                className="px-5 mb-4 font-bold text-lg"
+                style={{ color: textColor }}
+              >
+                {t("explore.suggestions.vibes")}
+              </Text>
+              {searchSuggestions.vibesPosts.map((post) => {
+                // Mostrar top 5 canciones random
+                const song = parseSongFromPost(post.songData);
+                if (!song) return null;
+                return (
+                  <TouchableOpacity
+                    key={post.$id}
+                    onPress={() => {
+                      setIsSearchActive(false);
+                      router.push(`/post/${post.$id}` as any);
+                    }}
+                    className="flex-row items-center px-5 py-3 border-b"
+                    style={{ borderColor: borderColor }}
+                  >
+                    <Image
+                      source={{ uri: song.cover }}
+                      className="w-12 h-12 rounded-lg mr-4 bg-zinc-800"
+                    />
+                    <View>
+                      <Text
+                        className="font-bold text-base"
+                        style={{ color: textColor }}
+                      >
+                        {song.title}
+                      </Text>
+                      <Text className="text-xs" style={{ color: subTextColor }}>
+                        {song.artist}
+                      </Text>
+                    </View>
+                    <View className="flex-1 items-end">
+                      <Ionicons
+                        name="chevron-forward"
+                        size={16}
+                        color={subTextColor}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* 3. 🔥 NUEVA SECCIÓN: QUIZÁS CONOZCAS (ESTILO DIFERENTE "Glass Dark") */}
+          {searchSuggestions.extraSuggestions.length > 0 && (
+            <View className="mb-20">
+              <Text
+                className="px-5 mb-4 font-bold text-lg"
+                style={{ color: textColor }}
+              >
+                {t("explore.suggestions.discover")}
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 20 }}
+              >
+                {searchSuggestions.extraSuggestions.map((user) => (
+                  <TouchableOpacity
+                    key={user.id}
+                    onPress={() => {
+                      setIsSearchActive(false);
+                      router.push(`/user/${user.id}` as any);
+                    }}
+                    className="mr-3 p-4 rounded-3xl w-40 items-center justify-between"
+                    style={{ backgroundColor: "#1E1E24", height: 160 }} // Fondo oscuro sólido pero suave
+                  >
+                    <View className="items-center">
+                      <Image
+                        source={
+                          user.avatar
+                            ? { uri: user.avatar }
+                            : require("@/assets/noPfp.jpg")
+                        }
+                        className="w-14 h-14 rounded-full mb-2 bg-zinc-700"
+                      />
+                      <Text
+                        className="text-white font-bold text-center text-sm"
+                        numberOfLines={1}
+                      >
+                        {user.name}
+                      </Text>
+                      <Text
+                        className="text-zinc-500 text-center text-xs"
+                        numberOfLines={1}
+                      >
+                        @{user.username}
+                      </Text>
+                    </View>
+                    <View className="w-full bg-[#5E17EB] py-1.5 rounded-full items-center mt-2">
+                      <Text className="text-white text-xs font-bold">
+                        {t("explore.actions.view")}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </ScrollView>
+      );
+    }
+
+    if (searchResults.isLoading) {
+      return (
+        <View className="flex-1 pt-20">
+          <ActivityIndicator size="large" color="#5E17EB" />
+        </View>
+      );
+    }
+
+    if (searchResults.users.length === 0 && searchResults.posts.length === 0) {
+      return (
+        <View className="flex-1 items-center justify-center opacity-50 pb-20">
+          <Text className="font-medium" style={{ color: subTextColor }}>
+            {t("explore.search.noResults")}
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+        {/* SECCIÓN PERSONAS (RESULTADOS) */}
+        {searchResults.users.length > 0 && (
+          <View className="mb-6">
+            <Text
+              className="px-5 py-3 font-bold text-lg opacity-80"
+              style={{ color: textColor }}
+            >
+              {t("explore.search.people")}
+            </Text>
+            {searchResults.users.map((user) => (
+              <View key={user.$id}>
+                {renderProfileItem({
+                  item: { ...user, id: user.$id, totalLikes: 0 },
+                })}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* SECCIÓN PUBLICACIONES (RESULTADOS) */}
+        {searchResults.posts.length > 0 && (
+          <View className="pb-10">
+            <Text
+              className="px-5 py-3 font-bold text-lg opacity-80"
+              style={{ color: textColor }}
+            >
+              {t("explore.search.posts")}
+            </Text>
+            {searchResults.posts.map((post) => (
+              <View
+                key={post.$id}
+                className="py-4 border-b"
+                style={{ borderColor: borderColor }}
+              >
+                <PostItem
+                  post={post}
+                  currentUserId={user?.$id || ""}
+                  onProfilePress={(id) => {
+                    setIsSearchActive(false);
+                    router.push(`/user/${id}` as any);
+                  }}
+                  onCommentPress={(id) => {
+                    setIsSearchActive(false);
+                    router.push(`/post/${id}` as any);
+                  }}
+                  onOptionsPress={() => handleOpenOptions(post)}
+                  onSharePress={() => openShare(post)}
+                />
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    );
+  };
+
   const renderContent = () => {
-    // Si está cargando, usamos el skeletonData
-    const data = isLoading
+    const contentData = data.isLoading
       ? skeletonData
       : (() => {
           switch (activeCategory) {
             case "music":
-              return topSongs;
+              return data.songs;
             case "artists":
-              return topArtists;
+              return data.artists;
             case "profiles":
-              return rankedUsers;
+              return data.users;
             default:
-              return explorePosts;
+              return data.posts;
           }
         })();
 
     return (
       <FlatList
-        data={data}
+        data={contentData}
         key={activeCategory === "artists" ? "grid" : "list"}
         numColumns={activeCategory === "artists" ? 2 : 1}
         columnWrapperStyle={
           activeCategory === "artists" ? { paddingHorizontal: 12 } : undefined
         }
         keyExtractor={(item, index) =>
-          isLoading
+          data.isLoading
             ? `skeleton-${index}`
             : item.id || item.$id || Math.random().toString()
         }
         renderItem={({ item, index }) => {
-          // --- LOGICA DE SKELETON ---
-          if (isLoading) {
+          if (data.isLoading) {
             switch (activeCategory) {
               case "music":
                 return <MusicSkeleton isDark={isDark} />;
@@ -1705,8 +2011,6 @@ const Explore = () => {
                 return <ExplorePostSkeleton isDark={isDark} />;
             }
           }
-
-          // --- LOGICA NORMAL ---
           switch (activeCategory) {
             case "music":
               return renderMusicItem({ item });
@@ -1716,25 +2020,63 @@ const Explore = () => {
               return renderProfileItem({ item });
             default:
               return (
-                <View
-                  className="py-4 border-1 border-b"
-                  style={{ borderColor: borderColor }}
-                >
-                  <PostItem
-                    post={item}
-                    currentUserId={user?.$id || ""}
-                    onProfilePress={(id) => router.push(`/user/${id}` as any)}
-                    onCommentPress={(id) => router.push(`/post/${id}` as any)}
-                    onOptionsPress={() => handleOpenOptions(item)}
-                    onSharePress={() => openShare(item)}
-                  />
+                <View className="relative">
+                  {/* 🔥 ETIQUETA MOOD FRESH (ACABA DE SALIR) */}
+                  {isFreshPost(item.$createdAt) && (
+                    <LinearGradient
+                      colors={["#5E17EB", "#9333EA"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={{
+                        position: "absolute",
+                        top: 24,
+                        right: 20,
+                        zIndex: 10,
+                        borderRadius: 100,
+                        paddingHorizontal: 12,
+                        paddingVertical: 4,
+                        flexDirection: "row",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Ionicons
+                        name="sparkles"
+                        size={10}
+                        color="white"
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text
+                        style={{
+                          color: "white",
+                          fontSize: 10,
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {t("explore.badge.fresh")}
+                      </Text>
+                    </LinearGradient>
+                  )}
+
+                  <View
+                    className="py-4 border-1 border-b"
+                    style={{ borderColor: borderColor }}
+                  >
+                    <PostItem
+                      post={item}
+                      currentUserId={user?.$id || ""}
+                      onProfilePress={(id) => router.push(`/user/${id}` as any)}
+                      onCommentPress={(id) => router.push(`/post/${id}` as any)}
+                      onOptionsPress={() => handleOpenOptions(item)}
+                      onSharePress={() => openShare(item)}
+                    />
+                  </View>
                 </View>
               );
           }
         }}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
-          !isLoading ? (
+          !data.isLoading ? (
             <View className="items-center justify-center mt-20 opacity-50">
               <Ionicons name="planet-outline" size={60} color={subTextColor} />
               <Text
@@ -1750,7 +2092,7 @@ const Explore = () => {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={data.refreshing}
             onRefresh={onRefresh}
             tintColor={accentColor}
           />
@@ -1774,6 +2116,26 @@ const Explore = () => {
               <StatusBar style={isDark ? "light" : "dark"} />
               {renderContent()}
 
+              {/* --- SEARCH MODAL (SUB-PAGE FIXED) --- */}
+              <Modal
+                visible={isSearchActive}
+                animationType="fade"
+                transparent={false}
+                onRequestClose={() => setIsSearchActive(false)}
+              >
+                {/* FIX DEL LAYOUT: Añadimos paddingTop manual para librar el notch */}
+                <View
+                  style={{
+                    flex: 1,
+                    backgroundColor: bgColor,
+                    paddingTop: insets.top,
+                  }}
+                >
+                  {renderSearchHeader()}
+                  {renderSearchResults()}
+                </View>
+              </Modal>
+
               <DirectShareSheet
                 visible={isShareSelectorVisible}
                 onClose={() => setShareSelectorVisible(false)}
@@ -1790,7 +2152,6 @@ const Explore = () => {
                 onSystemShare={handleSystemShare}
                 onCopyLink={handleCopyLink}
               />
-
               <StoryCreationModal
                 visible={isCreationVisible}
                 onClose={() => setCreationVisible(false)}
@@ -1800,19 +2161,16 @@ const Explore = () => {
                 }}
                 initialSongData={storyInitialSongData}
               />
-
               <MoodShareCard
                 isVisible={isViralModalVisible}
                 onClose={() => setViralModalVisible(false)}
                 post={getViralPostData()}
               />
-
               <ShareModal
                 isVisible={isShareVisible}
                 onClose={() => setShareVisible(false)}
                 postId={postToShare}
               />
-
               <OptionsModal
                 isVisible={isOptionsVisible}
                 onClose={() => setOptionsVisible(false)}

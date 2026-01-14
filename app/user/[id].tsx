@@ -12,9 +12,15 @@ import {
   TouchableWithoutFeedback,
   Share,
   FlatList,
-  useWindowDimensions, // <--- Importado
+  useWindowDimensions,
 } from "react-native";
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -30,7 +36,6 @@ import {
   getFollowCounts,
   blockUser,
   createChat,
-  getFeedCandidates,
   getFollowedUserIds,
   getLatestUsers,
   client,
@@ -41,9 +46,13 @@ import { useLanguage } from "@/context/LanguageContext";
 const { width, height } = Dimensions.get("window");
 const ITEM_SIZE = width / 3;
 
+// Helper seguro para parsear
 const parseSongFromPost = (songDataString: string) => {
   try {
     if (!songDataString) return null;
+    if (typeof songDataString !== "string" || !songDataString.startsWith("{"))
+      return null;
+
     const song = JSON.parse(songDataString);
     if (song.cover && song.cover.includes("100x100bb")) {
       song.cover = song.cover.replace("100x100bb", "600x600bb");
@@ -54,7 +63,7 @@ const parseSongFromPost = (songDataString: string) => {
   }
 };
 
-// --- SKELETON LOADER (NUEVO) ---
+// --- SKELETON LOADER ---
 const UserProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
   const bg = isDark ? "bg-zinc-900" : "bg-zinc-100";
   const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
@@ -63,7 +72,6 @@ const UserProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
 
   return (
     <View className="flex-1 animate-pulse">
-      {/* Header NavBar */}
       <View className="flex-row justify-between items-center px-6 py-2 mb-6">
         <View className={`w-10 h-10 rounded-full ${elementBg}`} />
         <View className="flex-row gap-3">
@@ -72,20 +80,17 @@ const UserProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
         </View>
       </View>
 
-      {/* Profile Info */}
       <View className="items-center mb-6">
         <View className={`w-32 h-32 rounded-full ${elementBg} mb-4`} />
         <View className={`w-48 h-6 rounded ${elementBg} mb-2`} />
         <View className={`w-28 h-4 rounded ${elementBg}`} />
       </View>
 
-      {/* Action Buttons (Follow/Chat) */}
       <View className="px-6 mb-6 flex-row gap-3">
         <View className={`flex-1 h-12 rounded-2xl ${elementBg}`} />
         <View className={`w-12 h-12 rounded-2xl ${elementBg}`} />
       </View>
 
-      {/* Stats Bar */}
       <View
         className={`mx-4 h-[70px] mb-6 rounded-3xl ${bg} flex-row items-center justify-between px-6`}
       >
@@ -105,7 +110,6 @@ const UserProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
         </View>
       </View>
 
-      {/* Grid Content */}
       <View className="flex-row flex-wrap">
         {[...Array(12)].map((_, i) => (
           <View
@@ -182,80 +186,86 @@ const UserProfile = () => {
     };
   }, []);
 
+  // --- FETCH DATA OPTIMIZADO (PARALELO) ---
   const fetchData = async () => {
     if (!userId) return;
 
     try {
-      const myUser = await getCurrentUser();
+      const [myUser, targetUser] = await Promise.all([
+        getCurrentUser(),
+        getUser(userId),
+      ]);
+
       if (!myUser) return;
       setCurrentUser(myUser);
+      setVisitedUser(targetUser);
 
-      const myFollowsIds = await getFollowedUserIds(myUser.$id);
-      const candidates = await getLatestUsers();
+      if (!targetUser) return;
+
+      const iBlockedThem = myUser?.blockedUsers?.includes(targetUser.$id);
+      const theyBlockedMe = targetUser?.blockedUsers?.includes(myUser.$id);
+
+      if (iBlockedThem || theyBlockedMe) {
+        setPosts([]);
+        setTopSongs([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const [statusA, statusB, counts, userPosts, candidates, myFollowsIds] =
+        await Promise.all([
+          checkFollowStatus(myUser.$id, targetUser.$id),
+          checkFollowStatus(targetUser.$id, myUser.$id),
+          getFollowCounts(userId),
+          getUserPosts(userId),
+          getLatestUsers(),
+          getFollowedUserIds(myUser.$id),
+        ]);
+
+      setFollowStatus(statusA);
+      setIsFollowingMe(statusB === "accepted");
+      setStats(counts);
 
       const filteredSuggestions = candidates.filter((candidate: any) => {
         const cId = candidate.$id || candidate.accountId;
         const isMe = cId === myUser.$id;
         const isVisitedProfile = cId === userId;
         const amIFollowing = myFollowsIds.includes(cId);
-
         return !isMe && !isVisitedProfile && !amIFollowing;
       });
-
       setSuggestedUsers(filteredSuggestions.slice(0, 10));
 
-      const userData = await getUser(userId);
-      setVisitedUser(userData);
-
-      let currentStatus = null;
-      if (myUser && userData) {
-        currentStatus = await checkFollowStatus(myUser.$id, userData.$id);
-        setFollowStatus(currentStatus);
-        const reverseStatus = await checkFollowStatus(userData.$id, myUser.$id);
-        setIsFollowingMe(reverseStatus === "accepted");
-      }
-
-      const counts = await getFollowCounts(userId);
-      setStats(counts);
-
-      const iBlockedThem = myUser?.blockedUsers?.includes(userData?.$id);
-      const theyBlockedMe = userData?.blockedUsers?.includes(myUser?.$id);
-
-      if (iBlockedThem || theyBlockedMe) {
-        setPosts([]);
-        setTopSongs([]);
-        return;
-      }
-
-      const isMe = myUser?.$id === userData?.$id;
-      const isPublic = !userData?.isPrivate;
-      const isFollower = currentStatus === "accepted";
+      const isMe = myUser.$id === targetUser.$id;
+      const isPublic = !targetUser.isPrivate;
+      const isFollower = statusA === "accepted";
 
       if (isMe || isPublic || isFollower) {
-        const userPosts = await getUserPosts(userId);
         setPosts(userPosts);
 
-        const sortedPosts = [...userPosts].sort((a, b) => {
-          const likesA = a.likedBy ? a.likedBy.length : 0;
-          const likesB = b.likedBy ? b.likedBy.length : 0;
-          return likesB - likesA;
-        });
+        if (userPosts.length > 0) {
+          const sortedPosts = [...userPosts].sort((a, b) => {
+            const likesA = a.likedBy ? a.likedBy.length : 0;
+            const likesB = b.likedBy ? b.likedBy.length : 0;
+            return likesB - likesA;
+          });
 
-        const top3 = sortedPosts
-          .filter((post) => post.likedBy && post.likedBy.length > 0)
-          .slice(0, 3)
-          .map((post) => {
-            const songData = parseSongFromPost(post.songData);
-            if (!songData) return null;
-            return {
-              ...songData,
-              postId: post.$id,
-              likes: post.likedBy ? post.likedBy.length : 0,
-            };
-          })
-          .filter((item) => item !== null);
-
-        setTopSongs(top3);
+          const top3 = sortedPosts
+            .filter((post) => post.likedBy && post.likedBy.length > 0)
+            .slice(0, 3)
+            .map((post) => {
+              const songData = parseSongFromPost(post.songData);
+              if (!songData) return null;
+              return {
+                ...songData,
+                postId: post.$id,
+                likes: post.likedBy ? post.likedBy.length : 0,
+              };
+            })
+            .filter((item) => item !== null);
+          setTopSongs(top3);
+        } else {
+          setTopSongs([]);
+        }
       } else {
         setPosts([]);
         setTopSongs([]);
@@ -264,6 +274,7 @@ const UserProfile = () => {
       console.log("Error cargando perfil:", error);
     } finally {
       setIsLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -273,11 +284,13 @@ const UserProfile = () => {
     }, [userId])
   );
 
+  // --- 🛠️ CORRECCIÓN: FUNCIÓN onRefresh AGREGADA AQUÍ ---
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchData();
     setRefreshing(false);
   };
+  // ---------------------------------------------------
 
   const handleShare = async () => {
     if (!visitedUser) return;
@@ -375,51 +388,55 @@ const UserProfile = () => {
     mainScrollRef.current?.scrollTo({ y: 450, animated: true });
     handleTabPress(0);
   };
-  const renderSuggestedUser = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      className="mr-3 p-3 rounded-2xl border w-[110px] items-center"
-      style={{ backgroundColor: cardBg, borderColor: borderColor }}
-      onPress={() =>
-        router.push({
-          pathname: "/user/[id]",
-          params: {
-            id: item.$id,
-            username: item.username,
-            avatar: item.pfp || item.avatar,
-            name: item.name,
-          },
-        } as any)
-      }
-    >
-      <Image
-        source={
-          item.pfp || item.avatar
-            ? { uri: item.pfp || item.avatar }
-            : require("@/assets/noPfp.jpg")
+
+  const renderSuggestedUser = useCallback(
+    ({ item }: { item: any }) => (
+      <TouchableOpacity
+        className="mr-3 p-3 rounded-2xl border w-[110px] items-center"
+        style={{ backgroundColor: cardBg, borderColor: borderColor }}
+        onPress={() =>
+          router.push({
+            pathname: "/user/[id]",
+            params: {
+              id: item.$id,
+              username: item.username,
+              avatar: item.pfp || item.avatar,
+              name: item.name,
+            },
+          } as any)
         }
-        className="w-14 h-14 rounded-full mb-2"
-        style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
-      />
-      <Text
-        className="text-xs font-bold text-center mb-1"
-        numberOfLines={1}
-        style={{ color: textColor }}
       >
-        {item.name}
-      </Text>
-      <Text
-        className="text-[10px] text-center mb-2"
-        numberOfLines={1}
-        style={{ color: subTextColor }}
-      >
-        @{item.username}
-      </Text>
-      <View className="bg-[#5E17EB]/10 w-full py-1 rounded-lg items-center">
-        <Text className="text-[#5E17EB] text-[10px] font-bold">
-          {t("profile.viewProfile")}
+        <Image
+          source={
+            item.pfp || item.avatar
+              ? { uri: item.pfp || item.avatar }
+              : require("@/assets/noPfp.jpg")
+          }
+          className="w-14 h-14 rounded-full mb-2"
+          style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
+        />
+        <Text
+          className="text-xs font-bold text-center mb-1"
+          numberOfLines={1}
+          style={{ color: textColor }}
+        >
+          {item.name}
         </Text>
-      </View>
-    </TouchableOpacity>
+        <Text
+          className="text-[10px] text-center mb-2"
+          numberOfLines={1}
+          style={{ color: subTextColor }}
+        >
+          @{item.username}
+        </Text>
+        <View className="bg-[#5E17EB]/10 w-full py-1 rounded-lg items-center">
+          <Text className="text-[#5E17EB] text-[10px] font-bold">
+            {t("profile.viewProfile")}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    ),
+    [cardBg, borderColor, isDark, textColor, subTextColor, t]
   );
 
   const renderMoodItem = (item: any) => {
@@ -507,7 +524,6 @@ const UserProfile = () => {
     </TouchableOpacity>
   );
 
-  // --- REEMPLAZO: Mostrar Skeleton mientras carga ---
   if (isLoading) {
     return (
       <SafeAreaView
@@ -520,7 +536,6 @@ const UserProfile = () => {
     );
   }
 
-  // --- CODIGO EXISTENTE PARA USUARIO BLOQUEADO/NO DISPONIBLE ---
   if (
     !visitedUser ||
     currentUser?.blockedUsers?.includes(visitedUser?.$id) ||
@@ -564,7 +579,7 @@ const UserProfile = () => {
       style={{ backgroundColor: bgColor }}
     >
       <StatusBar style={isDark ? "light" : "dark"} />
-      {/* ... MODALES (Sin Cambios) ... */}
+      {/* ... MODALES ... */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -682,6 +697,7 @@ const UserProfile = () => {
             tintColor={activeColor}
           />
         }
+        removeClippedSubviews={true}
       >
         <View>
           {/* Header NavBar */}
@@ -810,7 +826,6 @@ const UserProfile = () => {
             </View>
           )}
 
-          {/* Espaciador si soy yo */}
           {currentUser && currentUser.$id === visitedUser.$id && (
             <View className="h-6" />
           )}

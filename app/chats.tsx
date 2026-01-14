@@ -11,6 +11,7 @@ import {
   Modal,
   ActivityIndicator,
   useWindowDimensions,
+  BackHandler,
 } from "react-native";
 import React, {
   useState,
@@ -19,30 +20,32 @@ import React, {
   useMemo,
   useRef,
 } from "react";
-import { SafeAreaView } from "react-native-safe-area-context";
+// 👇 Importamos el hook de insets, ya no usaremos el componente SafeAreaView
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
+import {
+  GestureHandlerRootView,
+  PanGestureHandler,
+  State,
+} from "react-native-gesture-handler";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 
+import { useGlobalContext } from "@/context/GlobalProvider";
+
 import {
-  getCurrentUser,
   getUserChats,
   searchUsers,
   getLatestUsers,
   deleteChat,
   client,
   appwriteConfig,
-  markChatAsRead,
-  getOrCreateChat,
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
-// --- SKELETON LOADER ---
 const ChatSkeleton = ({ isDark }: { isDark: boolean }) => {
   const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
-
   return (
     <View className="flex-row items-center px-5 py-3.5 animate-pulse w-full">
       <View className={`w-[52px] h-[52px] rounded-full ${elementBg}`} />
@@ -57,7 +60,6 @@ const ChatSkeleton = ({ isDark }: { isDark: boolean }) => {
   );
 };
 
-// --- COMPONENTE MODAL PARA NUEVO CHAT ---
 const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -75,7 +77,6 @@ const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
 
   useEffect(() => {
     if (!visible) return;
-
     const fetchUsers = async () => {
       setLoading(true);
       try {
@@ -92,7 +93,6 @@ const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
         setLoading(false);
       }
     };
-
     const timeoutId = setTimeout(fetchUsers, 500);
     return () => clearTimeout(timeoutId);
   }, [query, visible]);
@@ -119,7 +119,6 @@ const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
             >
               Nuevo Mensaje
             </Text>
-
             <TouchableOpacity
               onPress={onClose}
               className="p-2 rounded-full"
@@ -128,7 +127,6 @@ const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
               <Ionicons name="close" size={20} color={closeBtnIcon} />
             </TouchableOpacity>
           </View>
-
           <View className="px-5 py-4">
             <View
               className="flex-row items-center px-4 py-3 rounded-2xl"
@@ -146,7 +144,6 @@ const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
               />
             </View>
           </View>
-
           {loading ? (
             <View className="flex-1 justify-center items-center">
               <ActivityIndicator size="large" color="#5E17EB" />
@@ -222,12 +219,15 @@ const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
   );
 };
 
-// --- COMPONENTE PRINCIPAL CHATSLIST ---
 const ChatsList = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
-  const { height } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
+  const { user, chats, setChats } = useGlobalContext();
+
+  // 🔥 HOOK PARA MEDIDAS EXACTAS
+  const insets = useSafeAreaInsets();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";
@@ -238,11 +238,52 @@ const ChatsList = () => {
   const deleteColor = "#EF4444";
   const fabColor = "#5E17EB";
 
-  const [chats, setChats] = useState<any[]>([]);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(chats.length === 0);
+  const [refreshing, setRefreshing] = useState(false);
   const [localSearchQuery, setLocalSearchQuery] = useState("");
   const [isNewChatVisible, setIsNewChatVisible] = useState(false);
+
+  // --- ANIMACIÓN DE SALIDA MANUAL ---
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const handleGoBack = useCallback(() => {
+    Animated.timing(translateX, {
+      toValue: width,
+      duration: 250,
+      useNativeDriver: true,
+      easing: (t) => t * (2 - t),
+    }).start(() => {
+      router.back();
+    });
+    return true;
+  }, [width, translateX]);
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      handleGoBack
+    );
+    return () => backHandler.remove();
+  }, [handleGoBack]);
+
+  const onPanGestureEvent = Animated.event(
+    [{ nativeEvent: { translationX: translateX } }],
+    { useNativeDriver: false }
+  );
+
+  const onPanHandlerStateChange = ({ nativeEvent }: any) => {
+    if (nativeEvent.oldState === State.ACTIVE) {
+      if (nativeEvent.translationX > 60 || nativeEvent.velocityX > 600) {
+        handleGoBack();
+      } else {
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          bounciness: 4,
+        }).start();
+      }
+    }
+  };
 
   const skeletonItems = useMemo(() => {
     const ESTIMATED_ITEM_HEIGHT = 80;
@@ -259,31 +300,24 @@ const ChatsList = () => {
 
   useFocusEffect(
     useCallback(() => {
-      loadChats();
-    }, [])
+      loadChats(false);
+    }, [user])
   );
 
-  // --- 🔥 LOGICA REALTIME CORREGIDA 🔥 ---
   useEffect(() => {
-    if (!currentUser || !client) return;
-
+    if (!user || !client) return;
     const channels = [
       `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.chatsCollectionId}.documents`,
       `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`,
     ];
-
     const unsubscribe = client.subscribe(channels, (response) => {
       const payload: any = response.payload;
       const event = response.events[0];
-
-      // 1. EVENTO DE SALA DE CHAT (Cuando se marca como leído o cambia algo en la sala)
       if (event.includes(`collections.${appwriteConfig.chatsCollectionId}`)) {
         if (event.includes(".update")) {
-          // Actualizamos la tarjeta del chat INMEDIATAMENTE
           setChats((prevChats) =>
             prevChats.map((chat) => {
               if (chat.$id === payload.$id) {
-                // Preservamos la info del usuario (otherUser) que no viene en el payload del evento
                 return { ...chat, ...payload, otherUser: chat.otherUser };
               }
               return chat;
@@ -291,40 +325,29 @@ const ChatsList = () => {
           );
         }
         if (event.includes(".create")) {
-          if (payload.users && payload.users.includes(currentUser.$id)) {
-            loadChats(); // Nuevo chat, recargamos lista
-          }
+          if (payload.users && payload.users.includes(user.$id))
+            loadChats(false);
         }
       }
-
-      // 2. EVENTO DE MENSAJE NUEVO
       if (
         event.includes(`collections.${appwriteConfig.messagesCollectionId}`)
       ) {
         if (event.includes(".create")) {
           const chatId = payload.chatId;
-          const isMyMsg = payload.senderId === currentUser.$id;
-
+          const isMyMsg = payload.senderId === user.$id;
           setChats((prevChats) => {
             const chatIndex = prevChats.findIndex((c) => c.$id === chatId);
-
-            // Si el chat no existe en la lista local, recargar todo
             if (chatIndex === -1) {
-              loadChats();
+              loadChats(false);
               return prevChats;
             }
-
-            // Crear el objeto chat actualizado
             const updatedChat = {
               ...prevChats[chatIndex],
               lastMessage: payload.content,
               lastMessageAt: payload.$createdAt,
               lastSenderId: payload.senderId,
-              // Si lo envié yo, obviamente está leído por mí. Si no, es no leído.
               lastMessageIsRead: isMyMsg,
             };
-
-            // Mover el chat al principio de la lista
             const newChats = [...prevChats];
             newChats.splice(chatIndex, 1);
             return [updatedChat, ...newChats];
@@ -332,22 +355,16 @@ const ChatsList = () => {
         }
       }
     });
-
     return () => {
       unsubscribe();
     };
-  }, [currentUser]);
+  }, [user]);
 
-  const loadChats = async () => {
+  const loadChats = async (showLoading = true) => {
     try {
-      let user = currentUser;
-      if (!user) {
-        user = await getCurrentUser();
-        setCurrentUser(user);
-      }
       if (user) {
+        if (showLoading && chats.length === 0) setLoading(true);
         const res = await getUserChats(user.$id);
-        // Filtrar chats vacíos
         const activeChats = res.filter(
           (c: any) => c.lastMessage && c.lastMessage.trim() !== ""
         );
@@ -357,7 +374,13 @@ const ChatsList = () => {
       console.log(e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadChats(true);
   };
 
   const filteredChats = useMemo(() => {
@@ -367,7 +390,6 @@ const ChatsList = () => {
       const name = (chat.otherUser?.name || "").toLowerCase();
       const username = (chat.otherUser?.username || "").toLowerCase();
       const lastMsg = (chat.lastMessage || "").toLowerCase();
-
       return (
         name.includes(lowerQuery) ||
         username.includes(lowerQuery) ||
@@ -412,20 +434,15 @@ const ChatsList = () => {
     otherUserId: string,
     otherUserFixedData?: any
   ) => {
-    if (!currentUser) return;
-
+    if (!user) return;
     setIsNewChatVisible(false);
-
-    // Optimistic UI: Marcar leído localmente instantáneo para feedback visual
     setChats((prev) =>
       prev.map((c) =>
         c.otherUser?.$id === otherUserId ? { ...c, lastMessageIsRead: true } : c
       )
     );
-
     const existingChat = chats.find((c) => c.otherUser?.$id === otherUserId);
     let targetChatId = existingChat ? existingChat.$id : "new";
-
     router.push({
       pathname: "/chat/[id]",
       params: {
@@ -436,7 +453,6 @@ const ChatsList = () => {
         otherUserAvatar: otherUserFixedData?.pfp || "",
       },
     } as any);
-
     setLocalSearchQuery("");
   };
 
@@ -468,14 +484,9 @@ const ChatsList = () => {
   };
 
   const renderChatItem = ({ item, index }: { item: any; index: number }) => {
-    // 🔥 LÓGICA DE UNREAD:
-    // Si lastMessageIsRead es false Y el último que envió NO fui yo... entonces es no leído.
-    const isUnread =
-      !item.lastMessageIsRead && item.lastSenderId !== currentUser?.$id;
-
+    const isUnread = !item.lastMessageIsRead && item.lastSenderId !== user?.$id;
     const displayName =
       item.otherUser?.name || item.otherUser?.username || "Usuario";
-
     return (
       <Swipeable
         ref={(ref) => {
@@ -503,7 +514,6 @@ const ChatsList = () => {
               className="w-[52px] h-[52px] rounded-full bg-zinc-200 dark:bg-zinc-800"
             />
           </View>
-
           <View
             className="ml-4 flex-1 justify-center py-1 border-b"
             style={{ borderColor: borderColor }}
@@ -527,7 +537,6 @@ const ChatsList = () => {
                   />
                 )}
               </View>
-
               <Text
                 className="text-[11px] shrink-0"
                 style={{
@@ -541,7 +550,6 @@ const ChatsList = () => {
                 })}
               </Text>
             </View>
-
             <View className="flex-row items-center justify-between">
               <Text
                 className="text-[14px] leading-5 flex-1 mr-4"
@@ -551,7 +559,7 @@ const ChatsList = () => {
                 }}
                 numberOfLines={1}
               >
-                {item.lastSenderId === currentUser?.$id && (
+                {item.lastSenderId === user?.$id && (
                   <Ionicons
                     name="checkmark-done-outline"
                     size={14}
@@ -561,7 +569,6 @@ const ChatsList = () => {
                 )}{" "}
                 {item.lastMessage}
               </Text>
-
               {isUnread && (
                 <View
                   className="min-w-[10px] h-[10px] rounded-full"
@@ -577,112 +584,138 @@ const ChatsList = () => {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView
-        className="flex-1"
-        edges={["top"]}
-        style={{ backgroundColor: bgColor }}
+      <PanGestureHandler
+        onGestureEvent={onPanGestureEvent}
+        onHandlerStateChange={onPanHandlerStateChange}
+        activeOffsetX={[0, 20]} // Gesto solo desde el borde izquierdo
       >
-        <View className="px-5 pt-3 pb-2">
-          <View className="flex-row items-center mb-4 gap-2">
-            <TouchableOpacity
-              onPress={() => router.push("/home")}
-              className="mr-1 -ml-2 p-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
-            >
-              <Ionicons name="arrow-back" size={28} color={textColor} />
-            </TouchableOpacity>
-            <Text
-              className="font-bold text-[34px]"
-              style={{ color: textColor }}
-            >
-              {t("chatsList.title")}
-            </Text>
-          </View>
-
-          <View
-            className="flex-row items-center px-3 py-2.5 rounded-xl"
-            style={{ backgroundColor: inputBg }}
-          >
-            <Ionicons name="search" size={18} color={subTextColor} />
-            <TextInput
-              placeholder="Buscar por nombre..."
-              placeholderTextColor={subTextColor}
-              className="flex-1 ml-2 text-base"
-              style={{ color: textColor, height: 20, padding: 0 }}
-              value={localSearchQuery}
-              onChangeText={setLocalSearchQuery}
-            />
-          </View>
-        </View>
-
-        {loading ? (
-          <View className="flex-1 mt-2">
-            {skeletonItems.map((i) => (
-              <ChatSkeleton key={i} isDark={isDark} />
-            ))}
-          </View>
-        ) : (
-          <FlatList
-            data={filteredChats}
-            keyExtractor={(item) => item.$id}
-            renderItem={renderChatItem}
-            contentContainerStyle={{ paddingBottom: 100 }}
-            refreshControl={
-              <RefreshControl
-                refreshing={loading}
-                onRefresh={loadChats}
-                tintColor={unreadColor}
-              />
-            }
-            ListEmptyComponent={
-              <View className="flex-1 justify-center items-center mt-32 px-10 opacity-60">
-                <Ionicons
-                  name="chatbubbles-outline"
-                  size={50}
-                  color={subTextColor}
-                />
-                <Text
-                  className="text-center font-medium text-lg mt-4"
-                  style={{ color: textColor }}
-                >
-                  {localSearchQuery
-                    ? "No hay coincidencias"
-                    : "No tienes mensajes aún"}
-                </Text>
-                <Text
-                  className="text-center text-sm mt-1"
-                  style={{ color: subTextColor }}
-                >
-                  Toca el botón + para empezar una conversación.
-                </Text>
-              </View>
-            }
-          />
-        )}
-
-        <TouchableOpacity
-          onPress={() => setIsNewChatVisible(true)}
-          activeOpacity={0.9}
-          className="absolute bottom-8 right-6 w-14 h-14 rounded-full items-center justify-center shadow-lg z-50"
+        <Animated.View
           style={{
-            backgroundColor: fabColor,
-            shadowColor: fabColor,
-            shadowOffset: { width: 0, height: 4 },
+            flex: 1,
+            backgroundColor: bgColor,
+            // 🚀 CORRECCIÓN DEL LAYOUT: Padding manual en vez de SafeAreaView
+            paddingTop: insets.top,
+            transform: [
+              {
+                translateX: translateX.interpolate({
+                  inputRange: [0, width],
+                  outputRange: [0, width],
+                  extrapolate: "clamp",
+                }),
+              },
+            ],
+            // Sombra para dar efecto de capas al salir
+            shadowColor: "#000",
+            shadowOffset: { width: -5, height: 0 },
             shadowOpacity: 0.3,
-            shadowRadius: 4.65,
-            elevation: 8,
+            shadowRadius: 10,
+            elevation: 20,
           }}
         >
-          <Ionicons name="add" size={32} color="white" />
-        </TouchableOpacity>
+          {/* Ya no usamos SafeAreaView aquí porque el AnimatedView ya tiene el padding */}
+          <View style={{ flex: 1, backgroundColor: bgColor }}>
+            <View className="px-5 pt-3 pb-2">
+              <View className="flex-row items-center mb-4 gap-2">
+                <TouchableOpacity
+                  onPress={handleGoBack}
+                  className="mr-1 -ml-2 p-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
+                >
+                  <Ionicons name="arrow-back" size={28} color={textColor} />
+                </TouchableOpacity>
+                <Text
+                  className="font-bold text-[34px]"
+                  style={{ color: textColor }}
+                >
+                  {t("chatsList.title")}
+                </Text>
+              </View>
+              <View
+                className="flex-row items-center px-3 py-2.5 rounded-xl"
+                style={{ backgroundColor: inputBg }}
+              >
+                <Ionicons name="search" size={18} color={subTextColor} />
+                <TextInput
+                  placeholder="Buscar por nombre..."
+                  placeholderTextColor={subTextColor}
+                  className="flex-1 ml-2 text-base"
+                  style={{ color: textColor, height: 20, padding: 0 }}
+                  value={localSearchQuery}
+                  onChangeText={setLocalSearchQuery}
+                />
+              </View>
+            </View>
 
-        <NewChatModal
-          visible={isNewChatVisible}
-          onClose={() => setIsNewChatVisible(false)}
-          onUserSelect={(selectedUser: any) =>
-            handleOpenChat(selectedUser.$id, selectedUser)
-          }
-        />
-      </SafeAreaView>
+            {loading && chats.length === 0 ? (
+              <View className="flex-1 mt-2">
+                {skeletonItems.map((i) => (
+                  <ChatSkeleton key={i} isDark={isDark} />
+                ))}
+              </View>
+            ) : (
+              <FlatList
+                data={filteredChats}
+                keyExtractor={(item) => item.$id}
+                renderItem={renderChatItem}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    tintColor={unreadColor}
+                  />
+                }
+                ListEmptyComponent={
+                  <View className="flex-1 justify-center items-center mt-32 px-10 opacity-60">
+                    <Ionicons
+                      name="chatbubbles-outline"
+                      size={50}
+                      color={subTextColor}
+                    />
+                    <Text
+                      className="text-center font-medium text-lg mt-4"
+                      style={{ color: textColor }}
+                    >
+                      {localSearchQuery
+                        ? "No hay coincidencias"
+                        : "No tienes mensajes aún"}
+                    </Text>
+                    <Text
+                      className="text-center text-sm mt-1"
+                      style={{ color: subTextColor }}
+                    >
+                      Toca el botón + para empezar una conversación.
+                    </Text>
+                  </View>
+                }
+              />
+            )}
+
+            <TouchableOpacity
+              onPress={() => setIsNewChatVisible(true)}
+              activeOpacity={0.9}
+              className="absolute bottom-8 right-6 w-14 h-14 rounded-full items-center justify-center shadow-lg z-50"
+              style={{
+                backgroundColor: fabColor,
+                shadowColor: fabColor,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 4.65,
+                elevation: 8,
+              }}
+            >
+              <Ionicons name="add" size={32} color="white" />
+            </TouchableOpacity>
+
+            <NewChatModal
+              visible={isNewChatVisible}
+              onClose={() => setIsNewChatVisible(false)}
+              onUserSelect={(selectedUser: any) =>
+                handleOpenChat(selectedUser.$id, selectedUser)
+              }
+            />
+          </View>
+        </Animated.View>
+      </PanGestureHandler>
     </GestureHandlerRootView>
   );
 };
