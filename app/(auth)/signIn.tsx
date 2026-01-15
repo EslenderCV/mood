@@ -74,18 +74,13 @@ const SignIn = () => {
         const user = await syncOrCreateUserDocument();
 
         if (user) {
-          // 1. Enviamos el correo en segundo plano
           sendWelcomeEmail(user.email, user.name).catch(console.error);
-
-          // 2. Actualizamos el estado global
           setUser(user as unknown as User);
           setLoggedIn(true);
 
-          // 3. SOLUCIÓN CLAVE: Esperar a que el navegador se cierre por completo
-          // antes de intentar montar la pantalla de Home que usa recursos nativos.
           setTimeout(() => {
             router.replace("/home");
-          }, 500); // Aumentamos a 500ms para mayor seguridad en Android físico
+          }, 500);
         } else {
           Alert.alert("Error", "No se pudo crear el perfil de usuario.");
         }
@@ -103,7 +98,10 @@ const SignIn = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <ScrollView 
+          contentContainerStyle={{ flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+        >
           <View className="w-full px-6 justify-center min-h-[85vh]">
             <View className="items-center mb-10">
               <Image
@@ -122,19 +120,29 @@ const SignIn = () => {
               <FormField
                 placeholder={t("auth.emailPlaceholder")}
                 value={form.email}
+                // --- CORRECCIÓN CLAVE AQUÍ ---
+                // Usamos 'prev' para asegurar que no se pierda el estado anterior
                 handleChangeText={(text: string) =>
-                  setForm({ ...form, email: text })
+                  setForm((prev) => ({ ...prev, email: text }))
                 }
                 otherStyles="mt-2"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                textContentType="username" 
+                autoComplete="email" 
               />
               <FormField
                 placeholder={t("auth.passwordPlaceholder")}
                 value={form.password}
+                // --- CORRECCIÓN CLAVE AQUÍ ---
+                // Usamos 'prev' para asegurar que no se sobrescriba el email
                 handleChangeText={(text: string) =>
-                  setForm({ ...form, password: text })
+                  setForm((prev) => ({ ...prev, password: text }))
                 }
                 otherStyles="mt-4"
                 secureTextEntry
+                textContentType="password"
+                autoComplete="password"
               />
               <View className="items-end mb-6">
                 <TouchableOpacity activeOpacity={0.7}>

@@ -1,4 +1,4 @@
-import { View, TextInput, TouchableOpacity } from "react-native";
+import { View, TextInput, TouchableOpacity, TextInputProps } from "react-native";
 import React, { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -10,6 +10,9 @@ interface FormFieldProps {
   secureTextEntry?: boolean;
   keyboardType?: "default" | "email-address" | "numeric" | "phone-pad";
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  // AGREGADOS: Propiedades para el autocompletado
+  textContentType?: TextInputProps["textContentType"];
+  autoComplete?: TextInputProps["autoComplete"];
 }
 
 const FormField = ({
@@ -20,6 +23,9 @@ const FormField = ({
   secureTextEntry,
   keyboardType = "default",
   autoCapitalize = "none",
+  // Recibir las nuevas props
+  textContentType,
+  autoComplete,
 }: FormFieldProps) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -42,6 +48,9 @@ const FormField = ({
           secureTextEntry={secureTextEntry && !showPassword}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
+          // Pasarlas al componente nativo
+          textContentType={textContentType}
+          autoComplete={autoComplete}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
         />

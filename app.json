@@ -11,7 +11,7 @@
     ],
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/splash-full.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },

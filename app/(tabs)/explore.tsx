@@ -911,44 +911,44 @@ const Explore = () => {
     }
   }, [currentSongUrl, player]);
 
-  // 🔥 NUEVO EFFECT: CARGA SUGERENCIAS ALEATORIAS AL ABRIR BUSCADOR 🔥
+  // 🔥 OPTIMIZACIÓN CLAVE: CARGA DE SUGERENCIAS AL INICIO (BACKGROUND)
+  // Se ha quitado la dependencia de isSearchActive para que cargue apenas se monte Explore.
   useEffect(() => {
     const loadSuggestions = async () => {
-      if (isSearchActive) {
-        try {
-          // 1. Obtener usuarios recientes y posts candidatos frescos
-          const [latestUsers, feedPosts] = await Promise.all([
-            getLatestUsers(),
-            getFeedCandidates(),
-          ]);
+      try {
+        // 1. Obtener usuarios recientes y posts candidatos frescos
+        const [latestUsers, feedPosts] = await Promise.all([
+          getLatestUsers(),
+          getFeedCandidates(),
+        ]);
 
-          // 2. Filtrar usuarios (quitarse a uno mismo y repetidos simple)
-          const validUsers = latestUsers
-            .filter((u: any) => u.$id !== user?.$id)
-            .map((u: any) => ({
-              ...u,
-              id: u.$id, // Normalize ID
-              avatar: u.pfp || u.avatar, // FIX: Asegurar que avatar exista
-            }));
+        // 2. Filtrar usuarios (quitarse a uno mismo y repetidos simple)
+        const validUsers = latestUsers
+          .filter((u: any) => u.$id !== user?.$id)
+          .map((u: any) => ({
+            ...u,
+            id: u.$id, // Normalize ID
+            avatar: u.pfp || u.avatar, // FIX: Asegurar que avatar exista
+          }));
 
-          // 3. Mezclar todo (SHUFFLE REAL)
-          const shuffledUsers = shuffleArray(validUsers);
-          const shuffledPosts = shuffleArray(feedPosts);
+        // 3. Mezclar todo (SHUFFLE REAL)
+        const shuffledUsers = shuffleArray(validUsers);
+        const shuffledPosts = shuffleArray(feedPosts);
 
-          // 4. Asignar a secciones
-          setSearchSuggestions({
-            trendingUsers: shuffledUsers.slice(0, 10), // Top 10 users
-            vibesPosts: shuffledPosts.slice(0, 5), // Top 5 posts
-            extraSuggestions: shuffledUsers.slice(10, 18), // Siguientes 8 users para "Quizás conozcas"
-          });
-        } catch (e) {
-          console.log("Error loading suggestions", e);
-        }
+        // 4. Asignar a secciones
+        setSearchSuggestions({
+          trendingUsers: shuffledUsers.slice(0, 10), // Top 10 users
+          vibesPosts: shuffledPosts.slice(0, 5), // Top 5 posts
+          extraSuggestions: shuffledUsers.slice(10, 18), // Siguientes 8 users para "Quizás conozcas"
+        });
+      } catch (e) {
+        console.log("Error loading suggestions", e);
       }
     };
 
+    // Ejecutar inmediatamente al montar el componente (optimización de velocidad percibida)
     loadSuggestions();
-  }, [isSearchActive]);
+  }, []); // Dependencia vacía para que corra 1 sola vez al inicio
 
   const handlePlayMusicItem = async (item: any) => {
     const listId = item.id;
@@ -1447,7 +1447,7 @@ const Explore = () => {
       >
         <Ionicons name="search" size={20} color={subTextColor} />
         <TextInput
-          autoFocus
+          // 🔥 CORRECCIÓN: Eliminado autoFocus para que el teclado no salga automático
           value={searchText}
           onChangeText={setSearchText}
           placeholder={t("explore.search.instruction")}
@@ -1735,7 +1735,12 @@ const Explore = () => {
     // ESTADO VACIO: SUGERENCIAS DINÁMICAS (FIX DEL "ERROR")
     if (searchText.trim() === "") {
       return (
-        <ScrollView className="flex-1 pt-6" keyboardShouldPersistTaps="handled">
+        <ScrollView 
+          className="flex-1 pt-6" 
+          keyboardShouldPersistTaps="handled"
+          // 🔥 CORRECCIÓN: Eliminar indicador de scroll
+          showsVerticalScrollIndicator={false}
+        >
           {/* 1. Gente Trending - Carrusel Horizontal */}
           {searchSuggestions.trendingUsers.length > 0 && (
             <View className="mb-8">
@@ -1912,7 +1917,12 @@ const Explore = () => {
     }
 
     return (
-      <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+      <ScrollView 
+        className="flex-1" 
+        keyboardShouldPersistTaps="handled"
+        // 🔥 CORRECCIÓN: Eliminar indicador de scroll
+        showsVerticalScrollIndicator={false}
+      >
         {/* SECCIÓN PERSONAS (RESULTADOS) */}
         {searchResults.users.length > 0 && (
           <View className="mb-6">

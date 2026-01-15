@@ -64,7 +64,6 @@ const SignUp = () => {
 
         setUser(result as unknown as User);
         setLoggedIn(true);
-        // CAMBIO: Redirigir a /search en lugar de /home al crear cuenta
         router.replace("/explore");
       }
     } catch (error) {
@@ -87,17 +86,11 @@ const SignUp = () => {
         const user = await syncOrCreateUserDocument();
 
         if (user) {
-          // 1. Enviamos el correo en segundo plano
           sendWelcomeEmail(user.email, user.name).catch(console.error);
-
-          // 2. Actualizamos el estado global
           setUser(user as unknown as User);
           setLoggedIn(true);
 
-          // 3. SOLUCIÓN CLAVE: Esperar a que el navegador se cierre por completo
-          // antes de intentar montar la pantalla.
           setTimeout(() => {
-            // CAMBIO: Redirigir a /search en lugar de /home al registrarse con RRSS
             router.replace("/explore");
           }, 500);
         } else {
@@ -126,7 +119,10 @@ const SignUp = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <ScrollView 
+          contentContainerStyle={{ flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+        >
           <View className="w-full px-6 justify-center min-h-[85vh] py-10">
             <View className="items-center mb-8">
               <Image
@@ -176,6 +172,34 @@ const SignUp = () => {
                 textStyles="text-white font-bold text-lg"
                 loading={isLoading}
               />
+            </View>
+
+            {/* TEXTO LEGAL EN INGLÉS */}
+            <View className="mt-6 px-2">
+              <Text className="text-zinc-500 text-xs text-center leading-4">
+                By creating an account, you agree to our{" "}
+                <Text
+                  className="text-[#5E17EB] font-bold"
+                  onPress={() =>
+                    openLink(
+                      "https://candied-resolution-5fa.notion.site/T-rminos-de-Uso-y-EULA-Acuerdo-de-Licencia-2e08961d2f1080769b1ddd43f1ea92c7?source=copy_link"
+                    )
+                  }
+                >
+                  Terms of Use (EULA)
+                </Text>
+                {" and our "}
+                <Text
+                  className="text-[#5E17EB] font-bold"
+                  onPress={() =>
+                    openLink(
+                      "https://candied-resolution-5fa.notion.site/Pol-tica-de-Privacidad-de-Mood-2e08961d2f1080018d6dc0ba872fab3d?source=copy_link"
+                    )
+                  }
+                >
+                  Privacy Policy
+                </Text>.
+              </Text>
             </View>
 
             <View className="flex-row justify-center items-center w-full gap-4 mt-6 mb-8">
