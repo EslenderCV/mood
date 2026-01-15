@@ -12,7 +12,6 @@ import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Link, router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import CustomButtom from "@/components/CustomButtom";
 import FormField from "@/components/FormField";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
@@ -98,7 +97,7 @@ const SignIn = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={{ flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
         >
@@ -120,22 +119,18 @@ const SignIn = () => {
               <FormField
                 placeholder={t("auth.emailPlaceholder")}
                 value={form.email}
-                // --- CORRECCIÓN CLAVE AQUÍ ---
-                // Usamos 'prev' para asegurar que no se pierda el estado anterior
                 handleChangeText={(text: string) =>
                   setForm((prev) => ({ ...prev, email: text }))
                 }
                 otherStyles="mt-2"
                 keyboardType="email-address"
                 autoCapitalize="none"
-                textContentType="username" 
-                autoComplete="email" 
+                textContentType="username"
+                autoComplete="email"
               />
               <FormField
                 placeholder={t("auth.passwordPlaceholder")}
                 value={form.password}
-                // --- CORRECCIÓN CLAVE AQUÍ ---
-                // Usamos 'prev' para asegurar que no se sobrescriba el email
                 handleChangeText={(text: string) =>
                   setForm((prev) => ({ ...prev, password: text }))
                 }

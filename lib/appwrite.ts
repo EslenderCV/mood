@@ -1862,12 +1862,19 @@ export async function createStory(songData: string, userId: string) {
 
 export async function getStories(currentUserId: string) {
   try {
+    // 1. Obtener a quién sigo
+    const followedUserIds = await getFollowedUserIds(currentUserId);
+    // 2. Incluir al propio usuario para ver su historia (Opcional, pero recomendado)
+    const allowedUsers = [...followedUserIds, currentUserId];
+
     const posts = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.storiesCollectionId,
       [
         Query.orderDesc("$createdAt"),
         Query.greaterThan("expiresAt", new Date().toISOString()),
+        // 3. FILTRO: Solo documentos donde 'user' esté en la lista permitida
+        Query.equal("user", allowedUsers),
       ]
     );
 

@@ -107,8 +107,8 @@ const GlobalProvider = ({ children }: Props) => {
       isLogged: loggedIn,
       setIsLogged: setLoggedIn,
       checkAuth,
-      chats, // <--- Exportamos
-      setChats, // <--- Exportamos
+      chats,
+      setChats,
     }),
     [loggedIn, user, loading, checkAuth, chats]
   );

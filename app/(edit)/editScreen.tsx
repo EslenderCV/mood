@@ -28,6 +28,63 @@ interface FormState {
   pfp: string | ImagePickerAsset | null;
 }
 
+// 🔥 CORRECCIÓN: Definimos el componente FUERA de EditScreen para evitar que el teclado se cierre
+const InputField = ({
+  label,
+  value,
+  onChangeText,
+  icon,
+  placeholder,
+  type = "text",
+  editable = true,
+  focusedInput,
+  setFocusedInput,
+  colors, // Recibimos los colores como prop
+}: any) => {
+  const isFocused = focusedInput === label;
+  return (
+    <View className="mb-6 w-full">
+      <Text
+        className="text-xs font-bold mb-2 ml-1 uppercase tracking-wider"
+        style={{ color: colors.subTextColor }}
+      >
+        {label}
+      </Text>
+      <View
+        className={`flex-row items-center border rounded-2xl px-4 h-[58px] transition-all`}
+        style={{
+          backgroundColor: colors.inputBg,
+          borderColor: isFocused ? "#5E17EB" : colors.inputBorder,
+          opacity: editable ? 1 : 0.6,
+        }}
+      >
+        <Feather
+          name={icon}
+          size={20}
+          color={isFocused ? "#5E17EB" : colors.subTextColor}
+          style={{ marginRight: 12 }}
+        />
+        <TextInput
+          className="flex-1 text-base font-medium h-full"
+          style={{ color: colors.textColor }}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.subTextColor}
+          autoCapitalize={
+            type === "email" || type === "username" ? "none" : "words"
+          }
+          keyboardType={type === "email" ? "email-address" : "default"}
+          // Usamos las funciones pasadas por prop
+          onFocus={() => setFocusedInput(label)}
+          onBlur={() => setFocusedInput(null)}
+          editable={editable}
+        />
+      </View>
+    </View>
+  );
+};
+
 const EditScreen = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -41,6 +98,14 @@ const EditScreen = () => {
   const inputBorder = isDark ? "#27272A" : "#E4E4E7";
   const iconColor = isDark ? "#FFFFFF" : "#000000";
   const backBtnBg = isDark ? "#18181B" : "#F4F4F5";
+
+  // Objeto con los colores para pasarlo al InputField
+  const colors = {
+    textColor,
+    subTextColor,
+    inputBg,
+    inputBorder,
+  };
 
   const { user, setUser } = useGlobalContext();
   const [isSaving, setIsSaving] = useState(false);
@@ -122,58 +187,6 @@ const EditScreen = () => {
     return require("@/assets/noPfp.jpg");
   };
 
-  const InputField = ({
-    label,
-    value,
-    onChangeText,
-    icon,
-    placeholder,
-    type = "text",
-    editable = true,
-  }: any) => {
-    const isFocused = focusedInput === label;
-    return (
-      <View className="mb-6 w-full">
-        <Text
-          className="text-xs font-bold mb-2 ml-1 uppercase tracking-wider"
-          style={{ color: subTextColor }}
-        >
-          {label}
-        </Text>
-        <View
-          className={`flex-row items-center border rounded-2xl px-4 h-[58px] transition-all`}
-          style={{
-            backgroundColor: inputBg,
-            borderColor: isFocused ? "#5E17EB" : inputBorder,
-            opacity: editable ? 1 : 0.6,
-          }}
-        >
-          <Feather
-            name={icon}
-            size={20}
-            color={isFocused ? "#5E17EB" : subTextColor}
-            style={{ marginRight: 12 }}
-          />
-          <TextInput
-            className="flex-1 text-base font-medium h-full"
-            style={{ color: textColor }}
-            value={value}
-            onChangeText={onChangeText}
-            placeholder={placeholder}
-            placeholderTextColor={subTextColor}
-            autoCapitalize={
-              type === "email" || type === "username" ? "none" : "words"
-            }
-            keyboardType={type === "email" ? "email-address" : "default"}
-            onFocus={() => setFocusedInput(label)}
-            onBlur={() => setFocusedInput(null)}
-            editable={editable}
-          />
-        </View>
-      </View>
-    );
-  };
-
   return (
     <SafeAreaView
       className="flex-1"
@@ -246,6 +259,9 @@ const EditScreen = () => {
               }
               icon="user"
               placeholder={t("editProfile.namePlaceholder")}
+              focusedInput={focusedInput}
+              setFocusedInput={setFocusedInput}
+              colors={colors}
             />
 
             <InputField
@@ -257,6 +273,9 @@ const EditScreen = () => {
               icon="at-sign"
               placeholder={t("editProfile.usernamePlaceholder")}
               type="username"
+              focusedInput={focusedInput}
+              setFocusedInput={setFocusedInput}
+              colors={colors}
             />
 
             <InputField
@@ -268,6 +287,9 @@ const EditScreen = () => {
               icon="mail"
               placeholder={t("editProfile.emailPlaceholder")}
               type="email"
+              focusedInput={focusedInput}
+              setFocusedInput={setFocusedInput}
+              colors={colors}
             />
           </View>
           <TouchableOpacity

@@ -20,7 +20,13 @@ import {
   Pressable,
   Platform,
 } from "react-native";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   Ionicons,
   FontAwesome5,
@@ -184,6 +190,7 @@ const parseSongFromPost = (songDataString: string) => {
 const getCreatorFromPost = (item: any) => {
   let userObj = item.creator || item.postedBy || item.users || item.user;
   if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
+
   if (userObj && typeof userObj === "object") {
     return {
       id: userObj.$id || userObj.accountId,
@@ -193,6 +200,18 @@ const getCreatorFromPost = (item: any) => {
       isVerified: userObj.isVerified,
     };
   }
+
+  // FIX: Soporte para IDs planos
+  if (typeof userObj === "string") {
+    return {
+      id: userObj,
+      username: "anon",
+      name: "Usuario",
+      avatar: null,
+      isVerified: false,
+    };
+  }
+
   return {
     id: "unknown",
     username: "anon",
@@ -911,44 +930,8 @@ const Explore = () => {
     }
   }, [currentSongUrl, player]);
 
-  // 🔥 OPTIMIZACIÓN CLAVE: CARGA DE SUGERENCIAS AL INICIO (BACKGROUND)
-  // Se ha quitado la dependencia de isSearchActive para que cargue apenas se monte Explore.
-  useEffect(() => {
-    const loadSuggestions = async () => {
-      try {
-        // 1. Obtener usuarios recientes y posts candidatos frescos
-        const [latestUsers, feedPosts] = await Promise.all([
-          getLatestUsers(),
-          getFeedCandidates(),
-        ]);
-
-        // 2. Filtrar usuarios (quitarse a uno mismo y repetidos simple)
-        const validUsers = latestUsers
-          .filter((u: any) => u.$id !== user?.$id)
-          .map((u: any) => ({
-            ...u,
-            id: u.$id, // Normalize ID
-            avatar: u.pfp || u.avatar, // FIX: Asegurar que avatar exista
-          }));
-
-        // 3. Mezclar todo (SHUFFLE REAL)
-        const shuffledUsers = shuffleArray(validUsers);
-        const shuffledPosts = shuffleArray(feedPosts);
-
-        // 4. Asignar a secciones
-        setSearchSuggestions({
-          trendingUsers: shuffledUsers.slice(0, 10), // Top 10 users
-          vibesPosts: shuffledPosts.slice(0, 5), // Top 5 posts
-          extraSuggestions: shuffledUsers.slice(10, 18), // Siguientes 8 users para "Quizás conozcas"
-        });
-      } catch (e) {
-        console.log("Error loading suggestions", e);
-      }
-    };
-
-    // Ejecutar inmediatamente al montar el componente (optimización de velocidad percibida)
-    loadSuggestions();
-  }, []); // Dependencia vacía para que corra 1 sola vez al inicio
+  // 🔥 OPTIMIZACIÓN CLAVE: ELIMINAMOS EL EFECTO SEPARADO Y LO INTEGRAMOS EN EL FETCH PRINCIPAL
+  // Esto evita la doble carga al iniciar.
 
   const handlePlayMusicItem = async (item: any) => {
     const listId = item.id;
@@ -1128,10 +1111,13 @@ const Explore = () => {
       let newData = { ...data };
 
       if (activeCategory === "posts") {
-        const [rawPosts, myFollowsList] = await Promise.all([
+        // 🔥 OPTIMIZACIÓN: Cargar usuarios recientes EN PARALELO aquí mismo
+        const [rawPosts, myFollowsList, latestUsers] = await Promise.all([
           getFeedCandidates(),
           myFollowsListPromise,
+          getLatestUsers(), // Traemos usuarios aquí para popular sugerencias de una vez
         ]);
+
         const safeFollows = Array.isArray(myFollowsList)
           ? myFollowsList.map((f: any) =>
               typeof f === "object" && f?.$id ? f.$id : f
@@ -1163,6 +1149,24 @@ const Explore = () => {
         const shuffledRecent = shuffleArray(recentPosts);
         const shuffledOlder = shuffleArray(olderPosts);
         newData.posts = [...shuffledRecent, ...shuffledOlder];
+
+        // 🔥 POBLAR SUGERENCIAS DE BÚSQUEDA AQUÍ MISMO (Sin doble llamada)
+        const validUsers = latestUsers
+          .filter((u: any) => u.$id !== user?.$id)
+          .map((u: any) => ({
+            ...u,
+            id: u.$id,
+            avatar: u.pfp || u.avatar,
+          }));
+
+        const shuffledUsers = shuffleArray(validUsers);
+        const shuffledPostsSearch = shuffleArray(filteredPosts); // Reusamos los posts filtrados
+
+        setSearchSuggestions({
+          trendingUsers: shuffledUsers.slice(0, 10),
+          vibesPosts: shuffledPostsSearch.slice(0, 5),
+          extraSuggestions: shuffledUsers.slice(10, 18),
+        });
       }
 
       if (activeCategory === "profiles") {
@@ -1735,8 +1739,8 @@ const Explore = () => {
     // ESTADO VACIO: SUGERENCIAS DINÁMICAS (FIX DEL "ERROR")
     if (searchText.trim() === "") {
       return (
-        <ScrollView 
-          className="flex-1 pt-6" 
+        <ScrollView
+          className="flex-1 pt-6"
           keyboardShouldPersistTaps="handled"
           // 🔥 CORRECCIÓN: Eliminar indicador de scroll
           showsVerticalScrollIndicator={false}
@@ -1917,8 +1921,8 @@ const Explore = () => {
     }
 
     return (
-      <ScrollView 
-        className="flex-1" 
+      <ScrollView
+        className="flex-1"
         keyboardShouldPersistTaps="handled"
         // 🔥 CORRECCIÓN: Eliminar indicador de scroll
         showsVerticalScrollIndicator={false}
@@ -2008,6 +2012,10 @@ const Explore = () => {
             ? `skeleton-${index}`
             : item.id || item.$id || Math.random().toString()
         }
+        // 🔥 CORRECCIÓN: Optimizaciones de rendimiento para la lista
+        initialNumToRender={5}
+        maxToRenderPerBatch={5}
+        windowSize={5}
         renderItem={({ item, index }) => {
           if (data.isLoading) {
             switch (activeCategory) {

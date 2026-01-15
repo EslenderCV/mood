@@ -16,6 +16,8 @@ import { useModal } from "@/context/ModalContext";
 import PostModal from "@/components/PostModal";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
+// 1. IMPORTAMOS LOS INSETS
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const MenuOption = ({
   label,
@@ -55,6 +57,9 @@ const TabsLayout = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
+
+  // 2. OBTENEMOS LOS INSETS (Espacios seguros)
+  const insets = useSafeAreaInsets();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const tabBarBg = isDark ? "#000000" : "#FFFFFF";
@@ -102,7 +107,9 @@ const TabsLayout = () => {
             backgroundColor: tabBarBg,
             borderTopColor: borderColor,
             borderTopWidth: 1,
-            height: Platform.OS === "ios" ? 85 : 60,
+            // 3. CORRECCIÓN PARA ANDROID: Sumamos insets.bottom a la altura y al padding
+            height: Platform.OS === "ios" ? 85 : 60 + insets.bottom,
+            paddingBottom: Platform.OS === "ios" ? 20 : insets.bottom,
             paddingTop: 5,
           },
           tabBarActiveTintColor: "#5E17EB",
@@ -150,7 +157,7 @@ const TabsLayout = () => {
               <View
                 className="bg-[#5E17EB] p-3 rounded-full shadow-lg shadow-[#5E17EB]/40"
                 style={{
-                  marginBottom: 20,
+                  marginBottom: Platform.OS === "ios" ? 20 : 20, // Ajuste menor
                   borderWidth: 4,
                   borderColor: tabBarBg,
                 }}
@@ -226,8 +233,10 @@ const TabsLayout = () => {
               backgroundColor: menuBg,
               borderColor: menuBorder,
               borderWidth: 1,
+              // 4. AJUSTE MENÚ: Sumamos el inset al bottom para que suba si hay botones
+              bottom: 100 + insets.bottom,
             }}
-            className="w-[300px] absolute right-4 bottom-[100px] rounded-[28px] shadow-2xl overflow-hidden"
+            className="w-[300px] absolute right-4 rounded-[28px] shadow-2xl overflow-hidden"
           >
             <Link href="/profile" asChild onPress={() => setMenuOpen(false)}>
               <Pressable
