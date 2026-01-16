@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -29,34 +23,29 @@ import {
   Platform,
   KeyboardAvoidingView,
   Easing,
-  StyleSheet,
+  BackHandler,
 } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAudioPlayer } from "expo-audio";
 import { Audio } from "expo-av";
-import * as Linking from "expo-linking";
 
-import {
-  PanGestureHandler,
-  State,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Databases, Query, ID } from "react-native-appwrite";
 
 import { useGlobalContext } from "@/context/GlobalProvider";
+import { FeedProvider, useFeed, FeedItem } from "@/context/FeedProvider";
+
 import TopBar from "@/components/TopBar";
 import {
-  getFeedCandidates,
   getFollowedUserIds,
   getCurrentUser,
   deletePost,
-  reportPost,
   getUnreadNotificationCount,
   getUnreadMessagesCount,
   createStory,
@@ -67,7 +56,6 @@ import {
   appwriteConfig,
   getDeezerTrackUrl,
   getOrCreateChat,
-  toggleSavePost,
 } from "@/lib/appwrite";
 import OptionsModal from "@/components/OptionsModal";
 import PostItem from "@/components/PostItem";
@@ -75,14 +63,17 @@ import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
 import MoodShareCard from "@/components/MoodShareCard";
 import ShareModal from "@/components/ShareModal";
+import PostModal from "@/components/PostModal";
+
+import SuggestedUsersCarousel from "@/components/SuggestedUsersCarousel";
+import TrendingSongCard from "@/components/TrendingSongCard";
 
 import ChatsList from "../chats";
 
-const { height, width } = Dimensions.get("window");
+const { width } = Dimensions.get("window");
 const ADMIN_USERS = [".angel", "whoseslender"];
 const databases = new Databases(client);
 
-// --- MOCK DATA TRENDING ---
 const RANDOM_SEARCH_TERMS = [
   "global top 50",
   "viral hits",
@@ -124,7 +115,6 @@ const OFFICIAL_MOOD_STORY = {
   ],
 };
 
-// --- COMPONENTE TOAST PERSONALIZADO ---
 const CustomToast = ({ visible, type, title, message, translateY }: any) => {
   if (!visible) return null;
 
@@ -190,7 +180,6 @@ const CustomToast = ({ visible, type, title, message, translateY }: any) => {
   );
 };
 
-// --- HELPERS ---
 const getCreatorId = (item: any) => {
   let userObj = item.creator || item.postedBy || item.users || item.user;
   if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
@@ -213,7 +202,7 @@ const parseSongData = (songDataString: string) => {
   }
 };
 
-const searchSongs = async (query: string) => {
+const searchSongsWrapper = async (query: string) => {
   try {
     const response = await fetch(
       `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=15`
@@ -237,7 +226,6 @@ const formatTimeAgo = (dateString: string) => {
   const now = new Date();
   const date = new Date(dateString);
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
   if (diffInSeconds < 60) return "Just now";
   const diffInMinutes = Math.floor(diffInSeconds / 60);
   if (diffInMinutes < 60) return `${diffInMinutes}m`;
@@ -246,7 +234,6 @@ const formatTimeAgo = (dateString: string) => {
   return "1d";
 };
 
-// --- SKELETON LOADERS ---
 const StoriesSkeleton = ({ isDark }: { isDark: boolean }) => {
   const bg = isDark ? "bg-zinc-800" : "bg-zinc-200";
   return (
@@ -337,6 +324,7 @@ const DirectShareSheet = ({
     }, 500);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
   const toggleUserSelection = (userId: string) => {
     setSelectedUsers((prev) =>
       prev.includes(userId)
@@ -975,7 +963,7 @@ const StoryCreationModal = ({
       RANDOM_SEARCH_TERMS[
         Math.floor(Math.random() * RANDOM_SEARCH_TERMS.length)
       ];
-    const songs = await searchSongs(randomTerm);
+    const songs = await searchSongsWrapper(randomTerm);
     setTrendingSongs(songs);
     setLoadingTrending(false);
   };
@@ -999,7 +987,7 @@ const StoryCreationModal = ({
     const delayDebounceFn = setTimeout(async () => {
       if (query.length > 2) {
         setSearching(true);
-        const songs = await searchSongs(query);
+        const songs = await searchSongsWrapper(query);
         setResults(songs);
         setSearching(false);
       } else {
@@ -1058,7 +1046,7 @@ const StoryCreationModal = ({
         caption: caption,
       });
       await createStory(songData, currentUser.$id);
-      onClose(); // Cerrar antes
+      onClose();
       setTimeout(() => {
         showToast("success", t("common.posted"), t("story.postedMsg"));
       }, 300);
@@ -1365,8 +1353,6 @@ const StoryCreationModal = ({
   );
 };
 
-// ... StoryViewer (se mantiene igual, no cambia nada en este bloque para ahorrar espacio, ya que el fix principal está en Home) ...
-// (Si necesitas StoryViewer completo, dímelo, pero está incluido en la respuesta anterior y es 100% reutilizable aquí)
 const StoryViewer = ({
   visible,
   onClose,
@@ -1393,6 +1379,7 @@ const StoryViewer = ({
   const slideAnim = useRef(new Animated.Value(20)).current;
   const glowAnim = useRef(new Animated.Value(1)).current;
   const { t } = useLanguage();
+
   const currentStory = group?.stories ? group.stories[currentIndex] : null;
   const songData = currentStory ? parseSongData(currentStory.songData) : null;
   const isOwner = group?.userId === currentUserId;
@@ -1403,6 +1390,7 @@ const StoryViewer = ({
   const player = useAudioPlayer(
     isAudioReady && liveAudioUrl ? liveAudioUrl : ""
   );
+
   useEffect(() => {
     if (visible) {
       setCurrentIndex(0);
@@ -1421,7 +1409,6 @@ const StoryViewer = ({
           });
           setIsAudioReady(true);
         } catch (e) {
-          console.log("Audio mode error", e);
           setIsAudioReady(true);
         }
       };
@@ -1430,11 +1417,13 @@ const StoryViewer = ({
       setIsAudioReady(false);
     }
   }, [visible, group?.userId]);
+
   useEffect(() => {
     if (currentStory && currentUserId) {
       setIsSaved(currentStory.savedBy?.includes(currentUserId) || false);
     }
   }, [currentStory, currentUserId]);
+
   useEffect(() => {
     const fetchPreviewViewers = async () => {
       if (isOwner && viewersList.length > 0) {
@@ -1444,9 +1433,7 @@ const StoryViewer = ({
             idsToFetch.map((id: string) => getUser(id))
           );
           setPreviewViewers(fetchedUsers.filter((u) => u !== null));
-        } catch (e) {
-          console.log("Error fetching preview viewers", e);
-        }
+        } catch (e) {}
       } else {
         setPreviewViewers([]);
       }
@@ -1455,6 +1442,7 @@ const StoryViewer = ({
       fetchPreviewViewers();
     }
   }, [currentIndex, visible, isOwner]);
+
   useEffect(() => {
     if (isOfficialMood) {
       fadeAnim.setValue(0);
@@ -1503,22 +1491,7 @@ const StoryViewer = ({
       ).start();
     }
   }, [isOfficialMood, currentIndex]);
-  const onGestureEvent = Animated.event(
-    [{ nativeEvent: { translationY: translateY } }],
-    { useNativeDriver: true }
-  );
-  const onHandlerStateChange = ({ nativeEvent }: any) => {
-    if (nativeEvent.oldState === State.ACTIVE) {
-      if (nativeEvent.translationY > 100) {
-        setTimeout(() => onClose(), 0);
-      } else {
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-        }).start();
-      }
-    }
-  };
+
   useEffect(() => {
     const fetchFreshAudio = async () => {
       if (!songData) {
@@ -1544,6 +1517,7 @@ const StoryViewer = ({
       fetchFreshAudio();
     }
   }, [currentIndex, visible, group]);
+
   useEffect(() => {
     if (
       visible &&
@@ -1555,6 +1529,7 @@ const StoryViewer = ({
       viewStory(currentStory.$id, currentUserId, currentStory.viewers || []);
     }
   }, [currentIndex, visible, currentStory]);
+
   useEffect(() => {
     if (!visible || !currentStory || !isAudioReady) {
       if (player && player.playing) player.pause();
@@ -1568,9 +1543,7 @@ const StoryViewer = ({
         } else {
           player.pause();
         }
-      } catch (e) {
-        console.log("Player control error", e);
-      }
+      } catch (e) {}
     }
     if (isPaused || viewersModalVisible || detailsVisible) return;
     if (liveAudioUrl && player) {
@@ -1611,6 +1584,7 @@ const StoryViewer = ({
     duration,
     isAudioReady,
   ]);
+
   const handleNext = () => {
     if (currentIndex < (group?.stories.length || 0) - 1) {
       setCurrentIndex((prev) => prev + 1);
@@ -1619,6 +1593,7 @@ const StoryViewer = ({
       setTimeout(() => onClose(), 0);
     }
   };
+
   const handlePrev = () => {
     if (player) {
       try {
@@ -1633,6 +1608,7 @@ const StoryViewer = ({
       setProgress(0);
     }
   };
+
   const handleSave = async () => {
     if (!currentStory || !currentUserId) return;
     const prevSaved = isSaved;
@@ -1653,11 +1629,11 @@ const StoryViewer = ({
       );
       currentStory.savedBy = newSavedBy;
     } catch (error) {
-      console.log("Error saving story:", error);
       setIsSaved(prevSaved);
       Alert.alert(t("common.error"), t("story.saveError"));
     }
   };
+
   const handleShareSong = async () => {
     try {
       await SystemShare.share({
@@ -1669,6 +1645,7 @@ const StoryViewer = ({
       console.log("Error sharing:", error);
     }
   };
+
   const handleDeleteStory = async () => {
     setIsPaused(true);
     Alert.alert(t("story.deleteTitle"), t("story.deleteConfirm"), [
@@ -1707,7 +1684,9 @@ const StoryViewer = ({
       },
     ]);
   };
+
   if (!visible || !currentStory || !songData) return null;
+
   return (
     <Modal
       animationType="fade"
@@ -1715,387 +1694,347 @@ const StoryViewer = ({
       visible={visible}
       onRequestClose={() => setTimeout(onClose, 0)}
     >
-      {" "}
       <GestureHandlerRootView style={{ flex: 1 }}>
-        {" "}
-        <View className="flex-1 bg-black">
-          {" "}
-          <PanGestureHandler
-            onGestureEvent={onGestureEvent}
-            onHandlerStateChange={onHandlerStateChange}
-            activeOffsetY={[-10, 10]}
-            failOffsetX={[-5, 5]}
+        <View style={{ flex: 1, backgroundColor: "black" }}>
+          <Animated.View
+            style={{
+              flex: 1,
+              transform: [
+                {
+                  translateY: translateY.interpolate({
+                    inputRange: [0, 500],
+                    outputRange: [0, 500],
+                    extrapolateLeft: "clamp",
+                  }),
+                },
+              ],
+            }}
           >
-            {" "}
-            <Animated.View
+            {isOfficialMood ? (
+              <View className="absolute w-full h-full bg-black overflow-hidden">
+                <Animated.Image
+                  source={require("@/assets/images/icon.png")}
+                  style={{
+                    position: "absolute",
+                    width: "150%",
+                    height: "150%",
+                    top: "-25%",
+                    left: "-25%",
+                    opacity: 0.6,
+                    transform: [{ scale: glowAnim }],
+                  }}
+                  blurRadius={100}
+                />
+                <LinearGradient
+                  colors={["#4F089A", "transparent", "#000000"]}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  className="absolute w-full h-full opacity-80"
+                />
+              </View>
+            ) : (
+              <View className="absolute w-full h-full">
+                <Image
+                  source={{ uri: songData.cover }}
+                  className="absolute w-full h-full opacity-60"
+                  blurRadius={40}
+                />
+                <LinearGradient
+                  colors={[
+                    "rgba(0,0,0,0.6)",
+                    "transparent",
+                    "transparent",
+                    "rgba(0,0,0,0.9)",
+                  ]}
+                  locations={[0, 0.2, 0.7, 1]}
+                  className="absolute w-full h-full"
+                />
+              </View>
+            )}
+            <View
+              className="flex-1 justify-between relative"
               style={{
-                flex: 1,
-                transform: [
-                  {
-                    translateY: translateY.interpolate({
-                      inputRange: [0, 500],
-                      outputRange: [0, 500],
-                      extrapolateLeft: "clamp",
-                    }),
-                  },
-                ],
+                paddingTop: insets.top > 0 ? insets.top : 40,
+                paddingBottom: insets.bottom,
               }}
             >
-              {" "}
-              {isOfficialMood ? (
-                <View className="absolute w-full h-full bg-black overflow-hidden">
-                  {" "}
-                  <Animated.Image
-                    source={require("@/assets/images/icon.png")}
-                    style={{
-                      position: "absolute",
-                      width: "150%",
-                      height: "150%",
-                      top: "-25%",
-                      left: "-25%",
-                      opacity: 0.6,
-                      transform: [{ scale: glowAnim }],
-                    }}
-                    blurRadius={100}
-                  />{" "}
-                  <LinearGradient
-                    colors={["#4F089A", "transparent", "#000000"]}
-                    start={{ x: 0.5, y: 0 }}
-                    end={{ x: 0.5, y: 1 }}
-                    className="absolute w-full h-full opacity-80"
-                  />{" "}
-                </View>
-              ) : (
-                <View className="absolute w-full h-full">
-                  {" "}
-                  <Image
-                    source={{ uri: songData.cover }}
-                    className="absolute w-full h-full opacity-60"
-                    blurRadius={40}
-                  />{" "}
-                  <LinearGradient
-                    colors={[
-                      "rgba(0,0,0,0.6)",
-                      "transparent",
-                      "transparent",
-                      "rgba(0,0,0,0.9)",
-                    ]}
-                    locations={[0, 0.2, 0.7, 1]}
-                    className="absolute w-full h-full"
-                  />{" "}
-                </View>
-              )}{" "}
               <View
-                className="flex-1 justify-between relative"
-                style={{
-                  paddingTop: insets.top > 0 ? insets.top : 40,
-                  paddingBottom: insets.bottom,
-                }}
+                className="absolute w-full h-full flex-row z-10"
+                pointerEvents="box-none"
               >
-                {" "}
-                <View
-                  className="absolute w-full h-full flex-row z-10"
-                  pointerEvents="box-none"
-                >
-                  {" "}
-                  <Pressable
-                    className="h-full w-[30%]"
-                    onPress={() => {
-                      if (Date.now() - pressStartTime.current < 200)
-                        handlePrev();
-                    }}
-                    onPressIn={() => {
-                      pressStartTime.current = Date.now();
-                      setIsPaused(true);
-                    }}
-                    onPressOut={() => setIsPaused(false)}
-                  />{" "}
-                  <Pressable
-                    className="h-full w-[70%]"
-                    onPress={() => {
-                      if (Date.now() - pressStartTime.current < 200)
-                        handleNext();
-                    }}
-                    onPressIn={() => {
-                      pressStartTime.current = Date.now();
-                      setIsPaused(true);
-                    }}
-                    onPressOut={() => setIsPaused(false)}
-                  />{" "}
-                </View>{" "}
-                <View pointerEvents="box-none" className="pt-2 z-20 px-2">
-                  {" "}
-                  <View className="flex-row gap-1 px-1 mb-4">
-                    {" "}
-                    {group.stories.map((_: any, index: number) => (
+                <Pressable
+                  className="h-full w-[30%]"
+                  onPress={() => {
+                    if (Date.now() - pressStartTime.current < 200) handlePrev();
+                  }}
+                  onPressIn={() => {
+                    pressStartTime.current = Date.now();
+                    setIsPaused(true);
+                  }}
+                  onPressOut={() => setIsPaused(false)}
+                />
+                <Pressable
+                  className="h-full w-[70%]"
+                  onPress={() => {
+                    if (Date.now() - pressStartTime.current < 200) handleNext();
+                  }}
+                  onPressIn={() => {
+                    pressStartTime.current = Date.now();
+                    setIsPaused(true);
+                  }}
+                  onPressOut={() => setIsPaused(false)}
+                />
+              </View>
+              <View pointerEvents="box-none" className="pt-2 z-20 px-2">
+                <View className="flex-row gap-1 px-1 mb-4">
+                  {group.stories.map((_: any, index: number) => (
+                    <View
+                      key={index}
+                      className="flex-1 h-[2px] bg-white/30 rounded-full overflow-hidden"
+                    >
                       <View
-                        key={index}
-                        className="flex-1 h-[2px] bg-white/30 rounded-full overflow-hidden"
-                      >
-                        {" "}
-                        <View
-                          style={{
-                            width:
-                              index < currentIndex
-                                ? "100%"
-                                : index === currentIndex
-                                ? `${progress}%`
-                                : "0%",
-                          }}
-                          className="h-full bg-white rounded-full"
-                        />{" "}
-                      </View>
-                    ))}{" "}
-                  </View>{" "}
-                  <View className="flex-row items-center justify-between px-2">
-                    {" "}
-                    <View className="flex-row items-center gap-3">
-                      {" "}
-                      <Image
-                        source={
-                          isOfficialMood
-                            ? require("@/assets/images/icon.png")
-                            : group.user?.pfp
-                            ? { uri: group.user?.pfp }
-                            : require("@/assets/noPfp.jpg")
-                        }
-                        className="w-10 h-10 rounded-full border border-white/20"
-                      />{" "}
-                      <View>
-                        {" "}
-                        <View className="flex-row items-center">
-                          {" "}
-                          <Text className="text-white font-bold text-[15px] leading-4 mr-1 shadow-sm">
-                            {group.user?.name || group.user?.username}
-                          </Text>{" "}
-                          {isVerified && (
-                            <MaterialIcons
-                              name="verified"
-                              size={16}
-                              color="#5E17EB"
-                              style={{ marginLeft: 4 }}
-                            />
-                          )}{" "}
-                          <Text className="text-zinc-400 text-xs ml-2 font-medium">
-                            {formatTimeAgo(currentStory.$createdAt)}
-                          </Text>{" "}
-                        </View>{" "}
-                        <Text className="text-white/70 text-xs font-medium">
-                          {t("story.moodStory")}
-                        </Text>{" "}
-                      </View>{" "}
-                    </View>{" "}
-                    <View className="flex-row items-center gap-4">
-                      {" "}
-                      {isOwner && (
-                        <TouchableOpacity
-                          onPress={handleDeleteStory}
-                          className="p-1"
-                        >
-                          <Ionicons
-                            name="trash-outline"
-                            size={22}
-                            color="white"
+                        style={{
+                          width:
+                            index < currentIndex
+                              ? "100%"
+                              : index === currentIndex
+                              ? `${progress}%`
+                              : "0%",
+                        }}
+                        className="h-full bg-white rounded-full"
+                      />
+                    </View>
+                  ))}
+                </View>
+                <View className="flex-row items-center justify-between px-2">
+                  <View className="flex-row items-center gap-3">
+                    <Image
+                      source={
+                        isOfficialMood
+                          ? require("@/assets/images/icon.png")
+                          : group.user?.pfp
+                          ? { uri: group.user?.pfp }
+                          : require("@/assets/noPfp.jpg")
+                      }
+                      className="w-10 h-10 rounded-full border border-white/20"
+                    />
+                    <View>
+                      <View className="flex-row items-center">
+                        <Text className="text-white font-bold text-[15px] leading-4 mr-1 shadow-sm">
+                          {group.user?.name || group.user?.username}
+                        </Text>
+                        {isVerified && (
+                          <MaterialIcons
+                            name="verified"
+                            size={16}
+                            color="#5E17EB"
+                            style={{ marginLeft: 4 }}
                           />
-                        </TouchableOpacity>
-                      )}{" "}
-                      {isOwner && (
-                        <TouchableOpacity
-                          onPress={() => {
-                            setTimeout(() => onClose(), 0);
-                            setTimeout(onAddMore, 300);
-                          }}
-                          className="bg-white/10 p-2 rounded-full backdrop-blur-md border border-white/5"
-                        >
-                          <Ionicons name="add" size={24} color="white" />
-                        </TouchableOpacity>
-                      )}{" "}
+                        )}
+                        <Text className="text-zinc-400 text-xs ml-2 font-medium">
+                          {formatTimeAgo(currentStory.$createdAt)}
+                        </Text>
+                      </View>
+                      <Text className="text-white/70 text-xs font-medium">
+                        {t("story.moodStory")}
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="flex-row items-center gap-4">
+                    {isOwner && (
                       <TouchableOpacity
-                        onPress={() => setTimeout(onClose, 0)}
+                        onPress={handleDeleteStory}
                         className="p-1"
                       >
-                        <Ionicons name="close" size={28} color="white" />
-                      </TouchableOpacity>{" "}
-                    </View>{" "}
-                  </View>{" "}
-                </View>{" "}
-                <View
-                  className="flex-1 justify-center items-center px-8 z-0"
-                  pointerEvents="none"
-                >
-                  {" "}
-                  {isOfficialMood ? (
-                    <View className="items-center justify-center w-full">
-                      {" "}
-                      <Animated.View
-                        style={{
-                          transform: [
-                            {
-                              translateY: logoScale.interpolate({
-                                inputRange: [1, 1.05],
-                                outputRange: [0, -15],
-                              }),
-                            },
-                          ],
-                          zIndex: 1,
+                        <Ionicons
+                          name="trash-outline"
+                          size={22}
+                          color="white"
+                        />
+                      </TouchableOpacity>
+                    )}
+                    {isOwner && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setTimeout(() => onClose(), 0);
+                          setTimeout(onAddMore, 300);
                         }}
+                        className="bg-white/10 p-2 rounded-full backdrop-blur-md border border-white/5"
                       >
-                        {" "}
-                        <Image
-                          source={require("@/assets/images/icon.png")}
-                          style={{ width: 140, height: 140, borderRadius: 35 }}
-                          resizeMode="contain"
-                        />{" "}
-                      </Animated.View>{" "}
-                      <Animated.View
-                        style={{
-                          opacity: fadeAnim,
-                          transform: [{ translateY: slideAnim }],
-                          marginTop: 50,
-                          zIndex: 1,
-                        }}
-                      >
-                        {" "}
-                        <Text
-                          className="text-white font-black text-5xl text-center tracking-tighter leading-tight"
-                          style={{
-                            textShadowColor: "#5E17EB",
-                            textShadowOffset: { width: 0, height: 0 },
-                            textShadowRadius: 20,
-                          }}
-                        >
-                          {t("story.official.title")}
-                        </Text>{" "}
-                      </Animated.View>{" "}
-                      <Animated.View
-                        style={{
-                          opacity: fadeAnim,
-                          transform: [{ translateY: slideAnim }],
-                          marginTop: 20,
-                          zIndex: 1,
-                        }}
-                      >
-                        {" "}
-                        <Text className="text-zinc-300 text-center text-xl font-light tracking-widest uppercase">
-                          {t("story.official.subtitle")}
-                        </Text>{" "}
-                      </Animated.View>{" "}
-                    </View>
-                  ) : (
-                    <>
-                      {" "}
-                      <Image
-                        source={{ uri: songData.cover }}
-                        style={{ width: width - 60, height: width - 60 }}
-                        className="rounded-2xl"
-                        resizeMode="cover"
-                      />{" "}
-                      <View className="items-center w-full mt-8">
-                        {" "}
-                        <Text
-                          className="text-white font-black text-center text-3xl mb-2 leading-8"
-                          style={{
-                            textShadowColor: "rgba(0,0,0,0.5)",
-                            textShadowOffset: { width: 0, height: 2 },
-                            textShadowRadius: 4,
-                          }}
-                        >
-                          {songData.title}
-                        </Text>{" "}
-                        <Text
-                          className="text-white/80 font-bold text-center text-lg mb-6"
-                          style={{
-                            textShadowColor: "rgba(0,0,0,0.5)",
-                            textShadowOffset: { width: 0, height: 1 },
-                            textShadowRadius: 3,
-                          }}
-                        >
-                          {songData.artist}
-                        </Text>{" "}
-                        {songData.caption && (
-                          <Text className="text-white font-medium text-center text-base mb-6 px-4 leading-6 shadow-sm">
-                            "{songData.caption}"
-                          </Text>
-                        )}{" "}
-                      </View>{" "}
-                    </>
-                  )}{" "}
-                </View>{" "}
-                <View className="px-4 pb-6 z-20 w-full flex-row items-center justify-between">
-                  {" "}
-                  {isOwner ? (
+                        <Ionicons name="add" size={24} color="white" />
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity
-                      onPress={() => {
-                        setIsPaused(true);
-                        setViewersModalVisible(true);
-                      }}
-                      activeOpacity={0.8}
-                      className="flex-row items-center bg-black/40 px-4 py-2.5 rounded-full border border-white/10 backdrop-blur-md"
+                      onPress={() => setTimeout(onClose, 0)}
+                      className="p-1"
                     >
-                      {" "}
-                      <View className="flex-row mr-2 items-center">
-                        {" "}
-                        {previewViewers.length > 0 ? (
-                          previewViewers.slice(0, 3).map((v, i) => (
-                            <Image
-                              key={i}
-                              source={{ uri: v.pfp || v.avatar }}
-                              className="w-6 h-6 rounded-full border border-black bg-zinc-700"
-                              style={{
-                                marginLeft: i === 0 ? 0 : -10,
-                                zIndex: 3 - i,
-                              }}
-                            />
-                          ))
-                        ) : (
-                          <View className="w-6 h-6 rounded-full bg-zinc-700 border border-black items-center justify-center">
-                            <Ionicons name="eye" size={12} color="white" />
-                          </View>
-                        )}{" "}
-                      </View>{" "}
-                      <Text className="text-white font-bold text-sm ml-2">
-                        {viewersCount} {t("story.views")}
-                      </Text>{" "}
+                      <Ionicons name="close" size={28} color="white" />
                     </TouchableOpacity>
-                  ) : (
-                    !isOfficialMood && (
-                      <View className="flex-1 flex-row items-center gap-3">
-                        {" "}
-                        <View className="flex-1 h-12 rounded-full border border-white/20 px-5 justify-center bg-black/30 backdrop-blur-md">
-                          <TextInput
-                            placeholder={t("story.replyPlaceholder")}
-                            placeholderTextColor="rgba(255,255,255,0.6)"
-                            className="text-white font-medium text-base"
+                  </View>
+                </View>
+              </View>
+              <View
+                className="flex-1 justify-center items-center px-8 z-0"
+                pointerEvents="none"
+              >
+                {isOfficialMood ? (
+                  <View className="items-center justify-center w-full">
+                    <Animated.View
+                      style={{
+                        transform: [
+                          {
+                            translateY: logoScale.interpolate({
+                              inputRange: [1, 1.05],
+                              outputRange: [0, -15],
+                            }),
+                          },
+                        ],
+                        zIndex: 1,
+                      }}
+                    >
+                      <Image
+                        source={require("@/assets/images/icon.png")}
+                        style={{ width: 140, height: 140, borderRadius: 35 }}
+                        resizeMode="contain"
+                      />
+                    </Animated.View>
+                    <Animated.View
+                      style={{
+                        opacity: fadeAnim,
+                        transform: [{ translateY: slideAnim }],
+                        marginTop: 50,
+                        zIndex: 1,
+                      }}
+                    >
+                      <Text
+                        className="text-white font-black text-5xl text-center tracking-tighter leading-tight"
+                        style={{
+                          textShadowColor: "#5E17EB",
+                          textShadowOffset: { width: 0, height: 0 },
+                          textShadowRadius: 20,
+                        }}
+                      >
+                        {t("story.official.title")}
+                      </Text>
+                    </Animated.View>
+                    <Animated.View
+                      style={{
+                        opacity: fadeAnim,
+                        transform: [{ translateY: slideAnim }],
+                        marginTop: 20,
+                        zIndex: 1,
+                      }}
+                    >
+                      <Text className="text-zinc-300 text-center text-xl font-light tracking-widest uppercase">
+                        {t("story.official.subtitle")}
+                      </Text>
+                    </Animated.View>
+                  </View>
+                ) : (
+                  <>
+                    <Image
+                      source={{ uri: songData.cover }}
+                      style={{ width: width - 60, height: width - 60 }}
+                      className="rounded-2xl"
+                      resizeMode="cover"
+                    />
+                    <View className="items-center w-full mt-8">
+                      <Text
+                        className="text-white font-black text-center text-3xl mb-2 leading-8"
+                        style={{
+                          textShadowColor: "rgba(0,0,0,0.5)",
+                          textShadowOffset: { width: 0, height: 2 },
+                          textShadowRadius: 4,
+                        }}
+                      >
+                        {songData.title}
+                      </Text>
+                      <Text
+                        className="text-white/80 font-bold text-center text-lg mb-6"
+                        style={{
+                          textShadowColor: "rgba(0,0,0,0.5)",
+                          textShadowOffset: { width: 0, height: 1 },
+                          textShadowRadius: 3,
+                        }}
+                      >
+                        {songData.artist}
+                      </Text>
+                      {songData.caption && (
+                        <Text className="text-white font-medium text-center text-base mb-6 px-4 leading-6 shadow-sm">
+                          "{songData.caption}"
+                        </Text>
+                      )}
+                    </View>
+                  </>
+                )}
+              </View>
+              <View className="px-4 pb-6 z-20 w-full flex-row items-center justify-between">
+                {isOwner ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsPaused(true);
+                      setViewersModalVisible(true);
+                    }}
+                    activeOpacity={0.8}
+                    className="flex-row items-center bg-black/40 px-4 py-2.5 rounded-full border border-white/10 backdrop-blur-md"
+                  >
+                    <View className="flex-row mr-2 items-center">
+                      {previewViewers.length > 0 ? (
+                        previewViewers.slice(0, 3).map((v, i) => (
+                          <Image
+                            key={i}
+                            source={{ uri: v.pfp || v.avatar }}
+                            className="w-6 h-6 rounded-full border border-black bg-zinc-700"
+                            style={{
+                              marginLeft: i === 0 ? 0 : -10,
+                              zIndex: 3 - i,
+                            }}
                           />
-                        </View>{" "}
-                        <TouchableOpacity
-                          onPress={() => {
-                            setIsPaused(true);
-                            setDetailsVisible(true);
-                          }}
-                          className="bg-black/30 p-3 rounded-full border border-white/20 backdrop-blur-md"
-                        >
-                          <Ionicons
-                            name="disc-outline"
-                            size={24}
-                            color="white"
-                          />
-                        </TouchableOpacity>{" "}
-                        <TouchableOpacity className="bg-black/30 p-3 rounded-full border border-white/20 backdrop-blur-md">
-                          <Ionicons
-                            name="heart-outline"
-                            size={24}
-                            color="white"
-                          />
-                        </TouchableOpacity>{" "}
+                        ))
+                      ) : (
+                        <View className="w-6 h-6 rounded-full bg-zinc-700 border border-black items-center justify-center">
+                          <Ionicons name="eye" size={12} color="white" />
+                        </View>
+                      )}
+                    </View>
+                    <Text className="text-white font-bold text-sm ml-2">
+                      {viewersCount} {t("story.views")}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  !isOfficialMood && (
+                    <View className="flex-1 flex-row items-center gap-3">
+                      <View className="flex-1 h-12 rounded-full border border-white/20 px-5 justify-center bg-black/30 backdrop-blur-md">
+                        <TextInput
+                          placeholder={t("story.replyPlaceholder")}
+                          placeholderTextColor="rgba(255,255,255,0.6)"
+                          className="text-white font-medium text-base"
+                        />
                       </View>
-                    )
-                  )}{" "}
-                </View>{" "}
-              </View>{" "}
-            </Animated.View>{" "}
-          </PanGestureHandler>{" "}
-        </View>{" "}
+                      <TouchableOpacity
+                        onPress={() => {
+                          setIsPaused(true);
+                          setDetailsVisible(true);
+                        }}
+                        className="bg-black/30 p-3 rounded-full border border-white/20 backdrop-blur-md"
+                      >
+                        <Ionicons name="disc-outline" size={24} color="white" />
+                      </TouchableOpacity>
+                      <TouchableOpacity className="bg-black/30 p-3 rounded-full border border-white/20 backdrop-blur-md">
+                        <Ionicons
+                          name="heart-outline"
+                          size={24}
+                          color="white"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  )
+                )}
+              </View>
+            </View>
+          </Animated.View>
+        </View>
+
         <ViewersModal
           visible={viewersModalVisible}
           onClose={() => {
@@ -2103,7 +2042,8 @@ const StoryViewer = ({
             setIsPaused(false);
           }}
           viewerIds={viewersList}
-        />{" "}
+        />
+
         <Modal
           animationType="slide"
           transparent={true}
@@ -2113,35 +2053,28 @@ const StoryViewer = ({
             setIsPaused(false);
           }}
         >
-          {" "}
           <TouchableWithoutFeedback
             onPress={() => {
               setDetailsVisible(false);
               setIsPaused(false);
             }}
           >
-            {" "}
             <View className="flex-1 justify-end bg-black/60">
-              {" "}
               <TouchableWithoutFeedback>
-                {" "}
                 <View className="bg-[#1E1E1E] w-full rounded-t-[32px] p-6 pb-12 border-t border-white/10 shadow-2xl">
-                  {" "}
-                  <View className="w-12 h-1 bg-zinc-600 rounded-full self-center mb-6 opacity-50" />{" "}
+                  <View className="w-12 h-1 bg-zinc-600 rounded-full self-center mb-6 opacity-50" />
                   <View className="flex-row items-center">
-                    {" "}
                     <Image
                       source={{ uri: songData.cover }}
                       className="w-24 h-24 rounded-2xl bg-zinc-800"
-                    />{" "}
+                    />
                     <View className="flex-1 ml-5">
-                      {" "}
                       <Text className="text-white font-black text-2xl mb-1 leading-7">
                         {songData.title}
-                      </Text>{" "}
+                      </Text>
                       <Text className="text-zinc-400 text-lg font-medium">
                         {songData.artist}
-                      </Text>{" "}
+                      </Text>
                       <View className="flex-row items-center mt-3">
                         <Ionicons
                           name="musical-notes"
@@ -2151,11 +2084,10 @@ const StoryViewer = ({
                         <Text className="text-[#5E17EB] text-xs font-bold ml-1 uppercase tracking-widest">
                           Mood Track
                         </Text>
-                      </View>{" "}
-                    </View>{" "}
-                  </View>{" "}
+                      </View>
+                    </View>
+                  </View>
                   <View className="mt-8 flex-row gap-4">
-                    {" "}
                     <TouchableOpacity
                       onPress={handleSave}
                       className="flex-1 bg-white/5 py-4 rounded-2xl flex-row items-center justify-center border border-white/5 active:bg-white/10"
@@ -2169,7 +2101,7 @@ const StoryViewer = ({
                       <Text className="text-white font-bold text-base">
                         {isSaved ? t("common.saved") : t("common.save")}
                       </Text>
-                    </TouchableOpacity>{" "}
+                    </TouchableOpacity>
                     <TouchableOpacity
                       onPress={handleShareSong}
                       className="flex-1 bg-[#5E17EB] py-4 rounded-2xl flex-row items-center justify-center shadow-lg shadow-purple-900/50 active:opacity-90"
@@ -2183,41 +2115,47 @@ const StoryViewer = ({
                       <Text className="text-white font-bold text-base">
                         {t("common.share")}
                       </Text>
-                    </TouchableOpacity>{" "}
-                  </View>{" "}
-                </View>{" "}
-              </TouchableWithoutFeedback>{" "}
-            </View>{" "}
-          </TouchableWithoutFeedback>{" "}
-        </Modal>{" "}
-      </GestureHandlerRootView>{" "}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      </GestureHandlerRootView>
     </Modal>
   );
 };
 
-// ============================================
-// COMPONENTE HOME PRINCIPAL (FIXED DEFINITIVO)
-// ============================================
-const Home = () => {
+const HomeContent = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-  const { t } = useLanguage();
-  const { user, loading, loggedIn } = useGlobalContext();
+  const { user } = useGlobalContext();
+  const navigation = useNavigation<any>();
 
-  const [data, setData] = useState({
-    feedPosts: [] as any[],
-    groupedStories: [] as any[],
-    isLoading: true,
-    refreshing: false,
-    suggestedUsers: [] as any[],
+  const {
+    feed,
+    isLoading: isFeedLoading,
+    isRefreshing,
+    refreshFeed,
+  } = useFeed();
+
+  const [localData, setLocalData] = useState<{
+    groupedStories: any[];
+    suggestedUsers: any[];
+    notiCount: number;
+    msgCount: number;
+  }>({
+    groupedStories: [],
+    suggestedUsers: [],
     notiCount: 0,
     msgCount: 0,
   });
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
   const [shareContacts, setShareContacts] = useState<any[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
-
   const [isViralModalVisible, setViralModalVisible] = useState(false);
   const [isShareVisible, setShareVisible] = useState(false);
   const [isShareSelectorVisible, setShareSelectorVisible] = useState(false);
@@ -2231,125 +2169,81 @@ const Home = () => {
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const [storyInitialSongData, setStoryInitialSongData] = useState<any>(null);
 
-  // --- SOLUCIÓN SWIPE ---
-  const translateX = useRef(new Animated.Value(0)).current;
-  const [isChatVisible, setIsChatVisible] = useState(false); // Estado para controlar visibilidad
+  const flatListRef = useRef<FlatList>(null);
 
-  // Resetea posición si la pantalla vuelve a tener foco (seguridad extra)
-  useFocusEffect(
-    useCallback(() => {
-      // Si volvemos de otra ruta y estaba abierto, cerramos el chat visualmente
-      // pero aquí estamos eliminando router.push, así que esto es solo por consistencia
-      if (isChatVisible) closeChat();
-    }, [])
-  );
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("tabPress", (e: any) => {
+      if (navigation.isFocused()) {
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        refreshFeed();
+      }
+    });
+    return unsubscribe;
+  }, [navigation, refreshFeed]);
 
-  const onPanGestureEvent = Animated.event(
-    [{ nativeEvent: { translationX: translateX } }],
-    { useNativeDriver: true }
-  );
+  const chatTranslateX = useRef(new Animated.Value(width)).current;
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const openChat = () => {
-    setIsChatVisible(true);
-    Animated.timing(translateX, {
-      toValue: -width,
-      duration: 300,
-      useNativeDriver: true,
-      easing: Easing.out(Easing.cubic),
-    }).start();
-  };
-
-  const closeChat = () => {
-    setIsChatVisible(false);
-    Animated.spring(translateX, {
+    setIsChatOpen(true);
+    Animated.spring(chatTranslateX, {
       toValue: 0,
       useNativeDriver: true,
-      bounciness: 6,
+      bounciness: 0,
+      speed: 14,
+    }).start();
+  };
+  const closeChat = () => {
+    setIsChatOpen(false);
+    Animated.timing(chatTranslateX, {
+      toValue: width,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
     }).start();
   };
 
-  const onPanHandlerStateChange = ({ nativeEvent }: any) => {
-    if (nativeEvent.oldState === State.ACTIVE) {
-      const { translationX, velocityX } = nativeEvent;
-
-      // Si desliza suficiente a la izquierda -> Abrir Chat (Reveal)
-      if (translationX < -100 || velocityX < -800) {
-        openChat();
-      } else {
-        // Regresar a Home (Cerrar Chat si estaba a medias)
+  useEffect(() => {
+    const onBackPress = () => {
+      if (isChatOpen) {
         closeChat();
+        return true;
       }
-    }
-  };
+      return false;
+    };
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress
+    );
+    return () => subscription.remove();
+  }, [isChatOpen]);
 
-  // ... (Fetch Data, mismo código que tu original, sin cambios) ...
-  // [INCLUYO EL BLOQUE COMPLETO PARA EVITAR ERRORES DE COPIA]
-  const fetchData = async () => {
+  const fetchAuxiliaryData = async () => {
     try {
-      let activeId = user?.$id;
+      let activeId = user?.$id || currentUserId;
       if (!activeId) {
         const u = await getCurrentUser();
         if (u) {
           activeId = u.$id;
           setCurrentUserId(u.$id);
         }
-      } else if (!currentUserId) {
-        setCurrentUserId(activeId);
       }
-
-      const [counts, storiesData, feedData] = await Promise.all([
-        activeId ? fetchCounts(activeId) : Promise.resolve({ noti: 0, msg: 0 }),
-        activeId ? fetchStoriesInternal(activeId) : Promise.resolve([]),
-        getFeedCandidates().catch(() => []),
-      ]);
-
-      let followedIds = activeId
-        ? await getFollowedUserIds(activeId).catch(() => [])
-        : [];
-
-      const timelinePosts = feedData.filter((post: any) => {
-        const creatorId = getCreatorId(post);
-        if (!creatorId || creatorId === "unknown") return false;
-        return creatorId === activeId || followedIds.includes(creatorId);
-      });
-
-      let suggestions: any[] = [];
-      if (timelinePosts.length === 0 && activeId) {
-        const uniqueCreators = new Map();
-        feedData.forEach((post: any) => {
-          const creatorId = getCreatorId(post);
-          if (
-            creatorId &&
-            creatorId !== activeId &&
-            !followedIds.includes(creatorId)
-          ) {
-            let creatorObj = post.creator || post.postedBy || post.users?.[0];
-            if (creatorObj && !uniqueCreators.has(creatorId))
-              uniqueCreators.set(creatorId, creatorObj);
-          }
-        });
-        suggestions = Array.from(uniqueCreators.values()).slice(0, 5);
+      if (activeId) {
+        const [counts, storiesData] = await Promise.all([
+          fetchCounts(activeId),
+          fetchStoriesInternal(activeId),
+        ]);
+        setLocalData((prev) => ({
+          ...prev,
+          notiCount: counts.noti,
+          msgCount: counts.msg,
+          groupedStories: storiesData,
+        }));
       }
-
-      setData((prev) => ({
-        ...prev,
-        feedPosts: timelinePosts.sort(
-          (a: any, b: any) =>
-            new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime()
-        ),
-        groupedStories: storiesData,
-        suggestedUsers: suggestions,
-        notiCount: counts.noti,
-        msgCount: counts.msg,
-        isLoading: false,
-        refreshing: false,
-      }));
-    } catch (error) {
-      console.log("Error en fetchData", error);
-      setData((prev) => ({ ...prev, isLoading: false, refreshing: false }));
+    } catch (e) {
+      console.log(e);
     }
   };
-
   const fetchCounts = async (userId: string) => {
     try {
       const [n, m] = await Promise.all([
@@ -2361,7 +2255,6 @@ const Home = () => {
       return { noti: 0, msg: 0 };
     }
   };
-
   const fetchStoriesInternal = async (userId: string) => {
     try {
       const storiesDocs = await getStories(userId);
@@ -2369,22 +2262,17 @@ const Home = () => {
       const recentStories = storiesDocs.filter(
         (doc: any) => new Date(doc.$createdAt) > oneDayAgo
       );
-
       const uniqueUserIds = new Set<string>();
       const userMap = new Map<string, any>();
-
       if (user) userMap.set(userId, user);
-
       recentStories.forEach((doc: any) => {
         if (doc.user && typeof doc.user === "string" && doc.user !== userId) {
           uniqueUserIds.add(doc.user);
         }
       });
-
       const idsToFetch = Array.from(uniqueUserIds).filter(
         (id) => !userMap.has(id)
       );
-
       if (idsToFetch.length > 0) {
         await Promise.all(
           idsToFetch.map(async (id) => {
@@ -2395,12 +2283,10 @@ const Home = () => {
           })
         );
       }
-
       const groups: Record<string, any> = {};
       recentStories.forEach((doc: any) => {
         let docUserId = null;
         let docUserData = null;
-
         if (typeof doc.user === "object" && doc.user.$id) {
           docUserId = doc.user.$id;
           docUserData = doc.user;
@@ -2408,9 +2294,7 @@ const Home = () => {
           docUserId = doc.user;
           docUserData = userMap.get(docUserId);
         }
-
         if (!docUserId) return;
-
         if (!groups[docUserId]) {
           groups[docUserId] = {
             userId: docUserId,
@@ -2424,110 +2308,28 @@ const Home = () => {
         }
         groups[docUserId].stories.push(doc);
       });
-
       return Object.values(groups);
     } catch (e) {
-      console.error(e);
       return [];
     }
   };
 
-  const isFetchingRef = useRef(false);
-
   useEffect(() => {
-    const init = async () => {
-      if (isFetchingRef.current) return;
-      isFetchingRef.current = true;
-      await fetchData();
-      isFetchingRef.current = false;
-    };
-    init();
-  }, [user, loggedIn]);
-
-  const onRefresh = async () => {
-    if (isFetchingRef.current) return;
-    setData((prev) => ({ ...prev, refreshing: true }));
-    isFetchingRef.current = true;
-    await fetchData();
-    isFetchingRef.current = false;
+    fetchAuxiliaryData();
+  }, [user]);
+  const onRefresh = () => {
+    refreshFeed();
+    fetchAuxiliaryData();
   };
 
-  useEffect(() => {
-    if (!user?.$id) return;
-    const channels = [
-      `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.notificationsCollectionId}.documents`,
-      `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`,
-    ];
-
-    const unsubscribe = client.subscribe(channels, async (response) => {
-      const event = response.events[0];
-      const payload: any = response.payload;
-      const isNoti =
-        event.includes(
-          `collections.${appwriteConfig.notificationsCollectionId}`
-        ) && payload.userId === user.$id;
-      const isMsg =
-        event.includes(`collections.${appwriteConfig.messagesCollectionId}`) &&
-        (payload.receiverId === user.$id || payload.senderId === user.$id);
-
-      if (isNoti || isMsg) {
-        const counts = await fetchCounts(user.$id);
-        setData((prev) => ({
-          ...prev,
-          notiCount: counts.noti,
-          msgCount: counts.msg,
-        }));
-      }
-    });
-    return () => {
-      unsubscribe();
-    };
-  }, [user]);
-
-  // Handlers para el Post
   const handleDeleteAction = () => {
     if (!selectedPost) return;
-    const post = selectedPost;
     setOptionsVisible(false);
-    Alert.alert("¿Eliminar?", "Esta acción no se puede deshacer.", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Eliminar",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setData((prev) => ({
-              ...prev,
-              feedPosts: prev.feedPosts.filter((p) => p.$id !== post.$id),
-            }));
-            await deletePost(post.$id);
-          } catch (e) {
-            Alert.alert("Error", "No se pudo eliminar.");
-            onRefresh();
-          }
-        },
-      },
-    ]);
+    deletePost(selectedPost.$id).then(() => onRefresh());
   };
-
   const handleReportAction = () => {
-    if (!selectedPost || !user?.$id) return;
     setOptionsVisible(false);
-    Alert.alert("Reportar", "Selecciona una razón", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Spam", onPress: () => submitReport("spam") },
-      { text: "Inapropiado", onPress: () => submitReport("inappropriate") },
-    ]);
-  };
-
-  const submitReport = async (reason: string) => {
-    if (!user) return;
-    try {
-      await reportPost(selectedPost.$id, user.$id, reason);
-      Alert.alert("Gracias", "Reporte enviado.");
-    } catch (error) {
-      Alert.alert("Error", "No se pudo enviar.");
-    }
+    Alert.alert("Reportado", "Gracias.");
   };
 
   const openOptions = (post: any) => {
@@ -2545,21 +2347,26 @@ const Home = () => {
       setIsLoadingContacts(false);
     }
   };
-
   const fetchFollowedUsers = async (userId: string) => {
     try {
-      const followedIds = await getFollowedUserIds(userId);
-      if (followedIds.length > 0) {
-        const promises = followedIds.map((id) => getUser(id));
-        const users = await Promise.all(promises);
-        return users.filter((u) => u !== null);
-      }
-    } catch (error) {
-      console.log("Error", error);
+      const f = await getFollowedUserIds(userId);
+      const promises = f.map((id) => getUser(id));
+      return (await Promise.all(promises)).filter((u) => u !== null);
+    } catch {
+      return [];
     }
-    return [];
   };
-
+  const handleShareSearch = async (text: string) => {
+    setIsLoadingContacts(true);
+    if (text.length > 0) {
+      const results = await searchUsersInAppwrite(text);
+      setShareContacts(results);
+    } else if (user?.$id) {
+      const contacts = await fetchFollowedUsers(user.$id);
+      setShareContacts(contacts);
+    }
+    setIsLoadingContacts(false);
+  };
   const searchUsersInAppwrite = async (query: string) => {
     try {
       return (
@@ -2576,30 +2383,14 @@ const Home = () => {
         )
       ).documents;
     } catch (error) {
-      console.log("Search error:", error);
       return [];
     }
   };
-
-  const handleShareSearch = async (text: string) => {
-    setIsLoadingContacts(true);
-    if (text.length > 0) {
-      const results = await searchUsersInAppwrite(text);
-      setShareContacts(results);
-    } else if (user?.$id) {
-      const contacts = await fetchFollowedUsers(user.$id);
-      setShareContacts(contacts);
-    }
-    setIsLoadingContacts(false);
-  };
-
   const handleSendShare = async (userIds: string[], message: string) => {
     if (!user?.$id || !postToShareData) return;
     try {
       const promises = userIds.map(async (targetId) => {
         const chatDoc = await getOrCreateChat(user.$id, targetId);
-        if (!chatDoc)
-          throw new Error("No se pudo crear el chat para " + targetId);
         return databases.createDocument(
           appwriteConfig.databaseId,
           appwriteConfig.messagesCollectionId,
@@ -2619,8 +2410,8 @@ const Home = () => {
     } catch (error) {
       Alert.alert("Error", "No se pudo compartir el post.");
     }
+    setShareSelectorVisible(false);
   };
-
   const handleAddToStoryFromPost = async () => {
     if (!postToShareData) return;
     const songData = parseSongData(postToShareData.songData);
@@ -2638,7 +2429,6 @@ const Home = () => {
       setTimeout(() => setCreationVisible(true), 300);
     }
   };
-
   const handleSystemShare = async () => {
     if (!postToShareData) return;
     const link = `https://moodapp.com/post/${postToShareData.$id}`;
@@ -2661,7 +2451,6 @@ const Home = () => {
     );
     setShareSelectorVisible(false);
   };
-
   const getViralPostData = () => {
     if (!postToShareData) return null;
     const song = parseSongData(postToShareData.songData);
@@ -2680,208 +2469,205 @@ const Home = () => {
     };
   };
 
-  const renderItem = ({ item }: { item: any }) => {
-    return (
-      <View
-        className="py-4 border-1 border-b"
-        style={{ borderColor: isDark ? "#27272A" : "#E5E5E5" }}
-      >
-        <PostItem
-          post={item}
-          currentUserId={user?.$id || currentUserId || ""}
-          onProfilePress={(userId) => router.push(`/user/${userId}` as any)}
-          onCommentPress={(postId) => router.push(`/post/${postId}` as any)}
-          onOptionsPress={() => openOptions(item)}
-          onSharePress={() => openShare(item)}
-        />
-      </View>
-    );
-  };
-
   const isPostOwner =
     user?.$id === (selectedPost?.postedBy?.$id || selectedPost?.creator?.$id);
   const isAdmin = ADMIN_USERS.includes(user?.username || "");
 
-  // ============================================
-  // RENDER PRINCIPAL (CORREGIDO PARA EL SWIPE)
-  // ============================================
+  const renderFeedItem = useCallback(
+    ({ item }: { item: FeedItem }) => {
+      switch (item.type) {
+        case "post":
+          return (
+            <View
+              className={`py-4 border-b ${
+                isDark ? "border-zinc-800" : "border-zinc-200"
+              }`}
+            >
+              {item.status === "uploading" && (
+                <View className="px-5 mb-2 flex-row items-center">
+                  <ActivityIndicator size="small" color="#5E17EB" />
+                  <Text
+                    className={`ml-2 text-xs ${
+                      isDark ? "text-zinc-400" : "text-zinc-600"
+                    }`}
+                  >
+                    Publicando en Mood...
+                  </Text>
+                </View>
+              )}
+              {item.status === "error" && (
+                <View className="px-5 mb-2 bg-red-500/10 p-2 rounded-lg mx-4">
+                  <Text className="text-red-500 text-xs font-bold text-center">
+                    Falló la subida. Toca para reintentar.
+                  </Text>
+                </View>
+              )}
+              <PostItem
+                post={item.data}
+                currentUserId={user?.$id || ""}
+                onProfilePress={(userId) =>
+                  router.push(`/user/${userId}` as any)
+                }
+                onCommentPress={(postId) =>
+                  router.push(`/post/${postId}` as any)
+                }
+                onOptionsPress={() => openOptions(item.data)}
+                onSharePress={() => openShare(item.data)}
+              />
+            </View>
+          );
+        case "suggested_users":
+          return <SuggestedUsersCarousel users={item.data} />;
+        case "trending_song":
+          return <TrendingSongCard song={item.data} />;
+        default:
+          return null;
+      }
+    },
+    [isDark, user]
+  );
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* CAPA 0: CHATS LIST
-        Debe estar posicionada absolutamente detrás y ocupar toda la pantalla
-        para que al deslizar el Home, aparezca debajo.
-      */}
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            zIndex: 0,
-            backgroundColor: isDark ? "#000" : "#fff",
-          },
-        ]}
-      >
-        {/* Aquí renderizamos el Chat directamente, sin router.push */}
-        <ChatsList />
-      </View>
+      <View style={{ flex: 1, backgroundColor: isDark ? "#000" : "#fff" }}>
+        <View style={{ flex: 1, zIndex: 0 }}>
+          <SafeAreaView
+            className="flex-1"
+            edges={["top"]}
+            style={{ backgroundColor: isDark ? "#000000" : "#FFFFFF" }}
+          >
+            <TopBar
+              notificationCount={localData.notiCount}
+              messageCount={localData.msgCount}
+              onChatPress={openChat}
+            />
+            {isFeedLoading ? (
+              <FeedSkeleton isDark={isDark} />
+            ) : (
+              <FlatList
+                ref={flatListRef}
+                data={feed}
+                keyExtractor={(item) => item._id}
+                renderItem={renderFeedItem}
+                ListHeaderComponent={
+                  <StoriesRail
+                    currentUser={user}
+                    groupedStories={localData.groupedStories}
+                    onPressStoryGroup={(g: any) => {
+                      setActiveStoryGroup(g);
+                      setStoryViewerVisible(true);
+                    }}
+                    onAddStory={() => {
+                      setStoryInitialSongData(null);
+                      setCreationVisible(true);
+                    }}
+                  />
+                }
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isRefreshing}
+                    onRefresh={onRefresh}
+                    tintColor="#5E17EB"
+                  />
+                }
+                initialNumToRender={4}
+                windowSize={5}
+                removeClippedSubviews={Platform.OS === "android"}
+                ListEmptyComponent={
+                  <EmptyStateWithSuggestions
+                    suggestions={[]}
+                    onGoToExplore={() => router.push("/explore" as any)}
+                  />
+                }
+              />
+            )}
+            {/* MODALES */}
+            <PostModal />
+            <DirectShareSheet
+              visible={isShareSelectorVisible}
+              onClose={() => setShareSelectorVisible(false)}
+              contacts={shareContacts}
+              isDark={isDark}
+              isLoadingContacts={isLoadingContacts}
+              onSearch={handleShareSearch}
+              onSend={handleSendShare}
+              onAddToStory={handleAddToStoryFromPost}
+              onViralCard={() => {
+                setShareSelectorVisible(false);
+                setTimeout(() => setViralModalVisible(true), 300);
+              }}
+              onSystemShare={handleSystemShare}
+              onCopyLink={handleCopyLink}
+            />
+            <StoryCreationModal
+              visible={isCreationVisible}
+              onClose={() => setCreationVisible(false)}
+              currentUser={user}
+              onSuccess={() => fetchAuxiliaryData()}
+              initialSongData={storyInitialSongData}
+            />
+            <StoryViewer
+              visible={isStoryViewerVisible}
+              onClose={() => setStoryViewerVisible(false)}
+              group={activeStoryGroup}
+              currentUserId={currentUserId}
+              onAddMore={() => {
+                setStoryInitialSongData(null);
+                setCreationVisible(true);
+              }}
+              onRefreshFeed={() => fetchAuxiliaryData()}
+            />
+            <OptionsModal
+              isVisible={isOptionsVisible}
+              onClose={() => setOptionsVisible(false)}
+              onDelete={handleDeleteAction}
+              onReport={handleReportAction}
+              isOwner={isPostOwner || isAdmin}
+            />
+            <MoodShareCard
+              isVisible={isViralModalVisible}
+              onClose={() => setViralModalVisible(false)}
+              post={getViralPostData()}
+            />
+            <ShareModal
+              isVisible={isShareVisible}
+              onClose={() => setShareVisible(false)}
+              postId={sharePostId}
+            />
+          </SafeAreaView>
+        </View>
 
-      {/* CAPA 1: HOME SCREEN
-        Esta es la capa que se desliza. Tiene zIndex mayor para tapar los chats.
-        pointerEvents="box-none" permite que los toques pasen a través del fondo si el Home se mueve.
-      */}
-      <PanGestureHandler
-        onGestureEvent={onPanGestureEvent}
-        onHandlerStateChange={onPanHandlerStateChange}
-        activeOffsetX={[-20, 20]} // Umbral para empezar el gesto lateral
-      >
+        {/* OVERLAY DE CHATS (ANIMATED VIEW) */}
         <Animated.View
           style={{
-            flex: 1,
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            width: width,
+            zIndex: 10,
             backgroundColor: isDark ? "#000" : "#fff",
-            zIndex: 10, // Encima de los chats
-            transform: [
-              {
-                translateX: translateX.interpolate({
-                  inputRange: [-width, 0],
-                  outputRange: [-width, 0],
-                  extrapolate: "clamp", // Evita que se mueva a la derecha (positivo)
-                }),
-              },
-            ],
-            // Sombra para dar efecto de capa superior
+            transform: [{ translateX: chatTranslateX }],
             shadowColor: "#000",
             shadowOffset: { width: -5, height: 0 },
-            shadowOpacity: 0.3,
-            shadowRadius: 10,
+            shadowOpacity: 0.5,
+            shadowRadius: 15,
             elevation: 20,
           }}
         >
-          {/* Si el chat está visible (home deslizado), desactivamos los toques en Home 
-              para que el usuario pueda tocar la lista de chats de abajo. */}
-          <View
-            style={{ flex: 1 }}
-            pointerEvents={isChatVisible ? "none" : "auto"}
-          >
-            <SafeAreaView
-              className="flex-1"
-              edges={["top"]}
-              style={{ backgroundColor: isDark ? "#000000" : "#FFFFFF" }}
-            >
-              <TopBar
-                notificationCount={data.notiCount}
-                messageCount={data.msgCount}
-              />
-
-              {data.isLoading ? (
-                <FeedSkeleton isDark={isDark} />
-              ) : (
-                <FlatList
-                  data={data.feedPosts}
-                  keyExtractor={(item) => item.$id}
-                  ListHeaderComponent={
-                    <StoriesRail
-                      currentUser={user}
-                      groupedStories={data.groupedStories}
-                      onPressStoryGroup={(g: any) => {
-                        setActiveStoryGroup(g);
-                        setStoryViewerVisible(true);
-                      }}
-                      onAddStory={() => {
-                        setStoryInitialSongData(null);
-                        setCreationVisible(true);
-                      }}
-                    />
-                  }
-                  renderItem={renderItem}
-                  refreshControl={
-                    <RefreshControl
-                      refreshing={data.refreshing}
-                      onRefresh={onRefresh}
-                      tintColor="#5E17EB"
-                    />
-                  }
-                  ListEmptyComponent={
-                    <EmptyStateWithSuggestions
-                      suggestions={data.suggestedUsers}
-                      onGoToExplore={() => router.push("/explore" as any)}
-                    />
-                  }
-                />
-              )}
-
-              {/* MODALES DEL HOME */}
-              <DirectShareSheet
-                visible={isShareSelectorVisible}
-                onClose={() => setShareSelectorVisible(false)}
-                contacts={shareContacts}
-                isDark={isDark}
-                isLoadingContacts={isLoadingContacts}
-                onSearch={handleShareSearch}
-                onSend={handleSendShare}
-                onAddToStory={handleAddToStoryFromPost}
-                onViralCard={() => {
-                  setShareSelectorVisible(false);
-                  setTimeout(() => setViralModalVisible(true), 300);
-                }}
-                onSystemShare={handleSystemShare}
-                onCopyLink={handleCopyLink}
-              />
-              <StoryCreationModal
-                visible={isCreationVisible}
-                onClose={() => setCreationVisible(false)}
-                currentUser={user}
-                onSuccess={() => fetchData()}
-                initialSongData={storyInitialSongData}
-              />
-              <StoryViewer
-                visible={isStoryViewerVisible}
-                onClose={() => setStoryViewerVisible(false)}
-                group={activeStoryGroup}
-                currentUserId={currentUserId}
-                onAddMore={() => {
-                  setStoryInitialSongData(null);
-                  setCreationVisible(true);
-                }}
-                onRefreshFeed={() => fetchData()}
-              />
-              <OptionsModal
-                isVisible={isOptionsVisible}
-                onClose={() => setOptionsVisible(false)}
-                onDelete={handleDeleteAction}
-                onReport={handleReportAction}
-                isOwner={isPostOwner || isAdmin}
-              />
-              <MoodShareCard
-                isVisible={isViralModalVisible}
-                onClose={() => setViralModalVisible(false)}
-                post={getViralPostData()}
-              />
-              <ShareModal
-                isVisible={isShareVisible}
-                onClose={() => setShareVisible(false)}
-                postId={sharePostId}
-              />
-            </SafeAreaView>
-          </View>
-
-          {/* BOTÓN INVISIBLE PARA CERRAR EL CHAT 
-              Si el chat está abierto, ponemos una zona táctil a la derecha para cerrarlo al tocar/deslizar */}
-          {isChatVisible && (
-            <Pressable
-              style={{
-                position: "absolute",
-                right: -40, // Un borde táctil que sobresale
-                top: 0,
-                bottom: 0,
-                width: 60,
-                zIndex: 999,
-              }}
-              onPress={closeChat}
-            />
-          )}
+          <ChatsList onBackPress={closeChat} />
         </Animated.View>
-      </PanGestureHandler>
+      </View>
     </GestureHandlerRootView>
   );
 };
 
-export default Home;
+// Wrapper Final
+const HomeWithProvider = () => (
+  <GestureHandlerRootView style={{ flex: 1 }}>
+    <FeedProvider>
+      <HomeContent />
+    </FeedProvider>
+  </GestureHandlerRootView>
+);
+
+export default HomeWithProvider;

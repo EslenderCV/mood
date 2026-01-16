@@ -20,6 +20,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useModal } from "@/context/ModalContext";
 import { useGlobalContext } from "@/context/GlobalProvider";
+import { useFeed } from "@/context/FeedProvider";
 import { createPost, searchUsers } from "@/lib/appwrite";
 import { useColorScheme } from "nativewind";
 import { useAudioPlayer, useAudioRecorder } from "expo-audio";
@@ -38,15 +39,12 @@ interface Song {
   isExplicit: boolean;
 }
 
-// --- COMPONENTE TOAST PERSONALIZADO ---
 const CustomToast = ({ visible, type, title, message, translateY }: any) => {
   if (!visible) return null;
-
   const isSuccess = type === "success";
   const iconName = isSuccess ? "checkmark-circle" : "alert-circle";
   const iconColor = isSuccess ? "#5E17EB" : "#EF4444";
   const bgColor = "rgba(20, 20, 23, 0.95)";
-
   return (
     <Animated.View
       style={{
@@ -107,6 +105,17 @@ const CustomToast = ({ visible, type, title, message, translateY }: any) => {
 export default function PostModal() {
   const { isPostModalVisible, setPostModalVisible } = useModal();
   const { user } = useGlobalContext();
+
+  let feedContext;
+  try {
+    feedContext = useFeed();
+  } catch (e) {
+    feedContext = null;
+  }
+  const createPostOptimistic = feedContext?.createPostOptimistic;
+  const viralSongToUse = feedContext?.viralSongToUse;
+  const setViralSongToUse = feedContext?.setViralSongToUse;
+
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
@@ -121,22 +130,15 @@ export default function PostModal() {
   const [text, setText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [linkedSong, setLinkedSong] = useState<Song | null>(null);
-
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [isSearchingMusic, setIsSearchingMusic] = useState(false);
   const [isLoadingSearch, setIsLoadingSearch] = useState(false);
-
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
 
-  // --- ANIMACIONES MODAL ---
-  // Background Fade
   const backgroundOpacity = useRef(new Animated.Value(0)).current;
-  // Content Slide (Empieza abajo fuera de pantalla)
   const contentTranslateY = useRef(new Animated.Value(height)).current;
-
-  // --- ESTADO PARA EL TOAST ---
   const [toast, setToast] = useState({
     visible: false,
     type: "success",
@@ -145,18 +147,34 @@ export default function PostModal() {
   });
   const toastAnim = useRef(new Animated.Value(-150)).current;
 
-  // Efecto de Entrada del Modal
+  useEffect(() => {
+    if (isPostModalVisible && viralSongToUse) {
+      const formattedSong: Song = {
+        trackId: String(viralSongToUse.id),
+        trackName: viralSongToUse.title,
+        artistName: viralSongToUse.artist?.name || viralSongToUse.artist,
+        artworkUrl100:
+          viralSongToUse.cover ||
+          viralSongToUse.album?.cover_xl ||
+          viralSongToUse.album?.cover_medium,
+        previewUrl: viralSongToUse.preview,
+        isExplicit: !!viralSongToUse.explicit_lyrics,
+      };
+
+      setLinkedSong(formattedSong);
+
+      if (setViralSongToUse) setViralSongToUse(null);
+    }
+  }, [isPostModalVisible, viralSongToUse]);
+
   useEffect(() => {
     if (isPostModalVisible) {
-      // 1. Resetear valores (por si acaso)
       backgroundOpacity.setValue(0);
       contentTranslateY.setValue(height);
-
-      // 2. Animar Entrada (Paralelo: Fade Fondo + Slide Caja)
       Animated.parallel([
         Animated.timing(backgroundOpacity, {
           toValue: 1,
-          duration: 200,
+          duration: 300,
           useNativeDriver: true,
         }),
         Animated.spring(contentTranslateY, {
@@ -173,11 +191,8 @@ export default function PostModal() {
     }
   }, [isPostModalVisible]);
 
-  // Función de Cierre con Animación de Salida
   const closeModal = () => {
     Keyboard.dismiss();
-
-    // Animar Salida
     Animated.parallel([
       Animated.timing(backgroundOpacity, {
         toValue: 0,
@@ -185,13 +200,12 @@ export default function PostModal() {
         useNativeDriver: true,
       }),
       Animated.timing(contentTranslateY, {
-        toValue: height, // Baja la caja
+        toValue: height,
         duration: 250,
         easing: Easing.in(Easing.ease),
         useNativeDriver: true,
       }),
     ]).start(() => {
-      // Una vez terminada la animación, ocultamos el modal real
       setPostModalVisible(false);
     });
   };
@@ -208,20 +222,13 @@ export default function PostModal() {
       friction: 8,
       tension: 40,
     }).start();
-
     setTimeout(() => {
-      hideToast();
+      Animated.timing(toastAnim, {
+        toValue: -150,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => setToast((prev) => ({ ...prev, visible: false })));
     }, 3000);
-  };
-
-  const hideToast = () => {
-    Animated.timing(toastAnim, {
-      toValue: -150,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setToast((prev) => ({ ...prev, visible: false }));
-    });
   };
 
   const recorder = useAudioRecorder({
@@ -240,15 +247,12 @@ export default function PostModal() {
     },
     web: { mimeType: "audio/mp4", bitsPerSecond: 128000 },
   });
-
   const [previewTrackUrl, setPreviewTrackUrl] = useState<string | null>(null);
   const activeAudioSource = previewTrackUrl || linkedSong?.previewUrl || "";
   const player = useAudioPlayer(activeAudioSource);
 
   useEffect(() => {
-    if (previewTrackUrl && player) {
-      player.play();
-    }
+    if (previewTrackUrl && player) player.play();
   }, [previewTrackUrl, player]);
 
   const resetForm = () => {
@@ -445,34 +449,44 @@ export default function PostModal() {
     if (!text.trim() && !linkedSong) return;
     if (!user) return;
     if (player) player.pause();
-    setIsLoading(true);
-    try {
-      const songDataString = linkedSong
-        ? JSON.stringify({
-            title: linkedSong.trackName,
-            artist: linkedSong.artistName,
-            cover: linkedSong.artworkUrl100,
-            preview: linkedSong.previewUrl,
-            spotifyId: linkedSong.trackId,
-          })
-        : JSON.stringify({});
-      await createPost(text, songDataString, user.$id);
 
-      // --- CAMBIO: Cierre primero, luego Toast ---
+    const songDataObj = linkedSong
+      ? {
+          title: linkedSong.trackName,
+          artist: linkedSong.artistName,
+          cover: linkedSong.artworkUrl100,
+          preview: linkedSong.previewUrl,
+          spotifyId: linkedSong.trackId,
+        }
+      : {};
+
+    if (createPostOptimistic) {
+      createPostOptimistic(text, songDataObj, user);
       closeModal();
-
-      // Pequeño delay para que la animación de cierre se vea fluida antes del toast
-      setTimeout(() => {
-        showToast(
-          "success",
-          t("post.alerts.successTitle"),
-          t("post.alerts.successMsg")
+      setTimeout(
+        () =>
+          showToast("success", t("post.alerts.successTitle"), "Publicando..."),
+        300
+      );
+    } else {
+      setIsLoading(true);
+      try {
+        await createPost(text, JSON.stringify(songDataObj), user.$id);
+        closeModal();
+        setTimeout(
+          () =>
+            showToast(
+              "success",
+              t("post.alerts.successTitle"),
+              t("post.alerts.successMsg")
+            ),
+          300
         );
-      }, 400); // 400ms da tiempo a que el modal baje y el fondo desaparezca
-    } catch (error: any) {
-      showToast("error", t("post.alerts.errorTitle"), error.message);
-    } finally {
-      setIsLoading(false);
+      } catch (error: any) {
+        showToast("error", t("post.alerts.errorTitle"), error.message);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -556,7 +570,6 @@ export default function PostModal() {
 
   return (
     <>
-      {/* TOAST EXTERNO (Sobrevive al cierre del modal) */}
       <CustomToast
         visible={toast.visible}
         type={toast.type}
@@ -564,9 +577,7 @@ export default function PostModal() {
         message={toast.message}
         translateY={toastAnim}
       />
-
       <Modal
-        // 🔥 IMPORTANTE: Desactivamos la animación nativa para hacer la nuestra
         animationType="none"
         transparent
         visible={isPostModalVisible}
@@ -574,20 +585,17 @@ export default function PostModal() {
       >
         <TouchableWithoutFeedback onPress={closeModal}>
           <View className="flex-1 justify-end">
-            {/* FONDO NEGRO: FADE IN/OUT (Sin movimiento) */}
             <Animated.View
               style={{
                 ...StyleSheet.absoluteFillObject,
                 backgroundColor: "rgba(0,0,0,0.6)",
-                opacity: backgroundOpacity, // Solo opacidad
+                opacity: backgroundOpacity,
               }}
             />
-
-            {/* CONTENIDO DEL MODAL: SLIDE UP/DOWN (Solo movimiento) */}
             <Animated.View
               style={{
                 width: "100%",
-                transform: [{ translateY: contentTranslateY }], // Solo traslación Y
+                transform: [{ translateY: contentTranslateY }],
               }}
             >
               <TouchableWithoutFeedback>
@@ -609,23 +617,19 @@ export default function PostModal() {
                           {t("post.cancel")}
                         </Text>
                       </TouchableOpacity>
-                      {isLoading ? (
-                        <ActivityIndicator color="#5E17EB" />
-                      ) : (
-                        <TouchableOpacity
-                          onPress={handlePost}
-                          disabled={!text.trim() && !linkedSong}
-                          className={`px-6 py-2 rounded-full ${
-                            text.trim() || linkedSong
-                              ? "bg-[#5E17EB]"
-                              : "bg-zinc-700"
-                          }`}
-                        >
-                          <Text className="text-white font-bold text-base">
-                            {t("post.publish")}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
+                      <TouchableOpacity
+                        onPress={handlePost}
+                        disabled={!text.trim() && !linkedSong}
+                        className={`px-6 py-2 rounded-full ${
+                          text.trim() || linkedSong
+                            ? "bg-[#5E17EB]"
+                            : "bg-zinc-700"
+                        }`}
+                      >
+                        <Text className="text-white font-bold text-base">
+                          {t("post.publish")}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
 
                     <View className="flex-row gap-4 mb-2">

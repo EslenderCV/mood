@@ -1,30 +1,28 @@
-import { View, Image, TouchableOpacity, Text } from "react-native";
+import { View, Text, TouchableOpacity, Image } from "react-native";
 import React from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Link, router } from "expo-router";
+import { useGlobalContext } from "@/context/GlobalProvider";
 import { useColorScheme } from "nativewind";
+import { router } from "expo-router";
 
 interface TopBarProps {
-  notificationCount?: number;
-  messageCount?: number;
+  notificationCount: number;
+  messageCount: number;
+  onChatPress?: () => void;
 }
 
-const TopBar = ({ notificationCount = 0, messageCount = 0 }: TopBarProps) => {
+const TopBar = ({
+  notificationCount,
+  messageCount,
+  onChatPress,
+}: TopBarProps) => {
+  const { user } = useGlobalContext();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  const bgColor = isDark ? "#000000" : "#FFFFFF";
-  const borderColor = isDark ? "#27272A" : "#F4F4F5";
-  const btnBg = isDark ? "#18181B" : "#F4F4F5";
   const iconColor = isDark ? "#5E17EB" : "#000000";
 
   return (
-    <View
-      className="flex-row items-center justify-between w-full px-5 py-2 border-b"
-      style={{
-        backgroundColor: bgColor,
-      }}
-    >
+    <View className="flex-row justify-between items-center px-5 py-2">
       <View className="h-[45px] w-[80px] justify-center">
         <Image
           source={require("@/assets/fullLogo.png")}
@@ -33,52 +31,41 @@ const TopBar = ({ notificationCount = 0, messageCount = 0 }: TopBarProps) => {
           style={{ tintColor: isDark ? undefined : "#5E17EB" }}
         />
       </View>
-      <View className="flex-row items-center gap-x-3">
+
+      <View className="flex-row gap-4">
         <TouchableOpacity
-          activeOpacity={0.7}
           onPress={() => {
             router.push("/notifications");
           }}
-          className="p-2.5 rounded-full relative"
-          style={{
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0 : 0.05,
-            shadowRadius: 4,
-            elevation: isDark ? 0 : 2,
-          }}
         >
-          {notificationCount > 0 && (
-            <View className="absolute -top-1 -right-1 bg-[#FF2D55] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 z-10 border border-white dark:border-black">
-              <Text className="text-[10px] text-white font-bold leading-none">
-                {notificationCount > 99 ? "99+" : notificationCount}
-              </Text>
-            </View>
-          )}
-          <Ionicons name="notifications-outline" color={iconColor} size={22} />
-        </TouchableOpacity>
-        <Link href="/chats" asChild>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            className="p-2.5 rounded-full relative"
-            style={{
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: isDark ? 0 : 0.05,
-              shadowRadius: 4,
-              elevation: isDark ? 0 : 2,
-            }}
-          >
-            {messageCount > 0 && (
-              <View className="absolute -top-1 -right-1 bg-[#5E17EB] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 z-10 border border-white dark:border-black">
-                <Text className="text-[10px] text-white font-bold leading-none">
-                  {messageCount > 99 ? "99+" : messageCount}
+          <View className="relative">
+            <Ionicons
+              name="notifications-outline"
+              size={26}
+              color={iconColor}
+            />
+            {notificationCount > 0 && (
+              <View className="absolute -top-1 -right-1 bg-red-500 w-4 h-4 rounded-full items-center justify-center">
+                <Text className="text-white text-[10px] font-bold">
+                  {notificationCount}
                 </Text>
               </View>
             )}
-            <Ionicons name="chatbubble-outline" color={iconColor} size={22} />
-          </TouchableOpacity>
-        </Link>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={onChatPress}>
+          <View className="relative">
+            <Ionicons name="chatbubble-outline" size={26} color={iconColor} />
+            {messageCount > 0 && (
+              <View className="absolute -top-1 -right-1 bg-[#5E17EB] w-4 h-4 rounded-full items-center justify-center">
+                <Text className="text-white text-[10px] font-bold">
+                  {messageCount}
+                </Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </View>
     </View>
   );

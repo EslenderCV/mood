@@ -1909,3 +1909,31 @@ export async function viewStory(
 }
 
 export { client, databases };
+
+export const searchSongs = async (query: string) => {
+  try {
+    const response = await fetch(
+      `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=15`
+    );
+    const data = await response.json();
+
+    if (!data.data) return [];
+
+    return data.data.map((track: any) => ({
+      id: track.id.toString(),
+      title: track.title,
+      artist: track.artist.name,
+      cover: track.album.cover_medium || track.album.cover_big,
+      preview: track.preview,
+      duration: track.duration,
+      // Adaptamos la estructura para que sea compatible con tu UI
+      album: {
+        cover_xl: track.album.cover_xl,
+        cover_medium: track.album.cover_medium,
+      },
+    }));
+  } catch (e) {
+    console.log("Error searching songs:", e);
+    return [];
+  }
+};

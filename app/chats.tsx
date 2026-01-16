@@ -7,29 +7,17 @@ import {
   TextInput,
   RefreshControl,
   Alert,
-  Animated,
   Modal,
   ActivityIndicator,
   useWindowDimensions,
-  BackHandler,
+  Animated,
 } from "react-native";
-import React, {
-  useState,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-} from "react";
-// 👇 Importamos el hook de insets, ya no usaremos el componente SafeAreaView
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
-import {
-  GestureHandlerRootView,
-  PanGestureHandler,
-  State,
-} from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 
 import { useGlobalContext } from "@/context/GlobalProvider";
@@ -219,14 +207,16 @@ const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
   );
 };
 
-const ChatsList = () => {
+interface ChatsListProps {
+  onBackPress?: () => void;
+}
+
+const ChatsList = ({ onBackPress }: ChatsListProps) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
-  const { height, width } = useWindowDimensions();
+  const { height } = useWindowDimensions();
   const { user, chats, setChats } = useGlobalContext();
-
-  // 🔥 HOOK PARA MEDIDAS EXACTAS
   const insets = useSafeAreaInsets();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
@@ -242,48 +232,6 @@ const ChatsList = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [localSearchQuery, setLocalSearchQuery] = useState("");
   const [isNewChatVisible, setIsNewChatVisible] = useState(false);
-
-  // --- ANIMACIÓN DE SALIDA MANUAL ---
-  const translateX = useRef(new Animated.Value(0)).current;
-
-  const handleGoBack = useCallback(() => {
-    Animated.timing(translateX, {
-      toValue: width,
-      duration: 250,
-      useNativeDriver: true,
-      easing: (t) => t * (2 - t),
-    }).start(() => {
-      router.back();
-    });
-    return true;
-  }, [width, translateX]);
-
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener(
-      "hardwareBackPress",
-      handleGoBack
-    );
-    return () => backHandler.remove();
-  }, [handleGoBack]);
-
-  const onPanGestureEvent = Animated.event(
-    [{ nativeEvent: { translationX: translateX } }],
-    { useNativeDriver: false }
-  );
-
-  const onPanHandlerStateChange = ({ nativeEvent }: any) => {
-    if (nativeEvent.oldState === State.ACTIVE) {
-      if (nativeEvent.translationX > 60 || nativeEvent.velocityX > 600) {
-        handleGoBack();
-      } else {
-        Animated.spring(translateX, {
-          toValue: 0,
-          useNativeDriver: true,
-          bounciness: 4,
-        }).start();
-      }
-    }
-  };
 
   const skeletonItems = useMemo(() => {
     const ESTIMATED_ITEM_HEIGHT = 80;
@@ -583,139 +531,108 @@ const ChatsList = () => {
   };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <PanGestureHandler
-        onGestureEvent={onPanGestureEvent}
-        onHandlerStateChange={onPanHandlerStateChange}
-        activeOffsetX={[0, 20]} // Gesto solo desde el borde izquierdo
-      >
-        <Animated.View
-          style={{
-            flex: 1,
-            backgroundColor: bgColor,
-            // 🚀 CORRECCIÓN DEL LAYOUT: Padding manual en vez de SafeAreaView
-            paddingTop: insets.top,
-            transform: [
-              {
-                translateX: translateX.interpolate({
-                  inputRange: [0, width],
-                  outputRange: [0, width],
-                  extrapolate: "clamp",
-                }),
-              },
-            ],
-            // Sombra para dar efecto de capas al salir
-            shadowColor: "#000",
-            shadowOffset: { width: -5, height: 0 },
-            shadowOpacity: 0.3,
-            shadowRadius: 10,
-            elevation: 20,
-          }}
-        >
-          {/* Ya no usamos SafeAreaView aquí porque el AnimatedView ya tiene el padding */}
-          <View style={{ flex: 1, backgroundColor: bgColor }}>
-            <View className="px-5 pt-3 pb-2">
-              <View className="flex-row items-center mb-4 gap-2">
-                <TouchableOpacity
-                  onPress={handleGoBack}
-                  className="mr-1 -ml-2 p-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
-                >
-                  <Ionicons name="arrow-back" size={28} color={textColor} />
-                </TouchableOpacity>
-                <Text
-                  className="font-bold text-[34px]"
-                  style={{ color: textColor }}
-                >
-                  {t("chatsList.title")}
-                </Text>
-              </View>
-              <View
-                className="flex-row items-center px-3 py-2.5 rounded-xl"
-                style={{ backgroundColor: inputBg }}
-              >
-                <Ionicons name="search" size={18} color={subTextColor} />
-                <TextInput
-                  placeholder="Buscar por nombre..."
-                  placeholderTextColor={subTextColor}
-                  className="flex-1 ml-2 text-base"
-                  style={{ color: textColor, height: 20, padding: 0 }}
-                  value={localSearchQuery}
-                  onChangeText={setLocalSearchQuery}
-                />
-              </View>
-            </View>
-
-            {loading && chats.length === 0 ? (
-              <View className="flex-1 mt-2">
-                {skeletonItems.map((i) => (
-                  <ChatSkeleton key={i} isDark={isDark} />
-                ))}
-              </View>
-            ) : (
-              <FlatList
-                data={filteredChats}
-                keyExtractor={(item) => item.$id}
-                renderItem={renderChatItem}
-                contentContainerStyle={{ paddingBottom: 100 }}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={onRefresh}
-                    tintColor={unreadColor}
-                  />
-                }
-                ListEmptyComponent={
-                  <View className="flex-1 justify-center items-center mt-32 px-10 opacity-60">
-                    <Ionicons
-                      name="chatbubbles-outline"
-                      size={50}
-                      color={subTextColor}
-                    />
-                    <Text
-                      className="text-center font-medium text-lg mt-4"
-                      style={{ color: textColor }}
-                    >
-                      {localSearchQuery
-                        ? "No hay coincidencias"
-                        : "No tienes mensajes aún"}
-                    </Text>
-                    <Text
-                      className="text-center text-sm mt-1"
-                      style={{ color: subTextColor }}
-                    >
-                      Toca el botón + para empezar una conversación.
-                    </Text>
-                  </View>
-                }
-              />
-            )}
-
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: bgColor }}>
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        <View className="px-5 pt-3 pb-2">
+          <View className="flex-row items-center mb-4 gap-2">
             <TouchableOpacity
-              onPress={() => setIsNewChatVisible(true)}
-              activeOpacity={0.9}
-              className="absolute bottom-8 right-6 w-14 h-14 rounded-full items-center justify-center shadow-lg z-50"
-              style={{
-                backgroundColor: fabColor,
-                shadowColor: fabColor,
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.3,
-                shadowRadius: 4.65,
-                elevation: 8,
-              }}
+              onPress={onBackPress ? onBackPress : () => router.back()}
+              className="mr-1 -ml-2 p-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
             >
-              <Ionicons name="add" size={32} color="white" />
+              <Ionicons name="arrow-back" size={28} color={textColor} />
             </TouchableOpacity>
-
-            <NewChatModal
-              visible={isNewChatVisible}
-              onClose={() => setIsNewChatVisible(false)}
-              onUserSelect={(selectedUser: any) =>
-                handleOpenChat(selectedUser.$id, selectedUser)
-              }
+            <Text
+              className="font-bold text-[34px]"
+              style={{ color: textColor }}
+            >
+              {t("chatsList.title")}
+            </Text>
+          </View>
+          <View
+            className="flex-row items-center px-3 py-2.5 rounded-xl"
+            style={{ backgroundColor: inputBg }}
+          >
+            <Ionicons name="search" size={18} color={subTextColor} />
+            <TextInput
+              placeholder="Buscar por nombre..."
+              placeholderTextColor={subTextColor}
+              className="flex-1 ml-2 text-base"
+              style={{ color: textColor, height: 20, padding: 0 }}
+              value={localSearchQuery}
+              onChangeText={setLocalSearchQuery}
             />
           </View>
-        </Animated.View>
-      </PanGestureHandler>
+        </View>
+
+        {loading && chats.length === 0 ? (
+          <View className="flex-1 mt-2">
+            {skeletonItems.map((i) => (
+              <ChatSkeleton key={i} isDark={isDark} />
+            ))}
+          </View>
+        ) : (
+          <FlatList
+            data={filteredChats}
+            keyExtractor={(item) => item.$id}
+            renderItem={renderChatItem}
+            contentContainerStyle={{ paddingBottom: 100 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={unreadColor}
+              />
+            }
+            ListEmptyComponent={
+              <View className="flex-1 justify-center items-center mt-32 px-10 opacity-60">
+                <Ionicons
+                  name="chatbubbles-outline"
+                  size={50}
+                  color={subTextColor}
+                />
+                <Text
+                  className="text-center font-medium text-lg mt-4"
+                  style={{ color: textColor }}
+                >
+                  {localSearchQuery
+                    ? "No hay coincidencias"
+                    : "No tienes mensajes aún"}
+                </Text>
+                <Text
+                  className="text-center text-sm mt-1"
+                  style={{ color: subTextColor }}
+                >
+                  Toca el botón + para empezar una conversación.
+                </Text>
+              </View>
+            }
+          />
+        )}
+
+        <TouchableOpacity
+          onPress={() => setIsNewChatVisible(true)}
+          activeOpacity={0.9}
+          className="absolute bottom-8 right-6 w-14 h-14 rounded-full items-center justify-center shadow-lg z-50"
+          style={{
+            backgroundColor: fabColor,
+            shadowColor: fabColor,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4.65,
+            elevation: 8,
+          }}
+        >
+          <Ionicons name="add" size={32} color="white" />
+        </TouchableOpacity>
+
+        <NewChatModal
+          visible={isNewChatVisible}
+          onClose={() => setIsNewChatVisible(false)}
+          onUserSelect={(selectedUser: any) =>
+            handleOpenChat(selectedUser.$id, selectedUser)
+          }
+        />
+      </View>
     </GestureHandlerRootView>
   );
 };
