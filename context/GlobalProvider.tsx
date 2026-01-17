@@ -41,7 +41,7 @@ interface GlobalContextType {
   isLogged: boolean;
   setIsLogged: Dispatch<SetStateAction<boolean>>;
   checkAuth: () => Promise<void>;
-  // 🔥 NUEVO: Estado global de chats
+  // 🔥 NUEVO: Estado global de chats (Mantenido)
   chats: any[];
   setChats: Dispatch<SetStateAction<any[]>>;
 }
@@ -66,11 +66,12 @@ const GlobalProvider = ({ children }: Props) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 🔥 Estado compartido para evitar recargas visuales
+  // 🔥 Estado compartido para evitar recargas visuales (Mantenido)
   const [chats, setChats] = useState<any[]>([]);
 
   const { colorScheme, setColorScheme } = useColorScheme();
 
+  // Función original de verificación de auth
   const checkAuth = useCallback(async () => {
     try {
       const res = await getCurrentUser();
@@ -106,11 +107,11 @@ const GlobalProvider = ({ children }: Props) => {
       loading,
       isLogged: loggedIn,
       setIsLogged: setLoggedIn,
-      checkAuth,
+      checkAuth, // Ahora se expone para que AccountManager lo use tras un cambio
       chats,
       setChats,
     }),
-    [loggedIn, user, loading, checkAuth, chats]
+    [loggedIn, user, loading, chats, checkAuth],
   );
 
   return (

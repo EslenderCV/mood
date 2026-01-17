@@ -1894,6 +1894,10 @@ export async function createStory(songData: string, userId: string) {
 
 // --- FUNCIÓN CORREGIDA: getStories ---
 export async function getStories(currentUserId: string) {
+  // 🔥 VALIDACIÓN DE SEGURIDAD:
+  // Si no hay un ID de usuario (por cambio de cuenta), retornamos vacío de inmediato.
+  if (!currentUserId) return [];
+
   try {
     const followedUserIds = await getFollowedUserIds(currentUserId);
     const allowedUsers = [...followedUserIds, currentUserId];
@@ -1908,13 +1912,14 @@ export async function getStories(currentUserId: string) {
       ],
     );
 
-    // 🔥 POBLAR DATOS DE USUARIO PARA QUE LA FOTO DE PERFIL NO FALLE
+    // Mapeo y población de datos del usuario
     const storiesWithUserData = await Promise.all(
-      posts.documents.map(async (story) => {
+      posts.documents.map(async (story: any) => {
         try {
+          // Si 'user' es solo un ID (string), buscamos el objeto completo
           if (typeof story.user === "string") {
             const userData = await getUser(story.user);
-            return { ...story, user: userData }; // Reemplazamos ID con Objeto Usuario
+            return { ...story, user: userData };
           }
           return story;
         } catch (e) {
@@ -1923,13 +1928,18 @@ export async function getStories(currentUserId: string) {
       }),
     );
 
-    return storiesWithUserData.filter((s) => s !== null && s.user);
-  } catch (error) {
-    console.log("Error obteniendo historias:", error);
+    // Filtramos nulos y aseguramos que tengan usuario
+    return storiesWithUserData.filter((s: any) => s !== null && s.user);
+  } catch (error: any) {
+    // Si el error es de autorización (401), fallamos en silencio
+    if (error?.code === 401) {
+      console.log("Sesión no activa durante la carga de historias.");
+      return [];
+    }
+    console.error("Error en getStories:", error);
     return [];
   }
 }
-
 export async function viewStory(
   storyId: string,
   userId: string,

@@ -19,6 +19,9 @@ import { useLanguage } from "@/context/LanguageContext";
 // 1. IMPORTAMOS LOS INSETS
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+// 🔥 IMPORTACIÓN DEL NUEVO MODAL DE CUENTAS
+import AccountSelectorModal from "@/components/profile/AccountSelectorModal";
+
 const MenuOption = ({
   label,
   iconName,
@@ -72,6 +75,9 @@ const TabsLayout = () => {
   const menuHeader = isDark ? "rgba(39, 39, 42, 0.5)" : "#F4F4F5";
 
   const [menuOpen, setMenuOpen] = useState(false);
+  // 🔥 ESTADO PARA EL MODAL DE CUENTAS
+  const [isAccountModalVisible, setIsAccountModalVisible] = useState(false);
+
   const { user } = useGlobalContext();
   const { setPostModalVisible } = useModal();
 
@@ -197,27 +203,40 @@ const TabsLayout = () => {
           options={{
             title: t("tabs.profile"),
             tabBarIcon: ({ focused }) => (
-              <View
-                style={{
-                  borderWidth: 2,
-                  borderColor: focused ? "#5E17EB" : "transparent",
-                  borderRadius: 9999,
-                  padding: 1,
-                }}
+              /* 🔥 PRESSABLE CON ONLONGPRESS PARA MULTI-CUENTAS */
+              <Pressable
+                onLongPress={() => setIsAccountModalVisible(true)}
+                delayLongPress={350}
+                style={{ alignItems: "center", justifyContent: "center" }}
               >
-                <Image
-                  source={
-                    user?.pfp
-                      ? { uri: user.pfp }
-                      : require("@/assets/noPfp.jpg")
-                  }
-                  className="w-7 h-7 rounded-full"
-                />
-              </View>
+                <View
+                  style={{
+                    borderWidth: 2,
+                    borderColor: focused ? "#5E17EB" : "transparent",
+                    borderRadius: 9999,
+                    padding: 1,
+                  }}
+                >
+                  <Image
+                    source={
+                      user?.pfp
+                        ? { uri: user.pfp }
+                        : require("@/assets/noPfp.jpg")
+                    }
+                    className="w-7 h-7 rounded-full"
+                  />
+                </View>
+              </Pressable>
             ),
           }}
         />
       </Tabs>
+
+      {/* 🔥 MODAL DE SELECCIÓN DE CUENTAS INTEGRADO */}
+      <AccountSelectorModal
+        visible={isAccountModalVisible}
+        onClose={() => setIsAccountModalVisible(false)}
+      />
 
       {menuOpen && (
         <View style={StyleSheet.absoluteFill} className="z-[60]">

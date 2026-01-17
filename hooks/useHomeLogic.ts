@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Alert, FlatList } from "react-native";
+import { Alert, FlatList, Image } from "react-native"; // 🔥 Añadido Image para prefetch
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useFeed } from "@/context/FeedProvider";
 import { useNavigation } from "expo-router";
@@ -158,6 +158,15 @@ export const useHomeLogic = () => {
         (doc: any) => new Date(doc.$createdAt) > oneDayAgo,
       );
 
+      // 🔥 LÓGICA DE PRE-CARGA (PREFETCHING)
+      recentStories.forEach((doc: any) => {
+        try {
+          const parsed = JSON.parse(doc.songData);
+          if (parsed.cover) Image.prefetch(parsed.cover);
+          if (doc.user?.pfp) Image.prefetch(doc.user.pfp);
+        } catch (e) {}
+      });
+
       const uniqueUserIds = new Set<string>();
       const userMap = new Map<string, any>();
       if (user) userMap.set(userId, user);
@@ -213,94 +222,79 @@ export const useHomeLogic = () => {
 
   const fetchAuxiliaryData = useCallback(async () => {
     try {
-      let activeId = user?.$id || currentUserId;
-      if (!activeId) {
-        const u = await getCurrentUser();
-        if (u) {
-          activeId = u.$id;
-          setCurrentUserId(u.$id);
-        } else {
-          return;
-        }
+      // 🔥 PROTECCIÓN DE SESIÓN: Si no hay usuario (por ejemplo, al añadir cuenta), detenemos todo.
+      // Esto evita el error de "Not Authorized" en la consola.
+      if (!user?.$id) return;
+
+      let activeId = user.$id;
+
+      const officialStoriesRes = await databases
+        .listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.storiesCollectionId,
+          [Query.equal("user", MOOD_OFFICIAL_ID)],
+        )
+        .catch(() => ({ documents: [] }));
+
+      const myStories: any[] = await fetchStoriesInternal(activeId);
+
+      const officialDocs = officialStoriesRes.documents;
+      const officialGroupIndex = myStories.findIndex(
+        (g) => g.userId === MOOD_OFFICIAL_ID,
+      );
+
+      if (officialDocs.length > 0) {
+        const officialGroup = {
+          userId: MOOD_OFFICIAL_ID,
+          user: {
+            $id: MOOD_OFFICIAL_ID,
+            username: "Mood",
+            name: "Mood Team",
+            pfp: null,
+            isVerified: true,
+          },
+          stories: officialDocs,
+        };
+        if (officialGroupIndex !== -1) myStories.splice(officialGroupIndex, 1);
+        myStories.unshift(officialGroup);
       }
 
-      if (activeId) {
-        const officialStoriesRes = await databases
-          .listDocuments(
-            appwriteConfig.databaseId,
-            appwriteConfig.storiesCollectionId,
-            [Query.equal("user", MOOD_OFFICIAL_ID)],
-          )
-          .catch(() => ({ documents: [] }));
-
-        const myStories: any[] = await fetchStoriesInternal(activeId);
-
-        const officialDocs = officialStoriesRes.documents;
-        const officialGroupIndex = myStories.findIndex(
-          (g) => g.userId === MOOD_OFFICIAL_ID,
-        );
-
-        if (officialDocs.length > 0) {
-          const officialGroup = {
-            userId: MOOD_OFFICIAL_ID,
-            user: {
-              $id: MOOD_OFFICIAL_ID,
-              username: "Mood",
-              name: "Mood Team",
-              pfp: null,
-              isVerified: true,
-            },
-            stories: officialDocs,
-          };
-          if (officialGroupIndex !== -1)
-            myStories.splice(officialGroupIndex, 1);
-          myStories.unshift(officialGroup);
-        }
-
-        const myGroupIndex = myStories.findIndex((g) => g.userId === activeId);
-        if (myGroupIndex > 0) {
-          const myGroup = myStories.splice(myGroupIndex, 1)[0];
-          const insertIndex =
-            myStories.length > 0 &&
-            myStories[0].userId === MOOD_OFFICIAL_ID &&
-            activeId !== MOOD_OFFICIAL_ID
-              ? 1
-              : 0;
-          myStories.splice(insertIndex, 0, myGroup);
-        }
-
-        setLocalData((prev) => ({
-          ...prev,
-          groupedStories: myStories,
-        }));
-
-        await fetchCounts(activeId);
+      const myGroupIndex = myStories.findIndex((g) => g.userId === activeId);
+      if (myGroupIndex > 0) {
+        const myGroup = myStories.splice(myGroupIndex, 1)[0];
+        const insertIndex =
+          myStories.length > 0 &&
+          myStories[0].userId === MOOD_OFFICIAL_ID &&
+          activeId !== MOOD_OFFICIAL_ID
+            ? 1
+            : 0;
+        myStories.splice(insertIndex, 0, myGroup);
       }
+
+      setLocalData((prev) => ({
+        ...prev,
+        groupedStories: myStories,
+      }));
+
+      await fetchCounts(activeId);
     } catch (e) {
-      console.log(e);
+      console.log("Fetch Auxiliary Data Error:", e);
     }
-  }, [user, currentUserId]);
+  }, [user]); // 🔥 Dependencia limpia para evitar re-ejecuciones innecesarias
 
   const onRefresh = useCallback(() => {
     refreshFeed();
     fetchAuxiliaryData();
   }, [refreshFeed, fetchAuxiliaryData]);
 
-  // --- LÓGICA INFINITA RESTAURADA ---
+  // --- LÓGICA INFINITA ---
   const handleLoadMore = () => {
-    // Si no hay contenido base, no hacemos nada
     if (poolOfContent.length === 0) return;
-
-    // Tomamos una copia de todo el contenido mezclable y lo reordenamos aleatoriamente
     const recycledBatch = shuffleArray([...poolOfContent]);
-
-    // Tomamos los primeros 10 elementos y les cambiamos el _id para que la lista no se queje de duplicados
     const newItems = recycledBatch.slice(0, 10).map((item) => ({
       ...item,
-      _id: item._id + Math.random().toString(), // ID único temporal
+      _id: item._id + Math.random().toString(),
     }));
-
-    // Agregamos al final de la lista actual
     setSortedFeed((prev) => [...prev, ...newItems]);
   };
 
@@ -321,7 +315,7 @@ export const useHomeLogic = () => {
     if (user) {
       fetchAuxiliaryData();
     }
-  }, [user]);
+  }, [user, fetchAuxiliaryData]);
 
   useEffect(() => {
     if (!user?.$id) return;
@@ -433,7 +427,6 @@ export const useHomeLogic = () => {
       });
     }
     setSortedFeed(initialFeed);
-    // Guardamos TODO lo que no es prioritario en el pool para reciclar
     setPoolOfContent([...discoveryPosts, ...generalPool, ...otherItems]);
   }, [feed, myFollowedIds, user]);
 
@@ -470,7 +463,7 @@ export const useHomeLogic = () => {
     fetchAuxiliaryData,
     MOOD_OFFICIAL_ID,
     handleMoodMediaPick,
-    handleLoadMore, // <--- ¡AHORA SÍ LA EXPORTAMOS!
+    handleLoadMore,
     flatListRef,
   };
 };

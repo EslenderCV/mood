@@ -26,6 +26,9 @@ import { sendWelcomeEmail } from "@/lib/email";
 import { AppwriteException } from "react-native-appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
+// 🔥 IMPORTAMOS EL ACCOUNT MANAGER
+import { AccountManager } from "@/lib/accountManager";
+
 const SignUp = () => {
   const { setUser, setLoggedIn } = useGlobalContext();
   const { t } = useLanguage();
@@ -52,25 +55,30 @@ const SignUp = () => {
 
     try {
       setIsLoading(true);
-      const result = await createUser(
+      // 🔥 CAPTURAMOS SESIÓN TRAS EL REGISTRO
+      const { user: newUser, session } = await createUser(
         form.email,
         form.password,
         form.name,
-        form.username
+        form.username,
       );
 
-      if (setUser) {
+      if (setUser && session) {
         sendWelcomeEmail(form.email, form.name).catch(console.error);
 
-        setUser(result as unknown as User);
+        setUser(newUser as unknown as User);
         setLoggedIn(true);
-        router.replace("/explore");
+
+        // 🔥 PASAMOS EL SECRET
+        await AccountManager.saveCurrentAccount(session.secret);
+
+        router.replace("/home");
       }
     } catch (error) {
       const appwriteError = error as AppwriteException;
       Alert.alert(
         t("auth.alerts.errorTitle"),
-        appwriteError.message || t("auth.alerts.createError")
+        appwriteError.message || t("auth.alerts.createError"),
       );
     } finally {
       setIsLoading(false);
@@ -90,8 +98,11 @@ const SignUp = () => {
           setUser(user as unknown as User);
           setLoggedIn(true);
 
+          // 🔥 GUARDAR EN MULTI-CUENTAS TRAS OAUTH
+          await AccountManager.saveCurrentAccount();
+
           setTimeout(() => {
-            router.replace("/explore");
+            router.replace("/home");
           }, 500);
         } else {
           Alert.alert("Error", "No se pudo sincronizar el perfil del usuario.");
@@ -119,7 +130,7 @@ const SignUp = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={{ flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
         >
@@ -174,7 +185,6 @@ const SignUp = () => {
               />
             </View>
 
-            {/* TEXTO LEGAL EN INGLÉS */}
             <View className="mt-6 px-2">
               <Text className="text-zinc-500 text-xs text-center leading-4">
                 By creating an account, you agree to our{" "}
@@ -182,7 +192,7 @@ const SignUp = () => {
                   className="text-[#5E17EB] font-bold"
                   onPress={() =>
                     openLink(
-                      "https://candied-resolution-5fa.notion.site/T-rminos-de-Uso-y-EULA-Acuerdo-de-Licencia-2e08961d2f1080769b1ddd43f1ea92c7?source=copy_link"
+                      "https://candied-resolution-5fa.notion.site/T-rminos-de-Uso-y-EULA-Acuerdo-de-Licencia-2e08961d2f1080769b1ddd43f1ea92c7?source=copy_link",
                     )
                   }
                 >
@@ -193,12 +203,13 @@ const SignUp = () => {
                   className="text-[#5E17EB] font-bold"
                   onPress={() =>
                     openLink(
-                      "https://candied-resolution-5fa.notion.site/Pol-tica-de-Privacidad-de-Mood-2e08961d2f1080018d6dc0ba872fab3d?source=copy_link"
+                      "https://candied-resolution-5fa.notion.site/Pol-tica-de-Privacidad-de-Mood-2e08961d2f1080018d6dc0ba872fab3d?source=copy_link",
                     )
                   }
                 >
                   Privacy Policy
-                </Text>.
+                </Text>
+                .
               </Text>
             </View>
 

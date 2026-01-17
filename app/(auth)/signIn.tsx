@@ -25,6 +25,9 @@ import { sendWelcomeEmail } from "@/lib/email";
 import { AppwriteException } from "react-native-appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
+// 🔥 IMPORTAMOS EL ACCOUNT MANAGER
+import { AccountManager } from "@/lib/accountManager";
+
 const SignIn = () => {
   const { setUser, setLoggedIn } = useGlobalContext();
   const { t } = useLanguage();
@@ -43,12 +46,18 @@ const SignIn = () => {
 
     try {
       setIsLoading(true);
-      await signInn(form.email, form.password);
+
+      // 🔥 CAPTURAMOS LA SESIÓN (session.secret es lo que necesitamos)
+      const session = await signInn(form.email, form.password);
       const result = await getCurrentUser();
 
-      if (result) {
+      if (result && session) {
         setLoggedIn(true);
         setUser(result as unknown as User);
+
+        // 🔥 PASAMOS EL SECRET EXPLÍCITAMENTE
+        await AccountManager.saveCurrentAccount(session.secret);
+
         router.replace("/home");
       } else {
         throw new Error("No se pudo obtener la información del usuario.");
@@ -57,7 +66,7 @@ const SignIn = () => {
       const appwriteError = error as AppwriteException;
       Alert.alert(
         t("auth.alerts.errorTitle"),
-        appwriteError.message || t("auth.alerts.wrongCredentials")
+        appwriteError.message || t("auth.alerts.wrongCredentials"),
       );
     } finally {
       setIsLoading(false);
@@ -76,6 +85,9 @@ const SignIn = () => {
           sendWelcomeEmail(user.email, user.name).catch(console.error);
           setUser(user as unknown as User);
           setLoggedIn(true);
+
+          // 🔥 GUARDAR EN MULTI-CUENTAS TRAS OAUTH
+          await AccountManager.saveCurrentAccount();
 
           setTimeout(() => {
             router.replace("/home");
