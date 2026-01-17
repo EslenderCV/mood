@@ -25,7 +25,6 @@ import { createPost, searchUsers } from "@/lib/appwrite";
 import { useColorScheme } from "nativewind";
 import { useAudioPlayer, useAudioRecorder } from "expo-audio";
 import { useLanguage } from "@/context/LanguageContext";
-import { BlurView } from "expo-blur";
 
 const { width, height } = Dimensions.get("window");
 const AUDD_API_TOKEN = "a3c6cdb39b3b57fe634900cdc67077c7";
@@ -147,6 +146,24 @@ export default function PostModal() {
   });
   const toastAnim = useRef(new Animated.Value(-150)).current;
 
+  // Controlar el teclado en Android
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      const showSub = Keyboard.addListener("keyboardDidShow", (e) =>
+        setKeyboardHeight(e.endCoordinates.height),
+      );
+      const hideSub = Keyboard.addListener("keyboardDidHide", () =>
+        setKeyboardHeight(0),
+      );
+      return () => {
+        showSub.remove();
+        hideSub.remove();
+      };
+    }
+  }, []);
+
   useEffect(() => {
     if (isPostModalVisible && viralSongToUse) {
       const formattedSong: Song = {
@@ -213,7 +230,7 @@ export default function PostModal() {
   const showToast = (
     type: "success" | "error",
     title: string,
-    message: string
+    message: string,
   ) => {
     setToast({ visible: true, type, title, message });
     Animated.spring(toastAnim, {
@@ -270,7 +287,7 @@ export default function PostModal() {
     setIsLoadingSearch(true);
     try {
       const response = await fetch(
-        `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=25`
+        `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=25`,
       );
       const data = await response.json();
 
@@ -334,7 +351,7 @@ export default function PostModal() {
       showToast(
         "error",
         t("post.alerts.errorTitle"),
-        t("post.alerts.noPreview")
+        t("post.alerts.noPreview"),
       );
       return;
     }
@@ -404,7 +421,7 @@ export default function PostModal() {
                 showToast(
                   "success",
                   t("post.alerts.found"),
-                  `Es "${bestMatch.trackName}"`
+                  `Es "${bestMatch.trackName}"`,
                 );
               } else {
                 const fallbackSong: Song = {
@@ -419,14 +436,14 @@ export default function PostModal() {
                 showToast(
                   "success",
                   t("post.alerts.found"),
-                  `Es "${fallbackSong.trackName}"`
+                  `Es "${fallbackSong.trackName}"`,
                 );
               }
             } else {
               showToast(
                 "error",
                 t("post.alerts.notFound"),
-                t("post.alerts.tryManual")
+                t("post.alerts.tryManual"),
               );
               setIsSearchingMusic(true);
             }
@@ -440,7 +457,7 @@ export default function PostModal() {
       showToast(
         "error",
         t("post.alerts.permission"),
-        t("post.alerts.enableMic")
+        t("post.alerts.enableMic"),
       );
     }
   };
@@ -466,7 +483,7 @@ export default function PostModal() {
       setTimeout(
         () =>
           showToast("success", t("post.alerts.successTitle"), "Publicando..."),
-        300
+        300,
       );
     } else {
       setIsLoading(true);
@@ -478,9 +495,9 @@ export default function PostModal() {
             showToast(
               "success",
               t("post.alerts.successTitle"),
-              t("post.alerts.successMsg")
+              t("post.alerts.successMsg"),
             ),
-          300
+          300,
         );
       } catch (error: any) {
         showToast("error", t("post.alerts.errorTitle"), error.message);
@@ -583,27 +600,26 @@ export default function PostModal() {
         visible={isPostModalVisible}
         onRequestClose={closeModal}
       >
-        <TouchableWithoutFeedback onPress={closeModal}>
-          <View className="flex-1 justify-end">
-            <Animated.View
-              style={{
-                ...StyleSheet.absoluteFillObject,
-                backgroundColor: "rgba(0,0,0,0.6)",
-                opacity: backgroundOpacity,
-              }}
-            />
-            <Animated.View
-              style={{
-                width: "100%",
-                transform: [{ translateY: contentTranslateY }],
-              }}
-            >
-              <TouchableWithoutFeedback>
-                <KeyboardAvoidingView
-                  behavior={Platform.OS === "ios" ? "padding" : "padding"}
-                  className="w-full"
-                  keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-                >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+        >
+          <TouchableWithoutFeedback onPress={closeModal}>
+            <View className="flex-1 justify-end">
+              <Animated.View
+                style={{
+                  ...StyleSheet.absoluteFillObject,
+                  backgroundColor: "rgba(0,0,0,0.6)",
+                  opacity: backgroundOpacity,
+                }}
+              />
+              <Animated.View
+                style={{
+                  width: "100%",
+                  transform: [{ translateY: contentTranslateY }],
+                }}
+              >
+                <TouchableWithoutFeedback>
                   <View
                     className="w-full rounded-t-[30px] border-t p-5 pb-10 shadow-2xl"
                     style={{ backgroundColor: bgColor, borderColor }}
@@ -863,11 +879,11 @@ export default function PostModal() {
                       </View>
                     )}
                   </View>
-                </KeyboardAvoidingView>
-              </TouchableWithoutFeedback>
-            </Animated.View>
-          </View>
-        </TouchableWithoutFeedback>
+                </TouchableWithoutFeedback>
+              </Animated.View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );

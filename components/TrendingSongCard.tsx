@@ -88,7 +88,7 @@ const TrendingSongCard = ({ song }: { song: any }) => {
 
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: previewUrl },
-        { shouldPlay: true }
+        { shouldPlay: true },
       );
 
       setSound(newSound);
@@ -143,7 +143,7 @@ const TrendingSongCard = ({ song }: { song: any }) => {
             isDark ? "text-white" : "text-black"
           }`}
         >
-          Viral en Mood
+          You Might Like
         </Text>
       </View>
 

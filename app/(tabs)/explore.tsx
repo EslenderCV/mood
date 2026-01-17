@@ -418,33 +418,22 @@ const CommentsSheet = ({ visible, onClose, postId, currentUser }: any) => {
 const DirectShareSheet = ({
   visible,
   onClose,
-  contacts,
   onSend,
-  onAddToStory,
-  onViralCard,
   onSystemShare,
   onCopyLink,
   isDark,
   onSearch,
-  isLoadingContacts,
 }: any) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const insets = useSafeAreaInsets();
   const bgColor = isDark ? "#18181B" : "#ffffff";
   const textColor = isDark ? "white" : "black";
-  const placeholderColor = isDark ? "#A1A1AA" : "#71717A";
   useEffect(() => {
     const t = setTimeout(() => onSearch && onSearch(searchQuery), 500);
     return () => clearTimeout(t);
   }, [searchQuery]);
-  const toggleUserSelection = (userId: string) => {
-    setSelectedUsers((prev) =>
-      prev.includes(userId)
-        ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
-    );
-  };
+
   const handleSend = () => {
     onSend(selectedUsers, searchQuery);
     setSelectedUsers([]);
@@ -555,11 +544,11 @@ const FullScreenPostItem = React.memo(
     const creator = getCreatorFromPost(item);
 
     const [isLiked, setIsLiked] = useState(
-      item.likedBy?.includes(currentUser?.$id) || false
+      item.likedBy?.includes(currentUser?.$id) || false,
     );
     const [likesCount, setLikesCount] = useState(item.likedBy?.length || 0);
     const [isSaved, setIsSaved] = useState(
-      item.savedBy?.includes(currentUser?.$id) || false
+      item.savedBy?.includes(currentUser?.$id) || false,
     );
     const [isFollowing, setIsFollowing] = useState(false);
     const [showComments, setShowComments] = useState(false);
@@ -598,7 +587,7 @@ const FullScreenPostItem = React.memo(
             if (previewUrl && isMounted) {
               const { sound } = await Audio.Sound.createAsync(
                 { uri: previewUrl },
-                { shouldPlay: true, isLooping: true }
+                { shouldPlay: true, isLooping: true },
               );
               soundRef.current = sound;
               setIsAudioPlaying(true);
@@ -812,7 +801,7 @@ const FullScreenPostItem = React.memo(
         />
       </View>
     );
-  }
+  },
 );
 
 // ============================================
@@ -836,7 +825,7 @@ const PlayerPostModal = ({
       if (viewableItems.length > 0 && viewableItems[0].index !== null) {
         setActiveIndex(viewableItems[0].index);
       }
-    }
+    },
   ).current;
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 }).current;
@@ -1100,7 +1089,7 @@ const Explore = () => {
       });
 
       const charts = Array.from(songMap.values()).sort(
-        (a: any, b: any) => b.score - a.score
+        (a: any, b: any) => b.score - a.score,
       );
       const dayOfYear = getDayOfYear();
       const dailySelection = [];
@@ -1115,7 +1104,7 @@ const Explore = () => {
         .sort((a: any, b: any) => b.count - a.count)
         .slice(0, 20);
       const people = latestUsers.filter(
-        (u: any) => u.$id !== user?.$id && !myFollowedIds.includes(u.$id)
+        (u: any) => u.$id !== user?.$id && !myFollowedIds.includes(u.$id),
       );
       const shuffledPeople = shuffleArray(people).slice(0, 20);
       const allProfiles = latestUsers.filter((u: any) => u.$id !== user?.$id);
@@ -1157,7 +1146,7 @@ const Explore = () => {
       if (!finalUrl) return;
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: finalUrl },
-        { shouldPlay: true }
+        { shouldPlay: true },
       );
       setSound(newSound);
       setPlayingPreviewId(trackId);
@@ -1191,7 +1180,7 @@ const Explore = () => {
               Query.search("name", text),
             ]),
             Query.limit(10),
-          ]
+          ],
         );
         setShareContacts(results.documents);
       } else if (user?.$id) {
@@ -1241,7 +1230,7 @@ const Explore = () => {
         const users = await databases.listDocuments(
           appwriteConfig.databaseId,
           appwriteConfig.usersCollectionId,
-          [Query.search("username", searchText), Query.limit(3)]
+          [Query.search("username", searchText), Query.limit(3)],
         );
         const matchedPosts = posts
           .filter((p: any) => {
@@ -1391,8 +1380,8 @@ const Explore = () => {
                           playingPreviewId === (item.trackId || item.id)
                             ? accentColor
                             : isDark
-                            ? "#27272A"
-                            : "#F3F4F6",
+                              ? "#27272A"
+                              : "#F3F4F6",
                       }}
                     >
                       <Ionicons
@@ -1484,8 +1473,8 @@ const Explore = () => {
               {activeCategory === "music"
                 ? "Top Global Charts"
                 : activeCategory === "artists"
-                ? "Top Artistas"
-                : "Descubrir Perfiles"}
+                  ? "Top Artistas"
+                  : "Descubrir Perfiles"}
             </Text>
           </View>
         )}
@@ -1560,8 +1549,8 @@ const Explore = () => {
             backgroundColor: isPlaying
               ? accentColor
               : isDark
-              ? "#27272A"
-              : "#E5E5E5",
+                ? "#27272A"
+                : "#E5E5E5",
           }}
         >
           <Ionicons
@@ -1598,7 +1587,11 @@ const Explore = () => {
 
   const renderProfileRow = ({ item }: { item: any }) => (
     <TouchableOpacity
-      onPress={() => router.push(`/user/${item.$id}` as any)}
+      onPress={() => {
+        setIsSearchActive(false);
+        setSearchText("");
+        router.push(`/user/${item.$id}` as any);
+      }}
       className="flex-row items-center px-5 py-4 border-b active:opacity-70"
       style={{ borderColor: borderColor }}
     >
