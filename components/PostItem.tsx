@@ -95,29 +95,35 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const [isLiked, setIsLiked] = useState(post.likedBy.includes(currentUserId));
   const [isSaved, setIsSaved] = useState(
-    post?.savedBy?.includes(currentUserId) || false
+    post?.savedBy?.includes(currentUserId) || false,
   );
   const [likesCount, setLikesCount] = useState(post?.likedBy?.length || 0);
   const [savesCount, setSavesCount] = useState(post?.savedBy?.length || 0);
 
   const songData = parseSongData(post.songData);
 
+  // --- OBTENER CREADOR (TRADUCIDO) ---
   const getCreator = () => {
     let userObj = post.postedBy;
     if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
+
+    // Traducciones dinámicas para usuarios anónimos o por defecto
+    const defaultName = t("common.user"); // "Usuario" / "User"
+    const defaultUsername = t("common.anonymous"); // "Anónimo" / "Anonymous"
+
     if (userObj && typeof userObj === "object") {
       return {
         id: userObj.$id || userObj.accountId,
-        username: userObj.username || "anon",
-        name: userObj.name || "Usuario",
+        username: userObj.username || defaultUsername,
+        name: userObj.name || defaultName,
         avatar: userObj.avatar || userObj.pfp,
         isVerified: userObj.isVerified,
       };
     }
     return {
       id: "unknown",
-      username: "anon",
-      name: "Usuario",
+      username: defaultUsername,
+      name: defaultName,
       avatar: null,
       isVerified: false,
     };
@@ -197,7 +203,7 @@ const PostItem: React.FC<PostItemProps> = ({
 
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: previewUrl },
-        { shouldPlay: true }
+        { shouldPlay: true },
       );
 
       setSound(newSound);

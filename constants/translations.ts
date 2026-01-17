@@ -8,6 +8,19 @@ export const translations = {
       save: "Guardar",
       saved: "Guardado",
       share: "Compartir",
+      user: "Usuario", // Nuevo
+      anonymous: "Anónimo", // Nuevo
+      follow: "Seguir", // Nuevo
+    },
+    connection: {
+      // Nuevo: Banner de Conexión
+      disconnected: "Sin conexión a internet",
+      reconnecting: "Sincronizando...",
+      restored: "Conexión restaurada",
+    },
+    home: {
+      // Nuevo: Home Feed
+      suggestedUsers: "Quizás conozcas",
     },
     story: {
       newStory: "Nueva Historia",
@@ -428,7 +441,7 @@ export const translations = {
         q3: "¿Qué hace la cuenta privada?",
         a3: "Solo tus seguidores aprobados podrán ver tus posts. Puedes aceptar solicitudes en Notificaciones.",
         q4: "¿Cómo bloqueo a alguien?",
-        a4: "Ve al perfil del usuario, toca el ícono de opciones (...) y selecciona Bloquear.",
+        a4: "Ve al perfil del usuario, toque el ícono de opciones (...) y selecciona Bloquear.",
       },
     },
     plus: {
@@ -503,6 +516,19 @@ export const translations = {
       save: "Save",
       saved: "Saved",
       share: "Share",
+      user: "User", // Nuevo
+      anonymous: "Anonymous", // Nuevo
+      follow: "Follow", // Nuevo
+    },
+    connection: {
+      // Nuevo
+      disconnected: "No internet connection",
+      reconnecting: "Syncing...",
+      restored: "Connection restored",
+    },
+    home: {
+      // Nuevo
+      suggestedUsers: "Suggested for you",
     },
     story: {
       newStory: "New Story",
@@ -999,6 +1025,19 @@ export const translations = {
       save: "Enregistrer",
       saved: "Enregistré",
       share: "Partager",
+      user: "Utilisateur", // Nuevo
+      anonymous: "Anonyme", // Nuevo
+      follow: "Suivre", // Nuevo
+    },
+    connection: {
+      // Nuevo
+      disconnected: "Pas de connexion internet",
+      reconnecting: "Synchronisation...",
+      restored: "Connexion rétablie",
+    },
+    home: {
+      // Nuevo
+      suggestedUsers: "Vous connaissez peut-être",
     },
     story: {
       newStory: "Nouvelle Story",
@@ -1091,7 +1130,7 @@ export const translations = {
       categories: {
         posts: "Posts",
         music: "Musique",
-        artists: "Artistes",
+        artists: "Artistas",
         profiles: "Profils",
       },
       headers: {
@@ -1461,7 +1500,7 @@ export const translations = {
       savingButton: "Enregistrement...",
       alerts: {
         usernameError:
-          "Le nom d'utilisateur doit comporter au moins 3 caractères.",
+          "Le nom d'utilisateur doit comporter au moins 3 caracteres.",
         emailError: "E-mail invalide.",
         successTitle: "Succès",
         successMsg: "Profil mis à jour avec succès.",
@@ -1497,6 +1536,19 @@ export const translations = {
       save: "Salvar",
       saved: "Salvo",
       share: "Compartilhar",
+      user: "Usuário", // Nuevo
+      anonymous: "Anônimo", // Nuevo
+      follow: "Seguir", // Nuevo
+    },
+    connection: {
+      // Nuevo
+      disconnected: "Sem conexão com a internet",
+      reconnecting: "Sincronizando...",
+      restored: "Conexão restaurada",
+    },
+    home: {
+      // Nuevo
+      suggestedUsers: "Talvez você conheça",
     },
     story: {
       newStory: "Nova História",
@@ -1841,7 +1893,7 @@ export const translations = {
         currentPlaceholder: "Digite sua senha atual",
         newLabel: "Nova Senha",
         newPlaceholder: "Digite a nova senha",
-        confirmLabel: "Confirmar Nova",
+        confirmLabel: "Conferma Nuova",
         confirmPlaceholder: "Repite a nova senha",
         btnUpdate: "Atualizar Senha",
         btnCancel: "Cancelar",
@@ -1990,6 +2042,19 @@ export const translations = {
       save: "Salva",
       saved: "Salvato",
       share: "Condividi",
+      user: "Utente", // Nuevo
+      anonymous: "Anonimo", // Nuevo
+      follow: "Segui", // Nuevo
+    },
+    connection: {
+      // Nuevo
+      disconnected: "Nessuna connessione internet",
+      reconnecting: "Sincronizzazione...",
+      restored: "Connessione ripristinata",
+    },
+    home: {
+      // Nuevo
+      suggestedUsers: "Persone che potresti conoscere",
     },
     story: {
       newStory: "Nuova Storia",

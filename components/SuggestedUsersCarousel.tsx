@@ -2,10 +2,12 @@ import React from "react";
 import { View, Text, FlatList, TouchableOpacity, Image } from "react-native";
 import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
+import { useLanguage } from "@/context/LanguageContext"; // <--- Importar hook
 
 const SuggestedUsersCarousel = ({ users }: { users: any[] }) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+  const { t } = useLanguage(); // <--- Obtener función de traducción
 
   return (
     <View
@@ -19,7 +21,7 @@ const SuggestedUsersCarousel = ({ users }: { users: any[] }) => {
             isDark ? "text-white" : "text-black"
           }`}
         >
-          Quizás conozcas
+          {t("home.suggestedUsers")} {/* <--- Texto traducido */}
         </Text>
       </View>
       <FlatList
@@ -40,7 +42,11 @@ const SuggestedUsersCarousel = ({ users }: { users: any[] }) => {
           >
             <View className="items-center mt-1">
               <Image
-                source={{ uri: item.pfp || item.avatar }}
+                source={
+                  item.pfp || item.avatar
+                    ? { uri: item.pfp || item.avatar }
+                    : require("@/assets/noPfp.jpg")
+                }
                 className="w-16 h-16 rounded-full bg-zinc-700 mb-2"
               />
               <Text
@@ -59,7 +65,9 @@ const SuggestedUsersCarousel = ({ users }: { users: any[] }) => {
               </Text>
             </View>
             <TouchableOpacity className="w-full bg-[#5E17EB] py-2 rounded-xl items-center mt-2">
-              <Text className="text-white text-xs font-bold">Seguir</Text>
+              <Text className="text-white text-xs font-bold">
+                {t("common.follow")} {/* <--- Texto traducido */}
+              </Text>
             </TouchableOpacity>
           </TouchableOpacity>
         )}
