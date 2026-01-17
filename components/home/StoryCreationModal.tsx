@@ -15,14 +15,18 @@ import {
   KeyboardAvoidingView,
   LayoutAnimation,
   Animated,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAudioPlayer } from "expo-audio";
-
+import { Video, ResizeMode } from "expo-av";
+import { pickMedia, uploadFile } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 import CustomToast from "../shared/CustomToast";
+
+const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
 
 interface StoryCreationModalProps {
   visible: boolean;
@@ -53,6 +57,8 @@ const StoryCreationModal = ({
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [previewTrackUrl, setPreviewTrackUrl] = useState<string | null>(null);
+  const [media, setMedia] = useState<any>(null);
+
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [trendingSongs, setTrendingSongs] = useState<any[]>([]);
@@ -64,6 +70,8 @@ const StoryCreationModal = ({
     message: "",
   });
   const toastAnim = useRef(new Animated.Value(-150)).current;
+
+  const isOfficialAccount = currentUser?.$id === MOOD_OFFICIAL_ID;
 
   const showToast = (
     type: "success" | "error",
@@ -151,6 +159,7 @@ const StoryCreationModal = ({
     setQuery("");
     setResults([]);
     setSelectedSong(null);
+    setMedia(null);
     setCaption("");
     setPreviewTrackUrl(null);
     try {
@@ -177,36 +186,70 @@ const StoryCreationModal = ({
   const handleSelectSong = (song: any) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSelectedSong(song);
+    setMedia(null);
     setPreviewTrackUrl(null);
     setStep("preview");
   };
 
+  const handlePickMedia = async (type: "image" | "video") => {
+    try {
+      const result = await pickMedia(type);
+      if (result) {
+        setMedia({ uri: result.uri, type: type, file: result });
+        setSelectedSong(null);
+        setStep("preview");
+      }
+    } catch (error) {
+      console.log("Error picking media:", error);
+    }
+  };
+
   const handleUpload = async () => {
-    if (!selectedSong || !currentUser) return;
+    if ((!selectedSong && !media) || !currentUser) return;
+
     setLoading(true);
     try {
       if (player) player.pause();
     } catch (e) {}
 
-    const songId =
-      selectedSong.id || selectedSong.spotifyId || selectedSong.trackId;
-
     try {
-      const songData = JSON.stringify({
-        title: selectedSong.title,
-        artist: selectedSong.artist,
-        cover: selectedSong.cover,
-        preview: selectedSong.preview,
-        spotifyId: songId,
-        caption: caption,
-      });
-      await createStory(songData, currentUser.$id);
+      let payloadString = "";
+
+      if (media && isOfficialAccount) {
+        const uploadedUrl = await uploadFile(media.file, media.type);
+        const mediaData = {
+          mediaUrl: uploadedUrl,
+          mediaType: media.type,
+          caption: caption,
+          duration: media.type === "video" ? 15000 : 5000,
+          isMediaStory: true,
+        };
+        payloadString = JSON.stringify(mediaData);
+      } else if (selectedSong) {
+        const songId =
+          selectedSong.id || selectedSong.spotifyId || selectedSong.trackId;
+        const songData = {
+          title: selectedSong.title,
+          artist: selectedSong.artist,
+          cover: selectedSong.cover,
+          preview: selectedSong.preview,
+          spotifyId: songId,
+          caption: caption,
+          mediaType: "music",
+          isMediaStory: false,
+        };
+        payloadString = JSON.stringify(songData);
+      }
+
+      await createStory(payloadString, currentUser.$id);
+
       onClose();
       setTimeout(() => {
         showToast("success", t("common.posted"), t("story.postedMsg"));
       }, 300);
       onSuccess();
     } catch (error) {
+      console.log(error);
       showToast("error", t("common.error"), t("story.errorPosting"));
     } finally {
       setLoading(false);
@@ -220,6 +263,7 @@ const StoryCreationModal = ({
       } else {
         setStep("search");
         setSelectedSong(null);
+        setMedia(null);
         setPreviewTrackUrl(null);
       }
     } else {
@@ -262,9 +306,47 @@ const StoryCreationModal = ({
                   </Text>
                   <View style={{ width: 70 }} />
                 </View>
+
                 <View className="flex-1 bg-black">
                   {step === "search" ? (
                     <View className="flex-1 px-4 pt-4">
+                      {isOfficialAccount && (
+                        <View className="mb-6">
+                          <Text className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-3 text-center">
+                            Admin Tools
+                          </Text>
+                          <View className="flex-row gap-4 justify-center">
+                            <TouchableOpacity
+                              onPress={() => handlePickMedia("image")}
+                              className="flex-1 bg-zinc-900 p-4 rounded-2xl items-center border border-zinc-800"
+                            >
+                              <Ionicons
+                                name="image"
+                                size={24}
+                                color="#5E17EB"
+                              />
+                              <Text className="text-white font-medium mt-2">
+                                Foto
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => handlePickMedia("video")}
+                              className="flex-1 bg-zinc-900 p-4 rounded-2xl items-center border border-zinc-800"
+                            >
+                              <Ionicons
+                                name="videocam"
+                                size={24}
+                                color="#5E17EB"
+                              />
+                              <Text className="text-white font-medium mt-2">
+                                Video
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                          <View className="h-[1px] bg-zinc-900 w-full mt-6" />
+                        </View>
+                      )}
+
                       <View className="bg-zinc-900 flex-row items-center px-4 py-4 rounded-3xl mb-6 border border-zinc-800 shadow-sm">
                         <Ionicons name="search" size={20} color="#A1A1AA" />
                         <TextInput
@@ -273,7 +355,7 @@ const StoryCreationModal = ({
                           className="flex-1 ml-3 text-white text-lg font-medium"
                           value={query}
                           onChangeText={setQuery}
-                          autoFocus
+                          autoFocus={!isOfficialAccount}
                           returnKeyType="search"
                         />
                         {query.length > 0 && (
@@ -286,6 +368,7 @@ const StoryCreationModal = ({
                           </TouchableOpacity>
                         )}
                       </View>
+
                       {searching ? (
                         <View className="mt-20">
                           <ActivityIndicator size="large" color="#5E17EB" />
@@ -399,17 +482,38 @@ const StoryCreationModal = ({
                   ) : (
                     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                       <View className="flex-1 relative">
-                        <Image
-                          source={{ uri: selectedSong.cover }}
-                          className="absolute w-full h-full"
-                          blurRadius={90}
-                          style={{ opacity: 0.6 }}
-                        />
-                        <LinearGradient
-                          colors={["transparent", "#000000"] as const}
-                          className="absolute w-full h-full"
-                          style={{ opacity: 0.8 }}
-                        />
+                        {media ? (
+                          media.type === "video" ? (
+                            <Video
+                              source={{ uri: media.uri }}
+                              style={{ width: "100%", height: "100%" }}
+                              resizeMode={ResizeMode.COVER}
+                              shouldPlay
+                              isLooping
+                            />
+                          ) : (
+                            <Image
+                              source={{ uri: media.uri }}
+                              className="w-full h-full"
+                              resizeMode="cover"
+                            />
+                          )
+                        ) : (
+                          <>
+                            <Image
+                              source={{ uri: selectedSong?.cover }}
+                              className="absolute w-full h-full"
+                              blurRadius={90}
+                              style={{ opacity: 0.6 }}
+                            />
+                            <LinearGradient
+                              colors={["transparent", "#000000"] as const}
+                              className="absolute w-full h-full"
+                              style={{ opacity: 0.8 }}
+                            />
+                          </>
+                        )}
+
                         <View
                           className="absolute top-0 w-full flex-row justify-between items-center px-5 z-20"
                           style={{ paddingTop: insets.top + 10 }}
@@ -425,49 +529,55 @@ const StoryCreationModal = ({
                             />
                           </TouchableOpacity>
                         </View>
+
                         <KeyboardAvoidingView
                           behavior={
                             Platform.OS === "ios" ? "padding" : "height"
                           }
                           className="flex-1 justify-center items-center px-6"
                         >
-                          <View
-                            className="w-full aspect-square rounded-[32px] overflow-hidden shadow-2xl mb-12 border border-white/10"
-                            style={{
-                              shadowColor: "#000",
-                              shadowOffset: { width: 0, height: 20 },
-                              shadowOpacity: 0.5,
-                              shadowRadius: 30,
-                              elevation: 10,
-                            }}
-                          >
-                            <Image
-                              source={{ uri: selectedSong.cover }}
-                              className="w-full h-full"
-                            />
-                            <LinearGradient
-                              colors={
-                                ["transparent", "rgba(0,0,0,0.8)"] as const
-                              }
-                              className="absolute bottom-0 w-full h-32 justify-end px-6 py-6"
+                          {!media && selectedSong && (
+                            <View
+                              className="w-full aspect-square rounded-[32px] overflow-hidden shadow-2xl mb-12 border border-white/10"
+                              style={{
+                                shadowColor: "#000",
+                                shadowOffset: { width: 0, height: 20 },
+                                shadowOpacity: 0.5,
+                                shadowRadius: 30,
+                                elevation: 10,
+                              }}
                             >
-                              <Text className="text-white font-black text-3xl shadow-sm">
-                                {selectedSong.title}
-                              </Text>
-                              <Text className="text-zinc-300 text-lg font-medium">
-                                {selectedSong.artist}
-                              </Text>
-                            </LinearGradient>
-                          </View>
-                          <View className="w-full px-4 mb-6">
+                              <Image
+                                source={{ uri: selectedSong.cover }}
+                                className="w-full h-full"
+                              />
+                              <LinearGradient
+                                colors={
+                                  ["transparent", "rgba(0,0,0,0.8)"] as const
+                                }
+                                className="absolute bottom-0 w-full h-32 justify-end px-6 py-6"
+                              >
+                                <Text className="text-white font-black text-3xl shadow-sm">
+                                  {selectedSong.title}
+                                </Text>
+                                <Text className="text-zinc-300 text-lg font-medium">
+                                  {selectedSong.artist}
+                                </Text>
+                              </LinearGradient>
+                            </View>
+                          )}
+
+                          <View
+                            className={`w-full px-4 mb-6 ${media ? "absolute bottom-32" : ""}`}
+                          >
                             <TextInput
                               placeholder={t("story.captionPlaceholder")}
-                              placeholderTextColor="rgba(255,255,255,0.5)"
+                              placeholderTextColor="rgba(255,255,255,0.7)"
                               className="text-white text-2xl py-2 text-center font-medium shadow-md"
                               style={{
-                                textShadowColor: "rgba(0,0,0,0.5)",
+                                textShadowColor: "rgba(0,0,0,0.8)",
                                 textShadowOffset: { width: 0, height: 1 },
-                                textShadowRadius: 3,
+                                textShadowRadius: 4,
                               }}
                               value={caption}
                               onChangeText={setCaption}
@@ -478,6 +588,7 @@ const StoryCreationModal = ({
                             />
                           </View>
                         </KeyboardAvoidingView>
+
                         <View
                           className="absolute bottom-10 right-6 z-20"
                           style={{ paddingBottom: insets.bottom }}
