@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AccountManager, StoredAccount } from "@/lib/accountManager";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useRouter } from "expo-router";
+import { useLanguage } from "@/context/LanguageContext";
 import { account } from "@/lib/appwrite";
 
 interface AccountSelectorModalProps {
@@ -29,14 +30,21 @@ const AccountSelectorModal = ({
   const [accounts, setAccounts] = useState<StoredAccount[]>([]);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const router = useRouter();
+  const { t } = useLanguage();
 
   useEffect(() => {
-    if (visible) loadAccounts();
+    if (visible) {
+      loadAccounts();
+    }
   }, [visible]);
 
   const loadAccounts = async () => {
-    const stored = await AccountManager.getStoredAccounts();
-    setAccounts(stored);
+    try {
+      const stored = await AccountManager.getStoredAccounts();
+      setAccounts(stored);
+    } catch (error) {
+      console.error("Error al cargar cuentas:", error);
+    }
   };
 
   const handleSwitchAccount = async (targetUserId: string) => {
@@ -46,23 +54,49 @@ const AccountSelectorModal = ({
     }
 
     setSwitchingId(targetUserId);
-    const success = await AccountManager.switchAccount(targetUserId);
 
-    if (success) {
-      await checkAuth();
-      onClose();
-    } else {
-      // Si falla por datos inválidos, obligamos a un re-login
-      setUser(null);
-      setLoggedIn(false);
-      onClose();
-      Alert.alert(
-        "Sesión expirada",
-        "Por favor, inicia sesión de nuevo en esta cuenta.",
-      );
+    try {
+      const success = await AccountManager.switchAccount(targetUserId);
+
+      if (success) {
+        await checkAuth();
+        onClose();
+      } else {
+        setUser(null);
+        setLoggedIn(false);
+        onClose();
+        Alert.alert(
+          t("auth.sessionExpiredTitle") || "Sesión expirada",
+          t("auth.sessionExpiredMsg") ||
+            "Por favor, inicia sesión de nuevo en esta cuenta.",
+        );
+        router.replace("/signIn");
+      }
+    } catch (error) {
+      console.error("Error al cambiar de cuenta:", error);
       router.replace("/signIn");
+    } finally {
+      setSwitchingId(null);
     }
-    setSwitchingId(null);
+  };
+
+  const handleAddAccount = () => {
+    // 1. Cerramos el modal visualmente primero
+    onClose();
+
+    // 2. Limpiamos el estado global inmediatamente
+    setUser(null);
+    setLoggedIn(false);
+
+    // 3. Ejecutamos el cierre de sesión en "segundo plano" (sin await)
+    // para no bloquear la navegación si el servidor tarda en responder.
+    account.deleteSession("current").catch(() => {});
+
+    // 4. Forzamos la navegación con un pequeño timeout para asegurar que
+    // el modal se ha desmontado correctamente.
+    setTimeout(() => {
+      router.replace("/signIn");
+    }, 100);
   };
 
   const handleLogoutAll = () => {
@@ -100,8 +134,9 @@ const AccountSelectorModal = ({
             onPress={(e) => e.stopPropagation()}
           >
             <View className="w-12 h-1.5 bg-zinc-800 rounded-full self-center mb-6" />
+
             <Text className="text-white text-xl font-bold mb-6 text-center">
-              Cambiar cuenta
+              {t("profile.switchAccount") || "Cambiar cuenta"}
             </Text>
 
             <FlatList
@@ -133,6 +168,7 @@ const AccountSelectorModal = ({
                         </Text>
                       </View>
                     </View>
+
                     {switchingId === item.userId ? (
                       <ActivityIndicator color="#5E17EB" />
                     ) : isActive ? (
@@ -148,15 +184,14 @@ const AccountSelectorModal = ({
             />
 
             <TouchableOpacity
-              onPress={() => {
-                onClose();
-                router.replace("/signIn");
-              }}
-              className="flex-row items-center gap-4 py-4 mt-2 border-t border-zinc-900"
+              onPress={handleAddAccount}
+              className="flex-row items-center gap-4 py-6 mt-2 border-t border-zinc-900"
             >
-              <Ionicons name="add-circle-outline" size={28} color="white" />
+              <View className="w-14 h-14 rounded-full border-2 border-dashed border-zinc-800 justify-center items-center">
+                <Ionicons name="add" size={30} color="white" />
+              </View>
               <Text className="text-white font-semibold text-base">
-                Añadir cuenta
+                {t("profile.addAccount") || "Añadir cuenta de Mood"}
               </Text>
             </TouchableOpacity>
 

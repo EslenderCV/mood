@@ -1,19 +1,11 @@
 import { View, Text, Image, TouchableOpacity, Alert } from "react-native";
-import React, { useState, useMemo } from "react";
-import { Ionicons } from "@expo/vector-icons";
-import { toggleCommentLike, searchUsers } from "@/lib/appwrite";
+import React, { useState, useMemo, useEffect } from "react";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { toggleCommentLike, searchUsers, getUser } from "@/lib/appwrite";
 import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
-
-const formatTimeAgo = (dateString: string) => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diff = (now.getTime() - date.getTime()) / 1000;
-  if (diff < 60) return "Ahora";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-  return `${Math.floor(diff / 86400)}d`;
-};
+import { useLanguage } from "@/context/LanguageContext";
+import { formatTimeAgo } from "@/lib/postUtils";
 
 interface CommentProps {
   item: any;
@@ -32,14 +24,40 @@ const CommentItem = ({
 }: CommentProps) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+  const { t } = useLanguage();
 
-  const textColor = isDark ? "#FFFFFF" : "#000000";
+  const textColor = isDark ? "#FAFAFA" : "#18181B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const lineColor = isDark ? "#3F3F46" : "#E4E4E7";
   const avatarBg = isDark ? "#27272A" : "#E4E4E7";
 
   const [likes, setLikes] = useState<string[]>(item.likedBy || []);
   const [showReplies, setShowReplies] = useState(false);
+
+  const [userData, setUserData] = useState<any>(item.user || null);
+
+  // 🔥 CORRECCIÓN 1: Sincronizar estado local si las props cambian (ej: pull-to-refresh)
+  useEffect(() => {
+    setLikes(item.likedBy || []);
+  }, [item.likedBy]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!userData && item.userId) {
+      getUser(item.userId)
+        .then((res) => {
+          if (isMounted && res) setUserData(res);
+        })
+        .catch(() => {});
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [item.userId]);
+
+  const displayName = userData?.name || item.username || "Usuario";
+  const isVerified = userData?.isVerified || item.isVerified;
+  const avatarUrl = userData?.pfp || item.avatar;
 
   const isLiked = likes.includes(currentUserId);
 
@@ -55,7 +73,7 @@ const CommentItem = ({
     try {
       await toggleCommentLike(item.$id, currentUserId, likes);
     } catch (error) {
-      setLikes(likes);
+      setLikes(likes); // Revertir si falla
     }
   };
 
@@ -63,29 +81,25 @@ const CommentItem = ({
     try {
       const users = await searchUsers(username);
       const targetUser = users.find((u) => u.username === username);
-
       if (targetUser) {
         router.push(`/user/${targetUser.$id}` as any);
       } else {
         Alert.alert(
           "Usuario no encontrado",
-          "Es posible que haya cambiado su nombre."
+          "Es posible que haya cambiado su nombre.",
         );
       }
     } catch (error) {
-      console.log("Error navegando al perfil:", error);
+      console.log("Error perfil:", error);
     }
   };
 
   const renderContent = (content: string) => {
     const words = content.split(/(\s+)/);
-
     return words.map((word, index) => {
       const cleanWord = word.trim().replace(/[^a-zA-Z0-9@_]/g, "");
-
       if (cleanWord.startsWith("@") && cleanWord.length > 1) {
         const username = cleanWord.substring(1);
-
         return (
           <Text
             key={index}
@@ -96,7 +110,6 @@ const CommentItem = ({
           </Text>
         );
       }
-
       return (
         <Text key={index} style={{ color: textColor }}>
           {word}
@@ -114,8 +127,9 @@ const CommentItem = ({
           <Image
             source={{
               uri:
-                item.avatar ||
-                "https://cloud.appwrite.io/v1/avatars/initials?name=User",
+                avatarUrl ||
+                "https://cloud.appwrite.io/v1/avatars/initials?name=" +
+                  displayName,
             }}
             className="w-9 h-9 rounded-full mt-1"
             style={{ backgroundColor: avatarBg }}
@@ -123,16 +137,23 @@ const CommentItem = ({
         </TouchableOpacity>
 
         <View className="flex-1 ml-3">
-          <View className="flex-row items-baseline">
+          <View className="flex-row items-center mb-0.5">
             <Text
-              className="font-bold text-[13px] mr-2"
+              className="font-bold text-[13px] mr-1"
               style={{ color: textColor }}
-              onPress={() => router.push(`/user/${item.userId}` as any)}
             >
-              {item.username}
+              {displayName}
             </Text>
-            <Text className="text-xs" style={{ color: subTextColor }}>
-              {formatTimeAgo(item.$createdAt)}
+            {isVerified && (
+              <MaterialIcons
+                name="verified"
+                size={12}
+                color="#5E17EB"
+                style={{ marginRight: 4 }}
+              />
+            )}
+            <Text className="text-[11px]" style={{ color: subTextColor }}>
+              {formatTimeAgo(item.$createdAt, t)}
             </Text>
           </View>
 
@@ -202,7 +223,6 @@ const CommentItem = ({
                   depth={depth + 1}
                 />
               ))}
-
               <TouchableOpacity
                 onPress={() => setShowReplies(false)}
                 className="mt-2 mb-2"

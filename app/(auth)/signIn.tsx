@@ -47,7 +47,6 @@ const SignIn = () => {
     try {
       setIsLoading(true);
 
-      // 🔥 CAPTURAMOS LA SESIÓN (session.secret es lo que necesitamos)
       const session = await signInn(form.email, form.password);
       const result = await getCurrentUser();
 
@@ -55,17 +54,16 @@ const SignIn = () => {
         setLoggedIn(true);
         setUser(result as unknown as User);
 
-        // 🔥 PASAMOS EL SECRET EXPLÍCITAMENTE
         await AccountManager.saveCurrentAccount(session.secret);
 
         router.replace("/home");
       } else {
         throw new Error("No se pudo obtener la información del usuario.");
       }
-    } catch (error) {
+    } catch (error: any) {
       const appwriteError = error as AppwriteException;
       Alert.alert(
-        t("auth.alerts.errorTitle"),
+        t("auth.alerts.errorTitle") || "Error",
         appwriteError.message || t("auth.alerts.wrongCredentials"),
       );
     } finally {
@@ -76,9 +74,12 @@ const SignIn = () => {
   const handleOAuth = async (provider: "google" | "apple") => {
     try {
       setIsLoading(true);
-      const success = await signInWithOAuth(provider);
 
-      if (success) {
+      // 🔥 1. Recibimos el secreto (antes era 'success')
+      const secret = await signInWithOAuth(provider);
+
+      // 🔥 2. Verificamos si existe el secreto
+      if (secret) {
         const user = await syncOrCreateUserDocument();
 
         if (user) {
@@ -86,8 +87,8 @@ const SignIn = () => {
           setUser(user as unknown as User);
           setLoggedIn(true);
 
-          // 🔥 GUARDAR EN MULTI-CUENTAS TRAS OAUTH
-          await AccountManager.saveCurrentAccount();
+          // 🔥 3. Pasamos el secreto explícitamente
+          await AccountManager.saveCurrentAccount(secret);
 
           setTimeout(() => {
             router.replace("/home");

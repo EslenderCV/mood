@@ -30,6 +30,9 @@ export const appwriteConfig = {
   storiesCollectionId: "69631b240013f47f559f",
 };
 
+// 🔥 NUEVO: Almacén temporal para solucionar la condición de carrera
+export const authStore = { secret: "" };
+
 const client = new Client();
 
 client
@@ -41,15 +44,15 @@ export const account = new Account(client);
 const databases = new Databases(client);
 const storage = new Storage(client);
 
-// --- FUNCIÓN CORREGIDA: pickMedia ---
+// --- MEDIA PICKER ---
 export const pickMedia = async (type: "image" | "video") => {
   try {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes:
         type === "video"
-          ? ImagePicker.MediaTypeOptions.Videos // Usamos Options para compatibilidad
+          ? ImagePicker.MediaTypeOptions.Videos
           : ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false, // Falso para formato historia completo
+      allowsEditing: false,
       quality: 1,
     });
 
@@ -63,7 +66,7 @@ export const pickMedia = async (type: "image" | "video") => {
   }
 };
 
-// --- FUNCIÓN CORREGIDA: uploadFile (SOLUCIÓN DEFINITIVA) ---
+// --- UPLOAD FILE ---
 export async function uploadFile(file: any, type?: "image" | "video") {
   if (!file) return;
 
@@ -87,9 +90,6 @@ export async function uploadFile(file: any, type?: "image" | "video") {
       asset,
     );
 
-    // 🔥 AQUÍ ESTÁ LA CORRECCIÓN CLAVE:
-    // Construimos la URL manualmente usando el endpoint y IDs.
-    // Esto garantiza que devolvemos un STRING válido y no una Promesa.
     const fileUrl = `${appwriteConfig.endpoint}/storage/buckets/${appwriteConfig.storageId}/files/${uploadedFile.$id}/view?project=${appwriteConfig.projectId}&mode=admin`;
 
     return fileUrl;
@@ -99,6 +99,7 @@ export async function uploadFile(file: any, type?: "image" | "video") {
   }
 }
 
+// --- PUSH NOTIFICATIONS ---
 export async function sendPushNotification(
   expoPushToken: string,
   title: string,
@@ -148,6 +149,7 @@ export async function updateUserPushToken(userId: string, token: string) {
   }
 }
 
+// --- NOTIFICATIONS ---
 export async function createNotification(data: {
   userId: string;
   type: "like" | "comment" | "follow" | "follow_request" | "tag";
@@ -196,6 +198,8 @@ export async function createNotification(data: {
   }
 }
 
+// --- AUTH ---
+// 🔥 CORREGIDO: Guarda el secret en authStore y lo retorna
 export const signInWithOAuth = async (provider: "google" | "apple") => {
   try {
     try {
@@ -232,6 +236,9 @@ export const signInWithOAuth = async (provider: "google" | "apple") => {
         : parsed.queryParams?.userId;
 
       if (secret && userId) {
+        // 🔥 GUARDAMOS EL SECRETO EN EL ALMACÉN GLOBAL
+        authStore.secret = secret;
+
         try {
           await account.createSession(userId, secret);
         } catch (sessionError: any) {
@@ -240,11 +247,11 @@ export const signInWithOAuth = async (provider: "google" | "apple") => {
             sessionError.code === 409
           ) {
             console.log("Sesión ya activa, continuando...");
-            return true;
+            return secret;
           }
           throw sessionError;
         }
-        return true;
+        return secret;
       }
     }
 
@@ -252,7 +259,7 @@ export const signInWithOAuth = async (provider: "google" | "apple") => {
       throw new Error("Cancelado por el usuario");
     }
 
-    return false;
+    return null;
   } catch (error: any) {
     console.error("OAuth failed:", error);
     throw new Error(error.message);
@@ -265,6 +272,37 @@ export const signOut = async () => {
     return true;
   } catch (error: any) {
     return true;
+  }
+};
+
+// 🔥 CORREGIDO: Guarda secret en authStore
+export const signInn = async (email: string, password: string) => {
+  try {
+    const session = await account.createEmailPasswordSession(email, password);
+    // 🔥 Guardamos en store por seguridad
+    if (session.secret) authStore.secret = session.secret;
+    return session;
+  } catch (err) {
+    const error = err as AppwriteException;
+    if (
+      error.message?.includes("session is active") ||
+      error.message?.includes("prohibited") ||
+      error.code === 409
+    ) {
+      console.log("⚠️ Sesión activa detectada. Limpiando...");
+      try {
+        await account.deleteSession("current");
+        const newSession = await account.createEmailPasswordSession(
+          email,
+          password,
+        );
+        if (newSession.secret) authStore.secret = newSession.secret;
+        return newSession;
+      } catch (retryError) {
+        throw new Error((retryError as AppwriteException).message);
+      }
+    }
+    throw new Error(error.message);
   }
 };
 
@@ -284,7 +322,8 @@ export const createUser = async (
       appwriteConfig.projectId
     }`;
 
-    await signInn(email, password);
+    // Capturamos la sesión creada para devolverla
+    const session = await signInn(email, password);
 
     const newUser = await databases.createDocument(
       appwriteConfig.databaseId,
@@ -303,32 +342,11 @@ export const createUser = async (
         isPrivate: false,
       },
     );
-    return newUser;
+
+    // Retornamos OBJETO COMPLETO con user y session
+    return { user: newUser, session: session };
   } catch (err) {
     throw new Error((err as AppwriteException).message);
-  }
-};
-
-export const signInn = async (email: string, password: string) => {
-  try {
-    const session = await account.createEmailPasswordSession(email, password);
-    return session;
-  } catch (err) {
-    const error = err as AppwriteException;
-    if (
-      error.message?.includes("session is active") ||
-      error.message?.includes("prohibited") ||
-      error.code === 409
-    ) {
-      console.log("⚠️ Sesión activa detectada. Limpiando...");
-      try {
-        await account.deleteSession("current");
-        return await account.createEmailPasswordSession(email, password);
-      } catch (retryError) {
-        throw new Error((retryError as AppwriteException).message);
-      }
-    }
-    throw new Error(error.message);
   }
 };
 
@@ -1892,10 +1910,7 @@ export async function createStory(songData: string, userId: string) {
   }
 }
 
-// --- FUNCIÓN CORREGIDA: getStories ---
 export async function getStories(currentUserId: string) {
-  // 🔥 VALIDACIÓN DE SEGURIDAD:
-  // Si no hay un ID de usuario (por cambio de cuenta), retornamos vacío de inmediato.
   if (!currentUserId) return [];
 
   try {
@@ -1916,7 +1931,6 @@ export async function getStories(currentUserId: string) {
     const storiesWithUserData = await Promise.all(
       posts.documents.map(async (story: any) => {
         try {
-          // Si 'user' es solo un ID (string), buscamos el objeto completo
           if (typeof story.user === "string") {
             const userData = await getUser(story.user);
             return { ...story, user: userData };
@@ -1928,10 +1942,8 @@ export async function getStories(currentUserId: string) {
       }),
     );
 
-    // Filtramos nulos y aseguramos que tengan usuario
     return storiesWithUserData.filter((s: any) => s !== null && s.user);
   } catch (error: any) {
-    // Si el error es de autorización (401), fallamos en silencio
     if (error?.code === 401) {
       console.log("Sesión no activa durante la carga de historias.");
       return [];

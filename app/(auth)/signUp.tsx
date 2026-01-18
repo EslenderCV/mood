@@ -55,7 +55,7 @@ const SignUp = () => {
 
     try {
       setIsLoading(true);
-      // 🔥 CAPTURAMOS SESIÓN TRAS EL REGISTRO
+
       const { user: newUser, session } = await createUser(
         form.email,
         form.password,
@@ -69,15 +69,14 @@ const SignUp = () => {
         setUser(newUser as unknown as User);
         setLoggedIn(true);
 
-        // 🔥 PASAMOS EL SECRET
         await AccountManager.saveCurrentAccount(session.secret);
 
         router.replace("/home");
       }
-    } catch (error) {
+    } catch (error: any) {
       const appwriteError = error as AppwriteException;
       Alert.alert(
-        t("auth.alerts.errorTitle"),
+        t("auth.alerts.errorTitle") || "Error",
         appwriteError.message || t("auth.alerts.createError"),
       );
     } finally {
@@ -88,9 +87,12 @@ const SignUp = () => {
   const handleOAuth = async (provider: "google" | "apple") => {
     try {
       setIsLoading(true);
-      const success = await signInWithOAuth(provider);
 
-      if (success) {
+      // 🔥 1. Recibimos el secreto
+      const secret = await signInWithOAuth(provider);
+
+      // 🔥 2. Verificamos si existe
+      if (secret) {
         const user = await syncOrCreateUserDocument();
 
         if (user) {
@@ -98,8 +100,8 @@ const SignUp = () => {
           setUser(user as unknown as User);
           setLoggedIn(true);
 
-          // 🔥 GUARDAR EN MULTI-CUENTAS TRAS OAUTH
-          await AccountManager.saveCurrentAccount();
+          // 🔥 3. Lo guardamos en el manager
+          await AccountManager.saveCurrentAccount(secret);
 
           setTimeout(() => {
             router.replace("/home");
