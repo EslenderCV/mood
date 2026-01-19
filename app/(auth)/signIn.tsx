@@ -8,10 +8,10 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { Link, router } from "expo-router";
+import { Link, router, useLocalSearchParams } from "expo-router";
 import CustomButtom from "@/components/CustomButtom";
 import FormField from "@/components/FormField";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
@@ -32,11 +32,23 @@ const SignIn = () => {
   const { setUser, setLoggedIn } = useGlobalContext();
   const { t } = useLanguage();
 
+  // ✅ Capturar parámetros de navegación
+  const params = useLocalSearchParams();
+
   const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({
     email: "",
     password: "",
   });
+
+  // ✅ CORRECCIÓN TYPE SCRIPT:
+  // Capturamos el valor en una variable const para asegurar el tipo string
+  useEffect(() => {
+    const incomingEmail = params.email; // 1. Asignamos a variable
+    if (incomingEmail && typeof incomingEmail === "string") {
+      setForm((prev) => ({ ...prev, email: incomingEmail })); // 2. Usamos la variable segura
+    }
+  }, [params]);
 
   const submit = async () => {
     if (!form.email.trim() || !form.password.trim()) {
@@ -47,14 +59,18 @@ const SignIn = () => {
     try {
       setIsLoading(true);
 
-      const session = await signInn(form.email, form.password);
+      // 1. Iniciar sesión (Crea la cookie nativa real)
+      await signInn(form.email, form.password);
+
+      // 2. Obtener usuario
       const result = await getCurrentUser();
 
-      if (result && session) {
+      if (result) {
         setLoggedIn(true);
         setUser(result as unknown as User);
 
-        await AccountManager.saveCurrentAccount(session.secret);
+        // 🔥 3. Guardar solo metadata (No se necesita secreto)
+        await AccountManager.saveCurrentAccount();
 
         router.replace("/home");
       } else {
@@ -75,11 +91,9 @@ const SignIn = () => {
     try {
       setIsLoading(true);
 
-      // 🔥 1. Recibimos el secreto (antes era 'success')
-      const secret = await signInWithOAuth(provider);
+      const success = await signInWithOAuth(provider);
 
-      // 🔥 2. Verificamos si existe el secreto
-      if (secret) {
+      if (success) {
         const user = await syncOrCreateUserDocument();
 
         if (user) {
@@ -87,8 +101,8 @@ const SignIn = () => {
           setUser(user as unknown as User);
           setLoggedIn(true);
 
-          // 🔥 3. Pasamos el secreto explícitamente
-          await AccountManager.saveCurrentAccount(secret);
+          // 🔥 Guardar metadata también en OAuth
+          await AccountManager.saveCurrentAccount();
 
           setTimeout(() => {
             router.replace("/home");

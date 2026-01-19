@@ -7,7 +7,6 @@ import {
   TouchableWithoutFeedback,
   TextInput,
   ActivityIndicator,
-  ScrollView,
   FlatList,
   Image,
   Keyboard,
@@ -15,18 +14,52 @@ import {
   KeyboardAvoidingView,
   LayoutAnimation,
   Animated,
-  Alert,
+  StatusBar,
+  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAudioPlayer } from "expo-audio";
+import { Audio } from "expo-av"; // 🔥 Usamos expo-av como en PostItem
 import { Video, ResizeMode } from "expo-av";
 import { pickMedia, uploadFile } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 import CustomToast from "../shared/CustomToast";
+import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
 
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
+const { width } = Dimensions.get("window");
+
+// 🎨 Paleta de colores Premium
+const COLORS = {
+  primary: "#5E17EB",
+  secondary: "#7c3aed",
+  bgDark: "#000000",
+  bgGradientStart: "#1a0b2e",
+  text: "#FFFFFF",
+  textMuted: "#A1A1AA",
+  border: "rgba(255,255,255,0.1)",
+};
+
+// 🎲 Lista de términos para el "Shuffle Latino"
+const LATIN_SHUFFLE_TERMS = [
+  "Exitos Reggaeton 2024",
+  "Feid",
+  "Bad Bunny",
+  "Karol G",
+  "Rauw Alejandro",
+  "Top Mexico",
+  "Perreo Intenso",
+  "Trap Argentino",
+  "Myke Towers",
+  "Mora",
+  "Young Miko",
+  "Arcangel",
+  "Eladio Carrion",
+  "Bachata Hits",
+  "Dembow Dominicano"
+];
 
 interface StoryCreationModalProps {
   visible: boolean;
@@ -47,7 +80,6 @@ const StoryCreationModal = ({
   initialSongData,
   createStory,
   searchSongsWrapper,
-  RANDOM_SEARCH_TERMS,
 }: StoryCreationModalProps) => {
   const [step, setStep] = useState<"search" | "preview">("search");
   const [query, setQuery] = useState("");
@@ -56,98 +88,172 @@ const StoryCreationModal = ({
   const [caption, setCaption] = useState("");
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
+  
+  // Audio State (Lógica de PostItem)
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [previewTrackUrl, setPreviewTrackUrl] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
   const [media, setMedia] = useState<any>(null);
 
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [trendingSongs, setTrendingSongs] = useState<any[]>([]);
   const [loadingTrending, setLoadingTrending] = useState(true);
+
+  const toastAnim = useRef(new Animated.Value(-150)).current;
   const [toast, setToast] = useState({
     visible: false,
     type: "success" as "success" | "error",
     title: "",
     message: "",
   });
-  const toastAnim = useRef(new Animated.Value(-150)).current;
 
   const isOfficialAccount = currentUser?.$id === MOOD_OFFICIAL_ID;
 
-  const showToast = (
-    type: "success" | "error",
-    title: string,
-    message: string,
-  ) => {
-    setToast({ visible: true, type, title, message });
-    Animated.spring(toastAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      friction: 8,
-      tension: 40,
-    }).start();
-    setTimeout(() => hideToast(), 3000);
-  };
-  const hideToast = () => {
-    Animated.timing(toastAnim, {
-      toValue: -150,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => setToast((prev) => ({ ...prev, visible: false })));
-  };
-
-  const activeAudioSource =
-    step === "preview" && selectedSong?.preview
-      ? selectedSong.preview
-      : previewTrackUrl || "";
-  const player = useAudioPlayer(activeAudioSource);
+  // --- EFECTOS DE CICLO DE VIDA ---
 
   useEffect(() => {
     if (visible) {
       if (initialSongData) {
         setSelectedSong(initialSongData);
         setStep("preview");
-        setPreviewTrackUrl(null);
+        // Si ya viene con canción, intentamos reproducir su preview
+        if (initialSongData.preview) {
+            handlePlayPreview(initialSongData.preview);
+        }
       } else {
         resetForm();
-        fetchRandomTrending();
+        loadRandomLatinHits(); // 🔥 Carga aleatoria
       }
+    } else {
+      // Al cerrar modal, detener audio
+      stopSound();
     }
   }, [visible, initialSongData]);
 
-  const fetchRandomTrending = async () => {
-    setLoadingTrending(true);
-    const randomTerm =
-      RANDOM_SEARCH_TERMS[
-        Math.floor(Math.random() * RANDOM_SEARCH_TERMS.length)
-      ];
-    const songs = await searchSongsWrapper(randomTerm);
-    setTrendingSongs(songs);
-    setLoadingTrending(false);
+  // Limpieza al desmontar
+  useEffect(() => {
+    return () => {
+      stopSound();
+    };
+  }, []);
+
+  // --- LÓGICA DE AUDIO (PostItem Style) ---
+  
+  const stopSound = async () => {
+    try {
+      if (sound) {
+        await sound.unloadAsync();
+        setSound(null);
+      }
+      setIsPlaying(false);
+      setPreviewTrackUrl(null);
+    } catch (error) {
+      console.log("Error stopping sound", error);
+    }
   };
 
-  useEffect(() => {
-    try {
-      if (activeAudioSource && player) {
-        if (player.playing) player.pause();
-        player.replace(activeAudioSource);
-        player.play();
-        player.loop = step === "preview";
-      } else if (player) {
-        player.pause();
-      }
-    } catch (e) {
-      console.log("Audio Error:", e);
-    }
-  }, [activeAudioSource, step]);
+  const handlePlayPreview = async (url: string | null) => {
+    if (!url) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    try {
+      // Si tocamos la misma canción que suena -> Pausa/Stop
+      if (previewTrackUrl === url && sound) {
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded && status.isPlaying) {
+          await sound.pauseAsync();
+          setIsPlaying(false);
+          return; // Salimos, ya pausamos
+        } else if (status.isLoaded && !status.isPlaying) {
+            // Si estaba pausada, reanudamos
+            await sound.playAsync();
+            setIsPlaying(true);
+            return;
+        }
+      }
+
+      // Si es una nueva canción, detenemos la anterior
+      if (sound) {
+        await sound.unloadAsync();
+      }
+
+      // 🔥 CONFIGURACIÓN DE AUDIO DE POSTITEM (SILENT MODE FIX)
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        allowsRecordingIOS: false,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: url },
+        { shouldPlay: true }
+      );
+
+      setSound(newSound);
+      setPreviewTrackUrl(url);
+      setIsPlaying(true);
+
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setIsPlaying(false);
+          // Opcional: loop en preview
+          // newSound.replayAsync(); 
+        }
+      });
+
+    } catch (error) {
+      console.log("Error playing preview:", error);
+    }
+  };
+
+  // --- LÓGICA DE DATOS ---
+
+  const filterUniqueArtists = (songs: any[]) => {
+    if (!songs || songs.length === 0) return [];
+    const seenArtists = new Set();
+    const uniqueSongs = [];
+    for (const song of songs) {
+      if (!song.cover || !song.preview) continue;
+      const artistName = song.artist ? song.artist.trim().toLowerCase() : "unknown";
+      if (!seenArtists.has(artistName)) {
+        seenArtists.add(artistName);
+        uniqueSongs.push(song);
+      }
+    }
+    return uniqueSongs.length >= 5 ? uniqueSongs : songs.filter(s => s.cover && s.preview);
+  };
+
+  const loadRandomLatinHits = async () => {
+    setLoadingTrending(true);
+    try {
+      // 🔥 SHUFFLE: Elegimos un término al azar cada vez
+      const randomTerm = LATIN_SHUFFLE_TERMS[Math.floor(Math.random() * LATIN_SHUFFLE_TERMS.length)];
+      console.log("Searching for:", randomTerm);
+      
+      const songs = await searchSongsWrapper(randomTerm);
+      const premiumList = filterUniqueArtists(songs);
+      
+      setTrendingSongs(premiumList);
+    } catch (e) {
+      console.log("Error cargando hits:", e);
+    } finally {
+      setLoadingTrending(false);
+    }
+  };
+
+  // --- BÚSQUEDA ---
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (query.length > 2) {
         setSearching(true);
-        const songs = await searchSongsWrapper(query);
-        setResults(songs);
-        setSearching(false);
-      } else {
+        try {
+            const songs = await searchSongsWrapper(query);
+            setResults(filterUniqueArtists(songs));
+        } catch (e) { console.log(e); } finally { setSearching(false); }
+      } else if (query.length === 0) {
         setResults([]);
       }
     }, 500);
@@ -162,109 +268,94 @@ const StoryCreationModal = ({
     setMedia(null);
     setCaption("");
     setPreviewTrackUrl(null);
-    try {
-      if (player) player.pause();
-    } catch (e) {}
-  };
-
-  const handlePlayPreview = (url: string | null) => {
-    if (!url) return;
-    try {
-      if (previewTrackUrl === url) {
-        if (player.playing) {
-          player.pause();
-          setPreviewTrackUrl(null);
-        } else {
-          player.play();
-        }
-      } else {
-        setPreviewTrackUrl(url);
-      }
-    } catch (e) {}
+    stopSound();
   };
 
   const handleSelectSong = (song: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Reproducimos la canción seleccionada al pasar al preview
+    if (song.preview) {
+        handlePlayPreview(song.preview);
+    }
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSelectedSong(song);
     setMedia(null);
-    setPreviewTrackUrl(null);
     setStep("preview");
   };
 
   const handlePickMedia = async (type: "image" | "video") => {
     try {
+      stopSound(); // Paramos música al elegir media
       const result = await pickMedia(type);
       if (result) {
         setMedia({ uri: result.uri, type: type, file: result });
         setSelectedSong(null);
         setStep("preview");
       }
-    } catch (error) {
-      console.log("Error picking media:", error);
-    }
+    } catch (error) { console.log(error); }
   };
 
   const handleUpload = async () => {
     if ((!selectedSong && !media) || !currentUser) return;
-
     setLoading(true);
-    try {
-      if (player) player.pause();
-    } catch (e) {}
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    stopSound(); // Parar audio al subir
 
     try {
       let payloadString = "";
-
       if (media && isOfficialAccount) {
         const uploadedUrl = await uploadFile(media.file, media.type);
-        const mediaData = {
+        payloadString = JSON.stringify({
           mediaUrl: uploadedUrl,
           mediaType: media.type,
-          caption: caption,
+          caption,
           duration: media.type === "video" ? 15000 : 5000,
           isMediaStory: true,
-        };
-        payloadString = JSON.stringify(mediaData);
+        });
       } else if (selectedSong) {
-        const songId =
-          selectedSong.id || selectedSong.spotifyId || selectedSong.trackId;
-        const songData = {
+        const songId = selectedSong.id || selectedSong.spotifyId || selectedSong.trackId;
+        payloadString = JSON.stringify({
           title: selectedSong.title,
           artist: selectedSong.artist,
           cover: selectedSong.cover,
           preview: selectedSong.preview,
           spotifyId: songId,
-          caption: caption,
+          caption,
           mediaType: "music",
           isMediaStory: false,
-        };
-        payloadString = JSON.stringify(songData);
+        });
       }
-
+      
       await createStory(payloadString, currentUser.$id);
-
       onClose();
-      setTimeout(() => {
-        showToast("success", t("common.posted"), t("story.postedMsg"));
-      }, 300);
+      setTimeout(() => showToast("success", t("common.posted"), t("story.postedMsg")), 300);
       onSuccess();
     } catch (error) {
-      console.log(error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       showToast("error", t("common.error"), t("story.errorPosting"));
     } finally {
       setLoading(false);
     }
   };
 
+  const showToast = (type: "success" | "error", title: string, message: string) => {
+    setToast({ visible: true, type, title, message });
+    Animated.spring(toastAnim, { toValue: 0, useNativeDriver: true }).start();
+    setTimeout(() => {
+        Animated.timing(toastAnim, { toValue: -150, duration: 300, useNativeDriver: true }).start(() => setToast((prev) => ({ ...prev, visible: false })));
+    }, 3000);
+  };
+
   const handleBack = () => {
     if (step === "preview") {
       if (initialSongData) {
-        onClose();
+          onClose();
       } else {
         setStep("search");
         setSelectedSong(null);
         setMedia(null);
-        setPreviewTrackUrl(null);
+        // Si volvemos y no hay query, recargamos trends random para variedad
+        if (query.length === 0) loadRandomLatinHits();
       }
     } else {
       onClose();
@@ -272,6 +363,79 @@ const StoryCreationModal = ({
   };
 
   if (!visible && !toast.visible) return null;
+
+  // --- RENDER ITEM ---
+  const renderSongItem = ({ item, index, isTrending = false }: any) => {
+    // Comparamos URL para saber si es el que suena
+    const isThisPlaying = isPlaying && previewTrackUrl === item.preview;
+    
+    return (
+      <TouchableOpacity
+        onPress={() => handleSelectSong(item)}
+        className="flex-row items-center px-4 mb-5"
+        activeOpacity={0.7}
+      >
+        {isTrending && (
+          <Text className="text-zinc-600 font-black text-xl w-8 text-center mr-3 italic">
+            {index + 1}
+          </Text>
+        )}
+        
+        <View className="relative shadow-sm">
+          <Image
+            source={{ uri: item.cover }}
+            className="w-14 h-14 rounded-xl bg-zinc-900"
+          />
+          {isThisPlaying && (
+            <View className="absolute inset-0 bg-black/50 rounded-xl items-center justify-center border-2 border-[#5E17EB]">
+              <Ionicons name="stats-chart" size={16} color={COLORS.primary} />
+            </View>
+          )}
+        </View>
+
+        <View className="ml-4 flex-1 justify-center">
+          <Text className="text-white font-bold text-[16px] mb-1 tracking-tight" numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text className="text-zinc-400 text-sm font-medium" numberOfLines={1}>
+            {item.artist}
+          </Text>
+        </View>
+
+        {item.preview && (
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              handlePlayPreview(item.preview);
+            }}
+            className="ml-2 p-1"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            {isThisPlaying ? (
+                 <Ionicons name="pause-circle" size={36} color={COLORS.primary} />
+            ) : (
+                 <Ionicons name="play-circle" size={36} color="#3f3f46" />
+            )}
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const renderSkeleton = () => (
+    <View className="px-4 pt-4">
+        {[1, 2, 3, 4, 5].map(i => (
+            <View key={i} className="flex-row items-center mb-6 opacity-20">
+                <View className="w-8 h-4 bg-zinc-700 rounded mr-3" />
+                <View className="w-14 h-14 bg-zinc-700 rounded-[12px]" />
+                <View className="ml-4 flex-1">
+                    <View className="w-2/3 h-4 bg-zinc-700 rounded mb-2" />
+                    <View className="w-1/3 h-3 bg-zinc-700 rounded" />
+                </View>
+            </View>
+        ))}
+    </View>
+  );
 
   return (
     <>
@@ -284,339 +448,180 @@ const StoryCreationModal = ({
       />
       <Modal
         animationType="slide"
-        transparent={true}
+        transparent={false}
         visible={visible}
         onRequestClose={onClose}
       >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View className="flex-1 justify-end bg-black/80">
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-              <View
-                className="w-full bg-[#121212] rounded-t-[32px] overflow-hidden"
-                style={{ height: "92%" }}
-              >
-                <View className="flex-row items-center justify-between px-5 py-4 border-b border-zinc-900 z-10 bg-[#121212]">
-                  <TouchableOpacity onPress={handleBack} className="p-2 -ml-2">
-                    <Text className="text-zinc-400 text-lg">
-                      {t("common.cancel")}
-                    </Text>
-                  </TouchableOpacity>
-                  <Text className="text-white font-bold text-lg">
-                    {t("story.newStory")}
-                  </Text>
-                  <View style={{ width: 70 }} />
-                </View>
+        <View className="flex-1 bg-[#000000]">
+          <StatusBar barStyle="light-content" />
+          
+          <LinearGradient
+            colors={[COLORS.bgGradientStart, COLORS.bgDark]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 0.4 }}
+            className="absolute w-full h-full"
+          />
 
-                <View className="flex-1 bg-black">
-                  {step === "search" ? (
-                    <View className="flex-1 px-4 pt-4">
-                      {isOfficialAccount && (
-                        <View className="mb-6">
-                          <Text className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-3 text-center">
-                            Admin Tools
-                          </Text>
-                          <View className="flex-row gap-4 justify-center">
-                            <TouchableOpacity
-                              onPress={() => handlePickMedia("image")}
-                              className="flex-1 bg-zinc-900 p-4 rounded-2xl items-center border border-zinc-800"
-                            >
-                              <Ionicons
-                                name="image"
-                                size={24}
-                                color="#5E17EB"
-                              />
-                              <Text className="text-white font-medium mt-2">
-                                Foto
-                              </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              onPress={() => handlePickMedia("video")}
-                              className="flex-1 bg-zinc-900 p-4 rounded-2xl items-center border border-zinc-800"
-                            >
-                              <Ionicons
-                                name="videocam"
-                                size={24}
-                                color="#5E17EB"
-                              />
-                              <Text className="text-white font-medium mt-2">
-                                Video
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                          <View className="h-[1px] bg-zinc-900 w-full mt-6" />
-                        </View>
-                      )}
+          <View style={{ paddingTop: insets.top }} className="flex-1">
+            
+            {/* HEADER */}
+            <View className="flex-row items-center justify-between px-4 py-4 z-10">
+                <TouchableOpacity 
+                    onPress={handleBack} 
+                    className="w-10 h-10 items-center justify-center bg-white/5 rounded-full backdrop-blur-md border border-white/5"
+                >
+                    {step === 'preview' ? <Ionicons name="chevron-back" size={24} color="white" /> : <Ionicons name="close" size={24} color="white" />}
+                </TouchableOpacity>
+                
+                <Text className="text-white font-bold text-[17px] tracking-wide">
+                    {step === 'search' ? t('story.newStory') : t('common.share')}
+                </Text>
+                <View style={{ width: 40 }} />
+            </View>
 
-                      <View className="bg-zinc-900 flex-row items-center px-4 py-4 rounded-3xl mb-6 border border-zinc-800 shadow-sm">
-                        <Ionicons name="search" size={20} color="#A1A1AA" />
-                        <TextInput
-                          placeholder={t("story.searchPlaceholder")}
-                          placeholderTextColor="#71717A"
-                          className="flex-1 ml-3 text-white text-lg font-medium"
-                          value={query}
-                          onChangeText={setQuery}
-                          autoFocus={!isOfficialAccount}
-                          returnKeyType="search"
-                        />
-                        {query.length > 0 && (
-                          <TouchableOpacity onPress={() => setQuery("")}>
-                            <Ionicons
-                              name="close-circle"
-                              size={20}
-                              color="#71717A"
-                            />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-
-                      {searching ? (
-                        <View className="mt-20">
-                          <ActivityIndicator size="large" color="#5E17EB" />
-                        </View>
-                      ) : query.length === 0 ? (
-                        <ScrollView showsVerticalScrollIndicator={false}>
-                          <Text className="text-white font-bold text-xl mb-4 ml-1">
-                            {t("story.trending")}
-                          </Text>
-                          {loadingTrending ? (
-                            <ActivityIndicator
-                              color="#5E17EB"
-                              className="mt-10"
-                            />
-                          ) : (
-                            trendingSongs.map((song, index) => (
-                              <TouchableOpacity
-                                key={song.id}
-                                onPress={() => handleSelectSong(song)}
-                                className="flex-row items-center mb-4 active:opacity-70"
-                              >
-                                <Text className="text-zinc-500 font-bold text-lg w-6 mr-2 text-center">
-                                  {index + 1}
-                                </Text>
-                                <Image
-                                  source={{ uri: song.cover }}
-                                  className="w-14 h-14 rounded-xl bg-zinc-800"
-                                />
-                                <View className="ml-3 flex-1">
-                                  <Text
-                                    className="text-white font-bold text-[16px]"
-                                    numberOfLines={1}
-                                  >
-                                    {song.title}
-                                  </Text>
-                                  <Text
-                                    className="text-zinc-400 text-sm"
-                                    numberOfLines={1}
-                                  >
-                                    {song.artist}
-                                  </Text>
-                                </View>
-                                <Ionicons
-                                  name="chevron-forward"
-                                  size={20}
-                                  color="#3F3F46"
-                                />
-                              </TouchableOpacity>
-                            ))
-                          )}
-                        </ScrollView>
-                      ) : (
-                        <FlatList
-                          data={results}
-                          keyExtractor={(item) => item.id}
-                          contentContainerStyle={{ paddingBottom: 40 }}
-                          keyboardShouldPersistTaps="handled"
-                          renderItem={({ item }) => {
-                            const isPlaying =
-                              previewTrackUrl === item.preview &&
-                              player.playing;
-                            return (
-                              <TouchableOpacity
-                                onPress={() => handleSelectSong(item)}
-                                className="flex-row items-center py-3 border-b border-zinc-900"
-                                activeOpacity={0.7}
-                              >
-                                <Image
-                                  source={{ uri: item.cover }}
-                                  className="w-14 h-14 rounded-lg bg-zinc-800"
-                                />
-                                <View className="ml-3 flex-1 pr-2">
-                                  <Text
-                                    className="text-white font-bold text-[15px] mb-0.5"
-                                    numberOfLines={1}
-                                  >
-                                    {item.title}
-                                  </Text>
-                                  <Text
-                                    className="text-zinc-400 text-xs"
-                                    numberOfLines={1}
-                                  >
-                                    {item.artist}
-                                  </Text>
-                                </View>
-                                {item.preview && (
-                                  <TouchableOpacity
-                                    onPress={(e) => {
-                                      e.stopPropagation();
-                                      handlePlayPreview(item.preview);
-                                    }}
-                                    className="p-2"
-                                  >
-                                    <Ionicons
-                                      name={
-                                        isPlaying
-                                          ? "pause-circle"
-                                          : "play-circle"
-                                      }
-                                      size={32}
-                                      color={isPlaying ? "#5E17EB" : "#71717A"}
-                                    />
-                                  </TouchableOpacity>
-                                )}
-                              </TouchableOpacity>
-                            );
-                          }}
-                        />
-                      )}
-                    </View>
-                  ) : (
-                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                      <View className="flex-1 relative">
-                        {media ? (
-                          media.type === "video" ? (
-                            <Video
-                              source={{ uri: media.uri }}
-                              style={{ width: "100%", height: "100%" }}
-                              resizeMode={ResizeMode.COVER}
-                              shouldPlay
-                              isLooping
-                            />
-                          ) : (
-                            <Image
-                              source={{ uri: media.uri }}
-                              className="w-full h-full"
-                              resizeMode="cover"
-                            />
-                          )
-                        ) : (
-                          <>
-                            <Image
-                              source={{ uri: selectedSong?.cover }}
-                              className="absolute w-full h-full"
-                              blurRadius={90}
-                              style={{ opacity: 0.6 }}
-                            />
-                            <LinearGradient
-                              colors={["transparent", "#000000"] as const}
-                              className="absolute w-full h-full"
-                              style={{ opacity: 0.8 }}
-                            />
-                          </>
-                        )}
-
-                        <View
-                          className="absolute top-0 w-full flex-row justify-between items-center px-5 z-20"
-                          style={{ paddingTop: insets.top + 10 }}
-                        >
-                          <TouchableOpacity
-                            onPress={handleBack}
-                            className="bg-black/20 p-3 rounded-full backdrop-blur-md"
-                          >
-                            <Ionicons
-                              name="chevron-down"
-                              size={28}
-                              color="white"
-                            />
-                          </TouchableOpacity>
-                        </View>
-
-                        <KeyboardAvoidingView
-                          behavior={
-                            Platform.OS === "ios" ? "padding" : "height"
-                          }
-                          className="flex-1 justify-center items-center px-6"
-                        >
-                          {!media && selectedSong && (
-                            <View
-                              className="w-full aspect-square rounded-[32px] overflow-hidden shadow-2xl mb-12 border border-white/10"
-                              style={{
-                                shadowColor: "#000",
-                                shadowOffset: { width: 0, height: 20 },
-                                shadowOpacity: 0.5,
-                                shadowRadius: 30,
-                                elevation: 10,
-                              }}
-                            >
-                              <Image
-                                source={{ uri: selectedSong.cover }}
-                                className="w-full h-full"
-                              />
-                              <LinearGradient
-                                colors={
-                                  ["transparent", "rgba(0,0,0,0.8)"] as const
-                                }
-                                className="absolute bottom-0 w-full h-32 justify-end px-6 py-6"
-                              >
-                                <Text className="text-white font-black text-3xl shadow-sm">
-                                  {selectedSong.title}
-                                </Text>
-                                <Text className="text-zinc-300 text-lg font-medium">
-                                  {selectedSong.artist}
-                                </Text>
-                              </LinearGradient>
-                            </View>
-                          )}
-
-                          <View
-                            className={`w-full px-4 mb-6 ${media ? "absolute bottom-32" : ""}`}
-                          >
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={{ flex: 1 }}
+            >
+              <View className="flex-1">
+                
+                {/* --- SEARCH --- */}
+                {step === "search" && (
+                  <View className="flex-1 pt-2">
+                    
+                    <View className="px-4">
+                        <BlurView intensity={20} tint="dark" className="flex-row items-center px-4 py-3.5 rounded-2xl mb-6 border border-white/10 overflow-hidden">
+                            <Ionicons name="search" size={20} color={COLORS.textMuted} />
                             <TextInput
-                              placeholder={t("story.captionPlaceholder")}
-                              placeholderTextColor="rgba(255,255,255,0.7)"
-                              className="text-white text-2xl py-2 text-center font-medium shadow-md"
-                              style={{
-                                textShadowColor: "rgba(0,0,0,0.8)",
-                                textShadowOffset: { width: 0, height: 1 },
-                                textShadowRadius: 4,
-                              }}
-                              value={caption}
-                              onChangeText={setCaption}
-                              maxLength={100}
-                              multiline
-                              returnKeyType="done"
-                              blurOnSubmit
+                                placeholder={t("story.searchPlaceholder")}
+                                placeholderTextColor={COLORS.textMuted}
+                                className="flex-1 ml-3 text-white text-[16px] font-medium"
+                                value={query}
+                                onChangeText={setQuery}
+                                autoFocus={false}
+                                returnKeyType="search"
+                                selectionColor={COLORS.primary}
                             />
-                          </View>
-                        </KeyboardAvoidingView>
-
-                        <View
-                          className="absolute bottom-10 right-6 z-20"
-                          style={{ paddingBottom: insets.bottom }}
-                        >
-                          <TouchableOpacity
-                            onPress={handleUpload}
-                            disabled={loading}
-                            className="bg-[#5E17EB] w-16 h-16 rounded-full items-center justify-center shadow-lg shadow-purple-500/40"
-                          >
-                            {loading ? (
-                              <ActivityIndicator size="small" color="white" />
-                            ) : (
-                              <Ionicons
-                                name="arrow-forward"
-                                size={32}
-                                color="white"
-                              />
+                            {query.length > 0 && (
+                                <TouchableOpacity onPress={() => setQuery("")}>
+                                    <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
+                                </TouchableOpacity>
                             )}
-                          </TouchableOpacity>
+                        </BlurView>
+                    </View>
+
+                    <View className="flex-1">
+                        {searching ? (
+                             <ActivityIndicator size="large" color={COLORS.primary} className="mt-20" />
+                        ) : query.length === 0 ? (
+                            loadingTrending ? renderSkeleton() : (
+                            <FlatList
+                                data={trendingSongs}
+                                keyExtractor={(item) => item.id}
+                                renderItem={({ item, index }) => renderSongItem({ item, index, isTrending: true })}
+                                showsVerticalScrollIndicator={false}
+                                contentContainerStyle={{ paddingBottom: 100, paddingTop: 10 }}
+                                ListHeaderComponent={
+                                    <View className="mb-6 px-4">
+                                        <Text className="text-white font-bold text-2xl tracking-tight">
+                                            {t("story.trending")}
+                                        </Text>
+                                        <Text className="text-zinc-500 text-sm mt-1">
+                                            {t("story.topHitsSubtitle") || "Lo más viral del momento"}
+                                        </Text>
+                                    </View>
+                                }
+                            />
+                            )
+                        ) : (
+                             <FlatList
+                                data={results}
+                                keyExtractor={(item) => item.id}
+                                renderItem={({ item }) => renderSongItem({ item })}
+                                showsVerticalScrollIndicator={false}
+                                contentContainerStyle={{ paddingBottom: 100, paddingTop: 10 }}
+                            />
+                        )}
+                    </View>
+                  </View>
+                )}
+
+                {/* --- PREVIEW --- */}
+                {step === "preview" && (
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                        <View className="flex-1 items-center px-6 pt-4">
+                            
+                            <View className="w-full aspect-square rounded-[32px] overflow-hidden shadow-2xl bg-zinc-900 relative mb-8 border border-white/5" 
+                                  style={{ shadowColor: COLORS.primary, shadowOpacity: 0.4, shadowRadius: 30 }}>
+                                {media ? (
+                                    media.type === "video" ? (
+                                        <Video source={{ uri: media.uri }} style={{ width: "100%", height: "100%" }} resizeMode={ResizeMode.COVER} shouldPlay isLooping />
+                                    ) : (
+                                        <Image source={{ uri: media.uri }} className="w-full h-full" resizeMode="cover" />
+                                    )
+                                ) : selectedSong ? (
+                                    <>
+                                        <Image source={{ uri: selectedSong.cover }} className="w-full h-full" resizeMode="cover" />
+                                        <LinearGradient colors={["transparent", "rgba(0,0,0,0.8)"]} className="absolute bottom-0 w-full h-40" />
+                                        
+                                        <View className="absolute top-4 right-4 bg-black/40 px-3 py-1.5 rounded-full flex-row items-center border border-white/10 backdrop-blur-md">
+                                            <Ionicons name="musical-notes" size={10} color={COLORS.primary} />
+                                            <Text className="text-white text-[10px] font-bold ml-1.5 uppercase tracking-widest">MOOD</Text>
+                                        </View>
+                                    </>
+                                ) : null}
+                            </View>
+
+                            {!media && selectedSong && (
+                                <View className="w-full items-center mb-8">
+                                    <Text className="text-white text-2xl font-black text-center mb-2 leading-8 tracking-tight shadow-sm">
+                                        {selectedSong.title}
+                                    </Text>
+                                    <Text className="text-zinc-400 text-lg font-medium text-center">
+                                        {selectedSong.artist}
+                                    </Text>
+                                </View>
+                            )}
+
+                            <View className="w-full mb-6">
+                                <BlurView intensity={15} tint="light" className="rounded-2xl overflow-hidden border border-white/10">
+                                    <TextInput
+                                        placeholder={t("story.captionPlaceholder")}
+                                        placeholderTextColor="rgba(255,255,255,0.5)"
+                                        className="px-5 py-4 text-white text-center text-[16px] font-medium bg-white/5"
+                                        value={caption}
+                                        onChangeText={setCaption}
+                                        maxLength={100}
+                                        multiline
+                                        returnKeyType="done"
+                                        blurOnSubmit
+                                    />
+                                </BlurView>
+                            </View>
+
+                            <TouchableOpacity onPress={handleUpload} disabled={loading} className="w-full mt-auto mb-8">
+                                <LinearGradient
+                                    colors={[COLORS.primary, COLORS.secondary]}
+                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                    className="py-4 rounded-full flex-row items-center justify-center shadow-lg shadow-purple-900/30"
+                                >
+                                    {loading ? (
+                                        <ActivityIndicator color="white" />
+                                    ) : (
+                                        <>
+                                            <Text className="text-white font-bold text-[16px] mr-2 tracking-wide">{t("story.shareBtn") || t("common.share")}</Text>
+                                            <Ionicons name="arrow-forward" size={20} color="white" />
+                                        </>
+                                    )}
+                                </LinearGradient>
+                            </TouchableOpacity>
                         </View>
-                      </View>
                     </TouchableWithoutFeedback>
-                  )}
-                </View>
+                )}
               </View>
-            </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
     </>
   );

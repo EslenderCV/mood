@@ -5,11 +5,16 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-  RefreshControl,
+  // RefreshControl, // 🗑 Eliminado
   ScrollView,
   Keyboard,
+  Animated, // ✨ Nuevo
+  Platform, // ✨ Nuevo
+  LayoutAnimation, // ✨ Nuevo
+  UIManager, // ✨ Nuevo
+  useWindowDimensions, // ✨ Nuevo
 } from "react-native";
-import React, { useCallback, useState, useMemo, memo, useEffect } from "react";
+import React, { useCallback, useState, useMemo, memo, useEffect, useRef } from "react";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -40,7 +45,19 @@ import PlayerPostModal from "@/components/explore/PlayerPostModal";
 import DirectShareSheet from "@/components/home/DirectShareSheet";
 import StoryCreationModal from "@/components/home/StoryCreationModal";
 
-// --- CONSTANTES ---
+// Habilitar animaciones de Layout en Android
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// --- CONSTANTES DE UX ---
+const PULL_THRESHOLD = -80;
+const VISIBLE_THRESHOLD = -40;
+const SPINNER_HEIGHT = 60;
+
 const searchSongsWrapper = async (query: string) => {
   try {
     const response = await fetch(
@@ -498,7 +515,59 @@ const Explore = () => {
   const [localSearchText, setLocalSearchText] = useState(logic.searchText);
   const [followedIds, setFollowedIds] = useState<string[]>([]);
 
-  // 🔥 LÓGICA DE DEBOUNCE
+  // 🔥 CUSTOM REFRESH STATE
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef(0);
+  const [showSpinner, setShowSpinner] = useState(false);
+
+  // --- ANIMACIONES & SCROLL ---
+  useEffect(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (!logic.isRefreshing) {
+      setShowSpinner(false);
+    }
+  }, [logic.isRefreshing]);
+
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      useNativeDriver: false,
+      listener: (event: any) => {
+        const offsetY = event.nativeEvent.contentOffset.y;
+        scrollRef.current = offsetY;
+
+        // Lógica reactiva de visibilidad
+        if (offsetY < VISIBLE_THRESHOLD) {
+           if (!showSpinner) setShowSpinner(true);
+        } else if (!logic.isRefreshing) {
+           if (showSpinner) setShowSpinner(false);
+        }
+      },
+    }
+  );
+
+  const handleScrollEndDrag = () => {
+    const offsetY = scrollRef.current;
+    if (offsetY < PULL_THRESHOLD && !logic.isRefreshing) {
+      setShowSpinner(true); 
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      logic.onRefresh();
+    }
+  };
+
+  const spinnerScale = scrollY.interpolate({
+    inputRange: [PULL_THRESHOLD * 1.5, PULL_THRESHOLD, 0],
+    outputRange: [1.3, 1, 0],
+    extrapolate: "clamp",
+  });
+
+  const spinnerRotate = scrollY.interpolate({
+    inputRange: [PULL_THRESHOLD * 2, 0],
+    outputRange: ["360deg", "0deg"],
+    extrapolate: "clamp",
+  });
+
+  // 🔥 DEBOUNCE LOGIC
   useEffect(() => {
     if (localSearchText === logic.searchText) return;
     const delayDebounceFn = setTimeout(() => {
@@ -660,8 +729,8 @@ const Explore = () => {
       <View style={{ flex: 1 }}>
         <StatusBar style={isDark ? "light" : "dark"} />
         <SafeAreaView className="flex-1" edges={["top"]}>
-          {/* 🔥 BARRA DE BÚSQUEDA PERSISTENTE CON "x" */}
-          <View className="px-5 pt-2 pb-4" style={{ backgroundColor: bgColor }}>
+          {/* BARRA DE BÚSQUEDA */}
+          <View className="px-5 pt-2 pb-4" style={{ backgroundColor: bgColor, zIndex: 10 }}>
             <View
               className="flex-row items-center h-12 rounded-2xl px-4 border"
               style={{ backgroundColor: inputBg, borderColor: "transparent" }}
@@ -704,7 +773,7 @@ const Explore = () => {
               onFollowOptimistic={handleFollowOptimistic}
             />
           ) : (
-            <FlatList
+            <Animated.FlatList
               data={
                 logic.isLoading
                   ? Array.from({ length: 6 })
@@ -719,17 +788,42 @@ const Explore = () => {
               keyExtractor={(item, index) =>
                 item?.$id || item?.id || index.toString()
               }
+              // 🔥 HANDLERS PARA REFRESH
+              onScroll={handleScroll}
+              onScrollEndDrag={handleScrollEndDrag}
+              scrollEventThrottle={16}
+              
               ListHeaderComponent={
-                <ExploreHeader
-                  logic={logic}
-                  t={t}
-                  textColor={textColor}
-                  subTextColor={subTextColor}
-                  borderColor={borderColor}
-                  accentColor={accentColor}
-                  isDark={isDark}
-                />
+                <View>
+                  {/* Contenedor del Spinner Animado */}
+                  <Animated.View
+                    style={{
+                      height: (showSpinner || logic.isRefreshing) ? SPINNER_HEIGHT : 0,
+                      opacity: (showSpinner || logic.isRefreshing) ? 1 : 0,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: "hidden",
+                      transform: [
+                        { scale: logic.isRefreshing ? 1 : spinnerScale },
+                        { rotate: logic.isRefreshing ? "0deg" : spinnerRotate },
+                      ],
+                    }}
+                  >
+                    <ActivityIndicator size="small" color="#5E17EB" />
+                  </Animated.View>
+
+                  <ExploreHeader
+                    logic={logic}
+                    t={t}
+                    textColor={textColor}
+                    subTextColor={subTextColor}
+                    borderColor={borderColor}
+                    accentColor={accentColor}
+                    isDark={isDark}
+                  />
+                </View>
               }
+              
               key={logic.activeCategory === "posts" ? "grid-3" : "list-1"}
               numColumns={logic.activeCategory === "posts" ? 3 : 1}
               renderItem={({ item, index }) => {
@@ -794,13 +888,7 @@ const Explore = () => {
                 });
               }}
               showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl
-                  refreshing={logic.isRefreshing}
-                  onRefresh={logic.onRefresh}
-                  tintColor="#5E17EB"
-                />
-              }
+              // refreshControl eliminado
             />
           )}
 

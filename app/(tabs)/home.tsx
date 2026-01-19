@@ -1,14 +1,16 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   View,
   FlatList,
-  RefreshControl,
   Animated,
   useWindowDimensions,
   Image,
   TouchableOpacity,
   Text,
   ActivityIndicator,
+  Platform,
+  LayoutAnimation,
+  UIManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,7 +20,7 @@ import * as Haptics from "expo-haptics";
 
 // --- HOOK ---
 import { useHomeLogic } from "@/hooks/useHomeLogic";
-import { FeedItem } from "@/context/FeedProvider"; // Eliminamos FeedProvider de los imports, solo tipos
+import { FeedItem } from "@/context/FeedProvider";
 
 // --- IMPORTS DE COMPONENTES ---
 import StoriesRail from "@/components/home/StoriesRail";
@@ -39,7 +41,15 @@ import TrendingSongCard from "@/components/TrendingSongCard";
 
 import { createStory, deletePost } from "@/lib/appwrite";
 
-// Wrapper local para búsqueda
+// Habilitar animaciones de Layout en Android
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// 🔥 DEFINICIÓN LOCAL DE searchSongsWrapper
 const searchSongsWrapper = async (query: string) => {
   try {
     const response = await fetch(
@@ -58,6 +68,7 @@ const searchSongsWrapper = async (query: string) => {
     return [];
   }
 };
+
 const RANDOM_SEARCH_TERMS = [
   "global top 50",
   "viral hits",
@@ -65,6 +76,11 @@ const RANDOM_SEARCH_TERMS = [
   "lo-fi beats",
   "rock classics",
 ];
+
+// CONSTANTES DE UX
+const PULL_THRESHOLD = -80; // Cuánto hay que bajar para activar
+const VISIBLE_THRESHOLD = -40; // Cuándo empieza a mostrarse el spinner
+const SPINNER_HEIGHT = 60;
 
 const Home = () => {
   const { width, height } = useWindowDimensions();
@@ -74,6 +90,68 @@ const Home = () => {
 
   const logic = useHomeLogic();
 
+  // 🔥 CUSTOM REFRESH STATE
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef(0);
+  
+  // FIX 1: Estado explícito para visibilidad
+  const [showSpinner, setShowSpinner] = useState(false);
+
+  // Configuración de animación para suavizar la apertura del Header
+  useEffect(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  }, [showSpinner, logic.isRefreshing]); // Se anima cuando cambia cualquiera de los dos
+
+  // FIX 1 (Parte C): Resetear estado al terminar
+  useEffect(() => {
+    if (!logic.isRefreshing) {
+      setShowSpinner(false);
+    }
+  }, [logic.isRefreshing]);
+
+  // 🔥 SCROLL HANDLER OPTIMIZADO
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      useNativeDriver: false, 
+      listener: (event: any) => {
+        const offsetY = event.nativeEvent.contentOffset.y;
+        scrollRef.current = offsetY;
+
+        // Lógica reactiva de visibilidad mientras arrastras
+        if (offsetY < VISIBLE_THRESHOLD) {
+           if (!showSpinner) setShowSpinner(true);
+        } else if (!logic.isRefreshing) {
+           if (showSpinner) setShowSpinner(false);
+        }
+      },
+    }
+  );
+
+  const handleScrollEndDrag = () => {
+    const offsetY = scrollRef.current;
+    // FIX 1 (Parte B): Activar refresh
+    if (offsetY < PULL_THRESHOLD && !logic.isRefreshing) {
+      setShowSpinner(true); 
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      logic.onRefresh();
+    }
+  };
+
+  // Interpolaciones Visuales
+  const spinnerScale = scrollY.interpolate({
+    inputRange: [PULL_THRESHOLD * 1.5, PULL_THRESHOLD, 0],
+    outputRange: [1.3, 1, 0],
+    extrapolate: "clamp",
+  });
+
+  const spinnerRotate = scrollY.interpolate({
+    inputRange: [PULL_THRESHOLD * 2, 0],
+    outputRange: ["360deg", "0deg"],
+    extrapolate: "clamp",
+  });
+
+  // --- CHAT HANDLERS ---
   const openChat = () => {
     setIsChatOpen(true);
     Animated.spring(chatTranslateX, {
@@ -154,7 +232,6 @@ const Home = () => {
   };
 
   return (
-    // 🔥 IMPORTANTE: Eliminamos <FeedProvider> aquí porque ya existe uno global en _layout
     <GestureHandlerRootView
       style={{ flex: 1, backgroundColor: isDark ? "#000" : "#fff" }}
     >
@@ -163,7 +240,7 @@ const Home = () => {
         style={{ flex: 1, backgroundColor: isDark ? "#000000" : "#FFFFFF" }}
       >
         {/* HEADER */}
-        <View className="flex-row justify-between items-center px-5 py-3 border-b border-transparent">
+        <View className="flex-row justify-between items-center px-5 py-3 border-b border-transparent z-50 bg-black">
           <View className="h-[40px] w-[80px] justify-center">
             <Image
               source={require("@/assets/fullLogo.png")}
@@ -185,7 +262,7 @@ const Home = () => {
                 <View className="absolute top-0 right-0 bg-red-500 w-3 h-3 rounded-full border border-black" />
               )}
             </TouchableOpacity>
-            <TouchableOpacity /*onPress={openChat}*/ className="relative">
+            <TouchableOpacity onPress={openChat} className="relative">
               <Ionicons
                 name="chatbubble-outline"
                 size={26}
@@ -202,50 +279,64 @@ const Home = () => {
           </View>
         </View>
 
+        {/* ❌ SPINNER ABSOLUTO ELIMINADO */}
+
         {logic.isFeedLoading ? (
           <FeedSkeleton isDark={isDark} />
         ) : (
-          <FlatList
+          <Animated.FlatList
             ref={logic.flatListRef}
             data={logic.sortedFeed}
             keyExtractor={(item) => item._id}
             renderItem={renderFeedItem}
-            // --- SCROLL INFINITO Y OPTIMIZACIÓN ---
+            // 🔥 SCROLL EVENTS
+            onScroll={handleScroll}
+            onScrollEndDrag={handleScrollEndDrag}
+            scrollEventThrottle={16}
+            
+            // Fondo transparente por si acaso, pero el spinner ya está adentro
+            style={{ backgroundColor: "transparent", zIndex: 1 }}
+            
+            // 🔥 AQUÍ ESTÁ EL FIX ARQUITECTÓNICO: Spinner dentro del Header
+            ListHeaderComponent={
+              <View>
+                {/* Contenedor del Spinner Animado */}
+                <Animated.View
+                  style={{
+                    // Si showSpinner O isRefreshing es true, ocupa espacio. Si no, 0.
+                    height: (showSpinner || logic.isRefreshing) ? SPINNER_HEIGHT : 0,
+                    opacity: (showSpinner || logic.isRefreshing) ? 1 : 0,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden", // Importante para la animación de altura
+                    transform: [
+                      { scale: logic.isRefreshing ? 1 : spinnerScale },
+                      { rotate: logic.isRefreshing ? "0deg" : spinnerRotate },
+                    ],
+                  }}
+                >
+                  <ActivityIndicator size="small" color="#5E17EB" />
+                </Animated.View>
+                
+                <StoriesRail
+                  currentUser={logic.user}
+                  groupedStories={logic.localData.groupedStories}
+                  onPressStoryGroup={(g) => {
+                    logic.setActiveStoryGroup(g);
+                    logic.toggleModal("isStoryViewer", true);
+                  }}
+                  onAddStory={handleAddStoryPress}
+                  moodOfficialId={logic.MOOD_OFFICIAL_ID}
+                />
+              </View>
+            }
+            
             onEndReached={() => logic.handleLoadMore()}
             onEndReachedThreshold={0.5}
             initialNumToRender={5}
             maxToRenderPerBatch={5}
             windowSize={5}
             removeClippedSubviews={true}
-            // --------------------------------------
-
-            ListHeaderComponent={
-              <StoriesRail
-                currentUser={logic.user}
-                groupedStories={logic.localData.groupedStories}
-                onPressStoryGroup={(g) => {
-                  logic.setActiveStoryGroup(g);
-                  logic.toggleModal("isStoryViewer", true);
-                }}
-                onAddStory={handleAddStoryPress}
-                moodOfficialId={logic.MOOD_OFFICIAL_ID}
-              />
-            }
-            refreshControl={
-              <RefreshControl
-                // 🔥 Este key fuerza a React a recrear el componente nativo si el color cambia o se monta
-                key="mood-refresh-control"
-                refreshing={logic.isRefreshing}
-                onRefresh={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  logic.onRefresh();
-                }}
-                // iOS
-                tintColor="#8856ec"
-                // Android
-                colors={["#5E17EB"]}
-              />
-            }
             ListEmptyComponent={
               <EmptyStateWithSuggestions
                 suggestions={[]}
@@ -257,7 +348,6 @@ const Home = () => {
 
         {/* --- MODALES --- */}
         <PostModal />
-
         <CreatorModal
           visible={logic.modals.isCreator}
           onClose={() => logic.toggleModal("isCreator", false)}
@@ -274,7 +364,6 @@ const Home = () => {
             }
           }}
         />
-
         <StoryCreationModal
           visible={logic.modals.isCreation}
           onClose={() => logic.toggleModal("isCreation", false)}
@@ -285,7 +374,6 @@ const Home = () => {
           searchSongsWrapper={searchSongsWrapper}
           RANDOM_SEARCH_TERMS={RANDOM_SEARCH_TERMS}
         />
-
         <StoryViewer
           visible={logic.modals.isStoryViewer}
           onClose={() => {
@@ -301,7 +389,6 @@ const Home = () => {
           onRefreshFeed={() => logic.fetchAuxiliaryData()}
           moodOfficialId={logic.MOOD_OFFICIAL_ID}
         />
-
         <DirectShareSheet
           visible={logic.modals.isShareSelector}
           onClose={() => logic.toggleModal("isShareSelector", false)}
@@ -318,13 +405,11 @@ const Home = () => {
           onSystemShare={logic.handleSystemShare}
           onCopyLink={logic.handleCopyLink}
         />
-
         <MoodShareCard
           isVisible={logic.modals.isViral}
           onClose={() => logic.toggleModal("isViral", false)}
           post={logic.getViralPostData()}
         />
-
         <OptionsModal
           isVisible={logic.modals.isOptions}
           onClose={() => logic.toggleModal("isOptions", false)}
@@ -338,7 +423,6 @@ const Home = () => {
               logic.selectedPost?.creator?.$id)
           }
         />
-
         <ShareModal
           isVisible={logic.modals.isShare}
           onClose={() => logic.toggleModal("isShare", false)}
@@ -346,7 +430,6 @@ const Home = () => {
         />
       </SafeAreaView>
 
-      {/* CHATS OVERLAY */}
       <Animated.View
         style={{
           position: "absolute",

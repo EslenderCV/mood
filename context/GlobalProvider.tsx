@@ -12,6 +12,7 @@ import {
 import { getCurrentUser } from "@/lib/appwrite";
 import { Models } from "react-native-appwrite";
 import { useColorScheme } from "nativewind";
+import { useRouter, useSegments } from "expo-router";
 
 export interface User extends Models.Document {
   name: string;
@@ -40,10 +41,12 @@ interface GlobalContextType {
   loading: boolean;
   isLogged: boolean;
   setIsLogged: Dispatch<SetStateAction<boolean>>;
-  checkAuth: () => Promise<void>;
-  // 🔥 NUEVO: Estado global de chats (Mantenido)
+  // 🔥 ACTUALIZACIÓN: checkAuth ahora acepta un parámetro opcional 'force'
+  checkAuth: (force?: boolean) => Promise<void>;
   chats: any[];
   setChats: Dispatch<SetStateAction<any[]>>;
+  isSwitching: boolean;
+  setIsSwitching: Dispatch<SetStateAction<boolean>>;
 }
 
 const GlobalContext = createContext<GlobalContextType>({
@@ -57,6 +60,8 @@ const GlobalContext = createContext<GlobalContextType>({
   checkAuth: async () => {},
   chats: [],
   setChats: () => {},
+  isSwitching: false,
+  setIsSwitching: () => {},
 });
 
 export const useGlobalContext = () => useContext(GlobalContext);
@@ -65,14 +70,20 @@ const GlobalProvider = ({ children }: Props) => {
   const [loggedIn, setLoggedIn] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // 🔥 Estado compartido para evitar recargas visuales (Mantenido)
   const [chats, setChats] = useState<any[]>([]);
+  const [isSwitching, setIsSwitching] = useState(false);
 
   const { colorScheme, setColorScheme } = useColorScheme();
+  const router = useRouter();
+  const segments = useSegments();
 
-  // Función original de verificación de auth
-  const checkAuth = useCallback(async () => {
+  // 🔥 LÓGICA CORREGIDA
+  const checkAuth = useCallback(async (force = false) => {
+    // Si estamos cambiando de cuenta (isSwitching) y NO es una llamada forzada,
+    // bloqueamos la ejecución para evitar condiciones de carrera o fetches basura.
+    // Pero si force === true, permitimos que pase para actualizar el contexto tras el setJWT.
+    if (isSwitching && !force) return;
+
     try {
       const res = await getCurrentUser();
       if (res) {
@@ -89,14 +100,23 @@ const GlobalProvider = ({ children }: Props) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isSwitching]);
 
   useEffect(() => {
     if (colorScheme !== "dark") {
       setColorScheme("dark");
     }
-    checkAuth();
+    checkAuth(); // Llamada normal (sin force) al montar
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+
+    const inAuthGroup = segments[0] === "(auth)";
+    if (!loggedIn && !inAuthGroup) {
+      router.replace("/signIn");
+    }
+  }, [loggedIn, loading, segments]);
 
   const contextValue = useMemo(
     () => ({
@@ -107,11 +127,13 @@ const GlobalProvider = ({ children }: Props) => {
       loading,
       isLogged: loggedIn,
       setIsLogged: setLoggedIn,
-      checkAuth, // Ahora se expone para que AccountManager lo use tras un cambio
+      checkAuth,
       chats,
       setChats,
+      isSwitching,
+      setIsSwitching,
     }),
-    [loggedIn, user, loading, chats, checkAuth],
+    [loggedIn, user, loading, chats, checkAuth, isSwitching],
   );
 
   return (

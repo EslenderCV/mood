@@ -9,13 +9,15 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AccountManager, StoredAccount } from "@/lib/accountManager";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useRouter } from "expo-router";
 import { useLanguage } from "@/context/LanguageContext";
-import { account } from "@/lib/appwrite";
+import { account, getUser, appwriteConfig, databases } from "@/lib/appwrite";
+import { Query } from "react-native-appwrite";
 
 interface AccountSelectorModalProps {
   visible: boolean;
@@ -26,7 +28,7 @@ const AccountSelectorModal = ({
   visible,
   onClose,
 }: AccountSelectorModalProps) => {
-  const { user, checkAuth, setUser, setLoggedIn } = useGlobalContext();
+  const { user, setUser, setLoggedIn, setIsSwitching } = useGlobalContext();
   const [accounts, setAccounts] = useState<StoredAccount[]>([]);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const router = useRouter();
@@ -38,85 +40,182 @@ const AccountSelectorModal = ({
     }
   }, [visible]);
 
+  // --- LÓGICA DE NEGOCIO ---
+  const smartFetchUser = async (id: string) => {
+    try {
+      const doc = await getUser(id);
+      if (doc) return doc;
+    } catch (e) {}
+
+    try {
+      const list = await databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.usersCollectionId,
+        [Query.equal("accId", id)]
+      );
+      if (list.documents.length > 0) return list.documents[0];
+    } catch (e) {}
+
+    return null;
+  };
+
   const loadAccounts = async () => {
     try {
       const stored = await AccountManager.getStoredAccounts();
       setAccounts(stored);
+
+      if (stored.length > 0) {
+        const freshAccounts = await Promise.all(
+          stored.map(async (acc) => {
+            try {
+              const userDoc = await smartFetchUser(acc.userId);
+              if (userDoc) {
+                const validPfp = (userDoc.pfp && userDoc.pfp.trim() !== "")
+                  ? userDoc.pfp 
+                  : `https://cloud.appwrite.io/v1/avatars/initials?name=${encodeURIComponent(userDoc.name)}&project=${appwriteConfig.projectId}`;
+
+                return {
+                  ...acc,
+                  userId: userDoc.$id,
+                  name: userDoc.name || acc.name,
+                  username: userDoc.username || "", 
+                  pfp: validPfp,
+                };
+              }
+            } catch (e) {}
+            return acc;
+          })
+        );
+        setAccounts(freshAccounts);
+        await AccountManager.updateAccountsList(freshAccounts);
+      }
     } catch (error) {
       console.error("Error al cargar cuentas:", error);
     }
   };
 
-  const handleSwitchAccount = async (targetUserId: string) => {
-    if (targetUserId === user?.$id) {
+  const handleSwitchAccount = async (targetAccount: StoredAccount) => {
+    // 🔥 CORRECCIÓN TS: Usamos (user as any).accId para evitar el error de tipos
+    // ya que sabemos que en la DB el campo existe aunque la interfaz diga 'accountId'.
+    const userAccId = user ? (user as any).accId : null;
+    const isSameUser = user && (targetAccount.userId === user.$id || targetAccount.userId === userAccId);
+
+    if (isSameUser) {
       onClose();
       return;
     }
 
-    setSwitchingId(targetUserId);
+    setSwitchingId(targetAccount.userId);
+    if (setIsSwitching) setIsSwitching(true);
+    onClose();
 
     try {
-      const success = await AccountManager.switchAccount(targetUserId);
+      await account.deleteSession("current").catch(() => {});
+      setUser(null);
+      setLoggedIn(false);
 
-      if (success) {
-        await checkAuth();
-        onClose();
-      } else {
-        setUser(null);
-        setLoggedIn(false);
-        onClose();
-        Alert.alert(
-          t("auth.sessionExpiredTitle") || "Sesión expirada",
-          t("auth.sessionExpiredMsg") ||
-            "Por favor, inicia sesión de nuevo en esta cuenta.",
-        );
-        router.replace("/signIn");
-      }
+      router.replace({
+        pathname: "/signIn",
+        params: { email: targetAccount.email }
+      });
+
     } catch (error) {
-      console.error("Error al cambiar de cuenta:", error);
+      console.error("Error al cambiar cuenta:", error);
       router.replace("/signIn");
     } finally {
       setSwitchingId(null);
+      setTimeout(() => {
+        if (setIsSwitching) setIsSwitching(false);
+      }, 1000);
     }
   };
 
-  const handleAddAccount = () => {
-    // 1. Cerramos el modal visualmente primero
+  const handleAddAccount = async () => {
+    if (setIsSwitching) setIsSwitching(true);
     onClose();
-
-    // 2. Limpiamos el estado global inmediatamente
     setUser(null);
     setLoggedIn(false);
-
-    // 3. Ejecutamos el cierre de sesión en "segundo plano" (sin await)
-    // para no bloquear la navegación si el servidor tarda en responder.
-    account.deleteSession("current").catch(() => {});
-
-    // 4. Forzamos la navegación con un pequeño timeout para asegurar que
-    // el modal se ha desmontado correctamente.
-    setTimeout(() => {
-      router.replace("/signIn");
-    }, 100);
+    try { await account.deleteSession("current"); } catch (e) {}
+    router.replace("/signIn");
+    setTimeout(() => { if (setIsSwitching) setIsSwitching(false); }, 1000);
   };
 
   const handleLogoutAll = () => {
     Alert.alert(
-      "Cerrar todas las sesiones",
-      "¿Estás seguro de que quieres cerrar sesión en todas las cuentas?",
+      t("auth.logoutTitle") || "Cerrar sesión",
+      t("auth.logoutConfirm") || "¿Cerrar todas las sesiones?",
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("common.cancel") || "Cancelar", style: "cancel" },
         {
-          text: "Cerrar todas",
+          text: t("profile.logoutAll") || "Cerrar todas",
           style: "destructive",
           onPress: async () => {
+            if (setIsSwitching) setIsSwitching(true);
             onClose();
             await AccountManager.logoutAll();
             setUser(null);
             setLoggedIn(false);
             router.replace("/signIn");
+            setTimeout(() => { if (setIsSwitching) setIsSwitching(false); }, 1000);
           },
         },
       ],
+    );
+  };
+
+  // --- RENDERIZADO PREMIUM ---
+
+  const renderAccountItem = ({ item }: { item: StoredAccount }) => {
+    // 🔥 CORRECCIÓN TS AQUÍ TAMBIÉN
+    const userAccId = user ? (user as any).accId : null;
+    const isSameUser = user && (item.userId === user.$id || item.email === user.email || item.userId === userAccId);
+    
+    const imageUri = (item.pfp && item.pfp.length > 5) ? item.pfp : null;
+    const imageSource = imageUri ? { uri: imageUri } : require("@/assets/noPfp.jpg");
+    const subtitle = (item.username && item.username.trim() !== "") ? `@${item.username}` : item.email;
+
+    return (
+      <TouchableOpacity
+        onPress={() => handleSwitchAccount(item)}
+        disabled={switchingId !== null}
+        activeOpacity={0.7}
+        className={`flex-row items-center justify-between p-4 mb-3 rounded-2xl border ${
+          isSameUser 
+            ? "bg-[#5E17EB]/10 border-[#5E17EB]/50" 
+            : "bg-zinc-900/50 border-white/5"
+        }`}
+      >
+        <View className="flex-row items-center gap-4 flex-1">
+          <View className={`p-[2px] rounded-full ${isSameUser ? "bg-[#5E17EB]" : "bg-transparent"}`}>
+            <Image
+              source={imageSource}
+              className="w-12 h-12 rounded-full bg-zinc-800"
+              resizeMode="cover"
+            />
+          </View>
+          
+          <View className="flex-1">
+            <Text className={`text-base font-bold ${isSameUser ? "text-white" : "text-zinc-300"}`} numberOfLines={1}>
+              {item.name || t("common.user") || "Usuario"}
+            </Text>
+            <Text className="text-zinc-500 text-xs font-medium mt-0.5" numberOfLines={1}>
+              {subtitle}
+            </Text>
+          </View>
+        </View>
+
+        <View className="ml-2">
+          {switchingId === item.userId ? (
+            <ActivityIndicator color="#5E17EB" size="small" />
+          ) : isSameUser ? (
+            <View className="bg-[#5E17EB] w-6 h-6 rounded-full items-center justify-center shadow-lg shadow-[#5E17EB]/50">
+               <View className="w-2 h-2 bg-white rounded-full" />
+            </View>
+          ) : (
+            <View className="w-6 h-6 rounded-full border border-zinc-700" />
+          )}
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -124,86 +223,62 @@ const AccountSelectorModal = ({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable className="flex-1 bg-black/50" onPress={onClose}>
+      <Pressable className="flex-1 bg-black/80" onPress={onClose}>
         <View className="flex-1 justify-end">
           <Pressable
-            className="bg-[#121212] rounded-t-[30px] p-6 pb-12"
+            className="bg-[#0f0f0f] rounded-t-[32px] overflow-hidden border-t border-white/10"
             onPress={(e) => e.stopPropagation()}
+            style={{ maxHeight: '85%' }}
           >
-            <View className="w-12 h-1.5 bg-zinc-800 rounded-full self-center mb-6" />
+            <View className="absolute top-0 left-0 right-0 h-[1px] bg-[#5E17EB]/30" />
+            
+            <View className="w-full items-center pt-3 pb-2">
+               <View className="w-10 h-1 bg-zinc-800 rounded-full" />
+            </View>
 
-            <Text className="text-white text-xl font-bold mb-6 text-center">
-              {t("profile.switchAccount") || "Cambiar cuenta"}
-            </Text>
+            <View className="px-6 pb-6 pt-2">
+              <Text className="text-white text-2xl font-bold tracking-tight text-center">
+                {t("profile.switchAccount") || "Cuentas"}
+              </Text>
+              <Text className="text-zinc-500 text-sm text-center mt-1">
+                {t("profile.manageSubtitle") || "Administra tus perfiles de Mood"}
+              </Text>
+            </View>
 
             <FlatList
               data={accounts}
               keyExtractor={(item) => item.userId}
-              renderItem={({ item }) => {
-                const isActive = item.userId === user?.$id;
-                return (
-                  <TouchableOpacity
-                    onPress={() => handleSwitchAccount(item.userId)}
-                    disabled={switchingId !== null}
-                    className="flex-row items-center justify-between py-4"
-                  >
-                    <View className="flex-row items-center gap-4">
-                      <Image
-                        source={
-                          item.pfp
-                            ? { uri: item.pfp }
-                            : require("@/assets/noPfp.jpg")
-                        }
-                        className="w-14 h-14 rounded-full border border-zinc-800"
-                      />
-                      <View>
-                        <Text className="text-white font-bold text-base">
-                          {item.name}
-                        </Text>
-                        <Text className="text-zinc-500 text-sm">
-                          @{item.username}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {switchingId === item.userId ? (
-                      <ActivityIndicator color="#5E17EB" />
-                    ) : isActive ? (
-                      <View className="bg-[#5E17EB] rounded-full p-1">
-                        <Ionicons name="checkmark" size={20} color="white" />
-                      </View>
-                    ) : (
-                      <View className="w-6 h-6 rounded-full border-2 border-zinc-800" />
-                    )}
-                  </TouchableOpacity>
-                );
-              }}
+              renderItem={renderAccountItem}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
+              showsVerticalScrollIndicator={false}
+              ItemSeparatorComponent={() => <View className="h-1" />}
             />
 
-            <TouchableOpacity
-              onPress={handleAddAccount}
-              className="flex-row items-center gap-4 py-6 mt-2 border-t border-zinc-900"
-            >
-              <View className="w-14 h-14 rounded-full border-2 border-dashed border-zinc-800 justify-center items-center">
-                <Ionicons name="add" size={30} color="white" />
-              </View>
-              <Text className="text-white font-semibold text-base">
-                {t("profile.addAccount") || "Añadir cuenta de Mood"}
-              </Text>
-            </TouchableOpacity>
+            <View className="px-6 pb-10 pt-4 bg-[#0f0f0f] border-t border-white/5">
+              <TouchableOpacity
+                onPress={handleAddAccount}
+                activeOpacity={0.8}
+                className="flex-row items-center justify-center gap-3 py-4 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/30 mb-3"
+              >
+                <Ionicons name="add-circle-outline" size={24} color="white" />
+                <Text className="text-white font-semibold text-base">
+                  {t("profile.addAccount") || "Añadir otra cuenta"}
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={handleLogoutAll}
-              className="flex-row items-center gap-4 py-4"
-            >
-              <Ionicons name="log-out-outline" size={28} color="#EF4444" />
-              <Text className="text-[#EF4444] font-semibold text-base">
-                Cerrar sesión en todas
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleLogoutAll}
+                activeOpacity={0.7}
+                className="flex-row items-center justify-center gap-2 py-3"
+              >
+                <Text className="text-[#ff4444] font-medium text-sm opacity-80">
+                  {t("profile.logoutAll") || "Cerrar sesión en todos los dispositivos"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </Pressable>
         </View>
       </Pressable>

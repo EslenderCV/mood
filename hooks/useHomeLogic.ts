@@ -17,6 +17,7 @@ import {
 import { Databases, Query, ID } from "react-native-appwrite";
 import * as ImagePicker from "expo-image-picker";
 import { parseSongData } from "@/lib/postUtils";
+
 const databases = new Databases(client);
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
 
@@ -82,11 +83,11 @@ export const useHomeLogic = () => {
       isMounted.current = false;
     };
   }, []);
+
   const openShare = async (post: any) => {
     setSelectedPostToShare(post);
     toggleModal("isShareSelector", true);
 
-    // Carga inicial de contactos (seguidos)
     if (user?.$id && shareContacts.length === 0) {
       setIsLoadingContacts(true);
       const followedIds = await getFollowedUserIds(user.$id);
@@ -95,6 +96,7 @@ export const useHomeLogic = () => {
       setIsLoadingContacts(false);
     }
   };
+
   const handleShareSearch = async (text: string) => {
     setIsLoadingContacts(true);
     if (text.length > 0) {
@@ -107,7 +109,7 @@ export const useHomeLogic = () => {
             Query.search("name", text),
           ]),
           Query.limit(10),
-        ],
+        ]
       );
       setShareContacts(response.documents);
     } else if (user?.$id) {
@@ -130,10 +132,10 @@ export const useHomeLogic = () => {
             senderId: user.$id,
             receiverId: targetId,
             content: message || "Compartió una publicación",
-            sharedPostId: selectedPostToShare.$id, // Aquí vinculamos el post
+            sharedPostId: selectedPostToShare.$id,
             createdAt: new Date().toISOString(),
-          },
-        ),
+          }
+        )
       );
       await Promise.all(promises);
       Alert.alert("Enviado", "Publicación compartida.");
@@ -142,6 +144,7 @@ export const useHomeLogic = () => {
       Alert.alert("Error", "No se pudo compartir.");
     }
   };
+
   const loadShareContacts = async (userId: string) => {
     setIsLoadingContacts(true);
     try {
@@ -154,40 +157,21 @@ export const useHomeLogic = () => {
       setIsLoadingContacts(false);
     }
   };
+
   const openShareSelector = async (post: any) => {
     setPostToShareData(post);
     toggleModal("isShareSelector", true);
 
     if (user?.$id && shareContacts.length === 0) {
-      await loadShareContacts(user.$id); // ✅ Ahora la función está definida arriba
+      await loadShareContacts(user.$id);
     }
   };
-  const getViralPostData = () => {
-    // 1. Verificamos si el objeto principal existe
-    if (!postToShareData) {
-      console.log("DEBUG Share: postToShareData es NULL o UNDEFINED");
-      return null;
-    }
 
-    // 2. Log del contenido de songData antes de parsear
-    console.log(
-      "DEBUG Share: Tipo de songData ->",
-      typeof postToShareData.songData,
-    );
-    console.log(
-      "DEBUG Share: Contenido de songData ->",
-      postToShareData.songData,
-    );
+  const getViralPostData = () => {
+    if (!postToShareData) return null;
 
     const song = parseSongData(postToShareData.songData);
-
-    // 3. Log del resultado del parseo
-    console.log("DEBUG Share: Resultado de parseSongData ->", song);
-
     const creator = postToShareData.postedBy || postToShareData.creator || {};
-
-    // 4. Log de la información del creador
-    console.log("DEBUG Share: Información del creador ->", creator.username);
 
     return {
       title: song?.title || "Música",
@@ -198,6 +182,7 @@ export const useHomeLogic = () => {
       comment: postToShareData.comment || null,
     };
   };
+
   const handleAddStoryFromPost = () => {
     if (!postToShareData) return;
     const songData = parseSongData(postToShareData.songData);
@@ -207,6 +192,7 @@ export const useHomeLogic = () => {
       setTimeout(() => toggleModal("isCreation", true), 300);
     }
   };
+
   const handleCopyLink = () => {
     if (!selectedPostToShare) return;
     const link = `https://moodapp.com/post/${selectedPostToShare.$id}`;
@@ -219,14 +205,14 @@ export const useHomeLogic = () => {
     const link = `https://moodapp.com/post/${selectedPostToShare.$id}`;
     await SystemShare.share({ message: `¡Escucha esto en Mood! ${link}` });
   };
+
   const handleMoodMediaPick = async () => {
     setModals((prev) => ({ ...prev, isCreator: false }));
 
     setTimeout(async () => {
       if (!userId) return;
 
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         Alert.alert("Permiso denegado", "Necesitamos acceso a la galería.");
         return;
@@ -243,7 +229,7 @@ export const useHomeLogic = () => {
           const asset = result.assets[0];
           Alert.alert(
             "Subiendo",
-            "Tu historia se está subiendo en segundo plano...",
+            "Tu historia se está subiendo en segundo plano..."
           );
 
           const file = {
@@ -298,16 +284,8 @@ export const useHomeLogic = () => {
       const storiesDocs = await getStories(uId);
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const recentStories = storiesDocs.filter(
-        (doc: any) => new Date(doc.$createdAt) > oneDayAgo,
+        (doc: any) => new Date(doc.$createdAt) > oneDayAgo
       );
-
-      // 🔥 OPTIMIZACIÓN: Desactivar prefetch agresivo para evitar congelamiento
-      // recentStories.forEach((doc: any) => {
-      //   try {
-      //     const parsed = JSON.parse(doc.songData);
-      //     if (parsed.cover) Image.prefetch(parsed.cover);
-      //   } catch (e) {}
-      // });
 
       const uniqueUserIds = new Set<string>();
       const userMap = new Map<string, any>();
@@ -325,7 +303,7 @@ export const useHomeLogic = () => {
       });
 
       const idsToFetch = Array.from(uniqueUserIds).filter(
-        (id) => !userMap.has(id),
+        (id) => !userMap.has(id)
       );
 
       if (idsToFetch.length > 0) {
@@ -335,7 +313,7 @@ export const useHomeLogic = () => {
               const u = await getUser(id);
               if (u) userMap.set(id, u);
             } catch (e) {}
-          }),
+          })
         );
       }
 
@@ -373,7 +351,7 @@ export const useHomeLogic = () => {
         .listDocuments(
           appwriteConfig.databaseId,
           appwriteConfig.storiesCollectionId,
-          [Query.equal("user", MOOD_OFFICIAL_ID)],
+          [Query.equal("user", MOOD_OFFICIAL_ID)]
         )
         .catch(() => ({ documents: [] }));
 
@@ -384,7 +362,7 @@ export const useHomeLogic = () => {
 
       const officialDocs = officialStoriesRes.documents;
       const officialGroupIndex = myStories.findIndex(
-        (g) => g.userId === MOOD_OFFICIAL_ID,
+        (g) => g.userId === MOOD_OFFICIAL_ID
       );
 
       if (officialDocs.length > 0) {
@@ -441,7 +419,6 @@ export const useHomeLogic = () => {
     setSortedFeed((prev) => [...prev, ...newItems]);
   };
 
-  // 🔥 EVENT LISTENER: Solo refresca si estás YA en Home y vuelves a tocar el tab.
   useEffect(() => {
     const unsubscribe = navigation.addListener("tabPress", (e: any) => {
       if (navigation.isFocused()) {
@@ -473,12 +450,12 @@ export const useHomeLogic = () => {
       (response) => {
         if (
           response.events.some(
-            (e) => e.includes("create") || e.includes("update"),
+            (e) => e.includes("create") || e.includes("update")
           )
         ) {
           fetchCounts(userId);
         }
-      },
+      }
     );
     return () => {
       unsubscribe();
