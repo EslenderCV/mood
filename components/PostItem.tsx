@@ -1,15 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, memo } from "react";
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
+  Animated,
 } from "react-native";
-// 🔥 CAMBIO: Usamos solo Audio de expo-av para todo (config y reproducción)
+// 🔥 OPTIMIZACIÓN 1: Image de expo-image (Caché + Performance)
+import { Image } from "expo-image";
 import { Audio } from "expo-av";
+// 🔥 OPTIMIZACIÓN 2: Haptics (Experiencia táctil)
+import * as Haptics from "expo-haptics";
+// 🔥 OPTIMIZACIÓN 3: Gestos
+import { TapGestureHandler, State } from "react-native-gesture-handler";
 
-import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
 import {
@@ -20,7 +25,6 @@ import {
 import { useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
 import { useAudioContext } from "@/context/AudioContext";
-import { useGlobalContext } from "@/context/GlobalProvider";
 
 const AudioVisualizer = ({
   isPlaying,
@@ -74,8 +78,9 @@ const PostItem: React.FC<PostItemProps> = ({
   onOptionsPress,
   onSharePress,
 }) => {
+  // 🔥 Evitar renders si el post viene vacío
   if (!post) return null;
-  const { user } = useGlobalContext();
+
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
@@ -88,7 +93,6 @@ const PostItem: React.FC<PostItemProps> = ({
   const { t, language } = useLanguage();
   const { currentPlayingId, setPlayingId } = useAudioContext();
 
-  // Estado local del sonido (expo-av)
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
@@ -100,16 +104,17 @@ const PostItem: React.FC<PostItemProps> = ({
   const [likesCount, setLikesCount] = useState(post?.likedBy?.length || 0);
   const [savesCount, setSavesCount] = useState(post?.savedBy?.length || 0);
 
+  // Animación del corazón gigante
+  const heartScaleAnim = useRef(new Animated.Value(0)).current;
+
   const songData = parseSongData(post.songData);
 
-  // --- OBTENER CREADOR (TRADUCIDO) ---
   const getCreator = () => {
     let userObj = post.postedBy;
     if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
 
-    // Traducciones dinámicas para usuarios anónimos o por defecto
-    const defaultName = t("common.user"); // "Usuario" / "User"
-    const defaultUsername = t("common.anonymous"); // "Anónimo" / "Anonymous"
+    const defaultName = t("common.user");
+    const defaultUsername = t("common.anonymous");
 
     if (userObj && typeof userObj === "object") {
       return {
@@ -130,7 +135,6 @@ const PostItem: React.FC<PostItemProps> = ({
   };
   const creator = getCreator();
 
-  // --- EFECTO: Limpieza al desmontar ---
   useEffect(() => {
     return () => {
       if (sound) {
@@ -139,11 +143,9 @@ const PostItem: React.FC<PostItemProps> = ({
     };
   }, [sound]);
 
-  // --- EFECTO: Control Global (Pausar si otro empieza a sonar) ---
   useEffect(() => {
     const manageGlobalAudio = async () => {
       if (currentPlayingId && currentPlayingId !== post.$id && sound) {
-        // Si hay otro ID sonando y yo tengo sonido cargado -> Pausar
         const status = await sound.getStatusAsync();
         if (status.isLoaded && status.isPlaying) {
           await sound.pauseAsync();
@@ -155,32 +157,30 @@ const PostItem: React.FC<PostItemProps> = ({
   }, [currentPlayingId, post.$id, sound]);
 
   const handlePlayPause = async () => {
+    Haptics.selectionAsync();
+
     try {
-      // 1. Si ya tengo el sonido cargado
       if (sound) {
         const status = await sound.getStatusAsync();
         if (status.isLoaded) {
           if (status.isPlaying) {
             await sound.pauseAsync();
             setIsPlaying(false);
-            setPlayingId(null); // Liberar contexto global
+            setPlayingId(null);
           } else {
-            // Si la canción terminó, reiniciar
             if (status.positionMillis >= status.durationMillis!) {
               await sound.replayAsync();
             } else {
               await sound.playAsync();
             }
-            setPlayingId(post.$id); // Tomar control global
+            setPlayingId(post.$id);
             setIsPlaying(true);
           }
         }
         return;
       }
 
-      // 2. Si NO tengo sonido, cargarlo
       setIsLoadingAudio(true);
-
       const trackId = songData?.id || songData?.spotifyId;
       if (!trackId) {
         setIsLoadingAudio(false);
@@ -193,7 +193,6 @@ const PostItem: React.FC<PostItemProps> = ({
         return;
       }
 
-      // IMPORTANTE: Aquí configuramos que el sonido suene aunque esté en silencio
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         allowsRecordingIOS: false,
@@ -210,13 +209,11 @@ const PostItem: React.FC<PostItemProps> = ({
       setIsPlaying(true);
       setPlayingId(post.$id);
 
-      // Listener para detectar fin de canción
       newSound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded) {
           if (status.didJustFinish) {
             setIsPlaying(false);
             setPlayingId(null);
-            // Opcional: newSound.unloadAsync(); para ahorrar memoria
           }
         }
       });
@@ -230,6 +227,8 @@ const PostItem: React.FC<PostItemProps> = ({
   };
 
   const handleLike = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
     const prevLiked = isLiked;
     const prevCount = likesCount;
 
@@ -245,7 +244,39 @@ const PostItem: React.FC<PostItemProps> = ({
     }
   };
 
+  // 🔥 NUEVO: Función para manejar el Doble Tap
+  const onDoubleTap = (event: any) => {
+    if (event.nativeEvent.state === State.ACTIVE) {
+      // 1. Feedback
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // 2. Dar like si no tiene
+      if (!isLiked) {
+        handleLike();
+      }
+
+      // 3. Animación del corazón
+      heartScaleAnim.setValue(0);
+      Animated.sequence([
+        Animated.spring(heartScaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          bounciness: 12,
+          speed: 20,
+        }),
+        Animated.delay(200),
+        Animated.timing(heartScaleAnim, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  };
+
   const handleSave = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
     const prevSaved = isSaved;
     const prevCount = savesCount;
     setIsSaved(!isSaved);
@@ -262,7 +293,6 @@ const PostItem: React.FC<PostItemProps> = ({
 
   return (
     <View className="px-5">
-      {/* 1. HEADER */}
       <View className="flex-row items-start justify-between mb-2">
         <View className="flex-row items-center flex-1">
           <TouchableOpacity
@@ -278,8 +308,12 @@ const PostItem: React.FC<PostItemProps> = ({
                   ? { uri: creator.avatar }
                   : require("@/assets/noPfp.jpg")
               }
-              className="w-10 h-10 rounded-full border-2 border-transparent"
-              style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
+              className="w-10 h-10 rounded-full"
+              style={{
+                backgroundColor: isDark ? "#27272A" : "#E4E4E7",
+              }}
+              contentFit="cover"
+              transition={200}
             />
           </TouchableOpacity>
 
@@ -322,7 +356,6 @@ const PostItem: React.FC<PostItemProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* 2. CONTENIDO */}
       <View className="pl-[52px]">
         {!!post.comment && post.comment.trim() !== "" && (
           <Text
@@ -333,56 +366,89 @@ const PostItem: React.FC<PostItemProps> = ({
           </Text>
         )}
 
-        <View
-          className="rounded-2xl p-3 flex-row items-center mb-4"
-          style={{ backgroundColor: songCardBg }}
-        >
-          <Image
-            source={{ uri: songData.cover }}
-            className="w-14 h-14 rounded-xl shadow-sm"
-            style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
-          />
-          <View className="flex-1 ml-3 mr-2 justify-center">
-            <Text
-              className="font-bold text-[15px] mb-0.5"
-              numberOfLines={1}
-              style={{ color: textColor }}
-            >
-              {songData.title}
-            </Text>
-            <Text
-              className="text-[13px]"
-              numberOfLines={1}
-              style={{ color: subTextColor }}
-            >
-              {songData.artist}
-            </Text>
-            <View className="mt-1 flex-row items-center">
-              <Ionicons name="musical-notes" size={10} color={accentColor} />
-              <AudioVisualizer isPlaying={isPlaying} color={subTextColor} />
-            </View>
-          </View>
-
-          <TouchableOpacity
-            onPress={handlePlayPause}
-            className="w-10 h-10 rounded-full items-center justify-center shadow-md"
-            style={{ backgroundColor: accentColor }}
-            activeOpacity={0.8}
+        {/* 🔥 GESTOR DE DOBLE TAP APLICADO A LA TARJETA DE CANCIÓN */}
+        <TapGestureHandler numberOfTaps={2} onHandlerStateChange={onDoubleTap}>
+          <Animated.View
+            className="rounded-2xl p-3 flex-row items-center mb-4 relative"
+            style={{ backgroundColor: songCardBg }}
           >
-            {isLoadingAudio ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={20}
-                color="white"
-                style={{ marginLeft: isPlaying ? 0 : 2 }}
-              />
-            )}
-          </TouchableOpacity>
-        </View>
+            <Image
+              source={{ uri: songData.cover }}
+              className="w-14 h-14 rounded-xl shadow-sm"
+              style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
+              contentFit="cover"
+              transition={300}
+            />
+            <View className="flex-1 ml-3 mr-2 justify-center">
+              <Text
+                className="font-bold text-[15px] mb-0.5"
+                numberOfLines={1}
+                style={{ color: textColor }}
+              >
+                {songData.title}
+              </Text>
+              <Text
+                className="text-[13px]"
+                numberOfLines={1}
+                style={{ color: subTextColor }}
+              >
+                {songData.artist}
+              </Text>
+              <View className="mt-1 flex-row items-center">
+                <Ionicons name="musical-notes" size={10} color={accentColor} />
+                <AudioVisualizer isPlaying={isPlaying} color={subTextColor} />
+              </View>
+            </View>
 
-        {/* 3. FOOTER */}
+            <TouchableOpacity
+              onPress={handlePlayPause}
+              className="w-10 h-10 rounded-full items-center justify-center shadow-md"
+              style={{ backgroundColor: accentColor }}
+              activeOpacity={0.8}
+            >
+              {isLoadingAudio ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Ionicons
+                  name={isPlaying ? "pause" : "play"}
+                  size={20}
+                  color="white"
+                  style={{ marginLeft: isPlaying ? 0 : 2 }}
+                />
+              )}
+            </TouchableOpacity>
+
+            {/* 🔥 Corazón animado Overlay */}
+            <Animated.View
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+                justifyContent: "center",
+                alignItems: "center",
+                zIndex: 50,
+                pointerEvents: "none",
+                transform: [{ scale: heartScaleAnim }],
+              }}
+            >
+              <Ionicons
+                name="heart"
+                size={50}
+                color="#EF4444" // Rojo estilo Instagram para buena visibilidad
+                style={{
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 4,
+                  elevation: 5,
+                }}
+              />
+            </Animated.View>
+          </Animated.View>
+        </TapGestureHandler>
+
         <View className="flex-row justify-between items-center pr-2">
           <TouchableOpacity
             className="flex-row items-center gap-2"
@@ -450,4 +516,4 @@ const PostItem: React.FC<PostItemProps> = ({
   );
 };
 
-export default PostItem;
+export default memo(PostItem);

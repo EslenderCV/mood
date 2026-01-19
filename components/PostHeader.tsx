@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics"; // 🔥 IMPORTAMOS HAPTICS
 import { parseSongData, formatTimeAgo } from "@/lib/postUtils";
 
 const AudioVisualizer = ({
@@ -51,6 +52,22 @@ const PostHeader = ({
   const isLiked = user ? likedBy.includes(user.$id) : false;
   const savedBy = post.savedBy || [];
   const isSaved = user ? savedBy.includes(user.$id) : false;
+
+  // 🔥 FUNCIONES WRAPPER PARA HAPTICS
+  const handleLikePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // Impacto ligero y seco
+    onLike();
+  };
+
+  const handleSavePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); // Un poco más notable
+    onSave();
+  };
+
+  const handlePlayPress = () => {
+    Haptics.selectionAsync(); // Vibración muy sutil, como un "click"
+    onPlayPause();
+  };
 
   return (
     <View
@@ -163,8 +180,9 @@ const PostHeader = ({
               )}
             </View>
           </View>
+          {/* 🔥 USAMOS EL WRAPPER CON HAPTIC */}
           <TouchableOpacity
-            onPress={onPlayPause}
+            onPress={handlePlayPress}
             className="w-14 h-14 rounded-full items-center justify-center shadow-md"
             style={{ backgroundColor: styles.accentColor }}
             activeOpacity={0.8}
@@ -185,8 +203,9 @@ const PostHeader = ({
 
       <View className="flex-row justify-between items-center mt-2 px-4 pb-2">
         <View className="flex-row gap-8">
+          {/* 🔥 USAMOS EL WRAPPER CON HAPTIC */}
           <TouchableOpacity
-            onPress={onLike}
+            onPress={handleLikePress}
             className="flex-row items-center gap-2"
             activeOpacity={0.6}
           >
@@ -228,7 +247,8 @@ const PostHeader = ({
               color={styles.subTextColor}
             />
           </TouchableOpacity>
-          <TouchableOpacity onPress={onSave}>
+          {/* 🔥 USAMOS EL WRAPPER CON HAPTIC */}
+          <TouchableOpacity onPress={handleSavePress}>
             <Ionicons
               name={isSaved ? "bookmark" : "bookmark-outline"}
               size={24}

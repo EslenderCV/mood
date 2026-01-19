@@ -30,10 +30,10 @@ export const NotificationProvider = ({
 }) => {
   const [expoPushToken, setExpoPushToken] = useState<string | undefined>("");
   const notificationListener = useRef<Notifications.Subscription | undefined>(
-    undefined
+    undefined,
   );
   const responseListener = useRef<Notifications.Subscription | undefined>(
-    undefined
+    undefined,
   );
 
   useEffect(() => {

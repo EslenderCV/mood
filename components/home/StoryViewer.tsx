@@ -11,6 +11,9 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Easing,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -22,6 +25,7 @@ import {
 } from "react-native-gesture-handler";
 import { Audio, Video, ResizeMode } from "expo-av";
 import { Databases } from "react-native-appwrite";
+import * as Haptics from "expo-haptics";
 
 import { useLanguage } from "@/context/LanguageContext";
 import {
@@ -67,17 +71,21 @@ const StoryViewer = ({
   moodOfficialId,
 }: StoryViewerProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [viewersModalVisible, setViewersModalVisible] = useState(false);
-  const [realViewersList, setRealViewersList] = useState<string[]>([]);
-
-  // 🔥 Nuevo estado para controlar cuándo la imagen está lista
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [replyText, setReplyText] = useState("");
+
+  // 🔥 LÓGICA DE PROGRESO FLUIDO
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const lastProgressValue = useRef(0);
+  const uiOpacity = useRef(new Animated.Value(1)).current;
+  const pauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const translateY = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
   const { t } = useLanguage();
 
   const currentStory = group?.stories ? group.stories[currentIndex] : null;
@@ -95,7 +103,6 @@ const StoryViewer = ({
   };
 
   const songData = currentStory ? parseSongData(currentStory.songData) : null;
-
   const ownerId =
     typeof group?.user === "string" ? group.user : group?.user?.$id;
   const isOwner = currentUserId && ownerId === currentUserId;
@@ -106,25 +113,111 @@ const StoryViewer = ({
     ["image", "video"].includes(songData?.mediaType);
   const isVideo = isMediaStory && songData?.mediaType === "video";
 
-  const handleNext = () => {
-    if (currentIndex < (group?.stories.length || 0) - 1) {
-      setImageLoaded(false); // Reset para la siguiente
-      setCurrentIndex((prev) => prev + 1);
-      setProgress(0);
-    } else {
-      requestAnimationFrame(() => {
-        onClose();
+  const viewersCount = currentStory?.viewers?.length || 0;
+
+  // --- ANIMACIÓN DE CARGA ---
+  const startAnimation = (fromValue = 0) => {
+    progressAnim.setValue(fromValue);
+    const duration = isMediaStory && !isVideo ? 5000 : 10000;
+    const remainingDuration = duration * (1 - fromValue);
+
+    Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: remainingDuration,
+      easing: Easing.linear,
+      useNativeDriver: false, // Width no soporta native driver
+    }).start(({ finished }) => {
+      if (finished) handleNext();
+    });
+  };
+
+  useEffect(() => {
+    if (
+      !visible ||
+      isPaused ||
+      isAudioLoading ||
+      viewersModalVisible ||
+      (isMediaStory && !isVideo && !imageLoaded)
+    ) {
+      progressAnim.stopAnimation((value) => {
+        lastProgressValue.current = value;
       });
+      return;
+    }
+
+    startAnimation(lastProgressValue.current);
+
+    return () => progressAnim.stopAnimation();
+  }, [
+    currentIndex,
+    visible,
+    isPaused,
+    isAudioLoading,
+    viewersModalVisible,
+    imageLoaded,
+  ]);
+
+  // --- NAVEGACIÓN ---
+  const handleNext = async () => {
+    if (isPaused) return;
+    lastProgressValue.current = 0;
+    progressAnim.setValue(0);
+    if (sound) {
+      await sound.stopAsync();
+      await sound.unloadAsync();
+      setSound(null);
+    }
+    if (currentIndex < (group?.stories.length || 0) - 1) {
+      setImageLoaded(false);
+      setCurrentIndex((prev) => prev + 1);
+    } else {
+      onClose();
     }
   };
 
-  const handlePrev = () => {
-    if (currentIndex > 0) {
-      setImageLoaded(false); // Reset para la anterior
-      setCurrentIndex((prev) => prev - 1);
-      setProgress(0);
+  const handlePrev = async () => {
+    if (isPaused) return;
+    lastProgressValue.current = 0;
+    progressAnim.setValue(0);
+    if (currentIndex === 0) {
+      if (sound) {
+        await sound.setPositionAsync(0);
+        await sound.playAsync();
+      }
+      startAnimation(0);
     } else {
-      setProgress(0);
+      if (sound) {
+        await sound.stopAsync();
+        await sound.unloadAsync();
+        setSound(null);
+      }
+      setImageLoaded(false);
+      setCurrentIndex((prev) => prev - 1);
+    }
+  };
+
+  const togglePause = (pause: boolean) => {
+    if (pause) {
+      pauseTimeoutRef.current = setTimeout(() => {
+        setIsPaused(true);
+        Animated.timing(uiOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }, 200);
+    } else {
+      if (pauseTimeoutRef.current) {
+        clearTimeout(pauseTimeoutRef.current);
+        pauseTimeoutRef.current = null;
+      }
+      setIsPaused(false);
+      Animated.timing(uiOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
     }
   };
 
@@ -133,16 +226,15 @@ const StoryViewer = ({
     let isMounted = true;
     const loadAudio = async () => {
       if (sound) {
-        await sound.unloadAsync();
+        try {
+          await sound.unloadAsync();
+        } catch (e) {}
         if (isMounted) setSound(null);
       }
-      if (isMounted) setProgress(0);
-
       if (!songData || isMediaStory || !visible) {
         if (isMounted) setIsAudioLoading(false);
         return;
       }
-
       if (isMounted) setIsAudioLoading(true);
       try {
         let url =
@@ -153,24 +245,10 @@ const StoryViewer = ({
           url = songData.preview;
 
         if (url && visible && isMounted) {
-          await Audio.setAudioModeAsync({
-            playsInSilentModeIOS: true,
-            allowsRecordingIOS: false,
-            staysActiveInBackground: false,
-            shouldDuckAndroid: true,
-          });
           const { sound: newSound } = await Audio.Sound.createAsync(
             { uri: url },
             { shouldPlay: !isPaused },
           );
-
-          newSound.setOnPlaybackStatusUpdate((s) => {
-            if (s.isLoaded && isMounted) {
-              if (s.didJustFinish) handleNext();
-              else if (s.isPlaying && s.durationMillis)
-                setProgress((s.positionMillis / s.durationMillis) * 100);
-            }
-          });
           if (isMounted) setSound(newSound);
         }
       } catch (e) {
@@ -179,96 +257,40 @@ const StoryViewer = ({
         if (isMounted) setIsAudioLoading(false);
       }
     };
-
     loadAudio();
     return () => {
       isMounted = false;
     };
   }, [currentIndex, visible, group?.$id]);
 
-  // --- TIMER ---
   useEffect(() => {
-    // 🔥 Pausamos el timer hasta que la imagen esté lista (si es media)
-    if (
-      isAudioLoading ||
-      sound ||
-      isVideo ||
-      !visible ||
-      isPaused ||
-      viewersModalVisible ||
-      (isMediaStory && !isVideo && !imageLoaded)
-    )
-      return;
+    if (sound) {
+      if (isPaused) sound.pauseAsync();
+      else sound.playAsync();
+    }
+  }, [isPaused]);
 
-    const duration = isMediaStory ? 5000 : 10000;
-    const intervalTime = 50;
-    const increment = (100 * intervalTime) / duration;
-
-    const interval = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 100) {
-          clearInterval(interval);
-          handleNext();
-          return 100;
-        }
-        return p + increment;
-      });
-    }, intervalTime);
-
-    return () => clearInterval(interval);
-  }, [
-    currentIndex,
-    visible,
-    isPaused,
-    viewersModalVisible,
-    isAudioLoading,
-    sound,
-    isVideo,
-    isMediaStory,
-    imageLoaded,
-  ]);
-
-  const handleDeleteStory = async () => {
-    setIsPaused(true);
-    Alert.alert(t("story.deleteTitle"), t("story.deleteConfirm"), [
-      {
-        text: t("common.cancel"),
-        style: "cancel",
-        onPress: () => setIsPaused(false),
-      },
-      {
-        text: t("common.delete"),
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await databases.deleteDocument(
-              appwriteConfig.databaseId,
-              appwriteConfig.storiesCollectionId,
-              currentStory.$id,
-            );
-            requestAnimationFrame(() => {
-              onClose();
-              onRefreshFeed();
-            });
-          } catch {
-            setIsPaused(false);
-          }
-        },
-      },
-    ]);
-  };
+  // Marcar como visto
+  useEffect(() => {
+    if (visible && currentStory && currentUserId && !isOwner) {
+      viewStory(currentStory.$id, currentUserId);
+    }
+  }, [currentIndex, visible]);
 
   if (!visible || !currentStory || !songData) return null;
 
   return (
     <Modal
       animationType="fade"
-      transparent={true}
+      transparent
       visible={visible}
       onRequestClose={onClose}
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={{ flex: 1, backgroundColor: "black" }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1, backgroundColor: "black" }}
+        >
           <PanGestureHandler
             onGestureEvent={Animated.event(
               [{ nativeEvent: { translationY: translateY } }],
@@ -301,8 +323,10 @@ const StoryViewer = ({
                 ],
               }}
             >
-              {/* CAPA DE CONTENIDO */}
-              <View className="absolute w-full h-full bg-black justify-center items-center">
+              <View
+                key={currentStory.$id}
+                className="absolute w-full h-full bg-black justify-center items-center"
+              >
                 {isMediaStory ? (
                   isVideo ? (
                     <Video
@@ -310,10 +334,6 @@ const StoryViewer = ({
                       style={{ width: "100%", height: "100%" }}
                       resizeMode={ResizeMode.COVER}
                       shouldPlay={!isPaused && visible}
-                      isLooping={false}
-                      onPlaybackStatusUpdate={(s) => {
-                        if (s.isLoaded && s.didJustFinish) handleNext();
-                      }}
                     />
                   ) : (
                     <>
@@ -321,13 +341,11 @@ const StoryViewer = ({
                         source={{ uri: songData.mediaUrl }}
                         className="w-full h-full"
                         resizeMode="cover"
-                        // 🔥 Forzamos la detección de carga para eliminar el negro
-                        onLoadStart={() => setImageLoaded(false)}
                         onLoad={() => setImageLoaded(true)}
                       />
                       {!imageLoaded && (
                         <View className="absolute inset-0 bg-black justify-center items-center">
-                          <ActivityIndicator size="large" color="#5E17EB" />
+                          <ActivityIndicator color="#5E17EB" />
                         </View>
                       )}
                     </>
@@ -350,8 +368,8 @@ const StoryViewer = ({
                     <View className="flex-1 justify-center items-center px-8">
                       <Image
                         source={{ uri: songData.cover }}
-                        style={{ width: width - 60, height: width - 60 }}
-                        className="rounded-2xl shadow-xl"
+                        style={{ width: width - 80, height: width - 80 }}
+                        className="rounded-2xl shadow-2xl"
                       />
                       <Text className="text-white font-bold text-3xl mt-8 text-center">
                         {songData.title}
@@ -362,78 +380,68 @@ const StoryViewer = ({
                     </View>
                   </View>
                 )}
-                {songData.caption && (
-                  <View className="absolute bottom-40 w-full px-8">
-                    <Text
-                      className="text-white text-2xl font-bold text-center"
-                      style={{
-                        textShadowColor: "rgba(0,0,0,0.9)",
-                        textShadowRadius: 10,
-                        textShadowOffset: { width: 0, height: 2 },
-                      }}
-                    >
-                      {songData.caption}
-                    </Text>
-                  </View>
-                )}
               </View>
 
-              {/* TAP ZONES */}
               <View className="absolute w-full h-full flex-row z-10">
                 <Pressable
                   className="h-full w-[30%]"
                   onPress={handlePrev}
-                  onPressIn={() => setIsPaused(true)}
-                  onPressOut={() => setIsPaused(false)}
+                  onPressIn={() => togglePause(true)}
+                  onPressOut={() => togglePause(false)}
                 />
                 <Pressable
                   className="h-full w-[70%]"
                   onPress={handleNext}
-                  onPressIn={() => setIsPaused(true)}
-                  onPressOut={() => setIsPaused(false)}
+                  onPressIn={() => togglePause(true)}
+                  onPressOut={() => togglePause(false)}
                 />
               </View>
 
-              {/* HEADER */}
-              <View className="absolute top-0 w-full pt-12 z-20 px-2">
-                <View className="flex-row gap-1 px-1 mb-4">
-                  {group.stories.map((_: any, i: number) => (
-                    <View
-                      key={i}
-                      className="flex-1 h-[2px] bg-white/30 rounded-full overflow-hidden"
-                    >
+              <Animated.View
+                className="absolute top-0 w-full z-20"
+                style={{ paddingTop: insets.top + 10, opacity: uiOpacity }}
+              >
+                <View className="flex-row gap-1 px-4 mb-4">
+                  {group.stories.map((_: any, i: number) => {
+                    const isCurrent = i === currentIndex;
+                    const isFinished = i < currentIndex;
+
+                    return (
                       <View
-                        style={{
-                          width:
-                            i < currentIndex
+                        key={i}
+                        className="flex-1 h-[2.5px] bg-white/30 rounded-full overflow-hidden"
+                      >
+                        <Animated.View
+                          style={{
+                            width: isFinished
                               ? "100%"
-                              : i === currentIndex
-                                ? `${progress}%`
+                              : isCurrent
+                                ? progressAnim.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: ["0%", "100%"],
+                                  })
                                 : "0%",
-                        }}
-                        className="h-full bg-white"
-                      />
-                    </View>
-                  ))}
+                          }}
+                          className="h-full bg-white"
+                        />
+                      </View>
+                    );
+                  })}
                 </View>
-                <View className="flex-row items-center justify-between px-2">
+                <View className="flex-row items-center justify-between px-4">
                   <View className="flex-row items-center gap-3">
                     <Image
                       source={
                         group.user?.pfp
                           ? { uri: group.user.pfp }
-                          : isOfficialMood
-                            ? require("@/assets/images/icon.png")
-                            : require("@/assets/noPfp.jpg")
+                          : require("@/assets/noPfp.jpg")
                       }
                       className="w-10 h-10 rounded-full border border-white/20"
                     />
                     <View>
                       <View className="flex-row items-center">
                         <Text className="text-white font-bold text-[15px] mr-1">
-                          {group.user?.name ||
-                            group.user?.username ||
-                            "Usuario"}
+                          {group.user?.username || "Usuario"}
                         </Text>
                         {isVerified && (
                           <MaterialIcons
@@ -448,12 +456,13 @@ const StoryViewer = ({
                       </Text>
                     </View>
                   </View>
-
-                  <View className="flex-row items-center gap-4">
+                  <View className="flex-row items-center gap-2">
                     {isOwner && (
                       <TouchableOpacity
-                        onPress={handleDeleteStory}
-                        className="p-1"
+                        className="p-2"
+                        onPress={() => {
+                          /* Lógica Delete */
+                        }}
                       >
                         <Ionicons
                           name="trash-outline"
@@ -462,42 +471,81 @@ const StoryViewer = ({
                         />
                       </TouchableOpacity>
                     )}
-                    <TouchableOpacity onPress={() => onClose()} className="p-1">
-                      <Ionicons name="close" size={28} color="white" />
+                    <TouchableOpacity onPress={onClose} className="p-2">
+                      <Ionicons name="close" size={32} color="white" />
                     </TouchableOpacity>
                   </View>
                 </View>
-              </View>
+              </Animated.View>
 
-              {/* VISTAS */}
-              {isOwner && (
-                <View className="absolute bottom-0 w-full pb-8 px-4 z-20">
+              <Animated.View
+                className="absolute bottom-0 w-full z-30 px-4"
+                style={{
+                  paddingBottom: insets.bottom + 20,
+                  opacity: uiOpacity,
+                }}
+              >
+                {isOwner ? (
                   <TouchableOpacity
                     onPress={() => {
                       setIsPaused(true);
                       setViewersModalVisible(true);
                     }}
-                    className="flex-row items-center bg-black/60 px-5 py-3 rounded-full border border-white/20 self-start backdrop-blur-lg"
+                    className="flex-row items-center bg-black/40 px-5 py-3 rounded-full border border-white/20 self-start backdrop-blur-md"
                   >
-                    <Ionicons name="eye" size={16} color="white" />
+                    <Ionicons name="eye-outline" size={18} color="white" />
                     <Text className="text-white font-bold text-sm ml-2">
-                      {realViewersList.length} {t("story.views")}
+                      {viewersCount} {t("story.views")}
                     </Text>
                   </TouchableOpacity>
-                </View>
-              )}
+                ) : (
+                  <View className="flex-row items-center gap-4">
+                    <View className="flex-1 flex-row items-center bg-black/30 border border-white/20 rounded-full h-12 px-4 backdrop-blur-md">
+                      <TextInput
+                        placeholder={
+                          t("story.replyPlaceholder") || "Responder..."
+                        }
+                        placeholderTextColor="rgba(255,255,255,0.6)"
+                        className="flex-1 text-white text-sm"
+                        value={replyText}
+                        onChangeText={setReplyText}
+                        onFocus={() => togglePause(true)}
+                        onBlur={() => togglePause(false)}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      onPress={() =>
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                      }
+                    >
+                      <Ionicons name="heart-outline" size={32} color="white" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() =>
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                      }
+                    >
+                      <Ionicons
+                        name="paper-plane-outline"
+                        size={28}
+                        color="white"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </Animated.View>
             </Animated.View>
           </PanGestureHandler>
-        </View>
-        <ViewersModal
-          visible={viewersModalVisible}
-          onClose={() => {
-            setViewersModalVisible(false);
-            setIsPaused(false);
-          }}
-          viewerIds={realViewersList}
-        />
+        </KeyboardAvoidingView>
       </GestureHandlerRootView>
+      <ViewersModal
+        visible={viewersModalVisible}
+        onClose={() => {
+          setViewersModalVisible(false);
+          setIsPaused(false);
+        }}
+        viewerIds={currentStory?.viewers || []}
+      />
     </Modal>
   );
 };

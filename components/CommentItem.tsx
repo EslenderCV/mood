@@ -6,6 +6,7 @@ import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
 import { useLanguage } from "@/context/LanguageContext";
 import { formatTimeAgo } from "@/lib/postUtils";
+import * as Haptics from "expo-haptics"; // 🔥 IMPORTAMOS HAPTICS
 
 interface CommentProps {
   item: any;
@@ -36,7 +37,6 @@ const CommentItem = ({
 
   const [userData, setUserData] = useState<any>(item.user || null);
 
-  // 🔥 CORRECCIÓN 1: Sincronizar estado local si las props cambian (ej: pull-to-refresh)
   useEffect(() => {
     setLikes(item.likedBy || []);
   }, [item.likedBy]);
@@ -66,6 +66,9 @@ const CommentItem = ({
   }, [allComments, item.$id]);
 
   const handleLike = async () => {
+    // 🔥 HAPTIC FEEDBACK AL DAR LIKE A COMENTARIO
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
     const newLikes = isLiked
       ? likes.filter((id) => id !== currentUserId)
       : [...likes, currentUserId];
@@ -73,7 +76,7 @@ const CommentItem = ({
     try {
       await toggleCommentLike(item.$id, currentUserId, likes);
     } catch (error) {
-      setLikes(likes); // Revertir si falla
+      setLikes(likes);
     }
   };
 

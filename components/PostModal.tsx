@@ -18,12 +18,16 @@ import {
   Easing,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+// 🔥 CAMBIO: Usamos Audio de expo-av para control total (Silencio/Play/Pause)
+import { Audio } from "expo-av";
+// Mantenemos useAudioRecorder para Shazam, pero quitamos useAudioPlayer
+import { useAudioRecorder } from "expo-audio";
+
 import { useModal } from "@/context/ModalContext";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useFeed } from "@/context/FeedProvider";
 import { createPost, searchUsers } from "@/lib/appwrite";
 import { useColorScheme } from "nativewind";
-import { useAudioPlayer, useAudioRecorder } from "expo-audio";
 import { useLanguage } from "@/context/LanguageContext";
 
 const { width, height } = Dimensions.get("window");
@@ -146,6 +150,13 @@ export default function PostModal() {
   });
   const toastAnim = useRef(new Animated.Value(-150)).current;
 
+  // 🔥 NUEVOS ESTADOS DE AUDIO (Logic PostItem)
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentPlayingUrl, setCurrentPlayingUrl] = useState<string | null>(
+    null,
+  );
+
   // Controlar el teclado en Android
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -163,6 +174,15 @@ export default function PostModal() {
       };
     }
   }, []);
+
+  // Limpieza de audio al desmontar
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
 
   useEffect(() => {
     if (isPostModalVisible && viralSongToUse) {
@@ -204,7 +224,12 @@ export default function PostModal() {
     } else {
       resetForm();
       if (recorder.isRecording) recorder.stop();
-      if (player) player.pause();
+      if (sound) {
+        sound.unloadAsync();
+        setSound(null);
+        setIsPlaying(false);
+        setCurrentPlayingUrl(null);
+      }
     }
   }, [isPostModalVisible]);
 
@@ -264,13 +289,6 @@ export default function PostModal() {
     },
     web: { mimeType: "audio/mp4", bitsPerSecond: 128000 },
   });
-  const [previewTrackUrl, setPreviewTrackUrl] = useState<string | null>(null);
-  const activeAudioSource = previewTrackUrl || linkedSong?.previewUrl || "";
-  const player = useAudioPlayer(activeAudioSource);
-
-  useEffect(() => {
-    if (previewTrackUrl && player) player.play();
-  }, [previewTrackUrl, player]);
 
   const resetForm = () => {
     setText("");
@@ -279,7 +297,7 @@ export default function PostModal() {
     setSearchResults([]);
     setIsSearchingMusic(false);
     setShowSuggestions(false);
-    setPreviewTrackUrl(null);
+    setCurrentPlayingUrl(null);
   };
 
   const searchDeezerTracks = async (query: string) => {
@@ -346,7 +364,8 @@ export default function PostModal() {
     setShowSuggestions(false);
   };
 
-  const handlePreviewTrack = (url: string | null) => {
+  // 🔥 NUEVA LÓGICA DE REPRODUCCIÓN (Misma que PostItem)
+  const handlePlayMusic = async (url: string | null) => {
     if (!url) {
       showToast(
         "error",
@@ -355,34 +374,83 @@ export default function PostModal() {
       );
       return;
     }
-    if (previewTrackUrl === url) {
-      player.pause();
-      setPreviewTrackUrl(null);
-    } else {
-      setPreviewTrackUrl(url);
+
+    try {
+      // 1. Si ya hay sonido y es el mismo URL, alternamos Pausa/Play
+      if (sound && currentPlayingUrl === url) {
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded) {
+          if (status.isPlaying) {
+            await sound.pauseAsync();
+            setIsPlaying(false);
+          } else {
+            // Si terminó, replay
+            if (status.positionMillis >= status.durationMillis!) {
+              await sound.replayAsync();
+            } else {
+              await sound.playAsync();
+            }
+            setIsPlaying(true);
+          }
+        }
+        return;
+      }
+
+      // 2. Si es una canción nueva, descargamos la anterior
+      if (sound) {
+        await sound.unloadAsync();
+      }
+
+      // 3. Configuramos sesión para que suene en Mute
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        allowsRecordingIOS: false,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+
+      // 4. Cargamos y reproducimos la nueva
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: url },
+        { shouldPlay: true },
+      );
+
+      setSound(newSound);
+      setCurrentPlayingUrl(url);
+      setIsPlaying(true);
+
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setIsPlaying(false);
+          // Opcional: resetear currentPlayingUrl si quieres que el icono vuelva a Play por defecto
+        }
+      });
+    } catch (error) {
+      console.log("Error playing audio:", error);
+      showToast("error", "Error", "No se pudo reproducir el audio.");
     }
   };
 
   const handleSelectSong = (song: Song) => {
-    if (player) player.pause();
-    setPreviewTrackUrl(null);
+    // Si hay audio sonando, lo detenemos y limpiamos
+    if (sound) {
+      sound.unloadAsync();
+      setSound(null);
+      setIsPlaying(false);
+      setCurrentPlayingUrl(null);
+    }
     setLinkedSong(song);
     setIsSearchingMusic(false);
     setSearchQuery("");
   };
 
-  const toggleLinkedSongPreview = () => {
-    if (!linkedSong?.previewUrl) return;
-    if (player.playing) {
-      player.pause();
-    } else {
-      player.play();
-    }
-  };
-
   const handleShazam = async () => {
     if (linkedSong) return;
-    if (player) player.pause();
+    // Detener música si suena
+    if (sound) {
+      await sound.unloadAsync();
+      setIsPlaying(false);
+    }
 
     try {
       await recorder.record();
@@ -465,7 +533,7 @@ export default function PostModal() {
   const handlePost = async () => {
     if (!text.trim() && !linkedSong) return;
     if (!user) return;
-    if (player) player.pause();
+    if (sound) await sound.unloadAsync(); // Stop music before posting
 
     const songDataObj = linkedSong
       ? {
@@ -508,8 +576,8 @@ export default function PostModal() {
   };
 
   const renderSongItem = ({ item }: { item: Song }) => {
-    const isPlayingPreview =
-      previewTrackUrl === item.previewUrl && player.playing;
+    // 🔥 Check dinámico: es el mismo URL y está sonando?
+    const isActive = currentPlayingUrl === item.previewUrl && isPlaying;
 
     return (
       <TouchableOpacity
@@ -548,14 +616,14 @@ export default function PostModal() {
           <TouchableOpacity
             onPress={(e) => {
               e.stopPropagation();
-              handlePreviewTrack(item.previewUrl);
+              handlePlayMusic(item.previewUrl);
             }}
             className="p-2 mr-2"
           >
             <Ionicons
-              name={isPlayingPreview ? "pause-circle" : "play-circle"}
+              name={isActive ? "pause-circle" : "play-circle"}
               size={28}
-              color={isPlayingPreview ? accentColor : subTextColor}
+              color={isActive ? accentColor : subTextColor}
             />
           </TouchableOpacity>
         )}
@@ -723,7 +791,13 @@ export default function PostModal() {
                             <TouchableOpacity
                               onPress={() => {
                                 setIsSearchingMusic(false);
-                                setPreviewTrackUrl(null);
+                                // Detener música al cerrar búsqueda
+                                if (sound) {
+                                  sound.unloadAsync();
+                                  setSound(null);
+                                  setIsPlaying(false);
+                                  setCurrentPlayingUrl(null);
+                                }
                               }}
                             >
                               <Ionicons
@@ -766,12 +840,15 @@ export default function PostModal() {
                             />
                             {linkedSong.previewUrl && (
                               <TouchableOpacity
-                                onPress={toggleLinkedSongPreview}
+                                onPress={() =>
+                                  handlePlayMusic(linkedSong.previewUrl)
+                                }
                                 className="absolute inset-0 items-center justify-center bg-black/30 rounded-md"
                               >
                                 <Ionicons
                                   name={
-                                    player.playing && previewTrackUrl === null
+                                    isPlaying &&
+                                    currentPlayingUrl === linkedSong.previewUrl
                                       ? "pause"
                                       : "play"
                                   }
@@ -812,7 +889,12 @@ export default function PostModal() {
                           <TouchableOpacity
                             onPress={() => {
                               setLinkedSong(null);
-                              if (player) player.pause();
+                              if (sound) {
+                                sound.unloadAsync();
+                                setSound(null);
+                                setIsPlaying(false);
+                                setCurrentPlayingUrl(null);
+                              }
                             }}
                             className="p-2"
                           >

@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Image,
   Alert,
   AlertButton,
 } from "react-native";
@@ -19,7 +18,8 @@ import {
   Swipeable,
 } from "react-native-gesture-handler";
 import { useColorScheme } from "nativewind";
-import * as Haptics from "expo-haptics";
+import { Image } from "expo-image"; // 🔥 Premium Image
+import * as Haptics from "expo-haptics"; // 🔥 Haptics
 
 import { useChatLogic } from "@/hooks/useChatLogic";
 import { ChatRoomSkeleton } from "@/components/chat/ChatSkeleton";
@@ -152,7 +152,10 @@ const ChatRoom = () => {
               )
             : undefined
         }
-        onSwipeableWillOpen={() => logic.onSwipeToReply(item)}
+        onSwipeableWillOpen={() => {
+          Haptics.selectionAsync(); // 🔥 Feedback al deslizar
+          logic.onSwipeToReply(item);
+        }}
         friction={2}
         overshootRight={false}
         overshootLeft={false}
@@ -173,8 +176,15 @@ const ChatRoom = () => {
                     ? { uri: logic.chatUser.avatar }
                     : require("@/assets/noPfp.jpg")
                 }
-                className="w-7 h-7 rounded-full self-end mr-2 mb-1"
-                style={{ backgroundColor: inputBg }}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: inputBg,
+                }}
+                className="self-end mr-2 mb-1"
+                contentFit="cover"
+                transition={200}
               />
             )}
             <View
@@ -293,8 +303,14 @@ const ChatRoom = () => {
                 ? { uri: logic.chatUser.avatar }
                 : require("@/assets/noPfp.jpg")
             }
-            className="w-9 h-9 rounded-full"
-            style={{ backgroundColor: inputBg }}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: inputBg,
+            }}
+            contentFit="cover"
+            transition={200}
           />
           <View className="ml-3 flex-1">
             <View className="flex-row items-center">
@@ -303,7 +319,7 @@ const ChatRoom = () => {
                 numberOfLines={1}
                 style={{ color: textColor }}
               >
-                {logic.chatUser.name}
+                {logic.chatUser.name || "Usuario"}
               </Text>
               {logic.chatUser.isVerified && (
                 <MaterialIcons
@@ -403,7 +419,10 @@ const ChatRoom = () => {
               />
             </View>
             <TouchableOpacity
-              onPress={logic.handleSend}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                logic.handleSend();
+              }}
               className="ml-2 w-10 h-10 rounded-full items-center justify-center"
               style={{
                 backgroundColor: logic.newMessage.trim()

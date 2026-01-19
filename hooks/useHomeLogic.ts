@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Alert, FlatList, Image } from "react-native"; // 🔥 Añadido Image para prefetch
+import { Alert, FlatList, Clipboard, Share as SystemShare } from "react-native";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useFeed } from "@/context/FeedProvider";
 import { useNavigation } from "expo-router";
 import {
-  getCurrentUser,
   getFollowedUserIds,
   getUnreadNotificationCount,
   getUnreadMessagesCount,
@@ -15,9 +14,9 @@ import {
   uploadFile,
   createStory,
 } from "@/lib/appwrite";
-import { Databases, Query, ID, Storage } from "react-native-appwrite";
+import { Databases, Query, ID } from "react-native-appwrite";
 import * as ImagePicker from "expo-image-picker";
-
+import { parseSongData } from "@/lib/postUtils";
 const databases = new Databases(client);
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
 
@@ -33,6 +32,8 @@ const shuffleArray = (array: any[]) => {
 
 export const useHomeLogic = () => {
   const { user } = useGlobalContext();
+  const userId = user?.$id;
+
   const {
     feed,
     isLoading: isFeedLoading,
@@ -42,13 +43,13 @@ export const useHomeLogic = () => {
   const navigation = useNavigation<any>();
   const flatListRef = useRef<FlatList>(null);
 
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const isMounted = useRef(true);
 
-  // Estados de Datos
+  // Estados
   const [sortedFeed, setSortedFeed] = useState<any[]>([]);
   const [myFollowedIds, setMyFollowedIds] = useState<string[]>([]);
   const [poolOfContent, setPoolOfContent] = useState<any[]>([]);
-
+  const [selectedPostToShare, setSelectedPostToShare] = useState<any>(null);
   const [notiCount, setNotiCount] = useState(0);
   const [msgCount, setMsgCount] = useState(0);
 
@@ -57,7 +58,6 @@ export const useHomeLogic = () => {
     suggestedUsers: [],
   });
 
-  // Estados de Modales
   const [modals, setModals] = useState({
     isShareSelector: false,
     isViral: false,
@@ -68,7 +68,6 @@ export const useHomeLogic = () => {
     isCreator: false,
   });
 
-  // Estados Auxiliares
   const [activeStoryGroup, setActiveStoryGroup] = useState(null);
   const [postToShareData, setPostToShareData] = useState<any>(null);
   const [sharePostId, setSharePostId] = useState("");
@@ -77,12 +76,154 @@ export const useHomeLogic = () => {
   const [shareContacts, setShareContacts] = useState<any[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
 
-  // --- LÓGICA DE GALERÍA ---
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+  const openShare = async (post: any) => {
+    setSelectedPostToShare(post);
+    toggleModal("isShareSelector", true);
+
+    // Carga inicial de contactos (seguidos)
+    if (user?.$id && shareContacts.length === 0) {
+      setIsLoadingContacts(true);
+      const followedIds = await getFollowedUserIds(user.$id);
+      const users = await Promise.all(followedIds.map((id) => getUser(id)));
+      setShareContacts(users.filter((u) => u !== null));
+      setIsLoadingContacts(false);
+    }
+  };
+  const handleShareSearch = async (text: string) => {
+    setIsLoadingContacts(true);
+    if (text.length > 0) {
+      const response = await databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.usersCollectionId,
+        [
+          Query.or([
+            Query.search("username", text),
+            Query.search("name", text),
+          ]),
+          Query.limit(10),
+        ],
+      );
+      setShareContacts(response.documents);
+    } else if (user?.$id) {
+      const followedIds = await getFollowedUserIds(user.$id);
+      const users = await Promise.all(followedIds.map((id) => getUser(id)));
+      setShareContacts(users.filter((u) => u !== null));
+    }
+    setIsLoadingContacts(false);
+  };
+
+  const handleSendShare = async (userIds: string[], message: string) => {
+    if (!user?.$id || !selectedPostToShare) return;
+    try {
+      const promises = userIds.map((targetId) =>
+        databases.createDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.messagesCollectionId,
+          ID.unique(),
+          {
+            senderId: user.$id,
+            receiverId: targetId,
+            content: message || "Compartió una publicación",
+            sharedPostId: selectedPostToShare.$id, // Aquí vinculamos el post
+            createdAt: new Date().toISOString(),
+          },
+        ),
+      );
+      await Promise.all(promises);
+      Alert.alert("Enviado", "Publicación compartida.");
+      toggleModal("isShareSelector", false);
+    } catch (error) {
+      Alert.alert("Error", "No se pudo compartir.");
+    }
+  };
+  const loadShareContacts = async (userId: string) => {
+    setIsLoadingContacts(true);
+    try {
+      const followedIds = await getFollowedUserIds(userId);
+      const users = await Promise.all(followedIds.map((id) => getUser(id)));
+      setShareContacts(users.filter((u) => u !== null));
+    } catch (error) {
+      console.error("Error loading contacts:", error);
+    } finally {
+      setIsLoadingContacts(false);
+    }
+  };
+  const openShareSelector = async (post: any) => {
+    setPostToShareData(post);
+    toggleModal("isShareSelector", true);
+
+    if (user?.$id && shareContacts.length === 0) {
+      await loadShareContacts(user.$id); // ✅ Ahora la función está definida arriba
+    }
+  };
+  const getViralPostData = () => {
+    // 1. Verificamos si el objeto principal existe
+    if (!postToShareData) {
+      console.log("DEBUG Share: postToShareData es NULL o UNDEFINED");
+      return null;
+    }
+
+    // 2. Log del contenido de songData antes de parsear
+    console.log(
+      "DEBUG Share: Tipo de songData ->",
+      typeof postToShareData.songData,
+    );
+    console.log(
+      "DEBUG Share: Contenido de songData ->",
+      postToShareData.songData,
+    );
+
+    const song = parseSongData(postToShareData.songData);
+
+    // 3. Log del resultado del parseo
+    console.log("DEBUG Share: Resultado de parseSongData ->", song);
+
+    const creator = postToShareData.postedBy || postToShareData.creator || {};
+
+    // 4. Log de la información del creador
+    console.log("DEBUG Share: Información del creador ->", creator.username);
+
+    return {
+      title: song?.title || "Música",
+      artist: song?.artist || "Artista",
+      cover: song?.cover || null,
+      originalPostCreator: creator.username || "usuario",
+      creatorPfp: creator.pfp || null,
+      comment: postToShareData.comment || null,
+    };
+  };
+  const handleAddStoryFromPost = () => {
+    if (!postToShareData) return;
+    const songData = parseSongData(postToShareData.songData);
+    if (songData) {
+      setStoryInitialSongData(songData);
+      toggleModal("isShareSelector", false);
+      setTimeout(() => toggleModal("isCreation", true), 300);
+    }
+  };
+  const handleCopyLink = () => {
+    if (!selectedPostToShare) return;
+    const link = `https://moodapp.com/post/${selectedPostToShare.$id}`;
+    Clipboard.setString(link);
+    Alert.alert("Copiado", "Enlace en el portapapeles.");
+  };
+
+  const handleSystemShare = async () => {
+    if (!selectedPostToShare) return;
+    const link = `https://moodapp.com/post/${selectedPostToShare.$id}`;
+    await SystemShare.share({ message: `¡Escucha esto en Mood! ${link}` });
+  };
   const handleMoodMediaPick = async () => {
     setModals((prev) => ({ ...prev, isCreator: false }));
 
     setTimeout(async () => {
-      if (!user) return;
+      if (!userId) return;
 
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -125,7 +266,7 @@ export const useHomeLogic = () => {
             mediaType: asset.type,
           });
 
-          await createStory(songData, user.$id);
+          await createStory(songData, userId);
           fetchAuxiliaryData();
           Alert.alert("Éxito", "Historia publicada");
         }
@@ -136,46 +277,48 @@ export const useHomeLogic = () => {
     }, 500);
   };
 
-  const fetchCounts = async (userId: string) => {
+  const fetchCounts = async (uId: string) => {
     try {
       const [n, m] = await Promise.all([
-        getUnreadNotificationCount(userId),
-        getUnreadMessagesCount(userId),
+        getUnreadNotificationCount(uId),
+        getUnreadMessagesCount(uId),
       ]);
-      setNotiCount(n);
-      setMsgCount(m);
+      if (isMounted.current) {
+        setNotiCount(n);
+        setMsgCount(m);
+      }
       return { noti: n, msg: m };
     } catch {
       return { noti: 0, msg: 0 };
     }
   };
 
-  const fetchStoriesInternal = async (userId: string) => {
+  const fetchStoriesInternal = async (uId: string) => {
     try {
-      const storiesDocs = await getStories(userId);
+      const storiesDocs = await getStories(uId);
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const recentStories = storiesDocs.filter(
         (doc: any) => new Date(doc.$createdAt) > oneDayAgo,
       );
 
-      // 🔥 LÓGICA DE PRE-CARGA (PREFETCHING)
-      recentStories.forEach((doc: any) => {
-        try {
-          const parsed = JSON.parse(doc.songData);
-          if (parsed.cover) Image.prefetch(parsed.cover);
-          if (doc.user?.pfp) Image.prefetch(doc.user.pfp);
-        } catch (e) {}
-      });
+      // 🔥 OPTIMIZACIÓN: Desactivar prefetch agresivo para evitar congelamiento
+      // recentStories.forEach((doc: any) => {
+      //   try {
+      //     const parsed = JSON.parse(doc.songData);
+      //     if (parsed.cover) Image.prefetch(parsed.cover);
+      //   } catch (e) {}
+      // });
 
       const uniqueUserIds = new Set<string>();
       const userMap = new Map<string, any>();
-      if (user) userMap.set(userId, user);
+
+      if (user) userMap.set(uId, { ...user });
 
       recentStories.forEach((doc: any) => {
         if (doc.user) {
           if (typeof doc.user === "object" && doc.user.$id) {
             userMap.set(doc.user.$id, doc.user);
-          } else if (typeof doc.user === "string" && doc.user !== userId) {
+          } else if (typeof doc.user === "string" && doc.user !== uId) {
             uniqueUserIds.add(doc.user);
           }
         }
@@ -184,6 +327,7 @@ export const useHomeLogic = () => {
       const idsToFetch = Array.from(uniqueUserIds).filter(
         (id) => !userMap.has(id),
       );
+
       if (idsToFetch.length > 0) {
         await Promise.all(
           idsToFetch.map(async (id) => {
@@ -197,21 +341,22 @@ export const useHomeLogic = () => {
 
       const groups: Record<string, any> = {};
       recentStories.forEach((doc: any) => {
-        let uId = typeof doc.user === "object" ? doc.user.$id : doc.user;
+        let storyUserId =
+          typeof doc.user === "object" ? doc.user.$id : doc.user;
         const userData =
-          userMap.get(uId) ||
+          userMap.get(storyUserId) ||
           (typeof doc.user === "object"
             ? doc.user
-            : { $id: uId, username: "Usuario", name: "Usuario" });
+            : { $id: storyUserId, username: "Usuario", name: "Usuario" });
 
-        if (!groups[uId]) {
-          groups[uId] = {
-            userId: uId,
+        if (!groups[storyUserId]) {
+          groups[storyUserId] = {
+            userId: storyUserId,
             user: userData,
             stories: [],
           };
         }
-        groups[uId].stories.push(doc);
+        groups[storyUserId].stories.push(doc);
       });
 
       return Object.values(groups);
@@ -221,13 +366,9 @@ export const useHomeLogic = () => {
   };
 
   const fetchAuxiliaryData = useCallback(async () => {
+    if (!userId) return;
+
     try {
-      // 🔥 PROTECCIÓN DE SESIÓN: Si no hay usuario (por ejemplo, al añadir cuenta), detenemos todo.
-      // Esto evita el error de "Not Authorized" en la consola.
-      if (!user?.$id) return;
-
-      let activeId = user.$id;
-
       const officialStoriesRes = await databases
         .listDocuments(
           appwriteConfig.databaseId,
@@ -236,7 +377,10 @@ export const useHomeLogic = () => {
         )
         .catch(() => ({ documents: [] }));
 
-      const myStories: any[] = await fetchStoriesInternal(activeId);
+      if (!isMounted.current) return;
+
+      const myStories: any[] = await fetchStoriesInternal(userId);
+      if (!isMounted.current) return;
 
       const officialDocs = officialStoriesRes.documents;
       const officialGroupIndex = myStories.findIndex(
@@ -259,13 +403,13 @@ export const useHomeLogic = () => {
         myStories.unshift(officialGroup);
       }
 
-      const myGroupIndex = myStories.findIndex((g) => g.userId === activeId);
+      const myGroupIndex = myStories.findIndex((g) => g.userId === userId);
       if (myGroupIndex > 0) {
         const myGroup = myStories.splice(myGroupIndex, 1)[0];
         const insertIndex =
           myStories.length > 0 &&
           myStories[0].userId === MOOD_OFFICIAL_ID &&
-          activeId !== MOOD_OFFICIAL_ID
+          userId !== MOOD_OFFICIAL_ID
             ? 1
             : 0;
         myStories.splice(insertIndex, 0, myGroup);
@@ -276,18 +420,17 @@ export const useHomeLogic = () => {
         groupedStories: myStories,
       }));
 
-      await fetchCounts(activeId);
+      await fetchCounts(userId);
     } catch (e) {
       console.log("Fetch Auxiliary Data Error:", e);
     }
-  }, [user]); // 🔥 Dependencia limpia para evitar re-ejecuciones innecesarias
+  }, [userId]);
 
   const onRefresh = useCallback(() => {
     refreshFeed();
     fetchAuxiliaryData();
   }, [refreshFeed, fetchAuxiliaryData]);
 
-  // --- LÓGICA INFINITA ---
   const handleLoadMore = () => {
     if (poolOfContent.length === 0) return;
     const recycledBatch = shuffleArray([...poolOfContent]);
@@ -298,6 +441,7 @@ export const useHomeLogic = () => {
     setSortedFeed((prev) => [...prev, ...newItems]);
   };
 
+  // 🔥 EVENT LISTENER: Solo refresca si estás YA en Home y vuelves a tocar el tab.
   useEffect(() => {
     const unsubscribe = navigation.addListener("tabPress", (e: any) => {
       if (navigation.isFocused()) {
@@ -312,13 +456,14 @@ export const useHomeLogic = () => {
   }, [navigation, onRefresh]);
 
   useEffect(() => {
-    if (user) {
+    if (userId) {
       fetchAuxiliaryData();
     }
-  }, [user, fetchAuxiliaryData]);
+  }, [userId]);
 
   useEffect(() => {
-    if (!user?.$id) return;
+    if (!userId) return;
+
     const unsubscribe = client.subscribe(
       [
         `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.notificationsCollectionId}.documents`,
@@ -331,34 +476,43 @@ export const useHomeLogic = () => {
             (e) => e.includes("create") || e.includes("update"),
           )
         ) {
-          fetchCounts(user.$id);
+          fetchCounts(userId);
         }
       },
     );
     return () => {
       unsubscribe();
     };
-  }, [user?.$id]);
+  }, [userId]);
 
   useEffect(() => {
+    let isActive = true;
     const fetchFollows = async () => {
-      if (user?.$id) {
+      if (userId) {
         try {
-          const ids = await getFollowedUserIds(user.$id);
-          setMyFollowedIds(ids);
+          const ids = await getFollowedUserIds(userId);
+          if (isActive && isMounted.current) {
+            setMyFollowedIds(ids);
+          }
         } catch (e) {
           console.log("Error fetching follows", e);
         }
       }
     };
     fetchFollows();
-  }, [user]);
+    return () => {
+      isActive = false;
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!feed || feed.length === 0) {
-      setSortedFeed([]);
+      if (isMounted.current && sortedFeed.length > 0) setSortedFeed([]);
       return;
     }
+
+    if (!userId) return;
+
     const priorityPosts: any[] = [];
     const discoveryPosts: any[] = [];
     const generalPool: any[] = [];
@@ -377,13 +531,13 @@ export const useHomeLogic = () => {
         post.postedBy?.$id ||
         post.users?.[0]?.$id ||
         post.userId;
-      const isMyPost = creatorId === user?.$id;
+      const isMyPost = creatorId === userId;
       const postDate = new Date(post.$createdAt || 0).getTime();
       const isRecent = now - postDate < FRESHNESS_THRESHOLD;
       const likedBy = post.likedBy || [];
       const savedBy = post.savedBy || [];
       const hasInteracted =
-        likedBy.includes(user?.$id) || savedBy.includes(user?.$id);
+        likedBy.includes(userId) || savedBy.includes(userId);
 
       if (isRecent && !hasInteracted) {
         if (myFollowedIds.includes(creatorId) || isMyPost) {
@@ -426,9 +580,12 @@ export const useHomeLogic = () => {
         }
       });
     }
-    setSortedFeed(initialFeed);
-    setPoolOfContent([...discoveryPosts, ...generalPool, ...otherItems]);
-  }, [feed, myFollowedIds, user]);
+
+    if (isMounted.current) {
+      setSortedFeed(initialFeed);
+      setPoolOfContent([...discoveryPosts, ...generalPool, ...otherItems]);
+    }
+  }, [feed, myFollowedIds, userId]);
 
   const toggleModal = (modalName: keyof typeof modals, value: boolean) => {
     setModals((prev) => ({ ...prev, [modalName]: value }));
@@ -465,5 +622,12 @@ export const useHomeLogic = () => {
     handleMoodMediaPick,
     handleLoadMore,
     flatListRef,
+    handleShareSearch,
+    handleSendShare,
+    handleSystemShare,
+    handleCopyLink,
+    handleAddStoryFromPost,
+    getViralPostData,
+    openShareSelector,
   };
 };

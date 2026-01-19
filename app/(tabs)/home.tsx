@@ -14,10 +14,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { router } from "expo-router";
+import * as Haptics from "expo-haptics";
 
 // --- HOOK ---
 import { useHomeLogic } from "@/hooks/useHomeLogic";
-import { FeedProvider, FeedItem } from "@/context/FeedProvider";
+import { FeedItem } from "@/context/FeedProvider"; // Eliminamos FeedProvider de los imports, solo tipos
 
 // --- IMPORTS DE COMPONENTES ---
 import StoriesRail from "@/components/home/StoriesRail";
@@ -36,7 +37,7 @@ import ChatsList from "../chats";
 import SuggestedUsersCarousel from "@/components/SuggestedUsersCarousel";
 import TrendingSongCard from "@/components/TrendingSongCard";
 
-import { createStory, deletePost, client } from "@/lib/appwrite";
+import { createStory, deletePost } from "@/lib/appwrite";
 
 // Wrapper local para búsqueda
 const searchSongsWrapper = async (query: string) => {
@@ -65,8 +66,7 @@ const RANDOM_SEARCH_TERMS = [
   "rock classics",
 ];
 
-// --- CONTENIDO PRINCIPAL ---
-const HomeContent = () => {
+const Home = () => {
   const { width, height } = useWindowDimensions();
   const chatTranslateX = useRef(new Animated.Value(width)).current;
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -132,6 +132,7 @@ const HomeContent = () => {
                 logic.setPostToShareData(item.data);
                 logic.setSharePostId(item.data.$id);
                 logic.toggleModal("isShareSelector", true);
+                logic.openShareSelector(item.data);
               }}
             />
           </View>
@@ -153,7 +154,10 @@ const HomeContent = () => {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: isDark ? "#000" : "#fff" }}>
+    // 🔥 IMPORTANTE: Eliminamos <FeedProvider> aquí porque ya existe uno global en _layout
+    <GestureHandlerRootView
+      style={{ flex: 1, backgroundColor: isDark ? "#000" : "#fff" }}
+    >
       <SafeAreaView
         edges={["top"]}
         style={{ flex: 1, backgroundColor: isDark ? "#000000" : "#FFFFFF" }}
@@ -181,7 +185,7 @@ const HomeContent = () => {
                 <View className="absolute top-0 right-0 bg-red-500 w-3 h-3 rounded-full border border-black" />
               )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={openChat} className="relative">
+            <TouchableOpacity /*onPress={openChat}*/ className="relative">
               <Ionicons
                 name="chatbubble-outline"
                 size={26}
@@ -229,9 +233,17 @@ const HomeContent = () => {
             }
             refreshControl={
               <RefreshControl
+                // 🔥 Este key fuerza a React a recrear el componente nativo si el color cambia o se monta
+                key="mood-refresh-control"
                 refreshing={logic.isRefreshing}
-                onRefresh={logic.onRefresh}
-                tintColor="#5E17EB"
+                onRefresh={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  logic.onRefresh();
+                }}
+                // iOS
+                tintColor="#8856ec"
+                // Android
+                colors={["#5E17EB"]}
               />
             }
             ListEmptyComponent={
@@ -296,31 +308,21 @@ const HomeContent = () => {
           contacts={logic.shareContacts}
           isDark={isDark}
           isLoadingContacts={logic.isLoadingContacts}
-          onSearch={(q) => {
-            /* lógica búsqueda contactos */
-          }}
-          onSend={(ids, msg) => {
-            /* lógica enviar */ logic.toggleModal("isShareSelector", false);
-          }}
-          onAddToStory={() => {
-            /* lógica... */
-          }}
+          onSearch={logic.handleShareSearch}
+          onSend={logic.handleSendShare}
+          onAddToStory={logic.handleAddStoryFromPost}
           onViralCard={() => {
             logic.toggleModal("isShareSelector", false);
             setTimeout(() => logic.toggleModal("isViral", true), 300);
           }}
-          onSystemShare={() => {
-            /* lógica... */
-          }}
-          onCopyLink={() => {
-            /* lógica... */
-          }}
+          onSystemShare={logic.handleSystemShare}
+          onCopyLink={logic.handleCopyLink}
         />
 
         <MoodShareCard
           isVisible={logic.modals.isViral}
           onClose={() => logic.toggleModal("isViral", false)}
-          post={logic.postToShareData}
+          post={logic.getViralPostData()}
         />
 
         <OptionsModal
@@ -359,17 +361,8 @@ const HomeContent = () => {
       >
         <ChatsList onBackPress={closeChat} />
       </Animated.View>
-    </View>
+    </GestureHandlerRootView>
   );
 };
 
-// --- WRAPPER FINAL ---
-const HomeWithProvider = () => (
-  <GestureHandlerRootView style={{ flex: 1 }}>
-    <FeedProvider>
-      <HomeContent />
-    </FeedProvider>
-  </GestureHandlerRootView>
-);
-
-export default HomeWithProvider;
+export default Home;

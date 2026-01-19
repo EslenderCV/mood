@@ -2,7 +2,6 @@ import {
   View,
   Text,
   FlatList,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -12,13 +11,15 @@ import React, { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { Image } from "expo-image"; // 🔥 Premium Image
+import * as Haptics from "expo-haptics"; // 🔥 Haptics
+
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { getBlockedUsersList, unblockUser } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
 const BlockedUsers = () => {
   const { user, setUser } = useGlobalContext();
-
   const { t } = useLanguage();
 
   const [blockedList, setBlockedList] = useState<any[]>([]);
@@ -31,7 +32,6 @@ const BlockedUsers = () => {
 
   const fetchBlockedUsers = async () => {
     if (!user?.$id) return;
-
     try {
       const users = await getBlockedUsersList(user.$id);
       setBlockedList(users);
@@ -44,6 +44,7 @@ const BlockedUsers = () => {
   };
 
   const handleUnblock = async (blockedUser: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); // 🔥 Haptic feedback
     Alert.alert(
       t("blockedUsersPage.unblockTitle"),
       `${t("blockedUsersPage.unblockMsg")} ${blockedUser.name}?`,
@@ -54,30 +55,31 @@ const BlockedUsers = () => {
           style: "destructive",
           onPress: async () => {
             if (!user) return;
-
+            // Optimistic update
             setBlockedList((prev) =>
-              prev.filter((u) => u.$id !== blockedUser.$id)
+              prev.filter((u) => u.$id !== blockedUser.$id),
             );
 
             try {
               await unblockUser(user.$id, blockedUser.$id);
-
               const currentBlocked = user.blockedUsers || [];
               const updatedBlocked = currentBlocked.filter(
-                (id: string) => id !== blockedUser.$id
+                (id: string) => id !== blockedUser.$id,
               );
-
               setUser({ ...user, blockedUsers: updatedBlocked });
+              Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success,
+              );
             } catch (error) {
               Alert.alert(
                 t("blockedUsersPage.errorTitle"),
-                t("blockedUsersPage.errorMsg")
+                t("blockedUsersPage.errorMsg"),
               );
-              fetchBlockedUsers();
+              fetchBlockedUsers(); // Revertir si falla
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -87,6 +89,8 @@ const BlockedUsers = () => {
         <Image
           source={item.pfp ? { uri: item.pfp } : require("@/assets/noPfp.jpg")}
           className="w-10 h-10 rounded-full bg-zinc-800"
+          contentFit="cover"
+          transition={300}
         />
         <View className="ml-3">
           <Text className="text-white font-bold text-base">{item.name}</Text>
@@ -129,6 +133,7 @@ const BlockedUsers = () => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setRefreshing(true);
                 fetchBlockedUsers();
               }}
@@ -136,13 +141,13 @@ const BlockedUsers = () => {
             />
           }
           ListEmptyComponent={
-            <View className="mt-20 items-center px-10">
+            <View className="mt-20 items-center px-10 opacity-70">
               <Ionicons
                 name="shield-checkmark-outline"
-                size={48}
+                size={64}
                 color="#3f3f46"
               />
-              <Text className="text-zinc-500 text-center mt-4">
+              <Text className="text-zinc-500 text-center mt-4 text-base">
                 {t("blockedUsersPage.empty")}
               </Text>
             </View>

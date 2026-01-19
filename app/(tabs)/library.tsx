@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, router } from "expo-router";
+import { router } from "expo-router";
 import { useColorScheme } from "nativewind";
 
 import { useLanguage } from "@/context/LanguageContext";
@@ -53,11 +53,11 @@ const Library = () => {
 
   const skeletonData = useMemo(() => Array.from({ length: 6 }), []);
 
-  useFocusEffect(
-    useCallback(() => {
-      logic.fetchData();
-    }, [logic.user]),
-  );
+  // 🔥 FIX: Cambiado useFocusEffect por useEffect para evitar recarga al enfocar.
+  // Solo se carga al montar el componente.
+  useEffect(() => {
+    logic.fetchData();
+  }, [logic.user]);
 
   const openAddToPlaylist = () => {
     logic.setOptionsModalVisible(false);

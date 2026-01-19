@@ -1,91 +1,31 @@
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   Dimensions,
   ScrollView,
   RefreshControl,
-  ActivityIndicator,
-  useWindowDimensions,
   Modal,
 } from "react-native";
 import React, { useState, useRef, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons, Feather, MaterialIcons } from "@expo/vector-icons";
-import { useGlobalContext } from "@/context/GlobalProvider";
+import { Image } from "expo-image"; // 🔥 Premium Image
+import * as Haptics from "expo-haptics"; // 🔥 Haptics
 import { router, useFocusEffect } from "expo-router";
 import { useColorScheme } from "nativewind";
+
+import { useGlobalContext } from "@/context/GlobalProvider";
 import { getUserPosts, getFollowCounts } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
+// Componentes Premium
+import ProfileSkeleton from "@/components/profile/ProfileSkeleton";
+import MoodGridItem from "@/components/profile/MoodGridItem";
+import TopSongItem from "@/components/profile/TopSongItem";
+
 const { width } = Dimensions.get("window");
-
-const parseSongFromPost = (songDataString: string) => {
-  try {
-    if (!songDataString) return null;
-    const song = JSON.parse(songDataString);
-    if (song.cover && song.cover.includes("100x100bb")) {
-      song.cover = song.cover.replace("100x100bb", "600x600bb");
-    }
-    return song;
-  } catch (error) {
-    return null;
-  }
-};
-
-const ProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
-  const bg = isDark ? "bg-zinc-900" : "bg-zinc-100";
-  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
-  const { width } = useWindowDimensions();
-  const itemSize = width / 3;
-  return (
-    <View className="flex-1 animate-pulse">
-      <View className="flex-row justify-between items-center px-6 py-2 mb-6">
-        <View className={`w-32 h-8 rounded ${elementBg}`} />
-        <View className={`w-10 h-10 rounded-2xl ${elementBg}`} />
-      </View>
-      <View className="items-center mb-8">
-        <View className={`w-32 h-32 rounded-full ${elementBg} mb-4`} />
-        <View className={`w-40 h-6 rounded ${elementBg} mb-2`} />
-        <View className={`w-24 h-4 rounded ${elementBg}`} />
-      </View>
-      <View
-        className={`mx-4 h-[70px] mb-6 rounded-3xl ${bg} flex-row items-center justify-between px-6`}
-      >
-        <View className="items-center gap-2">
-          <View className={`w-8 h-5 rounded ${elementBg}`} />
-          <View className={`w-12 h-3 rounded ${elementBg}`} />
-        </View>
-        <View className={`w-[1px] h-8 ${elementBg}`} />
-        <View className="items-center gap-2">
-          <View className={`w-8 h-5 rounded ${elementBg}`} />
-          <View className={`w-12 h-3 rounded ${elementBg}`} />
-        </View>
-        <View className={`w-[1px] h-8 ${elementBg}`} />
-        <View className="items-center gap-2">
-          <View className={`w-8 h-5 rounded ${elementBg}`} />
-          <View className={`w-12 h-3 rounded ${elementBg}`} />
-        </View>
-      </View>
-      <View className="flex-row px-4 mb-4 gap-4">
-        <View className={`flex-1 h-10 rounded-xl ${elementBg}`} />
-        <View className={`flex-1 h-10 rounded-xl ${bg}`} />
-      </View>
-      <View className="flex-row flex-wrap">
-        {[...Array(12)].map((_, i) => (
-          <View
-            key={i}
-            style={{ width: itemSize, height: itemSize, padding: 1 }}
-          >
-            <View className={`w-full h-full ${elementBg}`} />
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-};
 
 const Profile = () => {
   const { colorScheme } = useColorScheme();
@@ -114,6 +54,7 @@ const Profile = () => {
 
   const mainScrollRef = useRef<ScrollView>(null);
 
+  // Lógica de Ranking
   const rankPosts = (postsToSort: any[]) => {
     const now = new Date().getTime();
     return postsToSort
@@ -143,17 +84,24 @@ const Profile = () => {
         const likesB = b.likedBy ? b.likedBy.length : 0;
         return likesB - likesA;
       });
+
       const top3 = sortedByLikes
         .filter((post) => post.likedBy && post.likedBy.length > 0)
         .slice(0, 3)
         .map((post) => {
-          const songData = parseSongFromPost(post.songData);
-          if (!songData) return null;
-          return {
-            ...songData,
-            postId: post.$id,
-            likes: post.likedBy ? post.likedBy.length : 0,
-          };
+          try {
+            const song = JSON.parse(post.songData);
+            if (song.cover?.includes("100x100bb")) {
+              song.cover = song.cover.replace("100x100bb", "600x600bb");
+            }
+            return {
+              ...song,
+              postId: post.$id,
+              likes: post.likedBy ? post.likedBy.length : 0,
+            };
+          } catch {
+            return null;
+          }
         })
         .filter((item) => item !== null);
 
@@ -174,101 +122,24 @@ const Profile = () => {
   useFocusEffect(
     useCallback(() => {
       fetchData();
-    }, [user])
+    }, [user]),
   );
 
   const onRefresh = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setData((prev) => ({ ...prev, refreshing: true }));
     await fetchData();
   };
 
   const handleTabPress = (index: number) => {
+    if (activeTab !== index) Haptics.selectionAsync();
     setActiveTab(index);
   };
+
   const scrollToMoods = () => {
     mainScrollRef.current?.scrollTo({ y: 400, animated: true });
     handleTabPress(0);
   };
-
-  const renderMoodItem = (item: any) => {
-    const songData = parseSongFromPost(item.songData);
-    const imageUrl = songData
-      ? songData.cover
-      : "https://via.placeholder.com/300";
-    return (
-      <TouchableOpacity
-        key={item.$id}
-        activeOpacity={0.8}
-        onPress={() => router.push(`/post/${item.$id}` as any)}
-        style={{ width: "33.3333%", aspectRatio: 1, padding: 0.5 }}
-      >
-        <Image
-          source={{ uri: imageUrl }}
-          style={{ width: "100%", height: "100%", backgroundColor: cardBg }}
-          className="border-[0.5px] border-black/10 dark:border-white/10"
-          resizeMode="cover"
-        />
-        {item.likedBy && item.likedBy.length > 0 && (
-          <View className="absolute bottom-1 right-1 bg-black/60 px-1 rounded flex-row items-center">
-            <Ionicons name="heart" size={10} color="white" />
-            <Text className="text-white text-[10px] ml-1">
-              {item.likedBy.length}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    );
-  };
-
-  const renderMusicItem = (item: any, index: number) => (
-    <TouchableOpacity
-      key={item.postId || index}
-      onPress={() => router.push(`/post/${item.postId}` as any)}
-      className="flex-row items-center px-6 py-3 border-b w-full"
-      style={{ borderColor: borderColor }}
-    >
-      <Text className="text-[#5E17EB] font-bold text-lg mr-4 w-4 text-center">
-        {index + 1}
-      </Text>
-      <Image
-        source={{ uri: item.cover }}
-        className="w-14 h-14 rounded-xl mr-4"
-        style={{ backgroundColor: cardBg }}
-      />
-      <View className="flex-1">
-        <Text
-          className="font-bold text-base"
-          numberOfLines={1}
-          style={{ color: textColor }}
-        >
-          {item.title}
-        </Text>
-        <Text
-          className="text-sm"
-          numberOfLines={1}
-          style={{ color: subTextColor }}
-        >
-          {item.artist}
-        </Text>
-      </View>
-      <View
-        className="flex-row items-center px-2 py-1 rounded-lg"
-        style={{
-          backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "#F4F4F5",
-        }}
-      >
-        <Ionicons
-          name="heart"
-          size={12}
-          color="#EF4444"
-          style={{ marginRight: 4 }}
-        />
-        <Text className="text-xs font-bold" style={{ color: textColor }}>
-          {item.likes}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
 
   if (data.isLoading) {
     return (
@@ -289,6 +160,8 @@ const Profile = () => {
       style={{ backgroundColor: bgColor }}
     >
       <StatusBar style={isDark ? "light" : "dark"} />
+
+      {/* Modal Foto Perfil Full Screen */}
       <Modal
         visible={showImageModal}
         transparent={true}
@@ -307,7 +180,8 @@ const Profile = () => {
               user?.pfp ? { uri: user.pfp } : require("@/assets/noPfp.jpg")
             }
             style={{ width: width, height: width }}
-            resizeMode="contain"
+            contentFit="contain"
+            transition={300}
           />
         </View>
       </Modal>
@@ -324,6 +198,7 @@ const Profile = () => {
           />
         }
       >
+        {/* HEADER */}
         <View className="flex-row justify-between items-center px-6 py-2 mb-6">
           <Text className="text-3xl font-bold" style={{ color: textColor }}>
             {t("profile.title")}
@@ -339,9 +214,13 @@ const Profile = () => {
           </View>
         </View>
 
+        {/* INFO USUARIO */}
         <View className="items-center">
           <TouchableOpacity
-            onPress={() => setShowImageModal(true)}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setShowImageModal(true);
+            }}
             activeOpacity={0.8}
             className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/50"
           >
@@ -349,8 +228,9 @@ const Profile = () => {
               source={
                 user?.pfp ? { uri: user.pfp } : require("@/assets/noPfp.jpg")
               }
-              className="w-32 h-32 rounded-full"
-              style={{ backgroundColor: cardBg }}
+              style={{ width: 128, height: 128, borderRadius: 999 }}
+              contentFit="cover"
+              transition={500}
             />
           </TouchableOpacity>
           <View className="flex-row items-center mt-4">
@@ -371,6 +251,7 @@ const Profile = () => {
           </Text>
         </View>
 
+        {/* ESTADÍSTICAS */}
         <View
           className="flex-row justify-between items-center mx-4 h-[70px] mt-8 mb-6 px-2 rounded-3xl border shadow-sm"
           style={{ backgroundColor: cardBg, borderColor: borderColor }}
@@ -437,6 +318,7 @@ const Profile = () => {
           </TouchableOpacity>
         </View>
 
+        {/* TABS */}
         <View
           className="pt-2 border-t"
           style={{ backgroundColor: bgColor, borderColor: borderColor }}
@@ -485,6 +367,7 @@ const Profile = () => {
           </View>
         </View>
 
+        {/* CONTENIDO */}
         <View className="min-h-[200px]">
           {activeTab === 0 ? (
             <View>
@@ -496,7 +379,14 @@ const Profile = () => {
                 </View>
               ) : (
                 <View className="flex-row flex-wrap">
-                  {data.posts.map(renderMoodItem)}
+                  {data.posts.map((item) => (
+                    <MoodGridItem
+                      key={item.$id}
+                      item={item}
+                      cardBg={cardBg}
+                      borderColor={borderColor}
+                    />
+                  ))}
                 </View>
               )}
             </View>
@@ -515,9 +405,19 @@ const Profile = () => {
                 </View>
               ) : (
                 <View>
-                  {data.topSongs.map((song, index) =>
-                    renderMusicItem(song, index)
-                  )}
+                  {data.topSongs.map((song, index) => (
+                    <TopSongItem
+                      key={song.postId || index}
+                      item={song}
+                      index={index}
+                      textColor={textColor}
+                      subTextColor={subTextColor}
+                      cardBg={cardBg}
+                      borderColor={borderColor}
+                      activeColor="#5E17EB"
+                      isDark={isDark}
+                    />
+                  ))}
                 </View>
               )}
             </View>

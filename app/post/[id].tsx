@@ -1,7 +1,6 @@
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   TextInput,
   KeyboardAvoidingView,
@@ -17,8 +16,11 @@ import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useAudioPlayer } from "expo-audio";
+// 🔥 CAMBIO: Usamos expo-av para controlar el modo silencio
+import { Audio } from "expo-av";
 import { Databases, Query, ID } from "react-native-appwrite";
+import { Image } from "expo-image";
+import * as Haptics from "expo-haptics";
 
 import { useGlobalContext } from "@/context/GlobalProvider";
 import {
@@ -36,6 +38,7 @@ import {
   appwriteConfig,
   getFollowedUserIds,
   getUser,
+  createStory,
 } from "@/lib/appwrite";
 import { parseSongData, sendReplyNotification } from "@/lib/postUtils";
 import { useColorScheme } from "nativewind";
@@ -48,10 +51,37 @@ import MoodShareCard from "@/components/MoodShareCard";
 import CommentItem from "@/components/CommentItem";
 import PostDetailSkeleton from "@/components/PostDetailSkeleton";
 import PostHeader from "@/components/PostHeader";
-import DirectShareSheet from "@/components/DirectShareSheet";
-import StoryCreationModal from "@/components/StoryCreationModal";
+import DirectShareSheet from "@/components/home/DirectShareSheet";
+import StoryCreationModal from "@/components/home/StoryCreationModal";
 
 const databases = new Databases(client);
+
+const RANDOM_SEARCH_TERMS = [
+  "global top 50",
+  "viral hits",
+  "pop hits",
+  "lo-fi beats",
+  "rock classics",
+];
+
+const searchSongsWrapper = async (query: string) => {
+  try {
+    const response = await fetch(
+      `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=15`,
+    );
+    const data = await response.json();
+    return data.data.map((track: any) => ({
+      id: track.id.toString(),
+      title: track.title,
+      artist: track.artist.name,
+      cover: track.album.cover_medium || track.album.cover_big,
+      preview: track.preview,
+      duration: track.duration,
+    }));
+  } catch (e) {
+    return [];
+  }
+};
 
 const PostDetails = () => {
   const { colorScheme } = useColorScheme();
@@ -103,15 +133,12 @@ const PostDetails = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
 
-  // Audio
+  // Audio (Logica migrada de PostItem)
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
-  const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
 
-  const player = useAudioPlayer(currentSongUrl);
   const inputRef = useRef<TextInput>(null);
-
-  // 🔥 CORRECCIÓN 2: Ref para el debounce de búsqueda
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -125,29 +152,14 @@ const PostDetails = () => {
     }
   }, [allComments]);
 
+  // Limpieza del audio al salir
   useEffect(() => {
-    if (currentSongUrl && player) {
-      if (!player.playing) {
-        player.play();
-        setIsPlaying(true);
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
       }
-      const statusListener = (status: any) => {
-        if (status.didJustFinish) {
-          setIsPlaying(false);
-          player.seekTo(0);
-          player.pause();
-        }
-      };
-      if (player.addListener)
-        player.addListener("playbackStatusUpdate", statusListener);
-      else if ((player as any).setOnPlaybackStatusUpdate)
-        (player as any).setOnPlaybackStatusUpdate(statusListener);
-      return () => {
-        if (player.removeListener)
-          player.removeListener("playbackStatusUpdate", statusListener);
-      };
-    }
-  }, [currentSongUrl, player]);
+    };
+  }, [sound]);
 
   const fetchData = async () => {
     try {
@@ -179,36 +191,76 @@ const PostDetails = () => {
     };
   };
 
+  // 🔥 NUEVA LÓGICA DE AUDIO (Igual a PostItem)
   const handlePlayPause = async () => {
-    if (currentSongUrl && player) {
-      if (player.playing) {
-        player.pause();
-        setIsPlaying(false);
-      } else {
-        if (player.currentTime >= player.duration) player.seekTo(0);
-        player.play();
-        setIsPlaying(true);
+    Haptics.selectionAsync();
+
+    // 1. Si ya hay sonido cargado, controlamos play/pause/replay
+    if (sound) {
+      const status = await sound.getStatusAsync();
+      if (status.isLoaded) {
+        if (status.isPlaying) {
+          await sound.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          // Si terminó, replay; si no, play
+          if (status.positionMillis >= status.durationMillis!) {
+            await sound.replayAsync();
+          } else {
+            await sound.playAsync();
+          }
+          setIsPlaying(true);
+        }
       }
       return;
     }
+
+    // 2. Si no hay sonido, configuramos sesión y cargamos
     try {
       setIsLoadingAudio(true);
       const songData = parseSongData(post.songData);
       const trackId = songData?.id || songData?.spotifyId;
+
       if (!trackId) {
         Alert.alert("Error", "ID de canción no disponible.");
         setIsLoadingAudio(false);
         return;
       }
+
       const previewUrl = await getDeezerTrackUrl(trackId);
       if (!previewUrl) {
         Alert.alert("Error", "No se pudo obtener el audio.");
         setIsLoadingAudio(false);
         return;
       }
-      setCurrentSongUrl(previewUrl);
+
+      // 🔥 CONFIGURACIÓN CLAVE PARA IPHONE EN SILENCIO
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        allowsRecordingIOS: false,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: previewUrl },
+        { shouldPlay: true },
+      );
+
+      setSound(newSound);
+      setIsPlaying(true);
+
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded) {
+          if (status.didJustFinish) {
+            setIsPlaying(false);
+          }
+        }
+      });
+
       setIsLoadingAudio(false);
     } catch (error) {
+      console.log("Error playing audio:", error);
       Alert.alert("Error", "Ocurrió un error al reproducir.");
       setIsLoadingAudio(false);
     }
@@ -252,18 +304,15 @@ const PostDetails = () => {
     }
   };
 
-  // 🔥 CORRECCIÓN 2: Debounce en la búsqueda de usuarios
   const handleTextChange = (text: string) => {
     setCommentText(text);
     const words = text.split(" ");
     const lastWord = words[words.length - 1];
 
-    // Limpiamos el timer anterior si existe
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
 
     if (lastWord && lastWord.startsWith("@") && lastWord.length > 1) {
       const query = lastWord.substring(1);
-      // Esperamos 500ms antes de buscar
       searchTimeout.current = setTimeout(async () => {
         try {
           const results = await searchUsers(query);
@@ -280,26 +329,15 @@ const PostDetails = () => {
   };
 
   const handleSelectUser = (username: string) => {
+    Haptics.selectionAsync();
     const words = commentText.split(" ");
     words.pop();
     setCommentText(`${words.join(" ")} @${username} `);
     setShowSuggestions(false);
   };
 
-  const processMentions = async (content: string, postId: string) => {
-    if (!user) return;
-    const matches = content.match(/@(\w+)/g);
-    if (!matches) return;
-    [...new Set(matches)].forEach(async (mention) => {
-      const username = mention.substring(1);
-      const users = await searchUsers(username);
-      const targetUser = users.find((u) => u.username === username);
-      if (targetUser)
-        await sendTagNotification(user.$id, targetUser.$id, postId);
-    });
-  };
-
   const handleReply = (targetComment: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const rootId = targetComment.parentId
       ? targetComment.parentId
       : targetComment.$id;
@@ -315,6 +353,7 @@ const PostDetails = () => {
 
   const submitComment = async () => {
     if (!commentText.trim()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSending(true);
     try {
       const displayName = user?.name || user?.username;
@@ -335,7 +374,6 @@ const PostDetails = () => {
         user,
         replyingTo ? { $id: replyingTo.userId } : null,
       );
-      await processMentions(commentText, postId);
       setAllComments((prev) => [newComment, ...prev]);
       setCommentText("");
       setReplyingTo(null);
@@ -347,6 +385,7 @@ const PostDetails = () => {
   };
 
   const handleLike = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!post || !user) return;
     const originalPost = { ...post };
     const originalLikes = post.likedBy || [];
@@ -362,6 +401,7 @@ const PostDetails = () => {
   };
 
   const handleSave = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!post || !user) return;
     const originalSaved = post.savedBy || [];
     const newSaved = originalSaved.includes(user.$id)
@@ -405,6 +445,7 @@ const PostDetails = () => {
   };
 
   const openShare = async () => {
+    Haptics.selectionAsync();
     setShareSelectorVisible(true);
     if (user?.$id && shareContacts.length === 0) {
       setIsLoadingContacts(true);
@@ -554,7 +595,10 @@ const PostDetails = () => {
           Vibe
         </Text>
         <TouchableOpacity
-          onPress={() => setOptionsVisible(true)}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setOptionsVisible(true);
+          }}
           className="p-2 -mr-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
         >
           <Ionicons
@@ -599,7 +643,7 @@ const PostDetails = () => {
           contentContainerStyle={{ paddingBottom: 20 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          onScrollBeginDrag={Keyboard.dismiss} // 🔥 CORRECCIÓN 3: Cerrar teclado al scroll
+          onScrollBeginDrag={Keyboard.dismiss}
           ListEmptyComponent={
             <View className="items-center justify-center py-10 opacity-60">
               <Text
@@ -640,7 +684,9 @@ const PostDetails = () => {
                   >
                     <Image
                       source={{ uri: item.pfp }}
-                      className="w-8 h-8 rounded-full mr-3 bg-zinc-800"
+                      style={{ width: 32, height: 32, borderRadius: 999 }}
+                      className="mr-3 bg-zinc-800"
+                      contentFit="cover"
                     />
                     <Text
                       className="font-bold text-sm"
@@ -696,8 +742,9 @@ const PostDetails = () => {
                     user?.pfp ||
                     "https://cloud.appwrite.io/v1/avatars/initials?name=Me",
                 }}
-                className="w-10 h-10 rounded-full mb-1"
-                style={{ backgroundColor: styles.inputBg }}
+                style={{ width: 40, height: 40, borderRadius: 999 }}
+                className="mb-1 bg-zinc-800"
+                contentFit="cover"
               />
               <View
                 className="flex-1 rounded-3xl flex-row items-center px-5 py-1 border"
@@ -768,6 +815,9 @@ const PostDetails = () => {
         currentUser={user}
         onSuccess={() => setCreationVisible(false)}
         initialSongData={storyInitialSongData}
+        createStory={createStory}
+        searchSongsWrapper={searchSongsWrapper}
+        RANDOM_SEARCH_TERMS={RANDOM_SEARCH_TERMS}
       />
       <OptionsModal
         isVisible={isOptionsVisible}

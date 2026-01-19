@@ -5,10 +5,7 @@
     "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": [
-      "mood",
-      "appwrite-callback-6689e59b000acd6caf6f"
-    ],
+    "scheme": ["mood", "appwrite-callback-6689e59b000acd6caf6f"],
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/images/splash-full.png",
@@ -21,9 +18,9 @@
       "usesAppleSignIn": true,
       "buildNumber": "17",
       "infoPlist": {
-        "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos para tu perfil y publicaciones.",
-        "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar y subir fotos.",
-        "NSMicrophoneUsageDescription": "Mood necesita acceso al micrófono para grabar audio en los videos.",
+        "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos directamente desde la app para crear nuevos Vibes o actualizar tu foto de perfil.",
+        "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar imágenes y compartirlas en tus publicaciones o historias.",
+        "NSMicrophoneUsageDescription": "Mood necesita acceso al micrófono para capturar audio cuando grabas videos para tus historias.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -48,8 +45,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Mood necesita acceso a tus fotos para que puedas compartirlas en tu perfil.",
-          "cameraPermission": "Mood necesita acceso a la cámara para que puedas tomar fotos."
+          "photosPermission": "Permite a Mood acceder a tus fotos para crear publicaciones.",
+          "cameraPermission": "Permite a Mood usar la cámara para tomar fotos de perfil o contenido."
         }
       ],
       "expo-audio",

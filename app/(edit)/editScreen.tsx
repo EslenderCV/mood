@@ -2,7 +2,6 @@ import {
   View,
   Text,
   ScrollView,
-  Image,
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
@@ -20,6 +19,8 @@ import { updateProfile } from "@/lib/appwrite";
 import { router, Stack } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
+import { Image } from "expo-image"; // 🔥 Premium Image
+import * as Haptics from "expo-haptics"; // 🔥 Haptics
 
 interface FormState {
   name: string;
@@ -28,7 +29,7 @@ interface FormState {
   pfp: string | ImagePickerAsset | null;
 }
 
-// 🔥 CORRECCIÓN: Definimos el componente FUERA de EditScreen para evitar que el teclado se cierre
+// 🔥 Componente de Input fuera para estabilidad del teclado
 const InputField = ({
   label,
   value,
@@ -39,7 +40,7 @@ const InputField = ({
   editable = true,
   focusedInput,
   setFocusedInput,
-  colors, // Recibimos los colores como prop
+  colors,
 }: any) => {
   const isFocused = focusedInput === label;
   return (
@@ -75,8 +76,10 @@ const InputField = ({
             type === "email" || type === "username" ? "none" : "words"
           }
           keyboardType={type === "email" ? "email-address" : "default"}
-          // Usamos las funciones pasadas por prop
-          onFocus={() => setFocusedInput(label)}
+          onFocus={() => {
+            Haptics.selectionAsync(); // Feedback al enfocar
+            setFocusedInput(label);
+          }}
           onBlur={() => setFocusedInput(null)}
           editable={editable}
         />
@@ -99,7 +102,6 @@ const EditScreen = () => {
   const iconColor = isDark ? "#FFFFFF" : "#000000";
   const backBtnBg = isDark ? "#18181B" : "#F4F4F5";
 
-  // Objeto con los colores para pasarlo al InputField
   const colors = {
     textColor,
     subTextColor,
@@ -119,6 +121,7 @@ const EditScreen = () => {
   });
 
   const pickImage = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -133,16 +136,18 @@ const EditScreen = () => {
 
   const handleSave = async () => {
     if (formData.username.length < 3) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(
         t("editProfile.alerts.errorTitle"),
-        t("editProfile.alerts.usernameError")
+        t("editProfile.alerts.usernameError"),
       );
       return;
     }
     if (!formData.email.includes("@")) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(
         t("editProfile.alerts.errorTitle"),
-        t("editProfile.alerts.emailError")
+        t("editProfile.alerts.emailError"),
       );
       return;
     }
@@ -158,15 +163,19 @@ const EditScreen = () => {
 
       if (setUser) setUser(updatedDoc as unknown as User);
 
+      // 🔥 Éxito Táctil
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
       Alert.alert(
         t("editProfile.alerts.successTitle"),
-        t("editProfile.alerts.successMsg")
+        t("editProfile.alerts.successMsg"),
       );
       router.back();
     } catch (error: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(
         t("editProfile.alerts.errorTitle"),
-        error.message || t("editProfile.alerts.errorMsg")
+        error.message || t("editProfile.alerts.errorMsg"),
       );
     } finally {
       setIsSaving(false);
@@ -228,9 +237,14 @@ const EditScreen = () => {
               <View className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/20">
                 <Image
                   source={getImageSource()}
-                  className="w-36 h-36 rounded-full"
-                  style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
-                  resizeMode="cover"
+                  style={{
+                    width: 144,
+                    height: 144,
+                    borderRadius: 999,
+                    backgroundColor: isDark ? "#27272A" : "#E4E4E7",
+                  }}
+                  contentFit="cover"
+                  transition={500}
                 />
               </View>
               <TouchableOpacity

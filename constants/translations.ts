@@ -16,7 +16,7 @@ export const translations = {
       // Nuevo: Banner de Conexión
       disconnected: "Sin conexión a internet",
       reconnecting: "Sincronizando...",
-      restored: "Conexión restaurada",
+      restored: "Estás en línea",
     },
     home: {
       // Nuevo: Home Feed
@@ -524,7 +524,7 @@ export const translations = {
       // Nuevo
       disconnected: "No internet connection",
       reconnecting: "Syncing...",
-      restored: "Connection restored",
+      restored: "You're Online",
     },
     home: {
       // Nuevo
@@ -1033,7 +1033,7 @@ export const translations = {
       // Nuevo
       disconnected: "Pas de connexion internet",
       reconnecting: "Synchronisation...",
-      restored: "Connexion rétablie",
+      restored: "Vous êtes en ligne",
     },
     home: {
       // Nuevo
@@ -1544,7 +1544,7 @@ export const translations = {
       // Nuevo
       disconnected: "Sem conexão com a internet",
       reconnecting: "Sincronizando...",
-      restored: "Conexão restaurada",
+      restored: "Você está online",
     },
     home: {
       // Nuevo
@@ -2050,7 +2050,7 @@ export const translations = {
       // Nuevo
       disconnected: "Nessuna connessione internet",
       reconnecting: "Sincronizzazione...",
-      restored: "Connessione ripristinata",
+      restored: "Sei online",
     },
     home: {
       // Nuevo

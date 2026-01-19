@@ -14,6 +14,7 @@ interface OptionsModalProps {
   onClose: () => void;
   onDelete: () => void;
   onReport: () => void;
+  onBlock?: () => void; // 🔥 NUEVO: Prop para bloquear
   isOwner: boolean;
 }
 
@@ -22,6 +23,7 @@ export default function OptionsModal({
   onClose,
   onDelete,
   onReport,
+  onBlock, // Recibimos la función
   isOwner,
 }: OptionsModalProps) {
   const { colorScheme } = useColorScheme();
@@ -56,42 +58,15 @@ export default function OptionsModal({
               >
                 {isOwner ? "Gestionar tu publicación" : "Acciones"}
               </Text>
+
               {isOwner && (
-                <>
-                  <TouchableOpacity
-                    onPress={onDelete}
-                    className="flex-row items-center p-4 rounded-2xl border border-red-500/20 bg-red-500/5"
-                  >
-                    <View className="w-10 h-10 rounded-full items-center justify-center mr-4 bg-red-500/10">
-                      <Ionicons
-                        name="trash-outline"
-                        size={22}
-                        color={dangerColor}
-                      />
-                    </View>
-                    <View className="flex-1">
-                      <Text
-                        className="font-bold text-base"
-                        style={{ color: dangerColor }}
-                      >
-                        Eliminar publicación
-                      </Text>
-                      <Text className="text-xs text-red-400/70">
-                        Esta acción es irreversible
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </>
-              )}
-              {!isOwner && (
                 <TouchableOpacity
-                  onPress={onReport}
-                  className="flex-row items-center p-4 rounded-2xl mb-3"
-                  style={{ backgroundColor: isDark ? "#27272A" : "#F4F4F5" }}
+                  onPress={onDelete}
+                  className="flex-row items-center p-4 rounded-2xl border border-red-500/20 bg-red-500/5 mb-3"
                 >
-                  <View className="w-10 h-10 rounded-full items-center justify-center mr-4 bg-red-100 dark:bg-red-900/30">
+                  <View className="w-10 h-10 rounded-full items-center justify-center mr-4 bg-red-500/10">
                     <Ionicons
-                      name="flag-outline"
+                      name="trash-outline"
                       size={22}
                       color={dangerColor}
                     />
@@ -101,23 +76,79 @@ export default function OptionsModal({
                       className="font-bold text-base"
                       style={{ color: dangerColor }}
                     >
-                      Reportar publicación
+                      Eliminar publicación
                     </Text>
-                    <Text className="text-xs" style={{ color: subTextColor }}>
-                      Contenido inapropiado, spam, etc.
+                    <Text className="text-xs text-red-400/70">
+                      Esta acción es irreversible
                     </Text>
                   </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color={subTextColor}
-                  />
                 </TouchableOpacity>
+              )}
+
+              {!isOwner && (
+                <>
+                  {/* Opción Reportar */}
+                  <TouchableOpacity
+                    onPress={onReport}
+                    className="flex-row items-center p-4 rounded-2xl mb-3"
+                    style={{ backgroundColor: isDark ? "#27272A" : "#F4F4F5" }}
+                  >
+                    <View className="w-10 h-10 rounded-full items-center justify-center mr-4 bg-zinc-200 dark:bg-zinc-700">
+                      <Ionicons
+                        name="flag-outline"
+                        size={22}
+                        color={textColor}
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <Text
+                        className="font-bold text-base"
+                        style={{ color: textColor }}
+                      >
+                        Reportar publicación
+                      </Text>
+                      <Text className="text-xs" style={{ color: subTextColor }}>
+                        Contenido inapropiado, spam...
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color={subTextColor}
+                    />
+                  </TouchableOpacity>
+
+                  {/* 🔥 Opción Bloquear (REQUERIDO POR APPLE) */}
+                  <TouchableOpacity
+                    onPress={onBlock}
+                    className="flex-row items-center p-4 rounded-2xl mb-3"
+                    style={{ backgroundColor: isDark ? "#27272A" : "#F4F4F5" }}
+                  >
+                    <View className="w-10 h-10 rounded-full items-center justify-center mr-4 bg-red-100 dark:bg-red-900/20">
+                      <Ionicons
+                        name="ban-outline"
+                        size={22}
+                        color={dangerColor}
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <Text
+                        className="font-bold text-base"
+                        style={{ color: dangerColor }}
+                      >
+                        Bloquear usuario
+                      </Text>
+                      <Text className="text-xs" style={{ color: subTextColor }}>
+                        No verás más contenido de este usuario
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </>
               )}
 
               <TouchableOpacity
                 onPress={onClose}
-                className="mt-6 py-4 items-center"
+                className="mt-4 py-4 items-center"
               >
                 <Text
                   className="font-bold text-base"

@@ -2,7 +2,9 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import React, { useEffect, useState, useRef } from "react";
 import { View, Animated, StyleSheet } from "react-native";
 import * as SplashScreen from "expo-splash-screen";
-import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from "expo-av";
+import { Audio } from "expo-av";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 
 // Contextos
 import { AudioProvider } from "@/context/AudioContext";
@@ -11,11 +13,13 @@ import { ModalProvider } from "@/context/ModalContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { ConnectionProvider } from "@/context/ConnectionProvider";
+import { FeedProvider } from "@/context/FeedProvider";
+import { CommentsModalProvider } from "@/context/CommentsModalContext";
 
 // Componentes
 import CustomSplashScreen from "@/components/CustomSplashScreen";
+import CommentsSheet from "@/components/comments/CommentsSheet";
 
-// Mantiene el Splash Nativo visible hasta que estemos listos para cambiar al nuestro
 SplashScreen.preventAutoHideAsync();
 
 const StackLayout = () => {
@@ -23,62 +27,45 @@ const StackLayout = () => {
   const segments = useSegments();
   const router = useRouter();
 
-  // Estados para la animación del Splash
   const [isAppReady, setIsAppReady] = useState(false);
   const [isSplashAnimationComplete, setIsSplashAnimationComplete] =
     useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  // 1. Configuración de Audio
+  // 1. Configuración de Audio básica
   useEffect(() => {
-    const configureAudioSession = async () => {
+    (async () => {
       try {
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
           playsInSilentModeIOS: true,
-          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
           shouldDuckAndroid: true,
-          interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-          playThroughEarpieceAndroid: false,
           staysActiveInBackground: false,
         });
-        console.log("✅ Audio configurado: Categoría Playback forzada.");
-      } catch (error) {
-        console.error("❌ Error configurando audio:", error);
+      } catch (e) {
+        console.error("Audio error", e);
       }
-    };
-    configureAudioSession();
+    })();
   }, []);
 
-  // 2. Control de Navegación (Auth)
+  // 2. Control de Navegación
   useEffect(() => {
     if (loading) return;
-
     const segmentsArray = segments as string[];
-    const inAuthGroup = segmentsArray[0] === "(auth)";
-    const inTabsGroup = segmentsArray[0] === "(tabs)";
-    const inChat = segmentsArray[0] === "chat";
-    const inOnboarding = segmentsArray.length === 0;
+    const root = segmentsArray[0];
 
     if (loggedIn) {
-      if (inOnboarding || inAuthGroup) {
-        router.replace("/home");
-      }
+      if (!root || root === "(auth)") router.replace("/home");
     } else {
-      if (inTabsGroup || inChat) {
-        router.replace("/");
-      }
+      if (root === "(tabs)" || root === "chat") router.replace("/");
     }
   }, [loading, loggedIn, segments]);
 
-  // 3. Detectar cuando la app terminó de cargar (GlobalProvider listo)
+  // 3. Splash Control
   useEffect(() => {
-    if (!loading) {
-      setIsAppReady(true);
-    }
+    if (!loading) setIsAppReady(true);
   }, [loading]);
 
-  // 4. Manejo de la Animación de Entrada
   useEffect(() => {
     if (isAppReady) {
       SplashScreen.hideAsync();
@@ -86,9 +73,7 @@ const StackLayout = () => {
         toValue: 0,
         duration: 500,
         useNativeDriver: true,
-      }).start(() => {
-        setIsSplashAnimationComplete(true);
-      });
+      }).start(() => setIsSplashAnimationComplete(true));
     }
   }, [isAppReady]);
 
@@ -97,23 +82,12 @@ const StackLayout = () => {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: "#000000" },
+          contentStyle: { backgroundColor: "#000" },
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="index" options={{ headerShown: false }} />
-
-        <Stack.Screen
-          name="chats"
-          options={{
-            headerShown: false,
-            presentation: "transparentModal",
-            animation: "none",
-            gestureEnabled: false,
-          }}
-        />
-        <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
       </Stack>
 
       {!isSplashAnimationComplete && (
@@ -131,24 +105,30 @@ const StackLayout = () => {
   );
 };
 
-const RootLayout = () => {
+// 🔥 EXPORTACIÓN POR DEFECTO REFORZADA
+export default function RootLayout() {
   return (
-    // ORDEN CORREGIDO: Global -> Notification -> Language -> Connection
-    <GlobalProvider>
-      <NotificationProvider>
-        <LanguageProvider>
-          {/* 🔥 AHORA SÍ: ConnectionProvider está DENTRO de LanguageProvider */}
-          <ConnectionProvider>
-            <AudioProvider>
-              <ModalProvider>
-                <StackLayout />
-              </ModalProvider>
-            </AudioProvider>
-          </ConnectionProvider>
-        </LanguageProvider>
-      </NotificationProvider>
-    </GlobalProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <LanguageProvider>
+        <BottomSheetModalProvider>
+          <GlobalProvider>
+            <NotificationProvider>
+              <ConnectionProvider>
+                <FeedProvider>
+                  <CommentsModalProvider>
+                    <AudioProvider>
+                      <ModalProvider>
+                        <StackLayout />
+                        <CommentsSheet />
+                      </ModalProvider>
+                    </AudioProvider>
+                  </CommentsModalProvider>
+                </FeedProvider>
+              </ConnectionProvider>
+            </NotificationProvider>
+          </GlobalProvider>
+        </BottomSheetModalProvider>
+      </LanguageProvider>
+    </GestureHandlerRootView>
   );
-};
-
-export default RootLayout;
+}

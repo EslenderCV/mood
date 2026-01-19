@@ -2,7 +2,6 @@ import {
   View,
   Text,
   FlatList,
-  Image,
   TouchableOpacity,
   TextInput,
   RefreshControl,
@@ -15,6 +14,8 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Swipeable from "react-native-gesture-handler/Swipeable";
+import { Image } from "expo-image"; // 🔥 Premium Image
+import * as Haptics from "expo-haptics"; // 🔥 Haptics
 
 import { useChatsLogic } from "@/hooks/useChatsLogic";
 import { ChatListSkeleton } from "@/components/chats/ChatListSkeleton";
@@ -38,7 +39,6 @@ const ChatsList = ({ onBackPress }: { onBackPress?: () => void }) => {
   const deleteColor = "#EF4444";
   const fabColor = "#5E17EB";
 
-  // Recargar al volver
   useFocusEffect(
     React.useCallback(() => {
       logic.loadChats(false);
@@ -58,7 +58,10 @@ const ChatsList = ({ onBackPress }: { onBackPress?: () => void }) => {
     });
     return (
       <TouchableOpacity
-        onPress={() => logic.handleDeleteChat(item.$id, index)}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          logic.handleDeleteChat(item.$id, index);
+        }}
         className="justify-center items-center w-[80px]"
         style={{ backgroundColor: deleteColor }}
       >
@@ -73,10 +76,16 @@ const ChatsList = ({ onBackPress }: { onBackPress?: () => void }) => {
   };
 
   const renderChatItem = ({ item, index }: { item: any; index: number }) => {
+    // 🔥 SAFEGUARD: Validación de usuario nulo
+    const otherUser = item.otherUser || {};
     const isUnread =
       !item.lastMessageIsRead && item.lastSenderId !== logic.user?.$id;
     const displayName =
-      item.otherUser?.name || item.otherUser?.username || "Usuario";
+      otherUser.name || otherUser.username || "Usuario Eliminado";
+    const pfpUrl = otherUser.pfp
+      ? otherUser.pfp
+      : "https://cloud.appwrite.io/v1/avatars/initials?name=" +
+        (displayName === "Usuario Eliminado" ? "UE" : displayName);
 
     return (
       <Swipeable
@@ -90,21 +99,24 @@ const ChatsList = ({ onBackPress }: { onBackPress?: () => void }) => {
       >
         <TouchableOpacity
           activeOpacity={1}
-          onPress={() =>
-            logic.handleOpenChat(item.otherUser?.$id, item.otherUser)
-          }
+          onPress={() => {
+            Haptics.selectionAsync();
+            logic.handleOpenChat(otherUser.$id, otherUser);
+          }}
           className="flex-row items-center px-5 py-3.5"
           style={{ backgroundColor: bgColor }}
         >
           <View className="relative">
             <Image
-              source={{
-                uri:
-                  item.otherUser?.pfp ||
-                  "https://cloud.appwrite.io/v1/avatars/initials?name=" +
-                    displayName,
+              source={{ uri: pfpUrl }}
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 26,
+                backgroundColor: isDark ? "#27272A" : "#E4E4E7",
               }}
-              className="w-[52px] h-[52px] rounded-full bg-zinc-200 dark:bg-zinc-800"
+              contentFit="cover"
+              transition={200}
             />
           </View>
           <View
@@ -121,7 +133,7 @@ const ChatsList = ({ onBackPress }: { onBackPress?: () => void }) => {
                 >
                   {displayName}
                 </Text>
-                {item.otherUser?.isVerified && (
+                {otherUser.isVerified && (
                   <MaterialIcons
                     name="verified"
                     size={14}
@@ -130,18 +142,20 @@ const ChatsList = ({ onBackPress }: { onBackPress?: () => void }) => {
                   />
                 )}
               </View>
-              <Text
-                className="text-[11px] shrink-0"
-                style={{
-                  color: isUnread ? unreadColor : subTextColor,
-                  fontWeight: isUnread ? "700" : "400",
-                }}
-              >
-                {new Date(item.lastMessageAt).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </Text>
+              {item.lastMessageAt && (
+                <Text
+                  className="text-[11px] shrink-0"
+                  style={{
+                    color: isUnread ? unreadColor : subTextColor,
+                    fontWeight: isUnread ? "700" : "400",
+                  }}
+                >
+                  {new Date(item.lastMessageAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </Text>
+              )}
             </View>
             <View className="flex-row items-center justify-between">
               <Text
@@ -160,7 +174,7 @@ const ChatsList = ({ onBackPress }: { onBackPress?: () => void }) => {
                     style={{ marginRight: 4 }}
                   />
                 )}{" "}
-                {item.lastMessage}
+                {item.lastMessage || "Imagen/Audio"}
               </Text>
               {isUnread && (
                 <View
@@ -178,7 +192,6 @@ const ChatsList = ({ onBackPress }: { onBackPress?: () => void }) => {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: bgColor }}>
       <View style={{ flex: 1, paddingTop: insets.top }}>
-        {/* Header */}
         <View className="px-5 pt-3 pb-2">
           <View className="flex-row items-center mb-4 gap-2">
             <TouchableOpacity
@@ -210,7 +223,6 @@ const ChatsList = ({ onBackPress }: { onBackPress?: () => void }) => {
           </View>
         </View>
 
-        {/* List */}
         {logic.loading && logic.filteredChats.length === 0 ? (
           <View className="flex-1 mt-2">
             {logic.skeletonItems.map((i) => (
@@ -256,9 +268,11 @@ const ChatsList = ({ onBackPress }: { onBackPress?: () => void }) => {
           />
         )}
 
-        {/* FAB (BOTÓN FLOTANTE) CORREGIDO */}
         <TouchableOpacity
-          onPress={() => logic.setIsNewChatVisible(true)}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            logic.setIsNewChatVisible(true);
+          }}
           activeOpacity={0.9}
           className="absolute right-6 w-14 h-14 rounded-full items-center justify-center shadow-lg z-50"
           style={{
@@ -268,7 +282,6 @@ const ChatsList = ({ onBackPress }: { onBackPress?: () => void }) => {
             shadowOpacity: 0.3,
             shadowRadius: 4.65,
             elevation: 8,
-            // 🔥 AJUSTE: insets.bottom + 90px para librar el Tab Bar
             bottom: insets.bottom + 90,
           }}
         >

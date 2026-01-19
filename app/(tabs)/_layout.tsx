@@ -16,8 +16,8 @@ import { useModal } from "@/context/ModalContext";
 import PostModal from "@/components/PostModal";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
-// 1. IMPORTAMOS LOS INSETS
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
 
 // 🔥 IMPORTACIÓN DEL NUEVO MODAL DE CUENTAS
 import AccountSelectorModal from "@/components/profile/AccountSelectorModal";
@@ -60,8 +60,6 @@ const TabsLayout = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
-
-  // 2. OBTENEMOS LOS INSETS (Espacios seguros)
   const insets = useSafeAreaInsets();
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
@@ -75,7 +73,6 @@ const TabsLayout = () => {
   const menuHeader = isDark ? "rgba(39, 39, 42, 0.5)" : "#F4F4F5";
 
   const [menuOpen, setMenuOpen] = useState(false);
-  // 🔥 ESTADO PARA EL MODAL DE CUENTAS
   const [isAccountModalVisible, setIsAccountModalVisible] = useState(false);
 
   const { user } = useGlobalContext();
@@ -103,6 +100,10 @@ const TabsLayout = () => {
     ]).start();
   }, [menuOpen]);
 
+  const triggerHaptic = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: bgColor }}>
       <Tabs
@@ -113,10 +114,9 @@ const TabsLayout = () => {
             backgroundColor: tabBarBg,
             borderTopColor: borderColor,
             borderTopWidth: 1,
-            // 3. CORRECCIÓN PARA ANDROID: Sumamos insets.bottom a la altura y al padding
-            height: Platform.OS === "ios" ? 85 : 60 + insets.bottom,
-            paddingBottom: Platform.OS === "ios" ? 20 : insets.bottom,
-            paddingTop: 5,
+            height: 60 + insets.bottom,
+            paddingBottom: insets.bottom > 0 ? insets.bottom - 5 : 10,
+            paddingTop: 10,
           },
           tabBarActiveTintColor: "#5E17EB",
           tabBarInactiveTintColor: isDark ? "#71717A" : "#9CA3AF",
@@ -134,6 +134,9 @@ const TabsLayout = () => {
               />
             ),
           }}
+          listeners={{
+            tabPress: () => triggerHaptic(),
+          }}
         />
         <Tabs.Screen
           name="explore"
@@ -147,6 +150,9 @@ const TabsLayout = () => {
               />
             ),
           }}
+          listeners={{
+            tabPress: () => triggerHaptic(),
+          }}
         />
 
         <Tabs.Screen
@@ -154,6 +160,7 @@ const TabsLayout = () => {
           listeners={() => ({
             tabPress: (e) => {
               e.preventDefault();
+              triggerHaptic();
               setPostModalVisible(true);
             },
           })}
@@ -163,7 +170,7 @@ const TabsLayout = () => {
               <View
                 className="bg-[#5E17EB] p-3 rounded-full shadow-lg shadow-[#5E17EB]/40"
                 style={{
-                  marginBottom: Platform.OS === "ios" ? 20 : 20, // Ajuste menor
+                  marginBottom: Platform.OS === "ios" ? 15 : 15,
                   borderWidth: 4,
                   borderColor: tabBarBg,
                 }}
@@ -190,6 +197,9 @@ const TabsLayout = () => {
               />
             ),
           }}
+          listeners={{
+            tabPress: () => triggerHaptic(),
+          }}
         />
 
         <Tabs.Screen
@@ -197,17 +207,27 @@ const TabsLayout = () => {
           listeners={() => ({
             tabPress: (e) => {
               e.preventDefault();
+              triggerHaptic();
               setMenuOpen(!menuOpen);
             },
           })}
           options={{
             title: t("tabs.profile"),
             tabBarIcon: ({ focused }) => (
-              /* 🔥 PRESSABLE CON ONLONGPRESS PARA MULTI-CUENTAS */
               <Pressable
-                onLongPress={() => setIsAccountModalVisible(true)}
+                onPress={() => {
+                  triggerHaptic();
+                  setMenuOpen(!menuOpen);
+                }}
+                onLongPress={() => {
+                  triggerHaptic();
+                  setIsAccountModalVisible(true);
+                }}
                 delayLongPress={350}
-                style={{ alignItems: "center", justifyContent: "center" }}
+                style={{
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
                 <View
                   style={{
@@ -232,7 +252,6 @@ const TabsLayout = () => {
         />
       </Tabs>
 
-      {/* 🔥 MODAL DE SELECCIÓN DE CUENTAS INTEGRADO */}
       <AccountSelectorModal
         visible={isAccountModalVisible}
         onClose={() => setIsAccountModalVisible(false)}
@@ -252,15 +271,17 @@ const TabsLayout = () => {
               backgroundColor: menuBg,
               borderColor: menuBorder,
               borderWidth: 1,
-              // 4. AJUSTE MENÚ: Sumamos el inset al bottom para que suba si hay botones
-              bottom: 100 + insets.bottom,
+              bottom: 90 + insets.bottom,
             }}
             className="w-[300px] absolute right-4 rounded-[28px] shadow-2xl overflow-hidden"
           >
             <Link href="/profile" asChild onPress={() => setMenuOpen(false)}>
               <Pressable
                 className="p-5 flex-row items-center justify-between border-b"
-                style={{ backgroundColor: menuHeader, borderColor: menuBorder }}
+                style={{
+                  backgroundColor: menuHeader,
+                  borderColor: menuBorder,
+                }}
               >
                 <View className="flex-row items-center flex-1">
                   <Image

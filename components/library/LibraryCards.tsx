@@ -1,13 +1,14 @@
-import React from "react";
+import React, { memo } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image"; // 🔥 Premium Image
+import * as Haptics from "expo-haptics"; // 🔥 Haptics
 
 const { width } = Dimensions.get("window");
 const COLUMN_GAP = 12;
@@ -63,184 +64,211 @@ export const AudioVisualizer = ({
   </View>
 );
 
-// --- TARJETA DE CANCIÓN ---
-export const SongCard = ({
-  item,
-  playingId,
-  loadingAudioId,
-  isPlaying,
-  textColor,
-  subTextColor,
-  accentColor,
-  onPlay,
-  onOpenOptions,
-  onPressCard,
-}: any) => {
-  const isThisPlaying = playingId === item.id;
-  const isLoadingThis = loadingAudioId === item.id;
-  const showPause = isThisPlaying && isPlaying;
+// --- TARJETA DE CANCIÓN (MEMOIZED) ---
+export const SongCard = memo(
+  ({
+    item,
+    playingId,
+    loadingAudioId,
+    isPlaying,
+    textColor,
+    subTextColor,
+    accentColor,
+    onPlay,
+    onOpenOptions,
+    onPressCard,
+  }: any) => {
+    const isThisPlaying = playingId === item.id;
+    const isLoadingThis = loadingAudioId === item.id;
+    const showPause = isThisPlaying && isPlaying;
 
-  return (
-    <View style={{ width: CARD_WIDTH, marginBottom: 24 }}>
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onLongPress={() => onOpenOptions(item)}
-        onPress={() => onPressCard(item)}
-        className="flex-col"
-      >
-        <View className="relative mb-3.5 shadow-lg shadow-black/20">
-          <Image
-            source={{ uri: item.cover }}
-            style={{ width: "100%", aspectRatio: 1 }}
-            className="rounded-[24px] bg-zinc-800"
-            resizeMode="cover"
-          />
-          <View className="absolute inset-0 rounded-[24px] bg-black/5" />
-
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation();
-              onPlay(item);
-            }}
-            className="absolute bottom-3 left-3 items-center justify-center shadow-lg shadow-black/30 z-10"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: accentColor,
-            }}
-          >
-            {isLoadingThis ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Ionicons
-                name={showPause ? "pause" : "play"}
-                size={18}
-                color="white"
-                style={{ marginLeft: showPause ? 0 : 2 }}
-              />
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation();
-              onOpenOptions(item);
-            }}
-            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/30 backdrop-blur-md items-center justify-center"
-          >
-            <Ionicons name="ellipsis-horizontal" size={16} color="white" />
-          </TouchableOpacity>
-        </View>
-
-        <View className="pl-1 pr-1">
-          <View className="flex-row justify-between items-start">
-            <Text
-              className="font-bold text-[15px] leading-5 flex-1 mr-2"
-              numberOfLines={1}
-              style={{ color: isThisPlaying ? accentColor : textColor }}
-            >
-              {item.title}
-            </Text>
-          </View>
-          <View className="flex-row items-center mt-0.5">
-            <Text
-              className="text-[13px] font-medium"
-              numberOfLines={1}
-              style={{ color: subTextColor, maxWidth: "90%" }}
-            >
-              {item.artist}
-            </Text>
-            {isThisPlaying && isPlaying && (
-              <AudioVisualizer isPlaying={true} color={accentColor} />
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
-    </View>
-  );
-};
-
-// --- TARJETA DE PLAYLIST ---
-export const PlaylistCard = ({
-  item,
-  onPress,
-  t,
-  textColor,
-  subTextColor,
-  borderColor,
-  isDark,
-}: any) => {
-  const renderImage = (coverUrl: string | null) => {
-    if (coverUrl && !coverUrl.includes("avatars/initials")) {
-      return (
-        <Image
-          source={{ uri: coverUrl }}
-          style={{ width: "100%", aspectRatio: 1, borderRadius: 24 }}
-          className="bg-zinc-800"
-        />
-      );
-    }
     return (
-      <View
-        style={{
-          width: "100%",
-          aspectRatio: 1,
-          borderRadius: 24,
-          backgroundColor: isDark ? "#1C1C1E" : "#F2F2F7",
-          borderWidth: 1,
-          borderColor: borderColor,
-        }}
-        className="items-center justify-center relative overflow-hidden"
-      >
-        <Ionicons name="musical-notes" size={50} color={subTextColor} />
+      <View style={{ width: CARD_WIDTH, marginBottom: 24 }}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onLongPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            onOpenOptions(item);
+          }}
+          onPress={() => {
+            Haptics.selectionAsync();
+            onPressCard(item);
+          }}
+          className="flex-col"
+        >
+          <View className="relative mb-3.5 shadow-lg shadow-black/20">
+            {/* 🔥 IMAGEN OPTIMIZADA */}
+            <Image
+              source={{ uri: item.cover }}
+              style={{
+                width: "100%",
+                aspectRatio: 1,
+                borderRadius: 24,
+                backgroundColor: "#27272A",
+              }}
+              contentFit="cover"
+              transition={300}
+            />
+            <View className="absolute inset-0 rounded-[24px] bg-black/5" />
+
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                Haptics.selectionAsync();
+                onPlay(item);
+              }}
+              className="absolute bottom-3 left-3 items-center justify-center shadow-lg shadow-black/30 z-10"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: accentColor,
+              }}
+            >
+              {isLoadingThis ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Ionicons
+                  name={showPause ? "pause" : "play"}
+                  size={18}
+                  color="white"
+                  style={{ marginLeft: showPause ? 0 : 2 }}
+                />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onOpenOptions(item);
+              }}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/30 backdrop-blur-md items-center justify-center"
+            >
+              <Ionicons name="ellipsis-horizontal" size={16} color="white" />
+            </TouchableOpacity>
+          </View>
+
+          <View className="pl-1 pr-1">
+            <View className="flex-row justify-between items-start">
+              <Text
+                className="font-bold text-[15px] leading-5 flex-1 mr-2"
+                numberOfLines={1}
+                style={{ color: isThisPlaying ? accentColor : textColor }}
+              >
+                {item.title}
+              </Text>
+            </View>
+            <View className="flex-row items-center mt-0.5">
+              <Text
+                className="text-[13px] font-medium"
+                numberOfLines={1}
+                style={{ color: subTextColor, maxWidth: "90%" }}
+              >
+                {item.artist}
+              </Text>
+              {isThisPlaying && isPlaying && (
+                <AudioVisualizer isPlaying={true} color={accentColor} />
+              )}
+            </View>
+          </View>
+        </TouchableOpacity>
       </View>
     );
-  };
+  },
+);
 
-  return (
-    <TouchableOpacity
-      onPress={() => onPress(item)}
-      className="mb-6"
-      style={{ width: CARD_WIDTH }}
-    >
-      <View className="relative mb-3">
-        {renderImage(item.cover)}
-        {item.platform !== "mood" && (
-          <View className="absolute top-2 right-2 bg-black/60 px-2 py-1 rounded-full backdrop-blur-md">
-            <Ionicons
-              name={
-                item.platform === "spotify"
-                  ? "logo-rss"
-                  : item.platform === "apple"
-                    ? "logo-apple"
-                    : ("musical-notes" as any)
-              }
-              size={10}
-              color={
-                item.platform === "spotify"
-                  ? "#1DB954"
-                  : item.platform === "apple"
-                    ? "#FA243C"
-                    : "white"
-              }
-            />
-          </View>
-        )}
-      </View>
-      <Text
-        className="font-bold text-[15px] ml-1 mb-0.5"
-        numberOfLines={1}
-        style={{ color: textColor }}
+// --- TARJETA DE PLAYLIST (MEMOIZED) ---
+export const PlaylistCard = memo(
+  ({ item, onPress, t, textColor, subTextColor, borderColor, isDark }: any) => {
+    const renderImage = (coverUrl: string | null) => {
+      if (coverUrl && !coverUrl.includes("avatars/initials")) {
+        return (
+          <Image
+            source={{ uri: coverUrl }}
+            style={{
+              width: "100%",
+              aspectRatio: 1,
+              borderRadius: 24,
+              backgroundColor: isDark ? "#27272A" : "#E4E4E7",
+            }}
+            contentFit="cover"
+            transition={300}
+          />
+        );
+      }
+      return (
+        <View
+          style={{
+            width: "100%",
+            aspectRatio: 1,
+            borderRadius: 24,
+            backgroundColor: isDark ? "#1C1C1E" : "#F2F2F7",
+            borderWidth: 1,
+            borderColor: borderColor,
+          }}
+          className="items-center justify-center relative overflow-hidden"
+        >
+          {/* 🔥 CORRECCIÓN: Ruta de imagen corregida */}
+          <Image
+            source={require("@/assets/images/icon.png")}
+            style={{ width: "50%", height: "50%", opacity: 0.5 }}
+            contentFit="contain"
+          />
+        </View>
+      );
+    };
+
+    return (
+      <TouchableOpacity
+        onPress={() => {
+          Haptics.selectionAsync();
+          onPress(item);
+        }}
+        className="mb-6"
+        style={{ width: CARD_WIDTH }}
       >
-        {item.name}
-      </Text>
-      <Text className="text-xs ml-1 opacity-70" style={{ color: subTextColor }}>
-        {item.songs?.length || 0} {t("library.songsCount")}
-      </Text>
-    </TouchableOpacity>
-  );
-};
+        <View className="relative mb-3">
+          {renderImage(item.cover)}
+          {item.platform !== "mood" && (
+            <View className="absolute top-2 right-2 bg-black/60 px-2 py-1 rounded-full backdrop-blur-md">
+              <Ionicons
+                name={
+                  item.platform === "spotify"
+                    ? "logo-rss"
+                    : item.platform === "apple"
+                      ? "logo-apple"
+                      : ("musical-notes" as any)
+                }
+                size={10}
+                color={
+                  item.platform === "spotify"
+                    ? "#1DB954"
+                    : item.platform === "apple"
+                      ? "#FA243C"
+                      : "white"
+                }
+              />
+            </View>
+          )}
+        </View>
+        <Text
+          className="font-bold text-[15px] ml-1 mb-0.5"
+          numberOfLines={1}
+          style={{ color: textColor }}
+        >
+          {item.name}
+        </Text>
+        <Text
+          className="text-xs ml-1 opacity-70"
+          style={{ color: subTextColor }}
+        >
+          {item.songs?.length || 0} {t("library.songsCount")}
+        </Text>
+      </TouchableOpacity>
+    );
+  },
+);
 
 export const EmptyState = ({
   t,

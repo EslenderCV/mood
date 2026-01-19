@@ -1,31 +1,25 @@
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   Dimensions,
   ScrollView,
   RefreshControl,
   ActivityIndicator,
   Alert,
-  Modal,
-  TouchableWithoutFeedback,
   Share,
   FlatList,
-  useWindowDimensions,
+  Modal,
 } from "react-native";
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useColorScheme } from "nativewind";
+import { Image } from "expo-image";
+import * as Haptics from "expo-haptics";
+
 import {
   getUser,
   getUserPosts,
@@ -43,86 +37,13 @@ import {
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
+// Componentes Premium
+import ProfileSkeleton from "@/components/profile/ProfileSkeleton";
+import MoodGridItem from "@/components/profile/MoodGridItem";
+import TopSongItem from "@/components/profile/TopSongItem";
+import UserOptionsModal from "@/components/profile/UserOptionsModal";
+
 const { width, height } = Dimensions.get("window");
-const ITEM_SIZE = width / 3;
-
-// Helper seguro para parsear
-const parseSongFromPost = (songDataString: string) => {
-  try {
-    if (!songDataString) return null;
-    if (typeof songDataString !== "string" || !songDataString.startsWith("{"))
-      return null;
-
-    const song = JSON.parse(songDataString);
-    if (song.cover && song.cover.includes("100x100bb")) {
-      song.cover = song.cover.replace("100x100bb", "600x600bb");
-    }
-    return song;
-  } catch (error) {
-    return null;
-  }
-};
-
-// --- SKELETON LOADER ---
-const UserProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
-  const bg = isDark ? "bg-zinc-900" : "bg-zinc-100";
-  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
-  const { width } = useWindowDimensions();
-  const itemSize = width / 3;
-
-  return (
-    <View className="flex-1 animate-pulse">
-      <View className="flex-row justify-between items-center px-6 py-2 mb-6">
-        <View className={`w-10 h-10 rounded-full ${elementBg}`} />
-        <View className="flex-row gap-3">
-          <View className={`w-10 h-10 rounded-full ${elementBg}`} />
-          <View className={`w-10 h-10 rounded-full ${elementBg}`} />
-        </View>
-      </View>
-
-      <View className="items-center mb-6">
-        <View className={`w-32 h-32 rounded-full ${elementBg} mb-4`} />
-        <View className={`w-48 h-6 rounded ${elementBg} mb-2`} />
-        <View className={`w-28 h-4 rounded ${elementBg}`} />
-      </View>
-
-      <View className="px-6 mb-6 flex-row gap-3">
-        <View className={`flex-1 h-12 rounded-2xl ${elementBg}`} />
-        <View className={`w-12 h-12 rounded-2xl ${elementBg}`} />
-      </View>
-
-      <View
-        className={`mx-4 h-[70px] mb-6 rounded-3xl ${bg} flex-row items-center justify-between px-6`}
-      >
-        <View className="items-center gap-2">
-          <View className={`w-8 h-5 rounded ${elementBg}`} />
-          <View className={`w-12 h-3 rounded ${elementBg}`} />
-        </View>
-        <View className={`w-[1px] h-8 ${elementBg}`} />
-        <View className="items-center gap-2">
-          <View className={`w-8 h-5 rounded ${elementBg}`} />
-          <View className={`w-12 h-3 rounded ${elementBg}`} />
-        </View>
-        <View className={`w-[1px] h-8 ${elementBg}`} />
-        <View className="items-center gap-2">
-          <View className={`w-8 h-5 rounded ${elementBg}`} />
-          <View className={`w-12 h-3 rounded ${elementBg}`} />
-        </View>
-      </View>
-
-      <View className="flex-row flex-wrap">
-        {[...Array(12)].map((_, i) => (
-          <View
-            key={i}
-            style={{ width: itemSize, height: itemSize, padding: 1 }}
-          >
-            <View className={`w-full h-full ${elementBg}`} />
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-};
 
 const UserProfile = () => {
   const { colorScheme } = useColorScheme();
@@ -136,7 +57,6 @@ const UserProfile = () => {
   const cardBg = isDark ? "#18181B" : "#F4F4F5";
   const activeColor = "#5E17EB";
   const iconColor = isDark ? "#FFFFFF" : "#000000";
-  const dangerColor = "#EF4444";
 
   const params = useLocalSearchParams();
   const paramId = params.id || params.query;
@@ -154,20 +74,21 @@ const UserProfile = () => {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [stats, setStats] = useState({ followersCount: 0, followingCount: 0 });
   const [followLoading, setFollowLoading] = useState(false);
+
   const horizontalScrollRef = useRef<ScrollView>(null);
   const mainScrollRef = useRef<ScrollView>(null);
+
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showFullImageModal, setShowFullImageModal] = useState(false);
 
-  // --- LÓGICA REALTIME ---
+  // REALTIME
   useEffect(() => {
     const unsubscribe = client.subscribe(
       `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.postsCollectionId}.documents`,
       (response) => {
         const event = response.events[0];
         const payload = response.payload as any;
-
         if (event.includes(".update")) {
           setPosts((prevPosts) =>
             prevPosts.map((post) => {
@@ -175,21 +96,18 @@ const UserProfile = () => {
                 return { ...post, likedBy: payload.likedBy };
               }
               return post;
-            })
+            }),
           );
         }
-      }
+      },
     );
-
     return () => {
       unsubscribe();
     };
   }, []);
 
-  // --- FETCH DATA OPTIMIZADO (PARALELO) ---
   const fetchData = async () => {
     if (!userId) return;
-
     try {
       const [myUser, targetUser] = await Promise.all([
         getCurrentUser(),
@@ -226,6 +144,7 @@ const UserProfile = () => {
       setIsFollowingMe(statusB === "accepted");
       setStats(counts);
 
+      // Filtro de sugerencias
       const filteredSuggestions = candidates.filter((candidate: any) => {
         const cId = candidate.$id || candidate.accountId;
         const isMe = cId === myUser.$id;
@@ -241,7 +160,6 @@ const UserProfile = () => {
 
       if (isMe || isPublic || isFollower) {
         setPosts(userPosts);
-
         if (userPosts.length > 0) {
           const sortedPosts = [...userPosts].sort((a, b) => {
             const likesA = a.likedBy ? a.likedBy.length : 0;
@@ -253,13 +171,19 @@ const UserProfile = () => {
             .filter((post) => post.likedBy && post.likedBy.length > 0)
             .slice(0, 3)
             .map((post) => {
-              const songData = parseSongFromPost(post.songData);
-              if (!songData) return null;
-              return {
-                ...songData,
-                postId: post.$id,
-                likes: post.likedBy ? post.likedBy.length : 0,
-              };
+              try {
+                const song = JSON.parse(post.songData);
+                if (song.cover?.includes("100x100bb")) {
+                  song.cover = song.cover.replace("100x100bb", "600x600bb");
+                }
+                return {
+                  ...song,
+                  postId: post.$id,
+                  likes: post.likedBy ? post.likedBy.length : 0,
+                };
+              } catch {
+                return null;
+              }
             })
             .filter((item) => item !== null);
           setTopSongs(top3);
@@ -281,24 +205,21 @@ const UserProfile = () => {
   useFocusEffect(
     useCallback(() => {
       fetchData();
-    }, [userId])
+    }, [userId]),
   );
 
-  // --- 🛠️ CORRECCIÓN: FUNCIÓN onRefresh AGREGADA AQUÍ ---
   const onRefresh = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setRefreshing(true);
     await fetchData();
     setRefreshing(false);
   };
-  // ---------------------------------------------------
 
   const handleShare = async () => {
     if (!visitedUser) return;
     try {
       const message = `¡Mira el perfil de ${visitedUser.username} en Mood! 🎵`;
-      await Share.share({
-        message: message,
-      });
+      await Share.share({ message: message });
     } catch (error) {
       console.log("Error compartiendo:", error);
     }
@@ -319,6 +240,7 @@ const UserProfile = () => {
   };
 
   const handleOptionsPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!currentUser || !visitedUser) return;
     if (currentUser.$id === visitedUser.$id) {
       router.push("/(settings)/privacy" as any);
@@ -328,6 +250,7 @@ const UserProfile = () => {
   };
 
   const handleFollowAction = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!currentUser || !visitedUser || followLoading) return;
     if (currentUser.$id === visitedUser.$id) return;
 
@@ -344,7 +267,6 @@ const UserProfile = () => {
         }
       } else {
         await followUser(currentUser.$id, visitedUser.$id);
-
         if (visitedUser.isPrivate) {
           setFollowStatus("pending");
         } else {
@@ -363,6 +285,7 @@ const UserProfile = () => {
   };
 
   const handleChatPress = async () => {
+    Haptics.selectionAsync();
     if (!currentUser || !visitedUser || isChatLoading) return;
     setIsChatLoading(true);
     try {
@@ -381,6 +304,7 @@ const UserProfile = () => {
   };
 
   const handleTabPress = (index: number) => {
+    if (activeTab !== index) Haptics.selectionAsync();
     setActiveTab(index);
     horizontalScrollRef.current?.scrollTo({ x: index * width, animated: true });
   };
@@ -389,6 +313,7 @@ const UserProfile = () => {
     handleTabPress(0);
   };
 
+  // Render para usuarios sugeridos (Inline por tener poca lógica)
   const renderSuggestedUser = useCallback(
     ({ item }: { item: any }) => (
       <TouchableOpacity
@@ -412,11 +337,12 @@ const UserProfile = () => {
               ? { uri: item.pfp || item.avatar }
               : require("@/assets/noPfp.jpg")
           }
-          className="w-14 h-14 rounded-full mb-2"
-          style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
+          style={{ width: 56, height: 56, borderRadius: 999 }}
+          contentFit="cover"
+          transition={200}
         />
         <Text
-          className="text-xs font-bold text-center mb-1"
+          className="text-xs font-bold text-center mb-1 mt-2"
           numberOfLines={1}
           style={{ color: textColor }}
         >
@@ -436,92 +362,7 @@ const UserProfile = () => {
         </View>
       </TouchableOpacity>
     ),
-    [cardBg, borderColor, isDark, textColor, subTextColor, t]
-  );
-
-  const renderMoodItem = (item: any) => {
-    const songData = parseSongFromPost(item.songData);
-    const imageUrl = songData
-      ? songData.cover
-      : "https://via.placeholder.com/300";
-    return (
-      <TouchableOpacity
-        key={item.$id}
-        activeOpacity={0.8}
-        onPress={() => router.push(`/post/${item.$id}` as any)}
-      >
-        <Image
-          source={{ uri: imageUrl }}
-          style={{
-            width: ITEM_SIZE,
-            height: ITEM_SIZE,
-            backgroundColor: cardBg,
-            borderColor: borderColor,
-            borderWidth: 0.5,
-          }}
-          resizeMode="cover"
-        />
-        {item.likedBy && item.likedBy.length > 0 && (
-          <View className="absolute bottom-1 right-1 bg-black/60 px-1 rounded flex-row items-center">
-            <Ionicons name="heart" size={10} color="white" />
-            <Text className="text-white text-[10px] ml-1">
-              {item.likedBy.length}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    );
-  };
-
-  const renderMusicItem = (item: any, index: number) => (
-    <TouchableOpacity
-      key={item.postId || index}
-      onPress={() => router.push(`/post/${item.postId}` as any)}
-      className="flex-row items-center px-6 py-3 border-b w-full"
-      style={{ borderColor: borderColor }}
-    >
-      <Text
-        className="font-bold text-lg mr-4 w-4 text-center"
-        style={{ color: activeColor }}
-      >
-        {index + 1}
-      </Text>
-      <Image
-        source={{ uri: item.cover }}
-        className="w-14 h-14 rounded-xl mr-4"
-        style={{ backgroundColor: cardBg }}
-      />
-      <View className="flex-1">
-        <Text
-          className="font-bold text-base"
-          numberOfLines={1}
-          style={{ color: textColor }}
-        >
-          {item.title}
-        </Text>
-        <Text
-          className="text-sm"
-          numberOfLines={1}
-          style={{ color: subTextColor }}
-        >
-          {item.artist}
-        </Text>
-      </View>
-      <View
-        className="flex-row items-center px-2 py-1 rounded-lg"
-        style={{ backgroundColor: cardBg }}
-      >
-        <Ionicons
-          name="heart"
-          size={12}
-          color="#EF4444"
-          style={{ marginRight: 4 }}
-        />
-        <Text className="text-xs font-bold" style={{ color: textColor }}>
-          {item.likes}
-        </Text>
-      </View>
-    </TouchableOpacity>
+    [cardBg, borderColor, isDark, textColor, subTextColor, t],
   );
 
   if (isLoading) {
@@ -531,7 +372,7 @@ const UserProfile = () => {
         edges={["top"]}
         style={{ backgroundColor: bgColor }}
       >
-        <UserProfileSkeleton isDark={isDark} />
+        <ProfileSkeleton isDark={isDark} />
       </SafeAreaView>
     );
   }
@@ -566,12 +407,6 @@ const UserProfile = () => {
   const showContent = isMe || !isPrivateAccount || followStatus === "accepted";
   const pfpUrl = visitedUser?.pfp || null;
 
-  const modalTitle = t("userProfile.actions.options");
-  const displayModalTitle =
-    modalTitle && modalTitle !== "userProfile.actions.options"
-      ? modalTitle
-      : "Opciones";
-
   return (
     <SafeAreaView
       className="flex-1"
@@ -579,86 +414,16 @@ const UserProfile = () => {
       style={{ backgroundColor: bgColor }}
     >
       <StatusBar style={isDark ? "light" : "dark"} />
-      {/* ... MODALES ... */}
-      <Modal
-        animationType="fade"
-        transparent={true}
+
+      {/* Modal de Opciones (Bloqueo/Reporte) */}
+      <UserOptionsModal
         visible={showOptionsModal}
-        onRequestClose={() => setShowOptionsModal(false)}
-      >
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-          activeOpacity={1}
-          onPress={() => setShowOptionsModal(false)}
-        >
-          <TouchableWithoutFeedback>
-            <View
-              style={{
-                backgroundColor: isDark ? "#18181B" : "#FFFFFF",
-                width: "80%",
-                borderRadius: 24,
-                padding: 24,
-                borderWidth: 1,
-                borderColor: borderColor,
-              }}
-            >
-              <View className="items-center mb-6">
-                <View className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 items-center justify-center mb-4">
-                  <Ionicons
-                    name="shield-outline"
-                    size={32}
-                    color={dangerColor}
-                  />
-                </View>
-                <Text
-                  className="text-xl font-bold text-center mb-2"
-                  style={{ color: textColor }}
-                >
-                  {displayModalTitle}
-                </Text>
-                <Text
-                  className="text-center text-sm"
-                  style={{ color: subTextColor }}
-                >
-                  ¿Deseas bloquear el acceso de @{visitedUser.username} a tu
-                  perfil?
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={handleBlockUser}
-                className="w-full py-4 rounded-xl bg-red-500 mb-3 items-center flex-row justify-center"
-              >
-                <Ionicons
-                  name="ban"
-                  size={20}
-                  color="white"
-                  style={{ marginRight: 8 }}
-                />
-                <Text className="text-white font-bold text-base">
-                  {t("userProfile.actions.block") || "Bloquear"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setShowOptionsModal(false)}
-                className="w-full py-4 rounded-xl items-center"
-                style={{ backgroundColor: cardBg }}
-              >
-                <Text
-                  className="font-bold text-base"
-                  style={{ color: textColor }}
-                >
-                  {t("userProfile.actions.cancel") || "Cancelar"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
-      </Modal>
+        onClose={() => setShowOptionsModal(false)}
+        onBlock={handleBlockUser}
+        username={visitedUser.username}
+        isDark={isDark}
+      />
+
       <Modal
         animationType="fade"
         transparent={true}
@@ -679,7 +444,7 @@ const UserProfile = () => {
                   pfpUrl ? { uri: pfpUrl } : require("@/assets/noPfp.jpg")
                 }
                 style={{ width: width, height: height * 0.7 }}
-                resizeMode="contain"
+                contentFit="contain"
               />
             </View>
           </SafeAreaView>
@@ -737,15 +502,19 @@ const UserProfile = () => {
           <View className="items-center">
             <TouchableOpacity
               activeOpacity={0.9}
-              onPress={() => setShowFullImageModal(true)}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setShowFullImageModal(true);
+              }}
               className="p-1 rounded-full border-2 border-[#5E17EB] shadow-lg shadow-[#5E17EB]/30"
             >
               <Image
                 source={
                   pfpUrl ? { uri: pfpUrl } : require("@/assets/noPfp.jpg")
                 }
-                className="w-32 h-32 rounded-full"
-                style={{ backgroundColor: cardBg }}
+                style={{ width: 128, height: 128, borderRadius: 999 }}
+                contentFit="cover"
+                transition={500}
               />
             </TouchableOpacity>
 
@@ -771,7 +540,7 @@ const UserProfile = () => {
             </Text>
           </View>
 
-          {/* Botones de Acción (Si no soy yo) */}
+          {/* Botones de Acción */}
           {currentUser && currentUser.$id !== visitedUser.$id && (
             <View className="px-6 mt-6 min-h-[50px]">
               <View className="flex-row items-center gap-3 w-full">
@@ -799,10 +568,10 @@ const UserProfile = () => {
                           ? "Friends"
                           : "Following"
                         : followStatus === "pending"
-                        ? "Requested"
-                        : isFollowingMe
-                        ? "Follow Back"
-                        : "Follow"}
+                          ? "Requested"
+                          : isFollowingMe
+                            ? "Follow Back"
+                            : "Follow"}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -903,7 +672,7 @@ const UserProfile = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Sugerencias (Ocultas si es mi perfil) */}
+          {/* Sugerencias */}
           {!isMe && suggestedUsers.length > 0 && (
             <View className="mb-6 pl-4">
               <Text
@@ -1006,7 +775,14 @@ const UserProfile = () => {
                 </Text>
               ) : (
                 <View className="flex-row flex-wrap">
-                  {posts.map(renderMoodItem)}
+                  {posts.map((item) => (
+                    <MoodGridItem
+                      key={item.$id}
+                      item={item}
+                      cardBg={cardBg}
+                      borderColor={borderColor}
+                    />
+                  ))}
                 </View>
               )}
             </View>
@@ -1020,7 +796,19 @@ const UserProfile = () => {
                 </Text>
               ) : (
                 <View>
-                  {topSongs.map((song, index) => renderMusicItem(song, index))}
+                  {topSongs.map((song, index) => (
+                    <TopSongItem
+                      key={song.postId || index}
+                      item={song}
+                      index={index}
+                      textColor={textColor}
+                      subTextColor={subTextColor}
+                      cardBg={cardBg}
+                      borderColor={borderColor}
+                      activeColor="#5E17EB"
+                      isDark={isDark}
+                    />
+                  ))}
                 </View>
               )}
             </View>

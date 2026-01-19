@@ -1,16 +1,12 @@
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Image,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
+import { Image } from "expo-image"; // 🔥 Premium Image
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
 import { getPostById, getPlaylistById } from "@/lib/appwrite";
+import * as Haptics from "expo-haptics";
 
 const isValidId = (id: string | null | undefined) => {
   if (!id) return false;
@@ -38,12 +34,14 @@ export const PostPreviewBubble = ({
   const footerBg = isDark ? "rgba(255,255,255,0.03)" : "#FAFAFA";
 
   const [post, setPost] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     if (!isValidId(postId)) {
       setError(true);
+      setLoading(false);
       return;
     }
     getPostById(postId)
@@ -55,14 +53,16 @@ export const PostPreviewBubble = ({
       })
       .catch(() => {
         if (isMounted) setError(true);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
       });
     return () => {
       isMounted = false;
     };
   }, [postId]);
 
-  if (error) return null;
-  if (!post)
+  if (loading)
     return (
       <View
         className="w-48 h-20 rounded-xl justify-center items-center mb-1 border"
@@ -72,41 +72,62 @@ export const PostPreviewBubble = ({
       </View>
     );
 
+  if (error || !post)
+    return (
+      <View
+        className="px-3 py-2 rounded-xl mb-1 border justify-center items-center"
+        style={{
+          backgroundColor: isDark ? "#3f1a1a" : "#fee2e2",
+          borderColor: "#fca5a5",
+          width: 200,
+        }}
+      >
+        <Ionicons name="alert-circle" size={16} color="#EF4444" />
+        <Text className="text-xs text-red-500 font-bold ml-1">
+          Post no disponible
+        </Text>
+      </View>
+    );
+
   const song = post.songData ? JSON.parse(post.songData) : null;
 
   return (
     <TouchableOpacity
       activeOpacity={0.9}
-      onPress={() => router.push(`/post/${postId}` as any)}
+      onPress={() => {
+        Haptics.selectionAsync();
+        router.push(`/post/${postId}` as any);
+      }}
       onLongPress={onLongPress}
       delayLongPress={300}
-      className="rounded-[22px] overflow-hidden mb-1 border shadow-sm"
-      style={{ backgroundColor: cardBg, borderColor: borderColor, width: 240 }}
+      className="rounded-[18px] overflow-hidden mb-1 border shadow-sm"
+      style={{ backgroundColor: cardBg, borderColor: borderColor, width: 220 }}
     >
-      <View className="w-full h-32 bg-zinc-800 relative">
+      <View className="w-full h-28 bg-zinc-800 relative">
         <Image
           source={
             song?.cover
               ? { uri: song.cover }
               : require("@/assets/images/icon.png")
           }
-          className="w-full h-full"
-          resizeMode="cover"
+          style={{ width: "100%", height: "100%" }}
+          contentFit="cover"
+          transition={300}
         />
         <View className="absolute inset-0 bg-black/20 justify-center items-center">
-          <Ionicons name="play-circle" size={40} color="white" />
+          <Ionicons name="play-circle" size={36} color="white" />
         </View>
       </View>
-      <View className="p-3" style={{ backgroundColor: footerBg }}>
+      <View className="p-2.5" style={{ backgroundColor: footerBg }}>
         <Text
-          className="font-bold text-sm leading-tight"
+          className="font-bold text-xs leading-tight"
           numberOfLines={1}
           style={{ color: textColor }}
         >
           {song?.title || t("chat.song")}
         </Text>
         <Text
-          className="text-xs mt-0.5 font-medium"
+          className="text-[10px] mt-0.5 font-medium"
           numberOfLines={1}
           style={{ color: subTextColor }}
         >
@@ -164,7 +185,7 @@ export const ChatPlaylistCard = ({
   if (loading)
     return (
       <View
-        className="p-3 rounded-xl justify-center items-center mb-1"
+        className="p-2 rounded-xl justify-center items-center mb-1"
         style={{
           backgroundColor: isMyMessage
             ? "rgba(255,255,255,0.2)"
@@ -183,14 +204,15 @@ export const ChatPlaylistCard = ({
   if (error || !playlist)
     return (
       <View
-        className="p-3 rounded-xl mb-1 border justify-center"
+        className="p-2 rounded-xl mb-1 border justify-center items-center flex-row"
         style={{
           backgroundColor: isDark ? "#3f1a1a" : "#fee2e2",
           borderColor: "#fca5a5",
           width: 200,
         }}
       >
-        <Text className="text-xs text-red-500 font-bold">
+        <Ionicons name="alert-circle" size={16} color="#EF4444" />
+        <Text className="text-xs text-red-500 font-bold ml-1">
           Playlist no disponible
         </Text>
       </View>
@@ -212,50 +234,54 @@ export const ChatPlaylistCard = ({
   return (
     <TouchableOpacity
       activeOpacity={0.9}
-      onPress={() => router.push(`/playlist/${playlist.$id}` as any)}
-      className="flex-row items-center p-2 rounded-[18px] mb-1 border overflow-hidden"
+      onPress={() => {
+        Haptics.selectionAsync();
+        router.push(`/playlist/${playlist.$id}` as any);
+      }}
+      className="flex-row items-center p-2 rounded-[16px] mb-1 border overflow-hidden"
       style={{
         backgroundColor: cardBg,
         borderColor: borderColor,
-        width: 240,
-        height: 70,
+        width: 220,
+        height: 64,
       }}
     >
-      <View className="w-12 h-12 rounded-xl bg-zinc-800 overflow-hidden relative border border-zinc-700">
+      <View className="w-10 h-10 rounded-lg bg-zinc-800 overflow-hidden relative border border-zinc-700">
         {playlist.cover && !playlist.cover.includes("initials") ? (
           <Image
             source={{ uri: playlist.cover }}
-            className="w-full h-full"
-            resizeMode="cover"
+            style={{ width: "100%", height: "100%" }}
+            contentFit="cover"
+            transition={200}
           />
         ) : (
           <View className="w-full h-full items-center justify-center bg-zinc-800">
-            <Ionicons name="musical-notes" size={20} color="#5E17EB" />
+            <Ionicons name="musical-notes" size={18} color="#5E17EB" />
           </View>
         )}
       </View>
-      <View className="ml-3 flex-1 justify-center">
+      <View className="ml-2.5 flex-1 justify-center">
         <Text
           numberOfLines={1}
-          className="font-bold text-[14px]"
+          className="font-bold text-[13px]"
           style={{ color: textColor }}
         >
           {playlist.name}
         </Text>
-        <View className="flex-row items-center mt-1">
+        <View className="flex-row items-center mt-0.5">
           <Ionicons
             name={platformIcon as any}
-            size={12}
+            size={10}
             color={platformColor}
           />
-          <Text className="text-[11px] ml-1.5" style={{ color: subTextColor }}>
+          <Text className="text-[10px] ml-1" style={{ color: subTextColor }}>
             {playlist.songs?.length || 0} canciones
           </Text>
         </View>
       </View>
       <Ionicons
         name="chevron-forward"
-        size={18}
+        size={16}
         color={subTextColor}
         style={{ opacity: 0.5 }}
       />

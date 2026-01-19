@@ -8,10 +8,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
-  Image,
   TouchableWithoutFeedback,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image"; // 🔥 Premium Image
+import * as Haptics from "expo-haptics"; // 🔥 Haptics
 
 // --- MODAL: OPCIONES DE CANCIÓN ---
 export const SongOptionsModal = ({
@@ -44,11 +45,19 @@ export const SongOptionsModal = ({
               <View className="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-600 rounded-full self-center mb-6 opacity-50" />
               {selectedSong && (
                 <View className="flex-row items-center mb-8 border-b border-zinc-200 dark:border-zinc-800 pb-6">
+                  {/* 🔥 Imagen optimizada */}
                   <Image
                     source={{ uri: selectedSong.cover }}
-                    className="w-16 h-16 rounded-2xl bg-zinc-800 mr-4"
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: 16,
+                      backgroundColor: "#27272A",
+                    }}
+                    contentFit="cover"
+                    transition={200}
                   />
-                  <View className="flex-1">
+                  <View className="ml-4 flex-1">
                     <Text
                       className="font-bold text-lg"
                       style={{ color: textColor }}
@@ -67,7 +76,10 @@ export const SongOptionsModal = ({
                 </View>
               )}
               <TouchableOpacity
-                onPress={onAddToPlaylist}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  onAddToPlaylist();
+                }}
                 className="flex-row items-center p-4 rounded-2xl mb-2 active:bg-zinc-100 dark:active:bg-zinc-800"
               >
                 <View className="w-10 h-10 rounded-full bg-blue-500/10 items-center justify-center mr-4">
@@ -81,7 +93,10 @@ export const SongOptionsModal = ({
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={onUnsave}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  onUnsave();
+                }}
                 className="flex-row items-center p-4 rounded-2xl active:bg-zinc-100 dark:active:bg-zinc-800"
               >
                 <View className="w-10 h-10 rounded-full bg-red-500/10 items-center justify-center mr-4">
@@ -137,12 +152,15 @@ export const CreatePlaylistModal = ({
     const brandColor = myPlatform === "apple" ? "#FA243C" : "#1DB954";
     const iconName = myPlatform === "apple" ? "logo-apple" : "spotify";
     const label = myPlatform === "apple" ? "Apple Music" : "Spotify";
-    const isDark = modalBgColor.includes("1C1C1E"); // Simple check
+    const isDark = modalBgColor.includes("1C1C1E");
 
     return (
       <View className="flex-row gap-3 mb-8">
         <TouchableOpacity
-          onPress={() => setImportPlatform("mood")}
+          onPress={() => {
+            Haptics.selectionAsync();
+            setImportPlatform("mood");
+          }}
           className={`flex-1 p-3 rounded-2xl border items-center ${importPlatform === "mood" ? "border-[#5E17EB] bg-[#5E17EB]/10" : "border-transparent bg-zinc-100 dark:bg-zinc-800"}`}
         >
           <Ionicons
@@ -155,7 +173,10 @@ export const CreatePlaylistModal = ({
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => setImportPlatform(myPlatform)}
+          onPress={() => {
+            Haptics.selectionAsync();
+            setImportPlatform(myPlatform);
+          }}
           className={`flex-1 p-3 rounded-2xl border items-center`}
           style={{
             backgroundColor:
@@ -241,7 +262,10 @@ export const CreatePlaylistModal = ({
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    onPress={onCreate}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      onCreate();
+                    }}
                     className="flex-1 bg-[#5E17EB] p-4 rounded-full items-center shadow-lg shadow-purple-500/30"
                   >
                     <Text className="text-white font-bold text-lg">
@@ -297,18 +321,29 @@ export const AddToPlaylistModal = ({
                 showsVerticalScrollIndicator={false}
                 renderItem={({ item }) => (
                   <TouchableOpacity
-                    onPress={() => onSelectPlaylist(item.$id)}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      onSelectPlaylist(item.$id);
+                    }}
                     className="flex-row items-center p-4 border-b border-zinc-100 dark:border-zinc-800/50 mb-1"
                   >
                     <View style={{ width: 56, height: 56, marginRight: 16 }}>
-                      {/* Nota: Usamos un placeholder simple aquí o pasamos el renderizador */}
-                      <View className="w-full h-full rounded-2xl bg-zinc-200 dark:bg-zinc-800 items-center justify-center">
-                        <Ionicons
-                          name="musical-notes"
-                          size={24}
-                          color={subTextColor}
-                        />
-                      </View>
+                      {/* 🔥 CORRECCIÓN: Ruta de imagen corregida */}
+                      <Image
+                        source={
+                          item.cover
+                            ? { uri: item.cover }
+                            : require("@/assets/images/icon.png")
+                        }
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          borderRadius: 16,
+                          backgroundColor: "#27272A",
+                        }}
+                        contentFit="cover"
+                        transition={200}
+                      />
                     </View>
                     <View className="flex-1 justify-center">
                       <Text
