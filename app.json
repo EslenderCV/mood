@@ -19,7 +19,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.Gammes.Mood",
       "usesAppleSignIn": true,
-      "buildNumber": "18",
+      "buildNumber": "19",
       "infoPlist": {
         "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos directamente desde la app para crear nuevos Vibes o actualizar tu foto de perfil.",
         "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar imágenes y compartirlas en tus publicaciones o historias.",
@@ -33,7 +33,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.Gammes.Mood",
-      "versionCode": 18,
+      "versionCode": 19,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
