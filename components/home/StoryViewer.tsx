@@ -9,11 +9,11 @@ import {
   Animated,
   Dimensions,
   Pressable,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Easing,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -23,7 +23,9 @@ import {
   State,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import { Audio, Video, ResizeMode } from "expo-av";
+
+import { Audio } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { Databases } from "react-native-appwrite";
 import * as Haptics from "expo-haptics";
 
@@ -32,6 +34,7 @@ import {
   getUser,
   getDeezerTrackUrl,
   viewStory,
+  deleteStory,
   client,
   appwriteConfig,
 } from "@/lib/appwrite";
@@ -78,7 +81,6 @@ const StoryViewer = ({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [replyText, setReplyText] = useState("");
 
-  // 🔥 LÓGICA DE PROGRESO FLUIDO
   const progressAnim = useRef(new Animated.Value(0)).current;
   const lastProgressValue = useRef(0);
   const uiOpacity = useRef(new Animated.Value(1)).current;
@@ -108,14 +110,66 @@ const StoryViewer = ({
   const isOwner = currentUserId && ownerId === currentUserId;
   const isOfficialMood = ownerId === moodOfficialId;
   const isVerified = group?.user?.isVerified || isOfficialMood;
+
   const isMediaStory =
     songData?.isMediaStory === true ||
     ["image", "video"].includes(songData?.mediaType);
   const isVideo = isMediaStory && songData?.mediaType === "video";
 
+  const mediaSource = songData?.mediaUrl || songData?.cover;
+  const userPfp = group?.user?.avatar || group?.user?.pfp;
   const viewersCount = currentStory?.viewers?.length || 0;
 
-  // --- ANIMACIÓN DE CARGA ---
+  // 🔥 PLAYER CONFIG
+  const player = useVideoPlayer(isVideo ? mediaSource : null, (player) => {
+    player.loop = true;
+    player.muted = false; // Asegurar sonido
+    if (visible && !isPaused) {
+      player.play();
+    }
+  });
+
+  useEffect(() => {
+    if (isVideo && player) {
+      if (visible && !isPaused && !viewersModalVisible) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    }
+  }, [visible, isPaused, viewersModalVisible, isVideo, player]);
+
+  const handleDelete = () => {
+    setIsPaused(true);
+    Alert.alert(
+      "Eliminar historia",
+      "¿Seguro que quieres eliminar esta historia?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+          onPress: () => setIsPaused(false),
+        },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              if (currentStory?.$id) {
+                await deleteStory(currentStory.$id);
+                onClose();
+                setTimeout(() => onRefreshFeed(), 500);
+              }
+            } catch (error) {
+              Alert.alert("Error", "No se pudo eliminar.");
+              setIsPaused(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const startAnimation = (fromValue = 0) => {
     progressAnim.setValue(fromValue);
     const duration = isMediaStory && !isVideo ? 5000 : 10000;
@@ -125,7 +179,7 @@ const StoryViewer = ({
       toValue: 1,
       duration: remainingDuration,
       easing: Easing.linear,
-      useNativeDriver: false, // Width no soporta native driver
+      useNativeDriver: false,
     }).start(({ finished }) => {
       if (finished) handleNext();
     });
@@ -157,16 +211,19 @@ const StoryViewer = ({
     imageLoaded,
   ]);
 
-  // --- NAVEGACIÓN ---
   const handleNext = async () => {
     if (isPaused) return;
     lastProgressValue.current = 0;
     progressAnim.setValue(0);
+
     if (sound) {
       await sound.stopAsync();
       await sound.unloadAsync();
       setSound(null);
     }
+
+    if (player) player.pause();
+
     if (currentIndex < (group?.stories.length || 0) - 1) {
       setImageLoaded(false);
       setCurrentIndex((prev) => prev + 1);
@@ -179,11 +236,13 @@ const StoryViewer = ({
     if (isPaused) return;
     lastProgressValue.current = 0;
     progressAnim.setValue(0);
+
     if (currentIndex === 0) {
       if (sound) {
         await sound.setPositionAsync(0);
         await sound.playAsync();
       }
+      if (player) player.replay();
       startAnimation(0);
     } else {
       if (sound) {
@@ -191,6 +250,7 @@ const StoryViewer = ({
         await sound.unloadAsync();
         setSound(null);
       }
+      if (player) player.pause();
       setImageLoaded(false);
       setCurrentIndex((prev) => prev - 1);
     }
@@ -221,7 +281,6 @@ const StoryViewer = ({
     }
   };
 
-  // --- AUDIO LOGIC ---
   useEffect(() => {
     let isMounted = true;
     const loadAudio = async () => {
@@ -231,10 +290,12 @@ const StoryViewer = ({
         } catch (e) {}
         if (isMounted) setSound(null);
       }
+
       if (!songData || isMediaStory || !visible) {
         if (isMounted) setIsAudioLoading(false);
         return;
       }
+
       if (isMounted) setIsAudioLoading(true);
       try {
         let url =
@@ -270,7 +331,6 @@ const StoryViewer = ({
     }
   }, [isPaused]);
 
-  // Marcar como visto
   useEffect(() => {
     if (visible && currentStory && currentUserId && !isOwner) {
       viewStory(currentStory.$id, currentUserId);
@@ -329,19 +389,20 @@ const StoryViewer = ({
               >
                 {isMediaStory ? (
                   isVideo ? (
-                    <Video
-                      source={{ uri: songData.mediaUrl }}
+                    <VideoView
+                      player={player}
                       style={{ width: "100%", height: "100%" }}
-                      resizeMode={ResizeMode.COVER}
-                      shouldPlay={!isPaused && visible}
+                      contentFit="cover"
+                      nativeControls={false}
                     />
                   ) : (
                     <>
                       <Image
-                        source={{ uri: songData.mediaUrl }}
+                        source={{ uri: mediaSource }}
                         className="w-full h-full"
                         resizeMode="cover"
                         onLoad={() => setImageLoaded(true)}
+                        onError={() => setImageLoaded(true)}
                       />
                       {!imageLoaded && (
                         <View className="absolute inset-0 bg-black justify-center items-center">
@@ -432,8 +493,8 @@ const StoryViewer = ({
                   <View className="flex-row items-center gap-3">
                     <Image
                       source={
-                        group.user?.pfp
-                          ? { uri: group.user.pfp }
+                        userPfp
+                          ? { uri: userPfp }
                           : require("@/assets/noPfp.jpg")
                       }
                       className="w-10 h-10 rounded-full border border-white/20"
@@ -458,12 +519,7 @@ const StoryViewer = ({
                   </View>
                   <View className="flex-row items-center gap-2">
                     {isOwner && (
-                      <TouchableOpacity
-                        className="p-2"
-                        onPress={() => {
-                          /* Lógica Delete */
-                        }}
-                      >
+                      <TouchableOpacity className="p-2" onPress={handleDelete}>
                         <Ionicons
                           name="trash-outline"
                           size={24}

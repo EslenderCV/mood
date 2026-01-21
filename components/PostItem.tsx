@@ -6,13 +6,11 @@ import {
   ActivityIndicator,
   Animated,
 } from "react-native";
-// 🔥 OPTIMIZACIÓN 1: Image de expo-image (Caché + Performance)
 import { Image } from "expo-image";
 import { Audio } from "expo-av";
-// 🔥 OPTIMIZACIÓN 2: Haptics (Experiencia táctil)
 import * as Haptics from "expo-haptics";
-// 🔥 OPTIMIZACIÓN 3: Gestos
 import { TapGestureHandler, State } from "react-native-gesture-handler";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
@@ -25,6 +23,9 @@ import {
 import { useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
 import { useAudioContext } from "@/context/AudioContext";
+
+// ID OFICIAL DE MOOD
+const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
 
 const AudioVisualizer = ({
   isPlaying,
@@ -78,7 +79,6 @@ const PostItem: React.FC<PostItemProps> = ({
   onOptionsPress,
   onSharePress,
 }) => {
-  // 🔥 Evitar renders si el post viene vacío
   if (!post) return null;
 
   const { colorScheme } = useColorScheme();
@@ -104,10 +104,10 @@ const PostItem: React.FC<PostItemProps> = ({
   const [likesCount, setLikesCount] = useState(post?.likedBy?.length || 0);
   const [savesCount, setSavesCount] = useState(post?.savedBy?.length || 0);
 
-  // Animación del corazón gigante
   const heartScaleAnim = useRef(new Animated.Value(0)).current;
 
   const songData = parseSongData(post.songData);
+  const hasMusic = songData && songData.title;
 
   const getCreator = () => {
     let userObj = post.postedBy;
@@ -134,6 +134,11 @@ const PostItem: React.FC<PostItemProps> = ({
     };
   };
   const creator = getCreator();
+
+  // 🔥 DETECCIÓN DE ESTILO MOOD
+  const isMoodPost =
+    creator.id === MOOD_OFFICIAL_ID && !hasMusic && post.comment;
+  const moodStyle = songData?.moodStyle || "standard"; // 'standard' o 'card'
 
   useEffect(() => {
     return () => {
@@ -244,18 +249,12 @@ const PostItem: React.FC<PostItemProps> = ({
     }
   };
 
-  // 🔥 NUEVO: Función para manejar el Doble Tap
   const onDoubleTap = (event: any) => {
     if (event.nativeEvent.state === State.ACTIVE) {
-      // 1. Feedback
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // 2. Dar like si no tiene
       if (!isLiked) {
         handleLike();
       }
-
-      // 3. Animación del corazón
       heartScaleAnim.setValue(0);
       Animated.sequence([
         Animated.spring(heartScaleAnim, {
@@ -276,7 +275,6 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const handleSave = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
     const prevSaved = isSaved;
     const prevCount = savesCount;
     setIsSaved(!isSaved);
@@ -288,8 +286,6 @@ const PostItem: React.FC<PostItemProps> = ({
       setSavesCount(prevCount);
     }
   };
-
-  if (!songData) return null;
 
   return (
     <View className="px-5">
@@ -357,97 +353,207 @@ const PostItem: React.FC<PostItemProps> = ({
       </View>
 
       <View className="pl-[52px]">
-        {!!post.comment && post.comment.trim() !== "" && (
-          <Text
-            className="text-[15px] leading-6 mb-3 font-normal"
-            style={{ color: textColor }}
-          >
-            {post.comment}
-          </Text>
+        {/* 🔥 LÓGICA DE RENDERIZADO SEGÚN ESTILO MOOD */}
+        {isMoodPost ? (
+          moodStyle === "card" ? (
+            // --- ESTILO 1: TARJETA GRADIENTE (CARD) ---
+            <TapGestureHandler
+              numberOfTaps={2}
+              onHandlerStateChange={onDoubleTap}
+            >
+              <Animated.View className="mb-3 rounded-2xl overflow-hidden shadow-sm relative">
+                <LinearGradient
+                  colors={["#5E17EB", "#8C52FF"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    padding: 20,
+                    minHeight: 100,
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text
+                    className="text-white font-bold text-xl text-center leading-7"
+                    style={{
+                      textShadowColor: "rgba(0,0,0,0.1)",
+                      textShadowOffset: { width: 0, height: 1 },
+                      textShadowRadius: 2,
+                    }}
+                  >
+                    {post.comment}
+                  </Text>
+                  <Ionicons
+                    name="chatbubble-ellipses"
+                    size={80}
+                    color="rgba(255,255,255,0.1)"
+                    style={{
+                      position: "absolute",
+                      bottom: -10,
+                      right: -10,
+                      transform: [{ rotate: "-15deg" }],
+                    }}
+                  />
+                </LinearGradient>
+                <Animated.View
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    zIndex: 50,
+                    pointerEvents: "none",
+                    transform: [{ scale: heartScaleAnim }],
+                  }}
+                >
+                  <Ionicons name="heart" size={60} color="white" />
+                </Animated.View>
+              </Animated.View>
+            </TapGestureHandler>
+          ) : (
+            // --- ESTILO 2: CAJA DECORADA "CASUAL" (CLEAN BOX) ---
+            <TapGestureHandler
+              numberOfTaps={2}
+              onHandlerStateChange={onDoubleTap}
+            >
+              <Animated.View
+                className="mb-3 p-4 rounded-r-xl rounded-bl-xl border-l-4"
+                style={{
+                  backgroundColor: isDark ? "rgba(39, 39, 42, 0.5)" : "#F4F4F5",
+                  borderLeftColor: "#5E17EB",
+                }}
+              >
+                <Text
+                  className="text-[16px] leading-6 font-medium"
+                  style={{ color: textColor }}
+                >
+                  {post.comment}
+                </Text>
+
+                {/* Animación Corazón (Igual para todos) */}
+                <Animated.View
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    zIndex: 50,
+                    pointerEvents: "none",
+                    transform: [{ scale: heartScaleAnim }],
+                  }}
+                >
+                  <Ionicons name="heart" size={50} color="#EF4444" />
+                </Animated.View>
+              </Animated.View>
+            </TapGestureHandler>
+          )
+        ) : (
+          /* Renderizado Normal para el resto de mortales */
+          !!post.comment &&
+          post.comment.trim() !== "" && (
+            <Text
+              className="text-[15px] leading-6 mb-3 font-normal"
+              style={{ color: textColor }}
+            >
+              {post.comment}
+            </Text>
+          )
         )}
 
-        {/* 🔥 GESTOR DE DOBLE TAP APLICADO A LA TARJETA DE CANCIÓN */}
-        <TapGestureHandler numberOfTaps={2} onHandlerStateChange={onDoubleTap}>
-          <Animated.View
-            className="rounded-2xl p-3 flex-row items-center mb-4 relative"
-            style={{ backgroundColor: songCardBg }}
+        {hasMusic && (
+          <TapGestureHandler
+            numberOfTaps={2}
+            onHandlerStateChange={onDoubleTap}
           >
-            <Image
-              source={{ uri: songData.cover }}
-              className="w-14 h-14 rounded-xl shadow-sm"
-              style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
-              contentFit="cover"
-              transition={300}
-            />
-            <View className="flex-1 ml-3 mr-2 justify-center">
-              <Text
-                className="font-bold text-[15px] mb-0.5"
-                numberOfLines={1}
-                style={{ color: textColor }}
-              >
-                {songData.title}
-              </Text>
-              <Text
-                className="text-[13px]"
-                numberOfLines={1}
-                style={{ color: subTextColor }}
-              >
-                {songData.artist}
-              </Text>
-              <View className="mt-1 flex-row items-center">
-                <Ionicons name="musical-notes" size={10} color={accentColor} />
-                <AudioVisualizer isPlaying={isPlaying} color={subTextColor} />
-              </View>
-            </View>
-
-            <TouchableOpacity
-              onPress={handlePlayPause}
-              className="w-10 h-10 rounded-full items-center justify-center shadow-md"
-              style={{ backgroundColor: accentColor }}
-              activeOpacity={0.8}
-            >
-              {isLoadingAudio ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Ionicons
-                  name={isPlaying ? "pause" : "play"}
-                  size={20}
-                  color="white"
-                  style={{ marginLeft: isPlaying ? 0 : 2 }}
-                />
-              )}
-            </TouchableOpacity>
-
-            {/* 🔥 Corazón animado Overlay */}
             <Animated.View
-              style={{
-                position: "absolute",
-                top: 0,
-                bottom: 0,
-                left: 0,
-                right: 0,
-                justifyContent: "center",
-                alignItems: "center",
-                zIndex: 50,
-                pointerEvents: "none",
-                transform: [{ scale: heartScaleAnim }],
-              }}
+              className="rounded-2xl p-3 flex-row items-center mb-4 relative"
+              style={{ backgroundColor: songCardBg }}
             >
-              <Ionicons
-                name="heart"
-                size={50}
-                color="#EF4444" // Rojo estilo Instagram para buena visibilidad
-                style={{
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 4,
-                  elevation: 5,
-                }}
+              <Image
+                source={{ uri: songData.cover }}
+                className="w-14 h-14 rounded-xl shadow-sm"
+                style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
+                contentFit="cover"
+                transition={300}
               />
+              <View className="flex-1 ml-3 mr-2 justify-center">
+                <Text
+                  className="font-bold text-[15px] mb-0.5"
+                  numberOfLines={1}
+                  style={{ color: textColor }}
+                >
+                  {songData.title}
+                </Text>
+                <Text
+                  className="text-[13px]"
+                  numberOfLines={1}
+                  style={{ color: subTextColor }}
+                >
+                  {songData.artist}
+                </Text>
+                <View className="mt-1 flex-row items-center">
+                  <Ionicons
+                    name="musical-notes"
+                    size={10}
+                    color={accentColor}
+                  />
+                  <AudioVisualizer isPlaying={isPlaying} color={subTextColor} />
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={handlePlayPause}
+                className="w-10 h-10 rounded-full items-center justify-center shadow-md"
+                style={{ backgroundColor: accentColor }}
+                activeOpacity={0.8}
+              >
+                {isLoadingAudio ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Ionicons
+                    name={isPlaying ? "pause" : "play"}
+                    size={20}
+                    color="white"
+                    style={{ marginLeft: isPlaying ? 0 : 2 }}
+                  />
+                )}
+              </TouchableOpacity>
+
+              <Animated.View
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  zIndex: 50,
+                  pointerEvents: "none",
+                  transform: [{ scale: heartScaleAnim }],
+                }}
+              >
+                <Ionicons
+                  name="heart"
+                  size={50}
+                  color="#EF4444"
+                  style={{
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 4,
+                    elevation: 5,
+                  }}
+                />
+              </Animated.View>
             </Animated.View>
-          </Animated.View>
-        </TapGestureHandler>
+          </TapGestureHandler>
+        )}
 
         <View className="flex-row justify-between items-center pr-2">
           <TouchableOpacity

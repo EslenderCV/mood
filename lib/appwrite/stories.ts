@@ -12,7 +12,7 @@ export async function createStory(songData: string, userId: string) {
         user: userId,
         songData: songData,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      }
+      },
     );
     return newStory;
   } catch (error) {
@@ -21,7 +21,21 @@ export async function createStory(songData: string, userId: string) {
   }
 }
 
-// 🔥 FIX CRASH: Manejo de 401 en getStories
+// 🔥 NUEVA FUNCIÓN: Eliminar Historia
+export async function deleteStory(storyId: string) {
+  try {
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.storiesCollectionId,
+      storyId,
+    );
+    return true;
+  } catch (error) {
+    console.error("Error eliminando historia:", error);
+    throw error;
+  }
+}
+
 export async function getStories(currentUserId: string) {
   if (!currentUserId) return [];
 
@@ -36,7 +50,7 @@ export async function getStories(currentUserId: string) {
         Query.orderDesc("$createdAt"),
         Query.greaterThan("expiresAt", new Date().toISOString()),
         Query.equal("user", allowedUsers),
-      ]
+      ],
     );
 
     const storiesWithUserData = await Promise.all(
@@ -50,7 +64,7 @@ export async function getStories(currentUserId: string) {
         } catch (e) {
           return null;
         }
-      })
+      }),
     );
 
     return storiesWithUserData.filter((s: any) => s !== null && s.user);
@@ -67,7 +81,7 @@ export async function getStories(currentUserId: string) {
 export async function viewStory(
   storyId: string,
   userId: string,
-  currentViewers: string[] = []
+  currentViewers: string[] = [],
 ) {
   try {
     if (currentViewers.includes(userId)) return;
@@ -80,7 +94,7 @@ export async function viewStory(
       storyId,
       {
         viewers: updatedViewers,
-      }
+      },
     );
   } catch (error) {
     console.log("Error marcando vista:", error);

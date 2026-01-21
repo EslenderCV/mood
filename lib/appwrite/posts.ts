@@ -9,7 +9,7 @@ export async function getFeedCandidates() {
     const posts = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
-      [Query.orderDesc("$createdAt"), Query.limit(100)]
+      [Query.orderDesc("$createdAt"), Query.limit(100)],
     );
 
     const populatedPosts = await Promise.all(
@@ -33,7 +33,7 @@ export async function getFeedCandidates() {
         const commentsData = await databases.listDocuments(
           appwriteConfig.databaseId,
           appwriteConfig.commentsCollectionId,
-          [Query.equal("postId", post.$id), Query.limit(1)]
+          [Query.equal("postId", post.$id), Query.limit(1)],
         );
 
         return {
@@ -41,7 +41,7 @@ export async function getFeedCandidates() {
           postedBy: userData,
           commentsCount: commentsData.total,
         };
-      })
+      }),
     );
 
     return populatedPosts.filter((p) => p !== null);
@@ -55,10 +55,12 @@ export async function getFeedCandidates() {
   }
 }
 
+// 🔥 FIX: Agregado parámetro isPrivate (default false)
 export const createPost = async (
   comment: string,
   songData: string,
-  userId: string
+  userId: string,
+  isPrivate: boolean = false,
 ) => {
   try {
     let cleanSongData = songData;
@@ -83,7 +85,8 @@ export const createPost = async (
         postedBy: userId,
         likedBy: [],
         savedBy: [],
-      }
+        isPrivate: isPrivate, // Guardamos el estado de privacidad
+      },
     );
   } catch (error) {
     console.error("Error creating post:", error);
@@ -96,7 +99,7 @@ export async function deletePost(postId: string) {
     await databases.deleteDocument(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
-      postId
+      postId,
     );
     return true;
   } catch (error: any) {
@@ -113,7 +116,7 @@ export const getUserPosts = async (userId: string) => {
     const posts = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
-      [Query.equal("postedBy", userId), Query.orderDesc("$createdAt")]
+      [Query.equal("postedBy", userId), Query.orderDesc("$createdAt")],
     );
     return posts.documents;
   } catch (error: any) {
@@ -127,7 +130,7 @@ export async function getAllPosts(currentUserId?: string) {
     const posts = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
-      [Query.orderDesc("$createdAt")]
+      [Query.orderDesc("$createdAt")],
     );
 
     const postsWithData = await Promise.all(
@@ -142,7 +145,7 @@ export async function getAllPosts(currentUserId?: string) {
         const comments = await databases.listDocuments(
           appwriteConfig.databaseId,
           appwriteConfig.commentsCollectionId,
-          [Query.equal("postId", post.$id), Query.limit(1)]
+          [Query.equal("postId", post.$id), Query.limit(1)],
         );
 
         return {
@@ -150,7 +153,7 @@ export async function getAllPosts(currentUserId?: string) {
           postedBy: creator,
           commentsCount: comments.total,
         };
-      })
+      }),
     );
 
     return postsWithData.filter((p) => p !== null);
@@ -168,7 +171,7 @@ export async function getPostById(postId: string) {
     const post = await databases.getDocument(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
-      postId
+      postId,
     );
     if (post.postedBy && typeof post.postedBy === "string") {
       const user = await getUser(post.postedBy);
@@ -192,7 +195,7 @@ export async function getPostById(postId: string) {
 export async function toggleLikePost(
   postId: string,
   userId: string,
-  currentLikes: string[] = []
+  currentLikes: string[] = [],
 ) {
   try {
     let updatedLikes = [...currentLikes];
@@ -209,7 +212,7 @@ export async function toggleLikePost(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
       postId,
-      { likedBy: updatedLikes }
+      { likedBy: updatedLikes },
     );
 
     if (isAddingLike) {
@@ -217,7 +220,7 @@ export async function toggleLikePost(
         const post = await databases.getDocument(
           appwriteConfig.databaseId,
           appwriteConfig.postsCollectionId,
-          postId
+          postId,
         );
         const likerUser = await getUser(userId);
         if (post && post.postedBy && likerUser) {
@@ -252,7 +255,7 @@ export async function toggleSavePost(postId: string, userId: string) {
     const post = await databases.getDocument(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
-      postId
+      postId,
     );
 
     const savedBy = post.savedBy || [];
@@ -268,7 +271,7 @@ export async function toggleSavePost(postId: string, userId: string) {
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
       postId,
-      { savedBy: newSavedBy }
+      { savedBy: newSavedBy },
     );
 
     return updatedPost;
@@ -283,7 +286,7 @@ export async function getSavedPosts(userId: string) {
     const posts = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
-      [Query.search("savedBy", userId), Query.orderDesc("$createdAt")]
+      [Query.search("savedBy", userId), Query.orderDesc("$createdAt")],
     );
 
     const populatedPosts = await Promise.all(
@@ -303,7 +306,7 @@ export async function getSavedPosts(userId: string) {
           return { ...post, postedBy: userData };
         }
         return post;
-      })
+      }),
     );
 
     return populatedPosts.filter((p) => p !== null);
@@ -316,7 +319,7 @@ export async function getSavedPosts(userId: string) {
 export async function createComment(
   postId: string,
   commentData: any,
-  parentId: string | null = null
+  parentId: string | null = null,
 ) {
   try {
     const newComment = await databases.createDocument(
@@ -331,14 +334,14 @@ export async function createComment(
         avatar: commentData.avatar,
         parentId: parentId,
         likedBy: [],
-      }
+      },
     );
 
     try {
       const post = await databases.getDocument(
         appwriteConfig.databaseId,
         appwriteConfig.postsCollectionId,
-        postId
+        postId,
       );
       if (post.postedBy) {
         const ownerId =
@@ -369,7 +372,7 @@ export async function createComment(
 export async function toggleCommentLike(
   commentId: string,
   userId: string,
-  currentLikes: string[]
+  currentLikes: string[],
 ) {
   try {
     let updatedLikes = [...currentLikes];
@@ -385,7 +388,7 @@ export async function toggleCommentLike(
       appwriteConfig.databaseId,
       appwriteConfig.commentsCollectionId,
       commentId,
-      { likedBy: updatedLikes }
+      { likedBy: updatedLikes },
     );
 
     return updatedLikes;
@@ -400,7 +403,7 @@ export async function getPostComments(postId: string) {
     const comments = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.commentsCollectionId,
-      [Query.equal("postId", postId), Query.orderDesc("$createdAt")]
+      [Query.equal("postId", postId), Query.orderDesc("$createdAt")],
     );
     return comments.documents;
   } catch (error: any) {
@@ -412,7 +415,7 @@ export async function getPostComments(postId: string) {
 export async function reportPost(
   postId: string,
   reporterId: string,
-  reason: string
+  reason: string,
 ) {
   try {
     await databases.createDocument(
@@ -425,7 +428,7 @@ export async function reportPost(
         reason: reason,
         status: "pending",
         createdAt: new Date().toISOString(),
-      }
+      },
     );
     return true;
   } catch (error: any) {

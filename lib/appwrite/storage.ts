@@ -9,7 +9,7 @@ export const pickMedia = async (type: "image" | "video") => {
         type === "video"
           ? ImagePicker.MediaTypeOptions.Videos
           : ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false,
+      allowsEditing: false, // Importante false para historias
       quality: 1,
     });
 
@@ -23,7 +23,12 @@ export const pickMedia = async (type: "image" | "video") => {
   }
 };
 
-export async function uploadFile(file: any, type?: "image" | "video") {
+// 🔥 FIX: Acepta bucketId y elimina mode=admin
+export async function uploadFile(
+  file: any,
+  type?: "image" | "video",
+  bucketId?: string,
+) {
   if (!file) return;
 
   const fileName =
@@ -39,14 +44,18 @@ export async function uploadFile(file: any, type?: "image" | "video") {
     uri: file.uri,
   };
 
+  // Usar el bucket específico si se pasa, sino el default
+  const targetBucket = bucketId || appwriteConfig.storageId;
+
   try {
     const uploadedFile = await storage.createFile(
-      appwriteConfig.storageId,
+      targetBucket,
       ID.unique(),
       asset,
     );
 
-    const fileUrl = `${appwriteConfig.endpoint}/storage/buckets/${appwriteConfig.storageId}/files/${uploadedFile.$id}/view?project=${appwriteConfig.projectId}&mode=admin`;
+    // 🔥 CRÍTICO: Eliminado "&mode=admin" para que sea público/legible por el usuario
+    const fileUrl = `${appwriteConfig.endpoint}/storage/buckets/${targetBucket}/files/${uploadedFile.$id}/view?project=${appwriteConfig.projectId}`;
 
     return fileUrl;
   } catch (error) {

@@ -13,6 +13,7 @@ import {
   getUser,
   uploadFile,
   createStory,
+  pickMedia,
 } from "@/lib/appwrite";
 import { Databases, Query, ID } from "react-native-appwrite";
 import * as ImagePicker from "expo-image-picker";
@@ -20,8 +21,9 @@ import { parseSongData } from "@/lib/postUtils";
 
 const databases = new Databases(client);
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
+// 🔥 BUCKET DE HISTORIAS
+const STORIES_BUCKET_ID = "696bcdd6003277d6eefd";
 
-// --- HELPER PARA MEZCLAR ARRAY ---
 const shuffleArray = (array: any[]) => {
   const newArray = [...array];
   for (let i = newArray.length - 1; i > 0; i--) {
@@ -46,7 +48,6 @@ export const useHomeLogic = () => {
 
   const isMounted = useRef(true);
 
-  // Estados
   const [sortedFeed, setSortedFeed] = useState<any[]>([]);
   const [myFollowedIds, setMyFollowedIds] = useState<string[]>([]);
   const [poolOfContent, setPoolOfContent] = useState<any[]>([]);
@@ -109,7 +110,7 @@ export const useHomeLogic = () => {
             Query.search("name", text),
           ]),
           Query.limit(10),
-        ]
+        ],
       );
       setShareContacts(response.documents);
     } else if (user?.$id) {
@@ -134,8 +135,8 @@ export const useHomeLogic = () => {
             content: message || "Compartió una publicación",
             sharedPostId: selectedPostToShare.$id,
             createdAt: new Date().toISOString(),
-          }
-        )
+          },
+        ),
       );
       await Promise.all(promises);
       Alert.alert("Enviado", "Publicación compartida.");
@@ -212,55 +213,71 @@ export const useHomeLogic = () => {
     setTimeout(async () => {
       if (!userId) return;
 
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permiso denegado", "Necesitamos acceso a la galería.");
-        return;
-      }
-
-      try {
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.All,
-          allowsEditing: false,
-          quality: 1,
-        });
-
-        if (!result.canceled && result.assets[0]) {
-          const asset = result.assets[0];
-          Alert.alert(
-            "Subiendo",
-            "Tu historia se está subiendo en segundo plano..."
-          );
-
-          const file = {
-            fileName: asset.fileName || `story_${Date.now()}.jpg`,
-            mimeType: asset.type === "video" ? "video/mp4" : "image/jpeg",
-            uri: asset.uri,
-            fileSize: asset.fileSize || 0,
-          };
-
-          const uploadedFile = await uploadFile(file);
-          if (!uploadedFile) throw new Error("Fallo la subida");
-
-          const songData = JSON.stringify({
-            title: "Mood Update",
-            artist: "Mood Team",
-            cover: uploadedFile,
-            preview: "",
-            spotifyId: "mood_custom_" + Date.now(),
-            caption: "",
-            mediaType: asset.type,
-          });
-
-          await createStory(songData, userId);
-          fetchAuxiliaryData();
-          Alert.alert("Éxito", "Historia publicada");
-        }
-      } catch (e: any) {
-        console.log("Error media:", e);
-        Alert.alert("Error", "No se pudo subir.");
-      }
+      Alert.alert("Seleccionar", "¿Qué deseas subir?", [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Foto",
+          onPress: () => processMediaUpload("image"),
+        },
+        {
+          text: "Video",
+          onPress: () => processMediaUpload("video"),
+        },
+      ]);
     }, 500);
+  };
+
+  const processMediaUpload = async (type: "image" | "video") => {
+    if (!userId) {
+      Alert.alert("Error", "No estás identificado.");
+      return;
+    }
+
+    try {
+      const asset = await pickMedia(type);
+      if (!asset) return;
+
+      Alert.alert(
+        "Subiendo",
+        "Tu historia se está subiendo en segundo plano...",
+      );
+
+      const cleanExtension = type === "video" ? "mp4" : "jpg";
+      const cleanFileName = `story_${Date.now()}.${cleanExtension}`;
+
+      const file = {
+        fileName: cleanFileName,
+        mimeType: asset.type === "video" ? "video/mp4" : "image/jpeg",
+        uri: asset.uri,
+        fileSize: asset.fileSize || 0,
+      };
+
+      // 🔥 FIX: USAMOS EL ID DEL BUCKET DE HISTORIAS
+      const uploadedFile = await uploadFile(file, type, STORIES_BUCKET_ID);
+
+      if (!uploadedFile) throw new Error("Fallo la subida");
+
+      const songData = JSON.stringify({
+        mediaUrl: uploadedFile,
+        mediaType: asset.type,
+        isMediaStory: true,
+        duration: asset.type === "video" ? 15000 : 5000,
+
+        title: "Mood Update",
+        artist: "Mood Team",
+        cover: uploadedFile,
+        preview: "",
+        spotifyId: "mood_custom_" + Date.now(),
+        caption: "",
+      });
+
+      await createStory(songData, userId);
+      fetchAuxiliaryData();
+      Alert.alert("Éxito", "Historia publicada");
+    } catch (e: any) {
+      console.log("Error media:", e);
+      Alert.alert("Error", "No se pudo subir. Verifica el formato.");
+    }
   };
 
   const fetchCounts = async (uId: string) => {
@@ -284,7 +301,7 @@ export const useHomeLogic = () => {
       const storiesDocs = await getStories(uId);
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const recentStories = storiesDocs.filter(
-        (doc: any) => new Date(doc.$createdAt) > oneDayAgo
+        (doc: any) => new Date(doc.$createdAt) > oneDayAgo,
       );
 
       const uniqueUserIds = new Set<string>();
@@ -303,7 +320,7 @@ export const useHomeLogic = () => {
       });
 
       const idsToFetch = Array.from(uniqueUserIds).filter(
-        (id) => !userMap.has(id)
+        (id) => !userMap.has(id),
       );
 
       if (idsToFetch.length > 0) {
@@ -313,7 +330,7 @@ export const useHomeLogic = () => {
               const u = await getUser(id);
               if (u) userMap.set(id, u);
             } catch (e) {}
-          })
+          }),
         );
       }
 
@@ -351,7 +368,7 @@ export const useHomeLogic = () => {
         .listDocuments(
           appwriteConfig.databaseId,
           appwriteConfig.storiesCollectionId,
-          [Query.equal("user", MOOD_OFFICIAL_ID)]
+          [Query.equal("user", MOOD_OFFICIAL_ID)],
         )
         .catch(() => ({ documents: [] }));
 
@@ -362,21 +379,35 @@ export const useHomeLogic = () => {
 
       const officialDocs = officialStoriesRes.documents;
       const officialGroupIndex = myStories.findIndex(
-        (g) => g.userId === MOOD_OFFICIAL_ID
+        (g) => g.userId === MOOD_OFFICIAL_ID,
       );
 
       if (officialDocs.length > 0) {
+        let officialUserData: any = {
+          $id: MOOD_OFFICIAL_ID,
+          username: "Mood",
+          name: "Mood Team",
+          avatar: null,
+          isVerified: true,
+        };
+
+        if (userId === MOOD_OFFICIAL_ID && user) {
+          officialUserData = user;
+        } else {
+          try {
+            const fetchedMood = await getUser(MOOD_OFFICIAL_ID);
+            if (fetchedMood) officialUserData = fetchedMood;
+          } catch (e) {
+            console.log("No se pudo cargar el perfil de Mood Team");
+          }
+        }
+
         const officialGroup = {
           userId: MOOD_OFFICIAL_ID,
-          user: {
-            $id: MOOD_OFFICIAL_ID,
-            username: "Mood",
-            name: "Mood Team",
-            pfp: null,
-            isVerified: true,
-          },
+          user: officialUserData,
           stories: officialDocs,
         };
+
         if (officialGroupIndex !== -1) myStories.splice(officialGroupIndex, 1);
         myStories.unshift(officialGroup);
       }
@@ -450,12 +481,12 @@ export const useHomeLogic = () => {
       (response) => {
         if (
           response.events.some(
-            (e) => e.includes("create") || e.includes("update")
+            (e) => e.includes("create") || e.includes("update"),
           )
         ) {
           fetchCounts(userId);
         }
-      }
+      },
     );
     return () => {
       unsubscribe();

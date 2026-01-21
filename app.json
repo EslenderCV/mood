@@ -56,7 +56,8 @@
       "expo-localization",
       "expo-web-browser",
       "expo-apple-authentication",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

@@ -18,10 +18,9 @@ import {
   Easing,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-// 🔥 CAMBIO: Usamos Audio de expo-av para control total (Silencio/Play/Pause)
 import { Audio } from "expo-av";
-// Mantenemos useAudioRecorder para Shazam, pero quitamos useAudioPlayer
 import { useAudioRecorder } from "expo-audio";
+import * as Haptics from "expo-haptics";
 
 import { useModal } from "@/context/ModalContext";
 import { useGlobalContext } from "@/context/GlobalProvider";
@@ -32,6 +31,7 @@ import { useLanguage } from "@/context/LanguageContext";
 
 const { width, height } = Dimensions.get("window");
 const AUDD_API_TOKEN = "a3c6cdb39b3b57fe634900cdc67077c7";
+const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
 
 interface Song {
   trackId: string;
@@ -140,6 +140,12 @@ export default function PostModal() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
 
+  const [isPrivate, setIsPrivate] = useState(false);
+
+  // 🔥 NUEVO: Estado para el estilo del post de Mood
+  // 'standard' = Caja decorada | 'card' = Tarjeta Gradiente
+  const [moodStyle, setMoodStyle] = useState<"standard" | "card">("standard");
+
   const backgroundOpacity = useRef(new Animated.Value(0)).current;
   const contentTranslateY = useRef(new Animated.Value(height)).current;
   const [toast, setToast] = useState({
@@ -150,14 +156,12 @@ export default function PostModal() {
   });
   const toastAnim = useRef(new Animated.Value(-150)).current;
 
-  // 🔥 NUEVOS ESTADOS DE AUDIO (Logic PostItem)
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentPlayingUrl, setCurrentPlayingUrl] = useState<string | null>(
     null,
   );
 
-  // Controlar el teclado en Android
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
@@ -175,7 +179,6 @@ export default function PostModal() {
     }
   }, []);
 
-  // Limpieza de audio al desmontar
   useEffect(() => {
     return () => {
       if (sound) {
@@ -298,8 +301,11 @@ export default function PostModal() {
     setIsSearchingMusic(false);
     setShowSuggestions(false);
     setCurrentPlayingUrl(null);
+    setIsPrivate(false);
+    setMoodStyle("standard"); // Reset estilo
   };
 
+  // ... (Funciones searchDeezerTracks, handleTextChange, etc. igual que antes)
   const searchDeezerTracks = async (query: string) => {
     if (!query) return;
     setIsLoadingSearch(true);
@@ -364,7 +370,6 @@ export default function PostModal() {
     setShowSuggestions(false);
   };
 
-  // 🔥 NUEVA LÓGICA DE REPRODUCCIÓN (Misma que PostItem)
   const handlePlayMusic = async (url: string | null) => {
     if (!url) {
       showToast(
@@ -376,7 +381,6 @@ export default function PostModal() {
     }
 
     try {
-      // 1. Si ya hay sonido y es el mismo URL, alternamos Pausa/Play
       if (sound && currentPlayingUrl === url) {
         const status = await sound.getStatusAsync();
         if (status.isLoaded) {
@@ -384,7 +388,6 @@ export default function PostModal() {
             await sound.pauseAsync();
             setIsPlaying(false);
           } else {
-            // Si terminó, replay
             if (status.positionMillis >= status.durationMillis!) {
               await sound.replayAsync();
             } else {
@@ -396,12 +399,10 @@ export default function PostModal() {
         return;
       }
 
-      // 2. Si es una canción nueva, descargamos la anterior
       if (sound) {
         await sound.unloadAsync();
       }
 
-      // 3. Configuramos sesión para que suene en Mute
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         allowsRecordingIOS: false,
@@ -409,7 +410,6 @@ export default function PostModal() {
         shouldDuckAndroid: true,
       });
 
-      // 4. Cargamos y reproducimos la nueva
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: url },
         { shouldPlay: true },
@@ -422,7 +422,6 @@ export default function PostModal() {
       newSound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {
           setIsPlaying(false);
-          // Opcional: resetear currentPlayingUrl si quieres que el icono vuelva a Play por defecto
         }
       });
     } catch (error) {
@@ -432,7 +431,6 @@ export default function PostModal() {
   };
 
   const handleSelectSong = (song: Song) => {
-    // Si hay audio sonando, lo detenemos y limpiamos
     if (sound) {
       sound.unloadAsync();
       setSound(null);
@@ -446,7 +444,6 @@ export default function PostModal() {
 
   const handleShazam = async () => {
     if (linkedSong) return;
-    // Detener música si suena
     if (sound) {
       await sound.unloadAsync();
       setIsPlaying(false);
@@ -531,22 +528,42 @@ export default function PostModal() {
   };
 
   const handlePost = async () => {
-    if (!text.trim() && !linkedSong) return;
     if (!user) return;
-    if (sound) await sound.unloadAsync(); // Stop music before posting
 
-    const songDataObj = linkedSong
-      ? {
-          title: linkedSong.trackName,
-          artist: linkedSong.artistName,
-          cover: linkedSong.artworkUrl100,
-          preview: linkedSong.previewUrl,
-          spotifyId: linkedSong.trackId,
-        }
-      : {};
+    if (!linkedSong && user.$id !== MOOD_OFFICIAL_ID) {
+      showToast(
+        "error",
+        "Música Requerida",
+        "Debes agregar una canción para publicar en Mood.",
+      );
+      return;
+    }
+
+    if (!text.trim() && !linkedSong) return;
+
+    if (sound) await sound.unloadAsync();
+
+    // 🔥 PREPARAR JSON DE DATOS
+    let songDataObj: any = {};
+
+    if (linkedSong) {
+      songDataObj = {
+        title: linkedSong.trackName,
+        artist: linkedSong.artistName,
+        cover: linkedSong.artworkUrl100,
+        preview: linkedSong.previewUrl,
+        spotifyId: linkedSong.trackId,
+      };
+    } else if (user.$id === MOOD_OFFICIAL_ID) {
+      // 🔥 Si es Mood y no hay canción, guardamos el ESTILO elegido
+      songDataObj = {
+        moodStyle: moodStyle, // 'standard' o 'card'
+      };
+    }
 
     if (createPostOptimistic) {
-      createPostOptimistic(text, songDataObj, user);
+      // @ts-ignore
+      createPostOptimistic(text, songDataObj, user, isPrivate);
       closeModal();
       setTimeout(
         () =>
@@ -556,7 +573,13 @@ export default function PostModal() {
     } else {
       setIsLoading(true);
       try {
-        await createPost(text, JSON.stringify(songDataObj), user.$id);
+        // @ts-ignore
+        await createPost(
+          text,
+          JSON.stringify(songDataObj),
+          user.$id,
+          isPrivate,
+        );
         closeModal();
         setTimeout(
           () =>
@@ -575,8 +598,8 @@ export default function PostModal() {
     }
   };
 
+  // ... (renderSongItem, renderUserItem igual)
   const renderSongItem = ({ item }: { item: Song }) => {
-    // 🔥 Check dinámico: es el mismo URL y está sonando?
     const isActive = currentPlayingUrl === item.previewUrl && isPlaying;
 
     return (
@@ -701,19 +724,50 @@ export default function PostModal() {
                           {t("post.cancel")}
                         </Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={handlePost}
-                        disabled={!text.trim() && !linkedSong}
-                        className={`px-6 py-2 rounded-full ${
-                          text.trim() || linkedSong
-                            ? "bg-[#5E17EB]"
-                            : "bg-zinc-700"
-                        }`}
-                      >
-                        <Text className="text-white font-bold text-base">
-                          {t("post.publish")}
-                        </Text>
-                      </TouchableOpacity>
+
+                      <View className="flex-row items-center gap-3">
+                        <TouchableOpacity
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            setIsPrivate(!isPrivate);
+                          }}
+                          className={`flex-row items-center px-3 py-1.5 rounded-full border ${
+                            isPrivate
+                              ? "bg-[#F59E0B]/10 border-[#F59E0B]/30"
+                              : "bg-transparent border-transparent"
+                          }`}
+                        >
+                          <Ionicons
+                            name={isPrivate ? "lock-closed" : "earth"}
+                            size={16}
+                            color={isPrivate ? "#F59E0B" : subTextColor}
+                          />
+                          <Text
+                            className="text-xs font-bold ml-1.5"
+                            style={{
+                              color: isPrivate ? "#F59E0B" : subTextColor,
+                            }}
+                          >
+                            {isPrivate ? "Privado" : "Público"}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={handlePost}
+                          disabled={
+                            !linkedSong && user?.$id !== MOOD_OFFICIAL_ID
+                          }
+                          className={`px-6 py-2 rounded-full ${
+                            linkedSong || user?.$id === MOOD_OFFICIAL_ID
+                              ? "bg-[#5E17EB]"
+                              : "bg-zinc-700"
+                          }`}
+                        >
+                          <Text className="text-white font-bold text-base">
+                            {t("post.publish")}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
 
                     <View className="flex-row gap-4 mb-2">
@@ -743,6 +797,42 @@ export default function PostModal() {
                       </View>
                     </View>
 
+                    {/* 🔥 SELECTOR DE ESTILO: SOLO PARA MOOD TEAM Y SIN MÚSICA */}
+                    {!linkedSong && user?.$id === MOOD_OFFICIAL_ID && (
+                      <View className="flex-row gap-3 mb-4 px-2">
+                        <TouchableOpacity
+                          onPress={() => setMoodStyle("standard")}
+                          className={`flex-1 py-2 rounded-lg border items-center ${moodStyle === "standard" ? "bg-zinc-800 border-zinc-600" : "bg-transparent border-zinc-800"}`}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                moodStyle === "standard"
+                                  ? "white"
+                                  : subTextColor,
+                              fontWeight: "bold",
+                            }}
+                          >
+                            Casual 💬
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setMoodStyle("card")}
+                          className={`flex-1 py-2 rounded-lg border items-center ${moodStyle === "card" ? "bg-[#5E17EB] border-[#5E17EB]" : "bg-transparent border-zinc-800"}`}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                moodStyle === "card" ? "white" : subTextColor,
+                              fontWeight: "bold",
+                            }}
+                          >
+                            Card 📢
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
                     <View className="mt-2 min-h-[10px]">
                       {showSuggestions && (
                         <View
@@ -758,6 +848,7 @@ export default function PostModal() {
                         </View>
                       )}
 
+                      {/* ... Resto de componentes de búsqueda de música igual ... */}
                       {isSearchingMusic && (
                         <View
                           className="rounded-xl p-3 border mb-4"
@@ -791,7 +882,6 @@ export default function PostModal() {
                             <TouchableOpacity
                               onPress={() => {
                                 setIsSearchingMusic(false);
-                                // Detener música al cerrar búsqueda
                                 if (sound) {
                                   sound.unloadAsync();
                                   setSound(null);
