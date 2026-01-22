@@ -9,14 +9,17 @@ import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
-import { getCurrentUser, updateUserPushToken } from "@/lib/appwrite";
+import { router } from "expo-router";
+import { getCurrentUser } from "@/lib/appwrite"; // Esto importa desde index.ts o similar
+// 🔥 FIX: Ruta corregida según tu estructura de carpetas (lib/appwrite/notifications.ts)
+import { updateUserPushToken } from "@/lib/appwrite/notifications";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowAlert: false, // In-App Toast manejará esto
     shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
+    shouldSetBadge: true,
+    shouldShowBanner: false,
     shouldShowList: true,
   }),
 });
@@ -29,12 +32,16 @@ export const NotificationProvider = ({
   children: React.ReactNode;
 }) => {
   const [expoPushToken, setExpoPushToken] = useState<string | undefined>("");
+
   const notificationListener = useRef<Notifications.Subscription | undefined>(
     undefined,
   );
   const responseListener = useRef<Notifications.Subscription | undefined>(
     undefined,
   );
+
+  const [currentNotification, setCurrentNotification] =
+    useState<Notifications.Notification | null>(null);
 
   useEffect(() => {
     registerForPushNotificationsAsync().then(async (token) => {
@@ -49,12 +56,19 @@ export const NotificationProvider = ({
 
     notificationListener.current =
       Notifications.addNotificationReceivedListener((notification) => {
-        console.log("Notificación recibida:", notification);
+        console.log("🔔 Notificación en Primer Plano:", notification);
+        setCurrentNotification(notification);
+        setTimeout(() => setCurrentNotification(null), 4000);
       });
 
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener((response) => {
-        console.log("Notificación tocada:", response);
+        const data = response.notification.request.content.data;
+        if (data?.url) {
+          setTimeout(() => {
+            router.push(data.url as any);
+          }, 500);
+        }
       });
 
     return () => {
@@ -64,7 +78,9 @@ export const NotificationProvider = ({
   }, []);
 
   return (
-    <NotificationContext.Provider value={{ expoPushToken }}>
+    <NotificationContext.Provider
+      value={{ expoPushToken, currentNotification, setCurrentNotification }}
+    >
       {children}
     </NotificationContext.Provider>
   );
@@ -76,11 +92,20 @@ async function registerForPushNotificationsAsync() {
   let token;
 
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "default",
+    await Notifications.setNotificationChannelAsync("social-updates", {
+      name: "Actividad Social",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#FF231F7C",
+      lightColor: "#5E17EB",
+      sound: "default",
+    });
+
+    await Notifications.setNotificationChannelAsync("messages", {
+      name: "Mensajes Directos",
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 500],
+      lightColor: "#5E17EB",
+      sound: "default",
     });
   }
 
@@ -93,7 +118,6 @@ async function registerForPushNotificationsAsync() {
       finalStatus = status;
     }
     if (finalStatus !== "granted") {
-      alert("Se requieren permisos para notificaciones push.");
       return;
     }
 
@@ -101,19 +125,10 @@ async function registerForPushNotificationsAsync() {
       const projectId =
         Constants?.expoConfig?.extra?.eas?.projectId ??
         Constants?.easConfig?.projectId;
-
-      token = (
-        await Notifications.getExpoPushTokenAsync({
-          projectId: projectId || undefined,
-        })
-      ).data;
-
-      console.log("Mi Push Token:", token);
+      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     } catch (e) {
-      console.log("Error obteniendo token:", e);
+      console.log("Error token:", e);
     }
-  } else {
-    console.log("Debes usar un dispositivo físico para Push Notifications");
   }
 
   return token;

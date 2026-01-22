@@ -1,7 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
 import {
   View,
-  FlatList,
   Animated,
   useWindowDimensions,
   Image,
@@ -35,7 +34,6 @@ import PostModal from "@/components/PostModal";
 import OptionsModal from "@/components/OptionsModal";
 import MoodShareCard from "@/components/MoodShareCard";
 import ShareModal from "@/components/ShareModal";
-import ChatsList from "../chats";
 import SuggestedUsersCarousel from "@/components/SuggestedUsersCarousel";
 import TrendingSongCard from "@/components/TrendingSongCard";
 
@@ -83,26 +81,22 @@ const VISIBLE_THRESHOLD = -40; // Cuándo empieza a mostrarse el spinner
 const SPINNER_HEIGHT = 60;
 
 const Home = () => {
-  const { width, height } = useWindowDimensions();
-  const chatTranslateX = useRef(new Animated.Value(width)).current;
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const isDark = true;
-
   const logic = useHomeLogic();
 
   // 🔥 CUSTOM REFRESH STATE
   const scrollY = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef(0);
-  
-  // FIX 1: Estado explícito para visibilidad
+
+  // Estado explícito para visibilidad
   const [showSpinner, setShowSpinner] = useState(false);
 
   // Configuración de animación para suavizar la apertura del Header
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-  }, [showSpinner, logic.isRefreshing]); // Se anima cuando cambia cualquiera de los dos
+  }, [showSpinner, logic.isRefreshing]);
 
-  // FIX 1 (Parte C): Resetear estado al terminar
+  // Resetear estado al terminar
   useEffect(() => {
     if (!logic.isRefreshing) {
       setShowSpinner(false);
@@ -113,26 +107,26 @@ const Home = () => {
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
     {
-      useNativeDriver: false, 
+      useNativeDriver: false,
       listener: (event: any) => {
         const offsetY = event.nativeEvent.contentOffset.y;
         scrollRef.current = offsetY;
 
         // Lógica reactiva de visibilidad mientras arrastras
         if (offsetY < VISIBLE_THRESHOLD) {
-           if (!showSpinner) setShowSpinner(true);
+          if (!showSpinner) setShowSpinner(true);
         } else if (!logic.isRefreshing) {
-           if (showSpinner) setShowSpinner(false);
+          if (showSpinner) setShowSpinner(false);
         }
       },
-    }
+    },
   );
 
   const handleScrollEndDrag = () => {
     const offsetY = scrollRef.current;
-    // FIX 1 (Parte B): Activar refresh
+    // Activar refresh
     if (offsetY < PULL_THRESHOLD && !logic.isRefreshing) {
-      setShowSpinner(true); 
+      setShowSpinner(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       logic.onRefresh();
     }
@@ -150,28 +144,6 @@ const Home = () => {
     outputRange: ["360deg", "0deg"],
     extrapolate: "clamp",
   });
-
-  // --- CHAT HANDLERS ---
-  const openChat = () => {
-    setIsChatOpen(true);
-    Animated.spring(chatTranslateX, {
-      toValue: 0,
-      useNativeDriver: true,
-      bounciness: 0,
-      speed: 14,
-    }).start();
-  };
-  const closeChat = () => {
-    setIsChatOpen(false);
-    Animated.timing(chatTranslateX, {
-      toValue: width,
-      duration: 300,
-      easing: require("react-native").Easing.out(
-        require("react-native").Easing.cubic,
-      ),
-      useNativeDriver: true,
-    }).start();
-  };
 
   const handleAddStoryPress = () => {
     if (logic.user?.$id === logic.MOOD_OFFICIAL_ID) {
@@ -262,7 +234,12 @@ const Home = () => {
                 <View className="absolute top-0 right-0 bg-red-500 w-3 h-3 rounded-full border border-black" />
               )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={openChat} className="relative">
+
+            {/* 🔥 ICONO CHAT ACTUALIZADO: Navega a la nueva ruta /chatshome */}
+            <TouchableOpacity
+              onPress={() => router.push("/chatshome")}
+              className="relative"
+            >
               <Ionicons
                 name="chatbubble-outline"
                 size={26}
@@ -279,8 +256,6 @@ const Home = () => {
           </View>
         </View>
 
-        {/* ❌ SPINNER ABSOLUTO ELIMINADO */}
-
         {logic.isFeedLoading ? (
           <FeedSkeleton isDark={isDark} />
         ) : (
@@ -289,26 +264,21 @@ const Home = () => {
             data={logic.sortedFeed}
             keyExtractor={(item) => item._id}
             renderItem={renderFeedItem}
-            // 🔥 SCROLL EVENTS
             onScroll={handleScroll}
             onScrollEndDrag={handleScrollEndDrag}
             scrollEventThrottle={16}
-            
-            // Fondo transparente por si acaso, pero el spinner ya está adentro
             style={{ backgroundColor: "transparent", zIndex: 1 }}
-            
-            // 🔥 AQUÍ ESTÁ EL FIX ARQUITECTÓNICO: Spinner dentro del Header
             ListHeaderComponent={
               <View>
                 {/* Contenedor del Spinner Animado */}
                 <Animated.View
                   style={{
-                    // Si showSpinner O isRefreshing es true, ocupa espacio. Si no, 0.
-                    height: (showSpinner || logic.isRefreshing) ? SPINNER_HEIGHT : 0,
-                    opacity: (showSpinner || logic.isRefreshing) ? 1 : 0,
+                    height:
+                      showSpinner || logic.isRefreshing ? SPINNER_HEIGHT : 0,
+                    opacity: showSpinner || logic.isRefreshing ? 1 : 0,
                     alignItems: "center",
                     justifyContent: "center",
-                    overflow: "hidden", // Importante para la animación de altura
+                    overflow: "hidden",
                     transform: [
                       { scale: logic.isRefreshing ? 1 : spinnerScale },
                       { rotate: logic.isRefreshing ? "0deg" : spinnerRotate },
@@ -317,7 +287,7 @@ const Home = () => {
                 >
                   <ActivityIndicator size="small" color="#5E17EB" />
                 </Animated.View>
-                
+
                 <StoriesRail
                   currentUser={logic.user}
                   groupedStories={logic.localData.groupedStories}
@@ -330,7 +300,6 @@ const Home = () => {
                 />
               </View>
             }
-            
             onEndReached={() => logic.handleLoadMore()}
             onEndReachedThreshold={0.5}
             initialNumToRender={5}
@@ -429,21 +398,7 @@ const Home = () => {
           postId={logic.sharePostId}
         />
       </SafeAreaView>
-
-      <Animated.View
-        style={{
-          position: "absolute",
-          top: 0,
-          bottom: 0,
-          width,
-          height,
-          zIndex: 100,
-          backgroundColor: isDark ? "#000" : "#fff",
-          transform: [{ translateX: chatTranslateX }],
-        }}
-      >
-        <ChatsList onBackPress={closeChat} />
-      </Animated.View>
+      {/* ❌ ELIMINADO: Animated.View con ChatsList antiguo */}
     </GestureHandlerRootView>
   );
 };

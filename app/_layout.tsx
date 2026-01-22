@@ -12,6 +12,7 @@ import GlobalProvider, { useGlobalContext } from "@/context/GlobalProvider";
 import { ModalProvider } from "@/context/ModalContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { NotificationProvider } from "@/context/NotificationContext";
+import { ChatProvider } from "@/context/ChatContext"; // 🔥 IMPORTAR CHAT PROVIDER
 import { ConnectionProvider } from "@/context/ConnectionProvider";
 import { FeedProvider } from "@/context/FeedProvider";
 import { CommentsModalProvider } from "@/context/CommentsModalContext";
@@ -19,6 +20,7 @@ import { CommentsModalProvider } from "@/context/CommentsModalContext";
 // Componentes
 import CustomSplashScreen from "@/components/CustomSplashScreen";
 import CommentsSheet from "@/components/comments/CommentsSheet";
+import InAppNotification from "@/components/InAppNotification";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -105,7 +107,6 @@ const StackLayout = () => {
   );
 };
 
-// 🔥 EXPORTACIÓN POR DEFECTO REFORZADA
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -113,18 +114,23 @@ export default function RootLayout() {
         <BottomSheetModalProvider>
           <GlobalProvider>
             <NotificationProvider>
-              <ConnectionProvider>
-                <FeedProvider>
-                  <CommentsModalProvider>
-                    <AudioProvider>
-                      <ModalProvider>
-                        <StackLayout />
-                        <CommentsSheet />
-                      </ModalProvider>
-                    </AudioProvider>
-                  </CommentsModalProvider>
-                </FeedProvider>
-              </ConnectionProvider>
+              {/* 🔥 AQUÍ ENVOLVEMOS CON EL CHAT PROVIDER */}
+              <ChatProvider>
+                <ConnectionProvider>
+                  <FeedProvider>
+                    <CommentsModalProvider>
+                      <AudioProvider>
+                        <ModalProvider>
+                          <StackLayout />
+                          <CommentsSheet />
+                          <InAppNotification />
+                        </ModalProvider>
+                      </AudioProvider>
+                    </CommentsModalProvider>
+                  </FeedProvider>
+                </ConnectionProvider>
+              </ChatProvider>
+              {/* 🔥 FIN CHAT PROVIDER */}
             </NotificationProvider>
           </GlobalProvider>
         </BottomSheetModalProvider>

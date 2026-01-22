@@ -1,454 +1,147 @@
 import React from "react";
 import {
   View,
-  Text,
   FlatList,
-  TextInput,
-  TouchableOpacity,
+  ActivityIndicator,
+  Text,
   KeyboardAvoidingView,
   Platform,
-  Alert,
-  AlertButton,
 } from "react-native";
 import { Stack, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import {
-  GestureHandlerRootView,
-  Swipeable,
-} from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useColorScheme } from "nativewind";
-import { Image } from "expo-image"; // 🔥 Premium Image
-import * as Haptics from "expo-haptics"; // 🔥 Haptics
+import { Image } from "expo-image";
 
+// Hooks
 import { useChatLogic } from "@/hooks/useChatLogic";
-import { ChatRoomSkeleton } from "@/components/chat/ChatSkeleton";
-import {
-  PostPreviewBubble,
-  ChatPlaylistCard,
-} from "@/components/chat/ChatBubbles";
+
+// Componentes
+import { ChatInput } from "@/components/chat/ChatInput";
+import { MessageItem } from "@/components/chat/MessageItem";
 
 const ChatRoom = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
   const logic = useChatLogic();
-  const { t } = logic;
 
-  // Colors
+  // Colores
   const bgColor = isDark ? "#000000" : "#FFFFFF";
-  const textColor = isDark ? "#FFFFFF" : "#000000";
-  const subTextColor = isDark ? "#A1A1AA" : "#71717A";
+  const headerBg = isDark ? "#000000" : "#FFFFFF";
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
-  const inputBg = isDark ? "#18181B" : "#F4F4F5";
-  const headerBg = isDark ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.95)";
-  const iconColor = isDark ? "#A1A1AA" : "#52525B";
-
-  // Bubbles Colors
-  const myBubbleBg = "#5E17EB";
-  const myBubbleText = "#FFFFFF";
-  const otherBubbleBg = isDark ? "#27272A" : "#F3F4F6";
-  const otherBubbleText = isDark ? "#FFFFFF" : "#000000";
-  const replyBoxMyBg = "rgba(0, 0, 0, 0.2)";
-  const replyBoxOtherBg = isDark
-    ? "rgba(255, 255, 255, 0.1)"
-    : "rgba(0, 0, 0, 0.05)";
+  const textColor = isDark ? "#FFFFFF" : "#000000";
 
   if (logic.isLoading) {
     return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaView
-          className="flex-1"
-          edges={["top"]}
-          style={{ backgroundColor: bgColor }}
-        >
-          <ChatRoomSkeleton isDark={isDark} />
-        </SafeAreaView>
-      </GestureHandlerRootView>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: bgColor,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <ActivityIndicator size="large" color="#5E17EB" />
+      </View>
     );
   }
 
-  // --- RENDER MESSAGE ITEM ---
-  const renderMessage = ({ item }: { item: any }) => {
-    const isMe = item.senderId === logic.currentUser?.$id;
-    const time = new Date(item.$createdAt).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    const hasSharedPost = !!item.sharedPostId;
-    const hasSharedPlaylist = !!item.sharedPlaylistId;
-    const hasContent = item.content && item.content.trim().length > 0;
-
-    if (!hasSharedPost && !hasSharedPlaylist && !hasContent) return null;
-
-    // Parse Reply Logic
-    let displayContent = item.content;
-    let replySnippet = null;
-    let replyName = null;
-
-    if (hasContent) {
-      if (item.content.includes(":::REPLY:::")) {
-        const parts = item.content.split(":::REPLY:::");
-        const metadata = parts[0].split(":::");
-        replyName = metadata.length >= 2 ? metadata[0] : t("chat.reply");
-        replySnippet = metadata.length >= 2 ? metadata[1] : metadata[0];
-        displayContent = parts[1];
-      } else if (item.content.startsWith("Replying to:")) {
-        const parts = item.content.split("\n\n");
-        if (parts.length > 1) {
-          replyName = t("chat.reply");
-          replySnippet = parts[0]
-            .replace("Replying to: ", "")
-            .replace(/"/g, "");
-          displayContent = parts.slice(1).join("\n\n");
-        }
-      }
-    }
-
-    const handleLongPress = () => {
-      if (!isMe) return;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const options: AlertButton[] = [
-        { text: t("chat.cancel"), style: "cancel" },
-      ];
-      if (!hasSharedPost && !hasSharedPlaylist)
-        options.push({
-          text: t("chat.edit"),
-          onPress: () => logic.startEditing(item),
-        });
-      options.push({
-        text: t("chat.delete"),
-        style: "destructive",
-        onPress: () => logic.confirmDelete(item.$id),
-      });
-      Alert.alert(t("chat.options"), "", options);
-    };
-
-    return (
-      <Swipeable
-        ref={(ref) => {
-          if (ref && item.$id) logic.rowRefs.set(item.$id, ref);
-        }}
-        renderRightActions={
-          isMe
-            ? () => (
-                <View className="justify-center items-end pr-4 w-20">
-                  <Ionicons name="arrow-undo" size={24} color={iconColor} />
-                </View>
-              )
-            : undefined
-        }
-        renderLeftActions={
-          !isMe
-            ? () => (
-                <View className="justify-center items-start pl-4 w-20">
-                  <Ionicons
-                    name="arrow-undo"
-                    size={24}
-                    color={iconColor}
-                    style={{ transform: [{ scaleX: -1 }] }}
-                  />
-                </View>
-              )
-            : undefined
-        }
-        onSwipeableWillOpen={() => {
-          Haptics.selectionAsync(); // 🔥 Feedback al deslizar
-          logic.onSwipeToReply(item);
-        }}
-        friction={2}
-        overshootRight={false}
-        overshootLeft={false}
-        activeOffsetX={isMe ? [-20, 9999] : [-9999, 35]}
-      >
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onLongPress={handleLongPress}
-          delayLongPress={300}
-        >
-          <View
-            className={`mb-2 flex-row ${isMe ? "justify-end" : "justify-start"} px-4`}
-          >
-            {!isMe && (
-              <Image
-                source={
-                  logic.chatUser.avatar
-                    ? { uri: logic.chatUser.avatar }
-                    : require("@/assets/noPfp.jpg")
-                }
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  backgroundColor: inputBg,
-                }}
-                className="self-end mr-2 mb-1"
-                contentFit="cover"
-                transition={200}
-              />
-            )}
-            <View
-              className={`max-w-[80%] ${isMe ? "items-end" : "items-start"}`}
-            >
-              {hasSharedPost && (
-                <PostPreviewBubble
-                  postId={item.sharedPostId}
-                  onLongPress={handleLongPress}
-                />
-              )}
-              {hasSharedPlaylist && (
-                <ChatPlaylistCard
-                  playlistId={item.sharedPlaylistId}
-                  isMyMessage={isMe}
-                />
-              )}
-
-              {hasContent && (
-                <View
-                  className={`px-3 py-2 rounded-[18px] ${isMe ? "rounded-tr-none" : "rounded-tl-none"} mt-1`}
-                  style={{
-                    backgroundColor: isMe ? myBubbleBg : otherBubbleBg,
-                    opacity: logic.editingMessage?.$id === item.$id ? 0.5 : 1,
-                    minWidth: 80,
-                  }}
-                >
-                  {replySnippet && (
-                    <TouchableOpacity
-                      onPress={() =>
-                        logic.scrollToOriginalMessage(replySnippet as string)
-                      }
-                      className="mb-1 rounded-md overflow-hidden border-l-4 p-1.5"
-                      style={{
-                        backgroundColor: isMe ? replyBoxMyBg : replyBoxOtherBg,
-                        borderColor: isMe ? "rgba(255,255,255,0.7)" : "#5E17EB",
-                      }}
-                    >
-                      <Text
-                        className="text-[11px] font-bold mb-0.5"
-                        style={{
-                          color: isMe ? "rgba(255,255,255,0.9)" : "#5E17EB",
-                        }}
-                      >
-                        {replyName}
-                      </Text>
-                      <Text
-                        className="text-[12px]"
-                        numberOfLines={1}
-                        style={{
-                          color: isMe ? "rgba(255,255,255,0.7)" : subTextColor,
-                        }}
-                      >
-                        {replySnippet}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                  <Text
-                    className="text-[15px] leading-5"
-                    style={{ color: isMe ? myBubbleText : otherBubbleText }}
-                  >
-                    {displayContent}
-                  </Text>
-                  <View className="flex-row items-center justify-end mt-1 space-x-1">
-                    <Text
-                      className="text-[10px]"
-                      style={{
-                        color: isMe ? "rgba(255,255,255,0.6)" : subTextColor,
-                      }}
-                    >
-                      {time}
-                    </Text>
-                    {isMe && (
-                      <Ionicons
-                        name="checkmark-done"
-                        size={14}
-                        color={
-                          item.isRead ? "#60A5FA" : "rgba(255,255,255,0.6)"
-                        }
-                      />
-                    )}
-                  </View>
-                </View>
-              )}
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Swipeable>
-    );
-  };
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView
-        className="flex-1"
-        edges={["top"]}
-        style={{ backgroundColor: bgColor }}
-      >
-        <Stack.Screen options={{ headerShown: false }} />
-
-        {/* Header */}
-        <View
-          className="flex-row items-center px-2 py-2 border-b z-10"
-          style={{ backgroundColor: headerBg, borderColor: borderColor }}
-        >
-          <TouchableOpacity onPress={() => router.back()} className="p-2">
+      <View style={{ flex: 1, backgroundColor: bgColor }}>
+        <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+          <Stack.Screen options={{ headerShown: false }} />
+          {/* <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+          > */}
+          {/* HEADER */}
+          <View
+            className="flex-row items-center px-4 py-3 border-b z-10 shadow-sm"
+            style={{ backgroundColor: headerBg, borderColor: borderColor }}
+          >
             <Ionicons
               name="chevron-back"
               size={28}
-              color={isDark ? "#FFF" : "#000"}
+              color={textColor}
+              onPress={() => router.back()}
             />
-          </TouchableOpacity>
-          <Image
-            source={
-              logic.chatUser.avatar
-                ? { uri: logic.chatUser.avatar }
-                : require("@/assets/noPfp.jpg")
-            }
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: inputBg,
-            }}
-            contentFit="cover"
-            transition={200}
-          />
-          <View className="ml-3 flex-1">
-            <View className="flex-row items-center">
-              <Text
-                className="font-bold text-base"
-                numberOfLines={1}
-                style={{ color: textColor }}
-              >
-                {logic.chatUser.name || "Usuario"}
-              </Text>
-              {logic.chatUser.isVerified && (
-                <MaterialIcons
-                  name="verified"
-                  size={14}
-                  color="#5E17EB"
-                  style={{ marginLeft: 4 }}
-                />
-              )}
-            </View>
-          </View>
-        </View>
-
-        <FlatList
-          ref={logic.flatListRef}
-          data={logic.messages}
-          keyExtractor={(item) => item.$id}
-          renderItem={renderMessage}
-          inverted
-          contentContainerStyle={{ paddingVertical: 15 }}
-          className="flex-1"
-        />
-
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-        >
-          {(logic.replyingTo || logic.editingMessage) && (
-            <View
-              className="flex-row items-center justify-between px-3 py-2 m-2 rounded-xl border-l-4"
+            <Image
+              source={
+                logic.chatUser.avatar
+                  ? { uri: logic.chatUser.avatar }
+                  : require("@/assets/images/icon.png")
+              }
               style={{
-                backgroundColor: inputBg,
-                borderColor: logic.editingMessage ? "#EAB308" : "#5E17EB",
-                borderLeftWidth: 4,
-                elevation: 2,
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                marginLeft: 10,
+                backgroundColor: "#333",
               }}
-            >
-              <View className="flex-1 pl-2">
+              contentFit="cover"
+            />
+            <View className="ml-3 flex-1">
+              <View className="flex-row items-center">
                 <Text
-                  className="text-xs font-bold mb-0.5"
-                  style={{
-                    color: logic.editingMessage ? "#EAB308" : "#5E17EB",
-                  }}
-                >
-                  {logic.editingMessage
-                    ? t("chat.editing")
-                    : `${t("chat.replyingTo")} ${logic.replyingTo.senderId === logic.currentUser?.$id ? t("chat.yourself") : logic.chatUser.name}`}
-                </Text>
-                <Text
-                  className="text-xs"
+                  className="font-bold text-[16px]"
                   numberOfLines={1}
-                  style={{ color: subTextColor }}
+                  style={{ color: textColor }}
                 >
-                  {logic.editingMessage
-                    ? logic.editingMessage.content.includes(":::REPLY:::")
-                      ? logic.editingMessage.content.split(":::REPLY:::")[1]
-                      : logic.editingMessage.cleanContent
-                    : logic.replyingTo.content.includes(":::REPLY:::")
-                      ? logic.replyingTo.content.split(":::REPLY:::")[1]
-                      : logic.replyingTo.content}
+                  {logic.chatUser.name}
                 </Text>
+                {!logic.chatUser.isVerified && (
+                  <MaterialIcons
+                    name="verified"
+                    size={14}
+                    color="#5E17EB"
+                    style={{ marginLeft: 4 }}
+                  />
+                )}
               </View>
-              <TouchableOpacity
-                onPress={() => {
-                  logic.setReplyingTo(null);
-                  logic.setEditingMessage(null);
-                  logic.setNewMessage("");
-                }}
-                className="p-2"
-              >
-                <Ionicons name="close" size={20} color={iconColor} />
-              </TouchableOpacity>
+              <Text className="text-xs text-zinc-500">En línea</Text>
             </View>
-          )}
-
-          <View
-            className="flex-row items-end px-3 py-3 border-t"
-            style={{ backgroundColor: bgColor, borderColor: borderColor }}
-          >
-            <View
-              className="flex-1 flex-row items-center rounded-3xl border px-4 min-h-[40px]"
-              style={{ backgroundColor: inputBg, borderColor: borderColor }}
-            >
-              <TextInput
-                ref={logic.inputRef}
-                placeholder={
-                  logic.editingMessage
-                    ? t("chat.placeholderEdit")
-                    : t("chat.placeholder")
-                }
-                placeholderTextColor={subTextColor}
-                className="flex-1 text-[15px] py-2.5 max-h-28"
-                style={{ color: textColor }}
-                multiline
-                value={logic.newMessage}
-                onChangeText={logic.setNewMessage}
-              />
-            </View>
-            <TouchableOpacity
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                logic.handleSend();
-              }}
-              className="ml-2 w-10 h-10 rounded-full items-center justify-center"
-              style={{
-                backgroundColor: logic.newMessage.trim()
-                  ? logic.editingMessage
-                    ? "#EAB308"
-                    : "#5E17EB"
-                  : inputBg,
-                opacity: logic.newMessage.trim() ? 1 : 0.7,
-              }}
-              disabled={!logic.newMessage.trim()}
-            >
-              <Ionicons
-                name={logic.editingMessage ? "checkmark" : "send"}
-                size={18}
-                color={
-                  logic.newMessage.trim()
-                    ? logic.editingMessage
-                      ? "black"
-                      : "white"
-                    : subTextColor
-                }
-              />
-            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+
+          {/* LISTA */}
+          <FlatList
+            ref={logic.flatListRef}
+            data={logic.messages}
+            keyExtractor={(item) => item.$id}
+            renderItem={({ item }) => (
+              <MessageItem
+                item={item}
+                currentUserId={logic.currentUser?.$id}
+                isDark={isDark}
+                onSwipeToReply={logic.onSwipeToReply}
+                onDelete={logic.confirmDelete}
+                onEdit={logic.startEditing}
+              />
+            )}
+            inverted
+            contentContainerStyle={{ paddingVertical: 15 }}
+            keyboardShouldPersistTaps="handled"
+          />
+
+          {/* INPUT */}
+          <ChatInput
+            text={logic.newMessage}
+            setText={logic.setNewMessage}
+            onSend={logic.handleSend}
+            replyingTo={logic.replyingTo}
+            onCancelReply={() => logic.setReplyingTo(null)}
+            editingMessage={logic.editingMessage}
+            onCancelEdit={() => {
+              logic.setEditingMessage(null);
+              logic.setNewMessage("");
+            }}
+            inputRef={logic.inputRef}
+            isDark={isDark}
+          />
+          {/* </KeyboardAvoidingView> */}
+        </SafeAreaView>
+      </View>
     </GestureHandlerRootView>
   );
 };

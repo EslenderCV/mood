@@ -1,24 +1,31 @@
 import { ID, Query } from "react-native-appwrite";
 import { databases, appwriteConfig } from "./config";
 // Importamos getUser desde users (sin crear ciclo problemático en runtime)
-import { getUser } from "./users"; 
+import { getUser } from "./users";
 
 export async function sendPushNotification(
   expoPushToken: string,
   title: string,
   body: string,
-  data = {}
+  data: any = {},
+  image?: string, // 📸 Nuevo: Soporte para imágenes
 ) {
   if (!expoPushToken || !expoPushToken.startsWith("ExponentPushToken")) {
     return;
   }
 
+  // Estructura Premium
   const message = {
     to: expoPushToken,
     sound: "default",
     title: title,
     body: body,
-    data: data,
+    data: data, // Aquí va el postId o chatId para la navegación
+    image: image, // Imagen grande en Android (BigPictureStyle)
+    priority: "high",
+    channelId: "social-updates", // 🔥 Clave para Android
+    badge: 1,
+    _displayInForeground: false, // Dejaremos que nuestro Context maneje esto
   };
 
   try {
@@ -60,10 +67,12 @@ export async function createNotification(data: {
   senderName: string;
   senderAvatar: string;
   postId?: string;
+  imagePreview?: string; // 📸 Pasamos la imagen del post si existe
 }) {
   try {
     if (data.userId === data.senderId) return;
 
+    // 1. Guardar en Base de Datos (Igual que antes)
     await databases.createDocument(
       appwriteConfig.databaseId,
       appwriteConfig.notificationsCollectionId,
@@ -80,20 +89,32 @@ export async function createNotification(data: {
       },
     );
 
+    // 2. Preparar el Push "Premium"
     const targetUser = await getUser(data.userId);
 
     if (targetUser && targetUser.expoPushToken) {
       let title = "Mood";
+      let body = `${data.senderName} ${data.message}`;
+
+      // Personalización por tipo
       if (data.type === "like") title = "❤️ Nuevo Like";
-      if (data.type === "comment") title = "💬 Nuevo Comentario";
+      if (data.type === "comment") title = "💬 Comentario";
       if (data.type === "follow") title = "👤 Nuevo Seguidor";
-      if (data.type === "tag") title = "🏷️ Te etiquetaron";
+      if (data.type === "tag") title = "🏷️ Etiqueta";
 
-      const body = `${data.senderName} ${data.message}`;
-
-      await sendPushNotification(targetUser.expoPushToken, title, body, {
-        postId: data.postId,
-      });
+      // 3. Enviar con datos de navegación y visuales
+      await sendPushNotification(
+        targetUser.expoPushToken,
+        title,
+        body,
+        {
+          // 🧭 DATA PARA DEEP LINKING
+          url: data.postId ? `/post/${data.postId}` : `/user/${data.senderId}`,
+          type: data.type,
+        },
+        // Usamos la foto del post (si es like/comment) o el avatar del usuario
+        data.imagePreview || data.senderAvatar,
+      );
     }
   } catch (error) {
     console.log("Error creando notificación:", error);
@@ -105,7 +126,7 @@ export async function getUserNotifications(userId: string) {
     const result = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.notificationsCollectionId,
-      [Query.equal("userId", userId), Query.orderDesc("$createdAt")]
+      [Query.equal("userId", userId), Query.orderDesc("$createdAt")],
     );
     return result.documents;
   } catch (error) {
@@ -119,7 +140,7 @@ export async function getUnreadNotificationCount(userId: string) {
     const result = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.notificationsCollectionId,
-      [Query.equal("userId", userId), Query.equal("isRead", false)]
+      [Query.equal("userId", userId), Query.equal("isRead", false)],
     );
     return result.total;
   } catch (error) {
@@ -134,7 +155,7 @@ export async function markNotificationAsRead(notificationId: string) {
       appwriteConfig.databaseId,
       appwriteConfig.notificationsCollectionId,
       notificationId,
-      { isRead: true }
+      { isRead: true },
     );
   } catch (error) {
     console.log("Error marking as read:", error);
@@ -146,7 +167,7 @@ export async function markAllNotificationsAsRead(userId: string) {
     const unreadList = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.notificationsCollectionId,
-      [Query.equal("userId", userId), Query.equal("isRead", false)]
+      [Query.equal("userId", userId), Query.equal("isRead", false)],
     );
 
     if (unreadList.total === 0) return true;
@@ -156,8 +177,8 @@ export async function markAllNotificationsAsRead(userId: string) {
         appwriteConfig.databaseId,
         appwriteConfig.notificationsCollectionId,
         doc.$id,
-        { isRead: true }
-      )
+        { isRead: true },
+      ),
     );
 
     await Promise.all(promises);
@@ -173,7 +194,7 @@ export async function deleteNotification(notificationId: string) {
     await databases.deleteDocument(
       appwriteConfig.databaseId,
       appwriteConfig.notificationsCollectionId,
-      notificationId
+      notificationId,
     );
     return true;
   } catch (error) {
@@ -187,14 +208,14 @@ export async function clearAllNotifications(userId: string) {
     const list = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.notificationsCollectionId,
-      [Query.equal("userId", userId)]
+      [Query.equal("userId", userId)],
     );
     const promises = list.documents.map((doc) =>
       databases.deleteDocument(
         appwriteConfig.databaseId,
         appwriteConfig.notificationsCollectionId,
-        doc.$id
-      )
+        doc.$id,
+      ),
     );
     await Promise.all(promises);
     return true;
@@ -207,7 +228,7 @@ export async function clearAllNotifications(userId: string) {
 export const sendTagNotification = async (
   senderId: string,
   receiverId: string,
-  postId: string
+  postId: string,
 ) => {
   try {
     const receiver = await getUser(receiverId);

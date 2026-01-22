@@ -5,10 +5,7 @@
     "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": [
-      "mood",
-      "appwrite-callback-6689e59b000acd6caf6f"
-    ],
+    "scheme": ["mood", "appwrite-callback-6689e59b000acd6caf6f"],
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/images/splash-full.png",
@@ -33,6 +30,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.Gammes.Mood",
+      "softwareKeyboardLayoutMode": "resize",
       "versionCode": 19,
       "permissions": [
         "android.permission.CAMERA",

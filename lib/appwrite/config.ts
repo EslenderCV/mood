@@ -11,8 +11,11 @@ export const appwriteConfig = {
   followsCollectionId: "6949a7500026f2cf2850",
   commentsCollectionId: "6949afd6002150b37f0f",
   notificationsCollectionId: "6949b7490030640f0fb1",
-  chatsCollectionId: "6949bf1f002f7ce268a2",
-  messagesCollectionId: "6949c1b6000d070ff309",
+
+  // 🔥 NUEVAS COLECCIONES DE CHAT (PREMIUM)
+  chatsCollectionId: "6971493e000481d5a067", // Antes: conversations
+  messagesCollectionId: "69714a20003e2a516041", // Antes: direct_messages
+
   reportsCollectionId: "6959a194002105f44c03",
   playlistsCollectionId: "6959a8460009615dfbcb",
   storiesCollectionId: "69631b240013f47f559f",

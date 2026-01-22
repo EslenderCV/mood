@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Alert, FlatList, TextInput } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import * as Haptics from "expo-haptics";
+// 1. IMPORTACIONES CORREGIDAS
 import {
   getCurrentUser,
-  getChatMessages,
+  getMessages, // ✅ Antes getChatMessages
   sendMessage,
   deleteMessage,
   updateMessage,
@@ -28,6 +29,8 @@ export const useChatLogic = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [editingMessage, setEditingMessage] = useState<any>(null);
+
+  // Datos del otro usuario
   const [chatUser, setChatUser] = useState({
     name: (params.otherUserName as string) || "Usuario",
     avatar: (params.otherUserAvatar as string) || null,
@@ -40,38 +43,15 @@ export const useChatLogic = () => {
   const inputRef = useRef<TextInput>(null);
   const rowRefs = useRef(new Map()).current;
 
-  // --- 1. LECTURA DE MENSAJES ---
+  // --- LECTURA ---
   const performReadUpdate = async (userId: string, currentMessages: any[]) => {
     if (!chatId || !userId) return;
     try {
       await markChatAsRead(chatId, userId);
     } catch (e) {}
-
-    const unreadMessages = currentMessages.filter(
-      (m) => !m.isRead && m.senderId !== userId,
-    );
-    if (unreadMessages.length > 0) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          !m.isRead && m.senderId !== userId ? { ...m, isRead: true } : m,
-        ),
-      );
-      try {
-        await Promise.all(
-          unreadMessages.map((msg) =>
-            databases.updateDocument(
-              appwriteConfig.databaseId,
-              appwriteConfig.messagesCollectionId,
-              msg.$id,
-              { isRead: true },
-            ),
-          ),
-        );
-      } catch (e) {}
-    }
   };
 
-  // --- 2. CARGA DE DATOS ---
+  // --- CARGA DE DATOS ---
   const loadData = async () => {
     try {
       let user = currentUser;
@@ -81,57 +61,56 @@ export const useChatLogic = () => {
         setCurrentUser(user);
       }
 
-      if (!chatUser.id || !chatUser.avatar || !chatUser.expoPushToken) {
+      // Cargar info del otro usuario si falta
+      if (!chatUser.id || !chatUser.avatar) {
         try {
           if (chatUser.id) {
-            const otherUserData = await getUser(chatUser.id);
-            if (otherUserData) {
+            const u = await getUser(chatUser.id);
+            if (u)
               setChatUser({
-                name: otherUserData.name || otherUserData.username,
-                avatar: otherUserData.pfp,
-                id: otherUserData.$id,
-                expoPushToken: otherUserData.expoPushToken,
-                isVerified: otherUserData.isVerified,
+                name: u.name,
+                avatar: u.pfp,
+                id: u.$id,
+                expoPushToken: u.expoPushToken,
+                isVerified: u.isVerified,
               });
-            }
           } else {
-            const chatDoc = await databases.getDocument(
+            // Fallback buscando en el documento del chat
+            const doc = await databases.getDocument(
               appwriteConfig.databaseId,
               appwriteConfig.chatsCollectionId,
               chatId,
             );
-            if (chatDoc && chatDoc.participants) {
-              const otherId = chatDoc.participants.find(
-                (p: string) => p !== user.$id,
-              );
-              if (otherId) {
-                const otherUserData = await getUser(otherId);
-                if (otherUserData) {
-                  setChatUser({
-                    name: otherUserData.name || otherUserData.username,
-                    avatar: otherUserData.pfp,
-                    id: otherUserData.$id,
-                    expoPushToken: otherUserData.expoPushToken,
-                    isVerified: otherUserData.isVerified,
-                  });
-                }
-              }
+            const otherId = doc.participants.find(
+              (p: string) => p !== user.$id,
+            );
+            if (otherId) {
+              const u = await getUser(otherId);
+              if (u)
+                setChatUser({
+                  name: u.name,
+                  avatar: u.pfp,
+                  id: u.$id,
+                  expoPushToken: u.expoPushToken,
+                  isVerified: u.isVerified,
+                });
             }
           }
-        } catch (err) {}
+        } catch (e) {}
       }
 
-      const msgs = await getChatMessages(chatId);
+      // 2. USO DE FUNCIÓN CORRECTA
+      const msgs = await getMessages(chatId);
       setMessages(msgs);
       if (msgs.length > 0) performReadUpdate(user.$id, msgs);
     } catch (error) {
-      console.log("Error loading chat:", error);
+      console.log("Error:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // --- 3. REALTIME SUBSCRIPTION ---
+  // --- REALTIME ---
   useEffect(() => {
     loadData();
     const unsubscribe = client.subscribe(
@@ -163,68 +142,72 @@ export const useChatLogic = () => {
     return () => unsubscribe();
   }, [chatId]);
 
-  // --- 4. ACCIONES (Enviar, Editar, Borrar, Swipe) ---
+  // --- ACCIONES ---
   const handleSend = async () => {
     if (!newMessage.trim() || !currentUser || !chatUser.id) return;
 
+    // EDICIÓN
     if (editingMessage) {
       const tempId = editingMessage.$id;
-      let finalContent = newMessage;
-      if (editingMessage.content.includes(":::REPLY:::")) {
-        const parts = editingMessage.content.split(":::REPLY:::");
-        finalContent = `${parts[0]}:::REPLY:::${newMessage}`;
+      let finalBody = newMessage;
+      // Mantener metadata si existe
+      if (editingMessage.body && editingMessage.body.includes(":::REPLY:::")) {
+        const parts = editingMessage.body.split(":::REPLY:::");
+        finalBody = `${parts[0]}:::REPLY:::${newMessage}`;
       }
+
       setNewMessage("");
       setEditingMessage(null);
+      setMessages((prev) =>
+        prev.map((m) => (m.$id === tempId ? { ...m, body: finalBody } : m)),
+      );
+
       try {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.$id === tempId ? { ...m, content: finalContent } : m,
-          ),
-        );
-        await updateMessage(tempId, finalContent);
+        await updateMessage(tempId, finalBody);
       } catch {
         Alert.alert("Error", t("chat.errorEdit"));
       }
       return;
     }
 
-    let contentToSend = newMessage;
+    // ENVÍO NUEVO
+    let bodyToSend = newMessage;
     if (replyingTo) {
       const replyName =
         replyingTo.senderId === currentUser.$id ? t("chat.you") : chatUser.name;
-      let rawContent = replyingTo.content.includes(":::REPLY:::")
-        ? replyingTo.content.split(":::REPLY:::")[1]
-        : replyingTo.content;
-      if (rawContent.startsWith("Replying to:"))
-        rawContent = rawContent.split("\n\n").slice(1).join("\n\n");
+      let rawContent = replyingTo.body.includes(":::REPLY:::")
+        ? replyingTo.body.split(":::REPLY:::")[1]
+        : replyingTo.body;
       const snippet = rawContent.substring(0, 50).replace(/\n/g, " ");
-      contentToSend = `${replyName}:::${snippet}:::REPLY:::${newMessage}`;
+      bodyToSend = `${replyName}:::${snippet}:::REPLY:::${newMessage}`;
     }
 
-    const messageForNotification = newMessage;
-    const tempContent = contentToSend;
+    const tempBody = bodyToSend;
+    const msgForPush = newMessage;
     setNewMessage("");
     setReplyingTo(null);
 
+    // 3. ENVÍO COMO OBJETO (FIX ERROR ARGUMENTOS)
     try {
-      await sendMessage(
-        chatId,
-        currentUser.$id,
-        chatUser.id,
-        tempContent,
-        null,
-      );
+      await sendMessage({
+        chatId: chatId,
+        senderId: currentUser.$id,
+        receiverId: chatUser.id,
+        body: tempBody,
+        type: "text",
+      });
+
       if (chatUser.expoPushToken) {
         await sendPushNotification(
           chatUser.expoPushToken,
           currentUser.name || "Mood Chat",
-          messageForNotification,
+          msgForPush,
           { type: "chat", chatId: chatId, url: `/chat/${chatId}` },
+          currentUser.pfp,
         );
       }
-    } catch {
-      setNewMessage(tempContent);
+    } catch (e) {
+      setNewMessage(tempBody); // Restaurar si falla
       Alert.alert("Error", "No se pudo enviar");
     }
   };
@@ -234,7 +217,6 @@ export const useChatLogic = () => {
       setMessages((prev) => prev.filter((m) => m.$id !== messageId));
       await deleteMessage(messageId);
     } catch {
-      Alert.alert("Error", t("chat.errorDelete"));
       loadData();
     }
   };
@@ -252,13 +234,11 @@ export const useChatLogic = () => {
 
   const startEditing = (item: any) => {
     setReplyingTo(null);
-    let cleanContent = item.content;
-    if (item.content.includes(":::REPLY:::"))
-      cleanContent = item.content.split(":::REPLY:::")[1];
-    else if (item.content.startsWith("Replying to:"))
-      cleanContent = item.content.split("\n\n").slice(1).join("\n\n");
-    setEditingMessage({ ...item, cleanContent });
-    setNewMessage(cleanContent);
+    let cleanBody = item.body || "";
+    if (cleanBody.includes(":::REPLY:::"))
+      cleanBody = cleanBody.split(":::REPLY:::")[1];
+    setEditingMessage({ ...item, body: cleanBody });
+    setNewMessage(cleanBody);
     inputRef.current?.focus();
   };
 
@@ -266,26 +246,7 @@ export const useChatLogic = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setReplyingTo(message);
     setEditingMessage(null);
-    const ref = rowRefs.get(message.$id);
-    if (ref) ref.close();
     inputRef.current?.focus();
-  };
-
-  const scrollToOriginalMessage = (originalText: string) => {
-    const index = messages.findIndex((m) => {
-      let content = m.content.includes(":::REPLY:::")
-        ? m.content.split(":::REPLY:::")[1]
-        : m.content;
-      return content.includes(originalText) || content === originalText;
-    });
-    if (index !== -1 && flatListRef.current) {
-      flatListRef.current.scrollToIndex({
-        index,
-        animated: true,
-        viewPosition: 0.5,
-      });
-      Haptics.selectionAsync();
-    }
   };
 
   return {
@@ -306,7 +267,6 @@ export const useChatLogic = () => {
     confirmDelete,
     startEditing,
     onSwipeToReply,
-    scrollToOriginalMessage,
     t,
   };
 };
