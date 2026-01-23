@@ -2,7 +2,6 @@ import React, { useRef, useState, useEffect } from "react";
 import {
   View,
   Animated,
-  useWindowDimensions,
   Image,
   TouchableOpacity,
   Text,
@@ -10,6 +9,7 @@ import {
   Platform,
   LayoutAnimation,
   UIManager,
+  ViewToken,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,7 +18,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 
 // --- HOOK ---
-import { useHomeLogic } from "@/hooks/useHomeLogic";
+import { useHomeLogic, EnrichedFeedItem } from "@/hooks/useHomeLogic";
 import { FeedItem } from "@/context/FeedProvider";
 
 // --- IMPORTS DE COMPONENTES ---
@@ -47,7 +47,18 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// 🔥 DEFINICIÓN LOCAL DE searchSongsWrapper
+const SPINNER_HEIGHT = 60;
+const PULL_THRESHOLD = -80;
+const VISIBLE_THRESHOLD = -40;
+const RANDOM_SEARCH_TERMS = [
+  "global top 50",
+  "viral hits",
+  "pop hits",
+  "lo-fi beats",
+  "rock classics",
+];
+
+// Helper dummy si es necesario
 const searchSongsWrapper = async (query: string) => {
   try {
     const response = await fetch(
@@ -67,19 +78,6 @@ const searchSongsWrapper = async (query: string) => {
   }
 };
 
-const RANDOM_SEARCH_TERMS = [
-  "global top 50",
-  "viral hits",
-  "pop hits",
-  "lo-fi beats",
-  "rock classics",
-];
-
-// CONSTANTES DE UX
-const PULL_THRESHOLD = -80; // Cuánto hay que bajar para activar
-const VISIBLE_THRESHOLD = -40; // Cuándo empieza a mostrarse el spinner
-const SPINNER_HEIGHT = 60;
-
 const Home = () => {
   const isDark = true;
   const logic = useHomeLogic();
@@ -88,22 +86,18 @@ const Home = () => {
   const scrollY = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef(0);
 
-  // Estado explícito para visibilidad
   const [showSpinner, setShowSpinner] = useState(false);
 
-  // Configuración de animación para suavizar la apertura del Header
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   }, [showSpinner, logic.isRefreshing]);
 
-  // Resetear estado al terminar
   useEffect(() => {
     if (!logic.isRefreshing) {
       setShowSpinner(false);
     }
   }, [logic.isRefreshing]);
 
-  // 🔥 SCROLL HANDLER OPTIMIZADO
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
     {
@@ -112,7 +106,6 @@ const Home = () => {
         const offsetY = event.nativeEvent.contentOffset.y;
         scrollRef.current = offsetY;
 
-        // Lógica reactiva de visibilidad mientras arrastras
         if (offsetY < VISIBLE_THRESHOLD) {
           if (!showSpinner) setShowSpinner(true);
         } else if (!logic.isRefreshing) {
@@ -124,7 +117,6 @@ const Home = () => {
 
   const handleScrollEndDrag = () => {
     const offsetY = scrollRef.current;
-    // Activar refresh
     if (offsetY < PULL_THRESHOLD && !logic.isRefreshing) {
       setShowSpinner(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -132,7 +124,6 @@ const Home = () => {
     }
   };
 
-  // Interpolaciones Visuales
   const spinnerScale = scrollY.interpolate({
     inputRange: [PULL_THRESHOLD * 1.5, PULL_THRESHOLD, 0],
     outputRange: [1.3, 1, 0],
@@ -154,7 +145,8 @@ const Home = () => {
     }
   };
 
-  const renderFeedItem = ({ item }: { item: FeedItem }) => {
+  // 🔥 Render Item con Tracking Conectado
+  const renderFeedItem = ({ item }: { item: EnrichedFeedItem }) => {
     switch (item.type) {
       case "post":
         return (
@@ -164,33 +156,47 @@ const Home = () => {
             {item.status === "uploading" && (
               <View className="px-5 mb-2 flex-row items-center">
                 <ActivityIndicator size="small" color="#5E17EB" />
-                <Text className="ml-2 text-xs text-zinc-400">
-                  Publicando...
-                </Text>
+                <Text className="ml-2 text-xs text-zinc-400">Publicando...</Text>
               </View>
             )}
             <PostItem
               post={item.data}
               currentUserId={logic.user?.$id || ""}
-              onProfilePress={(userId) => router.push(`/user/${userId}` as any)}
-              onCommentPress={(postId) => router.push(`/post/${postId}` as any)}
+              onProfilePress={(userId) => {
+                logic.trackOpenProfile(item.data.$id, item.id, userId);
+                router.push(`/user/${userId}` as any);
+              }}
+              onCommentPress={(postId) => {
+                logic.trackOpenComments(postId, item.id);
+                router.push(`/post/${postId}` as any);
+              }}
               onOptionsPress={() => {
                 logic.setSelectedPost(item.data);
                 logic.toggleModal("isOptions", true);
               }}
               onSharePress={() => {
-                logic.setPostToShareData(item.data);
-                logic.setSharePostId(item.data.$id);
-                logic.toggleModal("isShareSelector", true);
                 logic.openShareSelector(item.data);
+                logic.setSharePostId(item.data.$id);
               }}
+              // 🔥 Tracking Actions
+              onLike={() => logic.trackLike(item.data.$id, item.id)}
+              onSave={() => logic.trackSave(item.data.$id, item.id)}
             />
           </View>
         );
+
       case "suggested_users":
-        return <SuggestedUsersCarousel users={item.data} />;
+        // ✅ FIX: SuggestedUsersCarousel requiere currentUserId
+        return (
+          <SuggestedUsersCarousel
+            users={item.data}
+            currentUserId={logic.user?.$id || ""}
+          />
+        );
+
       case "trending_song":
         return <TrendingSongCard song={item.data} />;
+
       default:
         return null;
     }
@@ -203,13 +209,37 @@ const Home = () => {
     }
   };
 
+  // 🔥 VIEWABILITY CONFIG (Estable)
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 60,
+    minimumViewTime: 250,
+  }).current;
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const validItems = viewableItems.filter(
+        (v) => v.isViewable && v.index !== null,
+      );
+      if (validItems.length === 0) return;
+
+      const indices = validItems.map((v) => v.index as number);
+      if (indices.length > 0) {
+        const minIndex = Math.min(...indices);
+        logic.updateViewableIndex(minIndex);
+      }
+    },
+  ).current;
+
   return (
     <GestureHandlerRootView
       style={{ flex: 1, backgroundColor: isDark ? "#000" : "#fff" }}
     >
       <SafeAreaView
         edges={["top"]}
-        style={{ flex: 1, backgroundColor: isDark ? "#000000" : "#FFFFFF" }}
+        style={{
+          flex: 1,
+          backgroundColor: isDark ? "#000000" : "#FFFFFF",
+        }}
       >
         {/* HEADER */}
         <View className="flex-row justify-between items-center px-5 py-3 border-b border-transparent z-50 bg-black">
@@ -234,8 +264,6 @@ const Home = () => {
                 <View className="absolute top-0 right-0 bg-red-500 w-3 h-3 rounded-full border border-black" />
               )}
             </TouchableOpacity>
-
-            {/* 🔥 ICONO CHAT ACTUALIZADO: Navega a la nueva ruta /chatshome */}
             <TouchableOpacity
               onPress={() => router.push("/chatshome")}
               className="relative"
@@ -262,15 +290,16 @@ const Home = () => {
           <Animated.FlatList
             ref={logic.flatListRef}
             data={logic.sortedFeed}
-            keyExtractor={(item) => item._id}
+            keyExtractor={(item) => item.id}
             renderItem={renderFeedItem}
             onScroll={handleScroll}
             onScrollEndDrag={handleScrollEndDrag}
             scrollEventThrottle={16}
             style={{ backgroundColor: "transparent", zIndex: 1 }}
+            viewabilityConfig={viewabilityConfig}
+            onViewableItemsChanged={onViewableItemsChanged}
             ListHeaderComponent={
               <View>
-                {/* Contenedor del Spinner Animado */}
                 <Animated.View
                   style={{
                     height:
@@ -287,7 +316,6 @@ const Home = () => {
                 >
                   <ActivityIndicator size="small" color="#5E17EB" />
                 </Animated.View>
-
                 <StoriesRail
                   currentUser={logic.user}
                   groupedStories={logic.localData.groupedStories}
@@ -315,7 +343,7 @@ const Home = () => {
           />
         )}
 
-        {/* --- MODALES --- */}
+        {/* MODALES */}
         <PostModal />
         <CreatorModal
           visible={logic.modals.isCreator}
@@ -328,9 +356,7 @@ const Home = () => {
             }, 300);
           }}
           onGallery={() => {
-            if (logic.handleMoodMediaPick) {
-              logic.handleMoodMediaPick();
-            }
+            if (logic.handleMoodMediaPick) logic.handleMoodMediaPick();
           }}
         />
         <StoryCreationModal
@@ -383,13 +409,10 @@ const Home = () => {
           isVisible={logic.modals.isOptions}
           onClose={() => logic.toggleModal("isOptions", false)}
           onDelete={handleDeleteAction}
-          onReport={() => {
-            logic.toggleModal("isOptions", false);
-          }}
+          onReport={() => logic.toggleModal("isOptions", false)}
           isOwner={
             logic.user?.$id ===
-            (logic.selectedPost?.postedBy?.$id ||
-              logic.selectedPost?.creator?.$id)
+            (logic.selectedPost?.postedBy?.$id || logic.selectedPost?.creator?.$id)
           }
         />
         <ShareModal
@@ -398,7 +421,6 @@ const Home = () => {
           postId={logic.sharePostId}
         />
       </SafeAreaView>
-      {/* ❌ ELIMINADO: Animated.View con ChatsList antiguo */}
     </GestureHandlerRootView>
   );
 };

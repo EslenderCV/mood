@@ -10,18 +10,18 @@ import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { router } from "expo-router";
-import { getCurrentUser } from "@/lib/appwrite"; // Esto importa desde index.ts o similar
-// 🔥 FIX: Ruta corregida según tu estructura de carpetas (lib/appwrite/notifications.ts)
+import { getCurrentUser } from "@/lib/appwrite";
 import { updateUserPushToken } from "@/lib/appwrite/notifications";
 
+// 🔥 FIX TYPE SCRIPT: Usamos un bloque con 'return' y 'as ...'
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: false, // In-App Toast manejará esto
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: false,
-    shouldShowList: true,
-  }),
+  handleNotification: async (_notification) => {
+    return {
+      shouldShowAlert: false,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    } as Notifications.NotificationBehavior;
+  },
 });
 
 const NotificationContext = createContext<any>(null);
@@ -32,6 +32,8 @@ export const NotificationProvider = ({
   children: React.ReactNode;
 }) => {
   const [expoPushToken, setExpoPushToken] = useState<string | undefined>("");
+  const [currentNotification, setCurrentNotification] =
+    useState<Notifications.Notification | null>(null);
 
   const notificationListener = useRef<Notifications.Subscription | undefined>(
     undefined,
@@ -40,10 +42,8 @@ export const NotificationProvider = ({
     undefined,
   );
 
-  const [currentNotification, setCurrentNotification] =
-    useState<Notifications.Notification | null>(null);
-
   useEffect(() => {
+    // 1. Registrar Token
     registerForPushNotificationsAsync().then(async (token) => {
       setExpoPushToken(token);
       if (token) {
@@ -54,13 +54,15 @@ export const NotificationProvider = ({
       }
     });
 
+    // 2. Escuchar Notificaciones en Primer Plano
     notificationListener.current =
       Notifications.addNotificationReceivedListener((notification) => {
-        console.log("🔔 Notificación en Primer Plano:", notification);
+        console.log("🔔 Notificación recibida (Silenciosa en sistema):", notification);
         setCurrentNotification(notification);
         setTimeout(() => setCurrentNotification(null), 4000);
       });
 
+    // 3. Manejar clics en notificaciones
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data;
@@ -127,7 +129,7 @@ async function registerForPushNotificationsAsync() {
         Constants?.easConfig?.projectId;
       token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     } catch (e) {
-      console.log("Error token:", e);
+      console.log("Error obteniendo token:", e);
     }
   }
 

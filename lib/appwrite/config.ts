@@ -19,6 +19,8 @@ export const appwriteConfig = {
   reportsCollectionId: "6959a194002105f44c03",
   playlistsCollectionId: "6959a8460009615dfbcb",
   storiesCollectionId: "69631b240013f47f559f",
+  feedEventsCollectionId: "69728245001c3be9cfe9",
+
 };
 
 export const client = new Client();

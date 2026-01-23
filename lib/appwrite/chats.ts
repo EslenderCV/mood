@@ -223,3 +223,28 @@ export async function setTypingStatus(
     );
   } catch (e) {}
 }
+
+export async function getUnreadMessagesCount(userId: string): Promise<number> {
+  try {
+    const result = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.chatsCollectionId,
+      [Query.equal("participants", userId)]
+    );
+
+    let total = 0;
+
+    for (const chat of result.documents) {
+      try {
+        const counts = JSON.parse(chat.unreadCounts || "{}") as Record<string, number>;
+        total += counts[userId] || 0;
+      } catch {
+        // si unreadCounts está corrupto o no es JSON válido, lo ignoramos
+      }
+    }
+
+    return total;
+  } catch {
+    return 0;
+  }
+}

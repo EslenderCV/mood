@@ -1,4 +1,6 @@
 export default {
+
+  
   common: {
     posted: "¡Publicado!",
     error: "Error",
@@ -20,6 +22,9 @@ export default {
   home: {
     suggestedUsers: "Quizás conozcas",
   },
+
+
+  
   auth: {
     welcomeBack: "¡Hola de nuevo!",
     subtitleSignIn: "Ingresa tus credenciales para continuar vibra.",
