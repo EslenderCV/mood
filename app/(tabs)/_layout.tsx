@@ -13,7 +13,7 @@ import { Link, Tabs, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useModal } from "@/context/ModalContext";
-import PostModal from "@/components/PostModal";
+import PostModal from "@/components/postModal/PostModal";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

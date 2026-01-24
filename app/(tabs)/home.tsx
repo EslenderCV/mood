@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { router } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import * as Haptics from "expo-haptics";
 
 // --- HOOK ---
@@ -30,7 +30,7 @@ import DirectShareSheet from "@/components/home/DirectShareSheet";
 import FeedSkeleton from "@/components/home/FeedSkeleton";
 import EmptyStateWithSuggestions from "@/components/home/EmptyStateWithSuggestions";
 import PostItem from "@/components/PostItem";
-import PostModal from "@/components/PostModal";
+import PostModal from "@/components/postModal/PostModal";
 import OptionsModal from "@/components/OptionsModal";
 import MoodShareCard from "@/components/MoodShareCard";
 import ShareModal from "@/components/ShareModal";
@@ -81,6 +81,9 @@ const searchSongsWrapper = async (query: string) => {
 const Home = () => {
   const isDark = true;
   const logic = useHomeLogic();
+
+  // ✅ CORRECCIÓN: Usar <any> para permitir 'tabPress' sin errores de TS
+  const navigation = useNavigation<any>();
 
   // 🔥 CUSTOM REFRESH STATE
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -156,7 +159,9 @@ const Home = () => {
             {item.status === "uploading" && (
               <View className="px-5 mb-2 flex-row items-center">
                 <ActivityIndicator size="small" color="#5E17EB" />
-                <Text className="ml-2 text-xs text-zinc-400">Publicando...</Text>
+                <Text className="ml-2 text-xs text-zinc-400">
+                  Publicando...
+                </Text>
               </View>
             )}
             <PostItem
@@ -186,7 +191,6 @@ const Home = () => {
         );
 
       case "suggested_users":
-        // ✅ FIX: SuggestedUsersCarousel requiere currentUserId
         return (
           <SuggestedUsersCarousel
             users={item.data}
@@ -229,6 +233,33 @@ const Home = () => {
       }
     },
   ).current;
+
+  // 🔥 PROTECCIÓN TAB PRESS
+  useEffect(() => {
+    // @ts-ignore - Ignoramos error de tipo estricto en tabPress
+    const unsubscribe = navigation.addListener("tabPress", (e: any) => {
+      // Si ya está cargando, NO HACER NADA
+      if (logic.isFeedLoading || logic.isRefreshing) {
+        e.preventDefault();
+        return;
+      }
+
+      if (navigation.isFocused()) {
+        e.preventDefault();
+        if (logic.flatListRef.current) {
+          logic.flatListRef.current.scrollToOffset({
+            offset: 0,
+            animated: true,
+          });
+        }
+        // Pequeño delay para no saturar si spamean el botón
+        setTimeout(() => {
+          logic.onRefresh();
+        }, 250);
+      }
+    });
+    return unsubscribe;
+  }, [navigation, logic.onRefresh, logic.isFeedLoading, logic.isRefreshing]);
 
   return (
     <GestureHandlerRootView
@@ -290,7 +321,7 @@ const Home = () => {
           <Animated.FlatList
             ref={logic.flatListRef}
             data={logic.sortedFeed}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.id} // ✅ KEY STABLE
             renderItem={renderFeedItem}
             onScroll={handleScroll}
             onScrollEndDrag={handleScrollEndDrag}
@@ -412,7 +443,8 @@ const Home = () => {
           onReport={() => logic.toggleModal("isOptions", false)}
           isOwner={
             logic.user?.$id ===
-            (logic.selectedPost?.postedBy?.$id || logic.selectedPost?.creator?.$id)
+            (logic.selectedPost?.postedBy?.$id ||
+              logic.selectedPost?.creator?.$id)
           }
         />
         <ShareModal

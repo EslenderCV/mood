@@ -1,19 +1,22 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-  Alert,
+  Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
-
-import { FollowButton } from "@/components/FollowButton";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
 
 import { followUser, unfollowUser, checkFollowStatus } from "@/lib/appwrite";
+import { BrainEmitter } from "@/src/brain/signals/emitters";
+import { InteractionType } from "@/src/brain/signals/InteractionSignals";
 
 type SuggestedUser = any;
 
@@ -35,88 +38,111 @@ export default function SuggestedUsersCarousel({
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  const bg = isDark ? "#09090B" : "#FFFFFF";
-  const cardBg = isDark ? "#18181B" : "#F4F4F5";
-  const textColor = isDark ? "#FAFAFA" : "#18181B";
+  // --- PALETA MOOD MODERNA ---
+  // Coincide con TrendingSongCard
+  const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
+  const cardBg = isDark ? "#121212" : "#F4F4F5"; // Un poco más claro que el fondo negro total
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
 
-  const safeUsers = useMemo(() => (Array.isArray(users) ? users : []), [users]);
-
+  const [visibleUsers, setVisibleUsers] = useState<SuggestedUser[]>([]);
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
   const [isFollowingMap, setIsFollowingMap] = useState<Record<string, boolean>>(
     {},
   );
-  const [isFollowerMap, setIsFollowerMap] = useState<Record<string, boolean>>(
-    {},
-  );
 
-  // Load follow status for each user (best-effort)
+  useEffect(() => {
+    if (Array.isArray(users)) {
+      const filtered = users.filter((u) => getUserId(u) !== currentUserId && u);
+      setVisibleUsers(filtered);
+      setLoadingMap({});
+      setIsFollowingMap({});
+    }
+  }, [users, currentUserId]);
+
+  // Carga optimizada (igual que antes)
   useEffect(() => {
     let alive = true;
+    const timer = setTimeout(() => {
+      const run = async () => {
+        if (!currentUserId || visibleUsers.length === 0) return;
+        const usersToCheck = visibleUsers
+          .filter((u) => isFollowingMap[getUserId(u)] === undefined)
+          .slice(0, 3);
 
-    const run = async () => {
-      if (!currentUserId || safeUsers.length === 0) return;
+        if (usersToCheck.length === 0) return;
 
-      const entries = await Promise.all(
-        safeUsers.map(async (u) => {
-          const targetId = getUserId(u);
-          if (!targetId || targetId === currentUserId) return null;
+        const results = await Promise.all(
+          usersToCheck.map(async (u) => {
+            const targetId = getUserId(u);
+            try {
+              const status = await checkFollowStatus(currentUserId, targetId);
+              return { targetId, isFollowing: !!(status as any)?.isFollowing };
+            } catch {
+              return { targetId, isFollowing: false };
+            }
+          }),
+        );
 
-          try {
-            const status = await checkFollowStatus(currentUserId, targetId);
-            const isFollowing = !!(status as any)?.isFollowing;
-            const isFollower = !!(status as any)?.isFollower;
-            return { targetId, isFollowing, isFollower };
-          } catch {
-            return { targetId, isFollowing: false, isFollower: false };
-          }
-        }),
-      );
-
-      if (!alive) return;
-
-      const nextFollowing: Record<string, boolean> = {};
-      const nextFollower: Record<string, boolean> = {};
-
-      entries.forEach((e) => {
-        if (!e) return;
-        nextFollowing[e.targetId] = e.isFollowing;
-        nextFollower[e.targetId] = e.isFollower;
-      });
-
-      setIsFollowingMap((prev) => ({ ...prev, ...nextFollowing }));
-      setIsFollowerMap((prev) => ({ ...prev, ...nextFollower }));
-    };
-
-    void run();
+        if (!alive) return;
+        setIsFollowingMap((prev) => {
+          const next = { ...prev };
+          results.forEach((r) => {
+            if (r.targetId) next[r.targetId] = r.isFollowing;
+          });
+          return next;
+        });
+      };
+      run();
+    }, 1000);
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
-  }, [currentUserId, safeUsers]);
+  }, [currentUserId, visibleUsers]);
+
+  // --- ACTIONS ---
+  const handleDismiss = useCallback((targetId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setVisibleUsers((prev) => prev.filter((u) => getUserId(u) !== targetId));
+    BrainEmitter.interaction(InteractionType.SKIP, {
+      postId: `profile_${targetId}`,
+      creatorId: targetId,
+      emotionalTag: "discovery_skip",
+    });
+  }, []);
+
+  const handleProfilePress = (targetId: string) => {
+    BrainEmitter.interaction(InteractionType.OPEN_PROFILE, {
+      postId: `profile_${targetId}`,
+      creatorId: targetId,
+      emotionalTag: "discovery_click",
+    });
+    router.push(`/user/${targetId}` as any);
+  };
 
   const toggleFollow = useCallback(
     async (targetId: string) => {
-      if (!currentUserId) {
-        Alert.alert("Error", "No se detectó el usuario actual.");
-        return;
-      }
-      if (!targetId || targetId === currentUserId) return;
-
+      if (!currentUserId) return;
+      Haptics.selectionAsync();
       const currentlyFollowing = !!isFollowingMap[targetId];
 
-      setLoadingMap((p) => ({ ...p, [targetId]: true }));
       setIsFollowingMap((p) => ({ ...p, [targetId]: !currentlyFollowing }));
+      setLoadingMap((p) => ({ ...p, [targetId]: true }));
 
       try {
         if (currentlyFollowing) {
           await unfollowUser(currentUserId, targetId);
         } else {
           await followUser(currentUserId, targetId);
+          BrainEmitter.interaction(InteractionType.FOLLOW, {
+            postId: `profile_${targetId}`,
+            creatorId: targetId,
+            emotionalTag: "discovery_follow",
+          });
         }
       } catch {
         setIsFollowingMap((p) => ({ ...p, [targetId]: currentlyFollowing }));
-        Alert.alert("Error", "No se pudo actualizar el follow. Intenta de nuevo.");
       } finally {
         setLoadingMap((p) => ({ ...p, [targetId]: false }));
       }
@@ -124,83 +150,194 @@ export default function SuggestedUsersCarousel({
     [currentUserId, isFollowingMap],
   );
 
-  const renderItem = ({ item }: { item: SuggestedUser }) => {
-    const id = getUserId(item);
-    if (!id || id === currentUserId) return null;
+  const renderItem = useCallback(
+    ({ item }: { item: SuggestedUser }) => {
+      const id = getUserId(item);
+      if (!id) return null;
 
-    const avatar = getAvatar(item);
-    const name = getName(item);
-    const username = getUsername(item);
+      const avatar = getAvatar(item);
+      const name = getName(item);
+      const username = getUsername(item);
+      const isFollowing = !!isFollowingMap[id];
+      const isLoading = !!loadingMap[id];
 
-    const isFollowing = !!isFollowingMap[id];
-    const isFollower = !!isFollowerMap[id];
-    const isLoading = !!loadingMap[id];
-
-    return (
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={() => router.push(`/user/${id}` as any)}
-        className="mr-3"
-      >
+      return (
         <View
-          className="w-[170px] rounded-2xl p-3"
-          style={{ backgroundColor: cardBg, borderWidth: 1, borderColor }}
+          className="w-[150px] mr-3 rounded-[24px] p-4 flex-col items-center relative"
+          style={{
+            backgroundColor: cardBg,
+            borderWidth: 1,
+            borderColor: isDark ? "rgba(255,255,255,0.08)" : borderColor,
+            // Sombra sutil para dar profundidad en el feed
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: isDark ? 0.4 : 0.1,
+            shadowRadius: 8,
+            elevation: 4,
+          }}
         >
-          <View className="flex-row items-center">
-            <Image
-              source={avatar ? { uri: avatar } : require("@/assets/noPfp.jpg")}
-              className="w-12 h-12 rounded-full"
-              contentFit="cover"
-              transition={200}
-              style={{ backgroundColor: isDark ? "#27272A" : "#E4E4E7" }}
+          {/* Botón de cerrar (X) sutil y elegante */}
+          <TouchableOpacity
+            onPress={() => handleDismiss(id)}
+            className="absolute top-2 right-2 w-6 h-6 rounded-full items-center justify-center z-10"
+            style={{ backgroundColor: "rgba(0,0,0,0.2)" }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons
+              name="close"
+              size={12}
+              color="#fff"
+              style={{ opacity: 0.8 }}
             />
-            <View className="ml-3 flex-1">
-              <Text
-                numberOfLines={1}
-                className="font-bold text-[14px]"
-                style={{ color: textColor }}
-              >
-                {name}
-              </Text>
-              <Text
-                numberOfLines={1}
-                className="text-[12px]"
-                style={{ color: subTextColor }}
-              >
-                @{username}
-              </Text>
+          </TouchableOpacity>
+
+          {/* Avatar con anillo de "vibe" */}
+          <TouchableOpacity
+            onPress={() => handleProfilePress(id)}
+            activeOpacity={0.9}
+            className="mb-3 mt-1 shadow-md"
+          >
+            <View
+              className="rounded-full p-[2px]"
+              style={{
+                // Anillo sutil estilo Instagram/Mood
+                backgroundColor: isFollowing ? "transparent" : "#5E17EB",
+              }}
+            >
+              <Image
+                source={
+                  avatar ? { uri: avatar } : require("@/assets/noPfp.jpg")
+                }
+                className="w-[72px] h-[72px] rounded-full"
+                contentFit="cover"
+                transition={200}
+                style={{
+                  backgroundColor: "#18181B",
+                  borderWidth: 2,
+                  borderColor: cardBg, // Mismo color que la tarjeta para efecto "cutout"
+                }}
+              />
             </View>
+          </TouchableOpacity>
+
+          {/* Info del usuario */}
+          <View className="items-center mb-4 w-full px-1">
+            <Text
+              numberOfLines={1}
+              className="font-bold text-[14px] text-center w-full mb-0.5"
+              style={{ color: textColor }}
+            >
+              {name}
+            </Text>
+            <Text
+              numberOfLines={1}
+              className="text-[11px] text-center w-full font-medium"
+              style={{ color: subTextColor }}
+            >
+              @{username}
+            </Text>
           </View>
 
-          <View className="mt-3">
-            <FollowButton
-              isFollowing={isFollowing}
-              isFollower={isFollower}
-              onPress={() => toggleFollow(id)}
-            />
-            {isLoading && (
-              <View className="absolute right-3 top-3">
-                <ActivityIndicator size="small" />
+          {/* Botón de acción: Gradiente Mood */}
+          <TouchableOpacity
+            onPress={() => toggleFollow(id)}
+            activeOpacity={0.8}
+            disabled={isLoading}
+            className="w-full h-9 rounded-full overflow-hidden shadow-sm"
+          >
+            {isFollowing ? (
+              // Estado: Siguiendo (Borde, fondo transparente)
+              <View
+                className="w-full h-full items-center justify-center rounded-full border"
+                style={{ borderColor: subTextColor }}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={textColor} />
+                ) : (
+                  <Text
+                    className="text-[12px] font-bold"
+                    style={{ color: textColor }}
+                  >
+                    Siguiendo
+                  </Text>
+                )}
               </View>
+            ) : (
+              // Estado: Seguir (Gradiente Completo)
+              <LinearGradient
+                colors={["#5E17EB", "#8C52FF"]} // Gradiente Púrpura Mood
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                className="w-full h-full items-center justify-center flex-row"
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <>
+                    <Text className="text-white text-[12px] font-bold tracking-wide mr-1">
+                      Seguir
+                    </Text>
+                    {/* Pequeño icono para invitar a la acción */}
+                    <Ionicons name="add" size={12} color="white" />
+                  </>
+                )}
+              </LinearGradient>
             )}
-          </View>
+          </TouchableOpacity>
         </View>
-      </TouchableOpacity>
-    );
-  };
+      );
+    },
+    [
+      isFollowingMap,
+      loadingMap,
+      isDark,
+      cardBg,
+      textColor,
+      subTextColor,
+      borderColor,
+    ],
+  );
 
-  // ✅ Evita render si no hay data o no hay usuario actual aún
-  if (!safeUsers.length || !currentUserId) return null;
+  if (visibleUsers.length < 3 || !currentUserId) return null;
 
   return (
-    <View style={{ backgroundColor: bg }}>
+    // 🔥 ESTRUCTURA IDÉNTICA A TrendingSongCard: py-6 + border-b
+    <View
+      className={`py-6 border-b ${
+        isDark ? "border-zinc-800" : "border-zinc-200"
+      }`}
+    >
+      {/* Header con padding horizontal (px-5) igual que TrendingSongCard */}
+      <View className="flex-row items-center mb-4 px-5">
+        <Ionicons
+          name="flash" // Icono "Energy" que va más con "Descubre"
+          size={18}
+          color="#5E17EB"
+          style={{ marginRight: 6 }}
+        />
+        <Text
+          className={`text-base font-bold ${
+            isDark ? "text-white" : "text-black"
+          }`}
+        >
+          You Might Know
+        </Text>
+      </View>
+
+      {/* Lista Horizontal */}
       <FlatList
         horizontal
-        data={safeUsers}
-        keyExtractor={(item, index) => String(getUserId(item) ?? `idx_${index}`)}
+        data={visibleUsers}
+        keyExtractor={(item) => String(getUserId(item))}
         renderItem={renderItem}
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 10 }}
+        // contentContainerStyle maneja el padding interno para que el primer item
+        // se alinee con el header (20px ≈ px-5)
+        contentContainerStyle={{ paddingHorizontal: 20 }}
+        removeClippedSubviews={true}
+        initialNumToRender={4}
+        decelerationRate="fast"
+        snapToInterval={150 + 12} // Ancho tarjeta + margen derecho
       />
     </View>
   );

@@ -30,11 +30,12 @@ export class MoodSessionManager {
 
   // Debounce
   private reorderTimeout: ReturnType<typeof setTimeout> | null = null;
-  private readonly DEBOUNCE_MS = 300;
 
   // Config
+  private readonly DEBOUNCE_MS = 1000;
+  private readonly SAFETY_MARGIN = 10;
+
   private readonly BASE_LEARNING_RATE = 0.25;
-  private readonly SAFETY_MARGIN = 2; // zona congelada
   private readonly CREATOR_ALPHA = 0.2;
   private readonly TAG_ALPHA = 0.1;
 
@@ -89,7 +90,11 @@ export class MoodSessionManager {
       target = signal.payload.trackFeatures;
     } else {
       const pf = signal.payload.postFeatures;
-      if (pf && typeof pf.energy === "number" && typeof pf.valence === "number") {
+      if (
+        pf &&
+        typeof pf.energy === "number" &&
+        typeof pf.valence === "number"
+      ) {
         target = { energy: pf.energy, valence: pf.valence };
       }
     }
@@ -98,11 +103,14 @@ export class MoodSessionManager {
       const nextCoords = this.predictiveEngine.calculateNextVector(
         this.sessionVector,
         target,
-        this.BASE_LEARNING_RATE * Math.abs(delta.weight)
+        this.BASE_LEARNING_RATE * Math.abs(delta.weight),
       );
       this.sessionVector.set(nextCoords.energy, nextCoords.valence);
     } else {
-      const dampenedDelta = this.predictiveEngine.calculateHeuristicDelta(delta, Math.abs(delta.weight));
+      const dampenedDelta = this.predictiveEngine.calculateHeuristicDelta(
+        delta,
+        Math.abs(delta.weight),
+      );
       this.sessionVector.applyDelta(dampenedDelta, 1.0);
     }
 
@@ -115,7 +123,10 @@ export class MoodSessionManager {
     // Creator affinity
     if (creatorId && creatorId !== "system" && creatorId !== "unknown") {
       const current = this.creatorAffinity.get(creatorId) || 0;
-      const next = Math.max(-3, Math.min(3, current + weight * this.CREATOR_ALPHA));
+      const next = Math.max(
+        -3,
+        Math.min(3, current + weight * this.CREATOR_ALPHA),
+      );
       this.creatorAffinity.set(creatorId, next);
     }
 
@@ -138,20 +149,31 @@ export class MoodSessionManager {
   }
 
   private performReorder(): void {
-    const mutableItems = this.buffer.getMutableTail(this.currentViewableIndex, this.SAFETY_MARGIN);
-    if (mutableItems.length < 2) return;
+    const mutableItems = this.buffer.getMutableTail(
+      this.currentViewableIndex,
+      this.SAFETY_MARGIN,
+    );
 
-    const lockedContext = this.buffer.items.slice(0, this.buffer.items.length - mutableItems.length);
+    if (mutableItems.length < 3) return;
+
+    const lockedContext = this.buffer.items.slice(
+      0,
+      this.buffer.items.length - mutableItems.length,
+    );
 
     const sortedTail = ResonanceEngine.rank(
       mutableItems,
       this.sessionVector,
       lockedContext,
       this.creatorAffinity,
-      this.tagAffinity
+      this.tagAffinity,
     );
 
-    this.buffer.mergeSortedTail(this.currentViewableIndex, sortedTail, this.SAFETY_MARGIN);
+    this.buffer.mergeSortedTail(
+      this.currentViewableIndex,
+      sortedTail,
+      this.SAFETY_MARGIN,
+    );
   }
 
   // --- GETTERS ---
@@ -170,6 +192,11 @@ export class MoodSessionManager {
 
   public generateMoodDigest() {
     return this.digest.generate(this.sessionVector, this.sessionId);
+  }
+
+  // 🔥 NUEVO: Permite consultar qué tanto nos gusta un creador para sugerirlo
+  public getCreatorAffinity(creatorId: string): number {
+    return this.creatorAffinity.get(creatorId) || 0;
   }
 
   public resetSession(): void {
