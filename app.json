@@ -5,7 +5,10 @@
     "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": ["mood", "appwrite-callback-6689e59b000acd6caf6f"],
+    "scheme": [
+      "mood",
+      "appwrite-callback-6689e59b000acd6caf6f"
+    ],
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/images/splash-full.png",
@@ -16,7 +19,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.Gammes.Mood",
       "usesAppleSignIn": true,
-      "buildNumber": "19",
+      "buildNumber": "20",
       "infoPlist": {
         "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos directamente desde la app para crear nuevos Vibes o actualizar tu foto de perfil.",
         "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar imágenes y compartirlas en tus publicaciones o historias.",
@@ -31,7 +34,7 @@
       },
       "package": "com.Gammes.Mood",
       "softwareKeyboardLayoutMode": "resize",
-      "versionCode": 19,
+      "versionCode": 20,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
