@@ -49,11 +49,8 @@ export default function MusicSection({
 }: MusicSectionProps) {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // Colores para iconos
   const iconColor = isDark ? "#A1A1AA" : "#71717A";
 
-  // 1. SI YA HAY CANCIÓN -> Muestra la tarjeta de la canción
   if (linkedSong) {
     return (
       <Animated.View entering={FadeIn} exiting={FadeOut}>
@@ -67,7 +64,6 @@ export default function MusicSection({
     );
   }
 
-  // 2. MODO BUSCADOR -> Input expandido
   if (isSearchingMusic) {
     return (
       <Animated.View entering={FadeIn} exiting={FadeOut} className="w-full">
@@ -95,14 +91,11 @@ export default function MusicSection({
             <Ionicons name="close-circle" size={18} color={iconColor} />
           </TouchableOpacity>
         </View>
-
-        {/* Lista de Resultados */}
         <View className="h-40">
           <ScrollView
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* 🔥 CORRECCIÓN AQUÍ: Usamos index como fallback para la key */}
             {searchResults.map((song, index) => (
               <SongResultRow
                 key={song.id ? `${song.id}-${index}` : index}
@@ -128,14 +121,12 @@ export default function MusicSection({
     );
   }
 
-  // 3. MODO TOOLBAR (ICONOS) -> Vista por defecto
   return (
     <Animated.View
       entering={FadeIn}
       className="flex-row items-center justify-between pt-2"
     >
       <View className="flex-row gap-4">
-        {/* BOTÓN MÚSICA */}
         <TouchableOpacity
           onPress={() => setIsSearchingMusic(true)}
           className="w-10 h-10 rounded-full items-center justify-center"
@@ -147,8 +138,6 @@ export default function MusicSection({
         >
           <Ionicons name="musical-notes" size={20} color="#5E17EB" />
         </TouchableOpacity>
-
-        {/* BOTÓN MICRÓFONO / SHAZAM */}
         <TouchableOpacity
           onPress={onShazam}
           className="w-10 h-10 rounded-full items-center justify-center"
@@ -166,20 +155,7 @@ export default function MusicSection({
             color={isRecording ? "white" : iconColor}
           />
         </TouchableOpacity>
-
-        {/* BOTÓN LOCATION (Placeholder visual) */}
-        <TouchableOpacity
-          disabled
-          className="w-10 h-10 rounded-full items-center justify-center opacity-50"
-        >
-          <Ionicons name="location-outline" size={22} color={iconColor} />
-        </TouchableOpacity>
       </View>
-
-      {/* Texto de ayuda sutil a la derecha */}
-      <Text style={{ color: iconColor, fontSize: 12, opacity: 0.6 }}>
-        Add to your post
-      </Text>
     </Animated.View>
   );
 }

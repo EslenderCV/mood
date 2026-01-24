@@ -505,7 +505,11 @@ const PostItem: React.FC<PostItemProps> = ({
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={handleSave} activeOpacity={0.6}>
+            <TouchableOpacity
+              onPress={handleSave}
+              activeOpacity={0.6}
+              className="relative top-1"
+            >
               <Ionicons
                 name={isSaved ? "bookmark" : "bookmark-outline"}
                 size={23}
@@ -514,7 +518,11 @@ const PostItem: React.FC<PostItemProps> = ({
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity onPress={onSharePress} activeOpacity={0.6}>
+          <TouchableOpacity
+            onPress={onSharePress}
+            activeOpacity={0.6}
+            className="relative top-1"
+          >
             <Ionicons name="share-social-outline" size={23} color={iconColor} />
           </TouchableOpacity>
         </View>

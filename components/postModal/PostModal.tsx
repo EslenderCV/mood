@@ -3,7 +3,6 @@ import {
   View,
   Modal,
   TouchableWithoutFeedback,
-  Dimensions,
   Platform,
   KeyboardAvoidingView,
   StyleSheet,
@@ -18,17 +17,12 @@ import Animated, {
   ZoomIn,
   ZoomOut,
 } from "react-native-reanimated";
-
-// Subcomponentes
 import PostModalHeader from "./PostModalHeader";
 import PostComposer from "./PostComposer";
 import MoodStyleSelector from "./MoodStyleSelector";
 import MusicSection from "./MusicSection";
 import PostToast from "./PostToast";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
-// --- HELPER: BÚSQUEDA DEEZER ---
 const searchDeezer = async (query: string) => {
   try {
     const response = await fetch(
@@ -49,10 +43,8 @@ const searchDeezer = async (query: string) => {
   }
 };
 
-// --- HELPER: SUGERENCIAS RANDOM (VIRALES) ---
 const fetchSuggestedSongs = async () => {
   try {
-    // Pedimos 50 canciones del top chart para tener variedad
     const response = await fetch(
       "https://api.deezer.com/chart/0/tracks?limit=50",
     );
@@ -60,7 +52,6 @@ const fetchSuggestedSongs = async () => {
 
     if (!json.data) return [];
 
-    // 1. Filtrar Artistas Únicos
     const uniqueTracks: any[] = [];
     const seenArtists = new Set();
 
@@ -71,10 +62,8 @@ const fetchSuggestedSongs = async () => {
       }
     }
 
-    // 2. Barajar (Shuffle) para que sea random cada vez
     const shuffled = uniqueTracks.sort(() => 0.5 - Math.random());
 
-    // 3. Tomar solo 5
     return shuffled.slice(0, 5).map((track: any) => ({
       id: track.id.toString(),
       title: track.title,
@@ -100,18 +89,14 @@ export default function PostModal() {
       controller.user?.$id === controller.MOOD_OFFICIAL_ID),
   );
 
-  // --- ESTADO LOCAL PARA BÚSQUEDA Y SUGERENCIAS ---
   const [localSearchResults, setLocalSearchResults] = useState<any[]>([]);
   const [isLocalLoading, setIsLocalLoading] = useState(false);
 
-  // Efecto Maestro: Maneja Búsqueda y Sugerencias
   useEffect(() => {
     const query = controller.searchQuery;
 
-    // CASO 1: No hay texto -> Mostrar Sugerencias Random
     if (!query || query.trim().length === 0) {
       const loadSuggestions = async () => {
-        // Solo cargamos si estamos en modo búsqueda para no saturar
         if (controller.isSearchingMusic) {
           setIsLocalLoading(true);
           const suggestions = await fetchSuggestedSongs();
@@ -123,20 +108,18 @@ export default function PostModal() {
       return;
     }
 
-    // CASO 2: Hay texto -> Buscar canción específica
     if (query.trim().length >= 2) {
       setIsLocalLoading(true);
       const timer = setTimeout(async () => {
         const results = await searchDeezer(query);
         setLocalSearchResults(results);
         setIsLocalLoading(false);
-      }, 500); // Debounce
+      }, 500);
 
       return () => clearTimeout(timer);
     }
   }, [controller.searchQuery, controller.isSearchingMusic]);
 
-  // --- CONFIGURACIÓN GLASSMORPHISM ---
   const blurTint = isDark
     ? "systemUltraThinMaterialDark"
     : "systemUltraThinMaterialLight";
@@ -188,7 +171,6 @@ export default function PostModal() {
                     },
                   ]}
                 >
-                  {/* CAPAS GLASS */}
                   <BlurView
                     intensity={Platform.OS === "ios" ? 40 : 100}
                     tint={blurTint as any}
@@ -212,17 +194,14 @@ export default function PostModal() {
                       height: 150,
                     }}
                   />
-
-                  {/* CONTENIDO */}
                   <View style={styles.contentContainer}>
-                    <View className="mb-2 z-10">
+                    <View className="mt-[-10px] z-10">
                       <PostModalHeader
                         onClose={controller.closeModal}
                         onPublish={controller.handlePost}
                         canPublish={canPublish}
                       />
                     </View>
-
                     <View
                       style={{
                         minHeight: 70,
@@ -239,9 +218,7 @@ export default function PostModal() {
                         onSelectUser={controller.handleSelectUser}
                       />
                     </View>
-
                     <View style={{ height: 10 }} />
-
                     <View>
                       {!controller.linkedSong &&
                         controller.user?.$id ===
@@ -261,7 +238,6 @@ export default function PostModal() {
                         onRemoveSong={controller.removeLinkedSong}
                         searchQuery={controller.searchQuery}
                         setSearchQuery={controller.setSearchQuery}
-                        // Estado local con sugerencias o resultados
                         isLoadingSearch={isLocalLoading}
                         searchResults={localSearchResults}
                         onSelectSong={controller.handleSelectSong}

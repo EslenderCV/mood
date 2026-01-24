@@ -1,31 +1,30 @@
 import { ID, Query } from "react-native-appwrite";
 import { databases, appwriteConfig } from "./config";
-// Importamos getUser desde users (sin crear ciclo problemático en runtime)
-import { getUser } from "./users";
+// ✅ CORRECCIÓN: Importamos desde el nuevo archivo neutral
+import { getUser } from "./userUtils";
 
 export async function sendPushNotification(
   expoPushToken: string,
   title: string,
   body: string,
   data: any = {},
-  image?: string, // 📸 Nuevo: Soporte para imágenes
+  image?: string,
 ) {
   if (!expoPushToken || !expoPushToken.startsWith("ExponentPushToken")) {
     return;
   }
 
-  // Estructura Premium
   const message = {
     to: expoPushToken,
     sound: "default",
     title: title,
     body: body,
-    data: data, // Aquí va el postId o chatId para la navegación
-    image: image, // Imagen grande en Android (BigPictureStyle)
+    data: data,
+    image: image,
     priority: "high",
-    channelId: "social-updates", // 🔥 Clave para Android
+    channelId: "social-updates",
     badge: 1,
-    _displayInForeground: false, // Dejaremos que nuestro Context maneje esto
+    _displayInForeground: false,
   };
 
   try {
@@ -67,12 +66,12 @@ export async function createNotification(data: {
   senderName: string;
   senderAvatar: string;
   postId?: string;
-  imagePreview?: string; // 📸 Pasamos la imagen del post si existe
+  imagePreview?: string;
 }) {
   try {
     if (data.userId === data.senderId) return;
 
-    // 1. Guardar en Base de Datos (Igual que antes)
+    // Crear en DB siempre (para que aparezca en la campana de notificaciones)
     await databases.createDocument(
       appwriteConfig.databaseId,
       appwriteConfig.notificationsCollectionId,
@@ -89,30 +88,30 @@ export async function createNotification(data: {
       },
     );
 
-    // 2. Preparar el Push "Premium"
     const targetUser = await getUser(data.userId);
 
-    if (targetUser && targetUser.expoPushToken) {
+    // 🔥 CORRECCIÓN: Verificamos 'notificationsEnabled !== false' antes de enviar Push
+    if (
+      targetUser &&
+      targetUser.expoPushToken &&
+      targetUser.notificationsEnabled !== false
+    ) {
       let title = "Mood";
       let body = `${data.senderName} ${data.message}`;
 
-      // Personalización por tipo
       if (data.type === "like") title = "❤️ Nuevo Like";
       if (data.type === "comment") title = "💬 Comentario";
       if (data.type === "follow") title = "👤 Nuevo Seguidor";
       if (data.type === "tag") title = "🏷️ Etiqueta";
 
-      // 3. Enviar con datos de navegación y visuales
       await sendPushNotification(
         targetUser.expoPushToken,
         title,
         body,
         {
-          // 🧭 DATA PARA DEEP LINKING
           url: data.postId ? `/post/${data.postId}` : `/user/${data.senderId}`,
           type: data.type,
         },
-        // Usamos la foto del post (si es like/comment) o el avatar del usuario
         data.imagePreview || data.senderAvatar,
       );
     }

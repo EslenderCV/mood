@@ -35,9 +35,7 @@ const PostComposer = React.memo(
     const textColor = isDark ? "#FFFFFF" : "#000000";
     const placeholderColor = isDark ? "#71717A" : "#A1A1AA";
     const borderColor = isDark ? "#27272A" : "#E4E4E7";
-    const inputBg = isDark ? "#18181B" : "#F4F4F5";
 
-    // Tinte morado sutil para el cursor
     const selectionColor = "#5E17EB";
 
     const renderUserItem = ({ item }: { item: any }) => (
@@ -69,7 +67,7 @@ const PostComposer = React.memo(
               user?.pfp ? { uri: user.pfp } : require("@/assets/noPfp.jpg")
             }
             className="w-12 h-12 rounded-full border-2"
-            style={{ borderColor: "#5E17EB" }} // Borde morado en el avatar
+            style={{ borderColor: "#5E17EB" }}
           />
           <View className="flex-1 h-full">
             <TextInput
@@ -78,7 +76,7 @@ const PostComposer = React.memo(
               multiline
               style={{
                 color: textColor,
-                fontSize: 20, // Texto más grande
+                fontSize: 20,
                 lineHeight: 28,
                 minHeight: 120,
                 textAlignVertical: "top",
@@ -86,12 +84,10 @@ const PostComposer = React.memo(
               value={text}
               onChangeText={onChangeText}
               selectionColor={selectionColor}
-              autoFocus={true} // Auto foco al abrir
+              autoFocus={true}
             />
           </View>
         </View>
-
-        {/* Sugerencias flotantes */}
         {showSuggestions && (
           <View
             className="absolute top-16 left-12 right-0 rounded-2xl border overflow-hidden max-h-48 shadow-lg z-50"

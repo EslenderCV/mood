@@ -7,9 +7,9 @@ import {
   Alert,
   Modal,
   TouchableWithoutFeedback,
-  Linking, // <--- 1. IMPORTADO
+  Linking,
 } from "react-native";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -24,6 +24,12 @@ const Settings = () => {
 
   const { user, setUser } = useGlobalContext();
   const [updatingPlatform, setUpdatingPlatform] = useState(false);
+
+  // 🔥 ESTADO PARA NOTIFICACIONES
+  // Usamos `(user as any)` para que TypeScript no se queje de la propiedad nueva
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    (user as any)?.notificationsEnabled ?? true,
+  );
 
   const { language, setLanguage, t, availableLanguages } = useLanguage();
 
@@ -43,6 +49,13 @@ const Settings = () => {
     availableLanguages.find((l) => l.code === language) ||
     availableLanguages[0];
 
+  useEffect(() => {
+    if (user) {
+      // Forzamos el tipo aquí también
+      setNotificationsEnabled((user as any).notificationsEnabled ?? true);
+    }
+  }, [user]);
+
   const handleSelectLanguage = (langCode: any) => {
     setLanguage(langCode);
     setShowLanguageModal(false);
@@ -52,12 +65,35 @@ const Settings = () => {
     Alert.alert(t("settings.clearCache"), "Se han liberado 45MB.");
   };
 
+  const handleNotificationToggle = async (value: boolean) => {
+    setNotificationsEnabled(value);
+
+    try {
+      await updateProfile(user?.$id || "", {
+        notificationsEnabled: value,
+      });
+
+      if (setUser) {
+        setUser({ ...user, notificationsEnabled: value } as any);
+      }
+    } catch (error: any) {
+      // <--- Añade :any aquí
+      setNotificationsEnabled(!value);
+
+      // 🔥 AGREGA ESTO PARA VER EL ERROR REAL EN LA CONSOLA
+      console.log("ERROR REAL APPWRITE:", error);
+      console.log("MENSAJE:", error.message);
+
+      Alert.alert("Error", `No se pudo actualizar: ${error.message}`);
+    }
+  };
+
   const handlePlatformChange = async (platform: string) => {
     if (user?.preferredPlatform === platform || updatingPlatform) return;
 
     try {
       setUpdatingPlatform(true);
-      const updatedDoc = await updateProfile(user?.$id || "", {
+      await updateProfile(user?.$id || "", {
         preferredPlatform: platform,
       });
 
@@ -71,7 +107,6 @@ const Settings = () => {
     }
   };
 
-  // 2. FUNCIÓN PARA ABRIR ENLACES
   const openLink = async (url: string) => {
     const supported = await Linking.canOpenURL(url);
     if (supported) {
@@ -174,6 +209,21 @@ const Settings = () => {
             </View>
           </SettingRow>
         </TouchableOpacity>
+
+        <SettingRow
+          icon="notifications"
+          title="Notificaciones"
+          subtitle="Alertas push y actividades"
+          color="#F59E0B"
+        >
+          <Switch
+            trackColor={{ false: "#E5E7EB", true: "#5E17EB" }}
+            thumbColor={"white"}
+            onValueChange={handleNotificationToggle}
+            value={notificationsEnabled}
+          />
+        </SettingRow>
+
         <SettingRow
           icon="moon"
           title={t("settings.darkMode")}
@@ -187,6 +237,7 @@ const Settings = () => {
             value={isDark}
           />
         </SettingRow>
+
         <SectionTitle title="PLATAFORMA DE MÚSICA" />
         <TouchableOpacity
           onPress={() => handlePlatformChange("spotify")}
@@ -221,6 +272,7 @@ const Settings = () => {
             )}
           </SettingRow>
         </TouchableOpacity>
+
         <SectionTitle title={t("settings.data")} />
 
         <TouchableOpacity onPress={clearCache}>
@@ -244,12 +296,11 @@ const Settings = () => {
           </SettingRow>
         </TouchableOpacity>
 
-        {/* 3. SECCIÓN LEGAL AÑADIDA */}
         <SectionTitle title="LEGAL" />
         <TouchableOpacity
           onPress={() =>
             openLink(
-              "https://candied-resolution-5fa.notion.site/T-rminos-de-Uso-y-EULA-Acuerdo-de-Licencia-2e08961d2f1080769b1ddd43f1ea92c7?source=copy_link"
+              "https://candied-resolution-5fa.notion.site/T-rminos-de-Uso-y-EULA-Acuerdo-de-Licencia-2e08961d2f1080769b1ddd43f1ea92c7?source=copy_link",
             )
           }
         >
@@ -263,7 +314,7 @@ const Settings = () => {
         <TouchableOpacity
           onPress={() =>
             openLink(
-              "https://candied-resolution-5fa.notion.site/Pol-tica-de-Privacidad-de-Mood-2e08961d2f1080018d6dc0ba872fab3d?source=copy_link"
+              "https://candied-resolution-5fa.notion.site/Pol-tica-de-Privacidad-de-Mood-2e08961d2f1080018d6dc0ba872fab3d?source=copy_link",
             )
           }
         >
@@ -290,6 +341,7 @@ const Settings = () => {
           </Text>
         </View>
       </ScrollView>
+
       <Modal
         animationType="slide"
         transparent={true}

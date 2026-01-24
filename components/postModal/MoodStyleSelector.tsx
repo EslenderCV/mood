@@ -1,4 +1,3 @@
-// components/postModal/MoodStyleSelector.tsx
 import React from "react";
 import { View, TouchableOpacity, Text } from "react-native";
 import { useColorScheme } from "nativewind";

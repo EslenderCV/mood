@@ -1,4 +1,10 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, {
+  useRef,
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
 import {
   View,
   Animated,
@@ -37,9 +43,12 @@ import ShareModal from "@/components/ShareModal";
 import SuggestedUsersCarousel from "@/components/SuggestedUsersCarousel";
 import TrendingSongCard from "@/components/TrendingSongCard";
 
+// IMPORTS DE ADS
+import AdItem from "@/components/AdItem";
+import { injectAdsInFeed } from "@/lib/mockAds";
+
 import { createStory, deletePost } from "@/lib/appwrite";
 
-// Habilitar animaciones de Layout en Android
 if (
   Platform.OS === "android" &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -58,7 +67,7 @@ const RANDOM_SEARCH_TERMS = [
   "rock classics",
 ];
 
-// Helper dummy si es necesario
+// Helper dummy
 const searchSongsWrapper = async (query: string) => {
   try {
     const response = await fetch(
@@ -81,15 +90,16 @@ const searchSongsWrapper = async (query: string) => {
 const Home = () => {
   const isDark = true;
   const logic = useHomeLogic();
-
-  // ✅ CORRECCIÓN: Usar <any> para permitir 'tabPress' sin errores de TS
   const navigation = useNavigation<any>();
 
-  // 🔥 CUSTOM REFRESH STATE
   const scrollY = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef(0);
-
   const [showSpinner, setShowSpinner] = useState(false);
+
+  // ADS INJECTION
+  const feedWithAds = useMemo(() => {
+    return injectAdsInFeed(logic.sortedFeed);
+  }, [logic.sortedFeed]);
 
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -148,63 +158,67 @@ const Home = () => {
     }
   };
 
-  // 🔥 Render Item con Tracking Conectado
-  const renderFeedItem = ({ item }: { item: EnrichedFeedItem }) => {
-    switch (item.type) {
-      case "post":
-        return (
-          <View
-            className={`py-4 border-b ${isDark ? "border-zinc-800" : "border-zinc-200"}`}
-          >
-            {item.status === "uploading" && (
-              <View className="px-5 mb-2 flex-row items-center">
-                <ActivityIndicator size="small" color="#5E17EB" />
-                <Text className="ml-2 text-xs text-zinc-400">
-                  Publicando...
-                </Text>
-              </View>
-            )}
-            <PostItem
-              post={item.data}
+  const renderFeedItem = useCallback(
+    ({ item }: { item: any }) => {
+      switch (item.type) {
+        case "post":
+          return (
+            <View
+              className={`py-4 border-b ${isDark ? "border-zinc-800" : "border-zinc-200"}`}
+            >
+              {item.status === "uploading" && (
+                <View className="px-5 mb-2 flex-row items-center">
+                  <ActivityIndicator size="small" color="#5E17EB" />
+                  <Text className="ml-2 text-xs text-zinc-400">
+                    Publicando...
+                  </Text>
+                </View>
+              )}
+              <PostItem
+                post={item.data}
+                currentUserId={logic.user?.$id || ""}
+                onProfilePress={(userId) => {
+                  logic.trackOpenProfile(item.data.$id, item.id, userId);
+                  router.push(`/user/${userId}` as any);
+                }}
+                onCommentPress={(postId) => {
+                  logic.trackOpenComments(postId, item.id);
+                  router.push(`/post/${postId}` as any);
+                }}
+                onOptionsPress={() => {
+                  logic.setSelectedPost(item.data);
+                  logic.toggleModal("isOptions", true);
+                }}
+                onSharePress={() => {
+                  logic.openShareSelector(item.data);
+                  logic.setSharePostId(item.data.$id);
+                }}
+                onLike={() => logic.trackLike(item.data.$id, item.id)}
+                onSave={() => logic.trackSave(item.data.$id, item.id)}
+              />
+            </View>
+          );
+
+        case "ad":
+          return <AdItem ad={item} />;
+
+        case "suggested_users":
+          return (
+            <SuggestedUsersCarousel
+              users={item.data}
               currentUserId={logic.user?.$id || ""}
-              onProfilePress={(userId) => {
-                logic.trackOpenProfile(item.data.$id, item.id, userId);
-                router.push(`/user/${userId}` as any);
-              }}
-              onCommentPress={(postId) => {
-                logic.trackOpenComments(postId, item.id);
-                router.push(`/post/${postId}` as any);
-              }}
-              onOptionsPress={() => {
-                logic.setSelectedPost(item.data);
-                logic.toggleModal("isOptions", true);
-              }}
-              onSharePress={() => {
-                logic.openShareSelector(item.data);
-                logic.setSharePostId(item.data.$id);
-              }}
-              // 🔥 Tracking Actions
-              onLike={() => logic.trackLike(item.data.$id, item.id)}
-              onSave={() => logic.trackSave(item.data.$id, item.id)}
             />
-          </View>
-        );
+          );
 
-      case "suggested_users":
-        return (
-          <SuggestedUsersCarousel
-            users={item.data}
-            currentUserId={logic.user?.$id || ""}
-          />
-        );
+        case "trending_song":
+          return <TrendingSongCard song={item.data} />;
 
-      case "trending_song":
-        return <TrendingSongCard song={item.data} />;
-
-      default:
-        return null;
-    }
-  };
+        default:
+          return null;
+      }
+    },
+    [logic, isDark],
+  );
 
   const handleDeleteAction = () => {
     if (logic.selectedPost) {
@@ -213,7 +227,6 @@ const Home = () => {
     }
   };
 
-  // 🔥 VIEWABILITY CONFIG (Estable)
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 60,
     minimumViewTime: 250,
@@ -234,16 +247,13 @@ const Home = () => {
     },
   ).current;
 
-  // 🔥 PROTECCIÓN TAB PRESS
   useEffect(() => {
-    // @ts-ignore - Ignoramos error de tipo estricto en tabPress
+    // @ts-ignore
     const unsubscribe = navigation.addListener("tabPress", (e: any) => {
-      // Si ya está cargando, NO HACER NADA
       if (logic.isFeedLoading || logic.isRefreshing) {
         e.preventDefault();
         return;
       }
-
       if (navigation.isFocused()) {
         e.preventDefault();
         if (logic.flatListRef.current) {
@@ -252,7 +262,6 @@ const Home = () => {
             animated: true,
           });
         }
-        // Pequeño delay para no saturar si spamean el botón
         setTimeout(() => {
           logic.onRefresh();
         }, 250);
@@ -272,7 +281,6 @@ const Home = () => {
           backgroundColor: isDark ? "#000000" : "#FFFFFF",
         }}
       >
-        {/* HEADER */}
         <View className="flex-row justify-between items-center px-5 py-3 border-b border-transparent z-50 bg-black">
           <View className="h-[40px] w-[80px] justify-center">
             <Image
@@ -320,15 +328,23 @@ const Home = () => {
         ) : (
           <Animated.FlatList
             ref={logic.flatListRef}
-            data={logic.sortedFeed}
-            keyExtractor={(item) => item.id} // ✅ KEY STABLE
+            data={feedWithAds}
+            keyExtractor={(item) => item.id}
             renderItem={renderFeedItem}
             onScroll={handleScroll}
             onScrollEndDrag={handleScrollEndDrag}
             scrollEventThrottle={16}
             style={{ backgroundColor: "transparent", zIndex: 1 }}
+            // 🔥 AQUÍ ESTÁ EL CAMBIO PARA QUITAR LA BARRA DE SCROLL
+            showsVerticalScrollIndicator={false}
             viewabilityConfig={viewabilityConfig}
             onViewableItemsChanged={onViewableItemsChanged}
+            // Configuración de rendimiento optimizada
+            windowSize={15}
+            initialNumToRender={5}
+            maxToRenderPerBatch={5}
+            removeClippedSubviews={Platform.OS === "android"}
+            updateCellsBatchingPeriod={50}
             ListHeaderComponent={
               <View>
                 <Animated.View
@@ -361,10 +377,6 @@ const Home = () => {
             }
             onEndReached={() => logic.handleLoadMore()}
             onEndReachedThreshold={0.5}
-            initialNumToRender={5}
-            maxToRenderPerBatch={5}
-            windowSize={5}
-            removeClippedSubviews={true}
             ListEmptyComponent={
               <EmptyStateWithSuggestions
                 suggestions={[]}
@@ -374,7 +386,6 @@ const Home = () => {
           />
         )}
 
-        {/* MODALES */}
         <PostModal />
         <CreatorModal
           visible={logic.modals.isCreator}

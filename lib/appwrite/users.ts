@@ -2,21 +2,11 @@ import { Query, ID, AppwriteException } from "react-native-appwrite";
 import { databases, appwriteConfig, account } from "./config";
 import { uploadFile } from "./storage";
 import { createNotification } from "./notifications";
+// ✅ IMPORTAR desde utils (Asegúrate de que el archivo se llame userUtils.ts y no userUtils.t)
+import { getUser } from "./userUtils";
 
-// Obtener usuario por ID
-export async function getUser(userId: string) {
-  try {
-    const user = await databases.getDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      userId,
-    );
-    if (user.isBanned) return null;
-    return user;
-  } catch (error) {
-    return null;
-  }
-}
+// ✅ RE-EXPORTAR para compatibilidad con el resto de la app
+export { getUser } from "./userUtils";
 
 // Sincronizar usuario
 export const syncOrCreateUserDocument = async () => {
@@ -48,6 +38,7 @@ export const syncOrCreateUserDocument = async () => {
           Math.floor(Math.random() * 1000),
         preferredPlatform: "spotify",
         allowTags: true,
+        notificationsEnabled: true, // Valor por defecto
         blockedUsers: [],
         isBanned: false,
         isPrivate: false,
@@ -89,6 +80,10 @@ export async function updateProfile(userId: string, form: any) {
     if (imageUrl) updates.pfp = imageUrl;
     if (form.isPrivate !== undefined) updates.isPrivate = form.isPrivate;
     if (form.allowTags !== undefined) updates.allowTags = form.allowTags;
+
+    // 🔥 CORRECCIÓN: Permitir guardar la preferencia de notificaciones
+    if (form.notificationsEnabled !== undefined)
+      updates.notificationsEnabled = form.notificationsEnabled;
 
     return await databases.updateDocument(
       appwriteConfig.databaseId,
@@ -174,7 +169,6 @@ export const getLatestUsers = async () => {
   }
 };
 
-// 🔥 BÚSQUEDA CORREGIDA: Busca por Username O Nombre
 export async function searchUsers(query: string) {
   try {
     const users = await databases.listDocuments(
@@ -321,7 +315,8 @@ export async function getUserFollowers(userId: string) {
     const users = await Promise.all(
       res.documents.map((d) => getUser(d.followerId)),
     );
-    return users.filter((u) => u !== null);
+    // 🔥 CORRECCIÓN: Tipado explícito (u: any) para evitar error de TypeScript
+    return users.filter((u: any) => u !== null);
   } catch {
     return [];
   }
@@ -337,7 +332,8 @@ export async function getUserFollowing(userId: string) {
     const users = await Promise.all(
       res.documents.map((d) => getUser(d.followedId)),
     );
-    return users.filter((u) => u !== null);
+    // 🔥 CORRECCIÓN: Tipado explícito
+    return users.filter((u: any) => u !== null);
   } catch {
     return [];
   }
@@ -440,11 +436,9 @@ export async function deleteFollowRequest(
 
 export async function blockUser(currentUserId: string, userToBlockId: string) {
   try {
-    const user = await databases.getDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      currentUserId,
-    );
+    const user = await getUser(currentUserId);
+    if (!user) throw new Error("User not found");
+
     const blocked = user.blockedUsers || [];
     if (!blocked.includes(userToBlockId)) {
       await databases.updateDocument(
@@ -469,11 +463,9 @@ export async function unblockUser(
   userToUnblockId: string,
 ) {
   try {
-    const user = await databases.getDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      currentUserId,
-    );
+    const user = await getUser(currentUserId);
+    if (!user) throw new Error("User not found");
+
     const blocked = user.blockedUsers || [];
     await databases.updateDocument(
       appwriteConfig.databaseId,
@@ -496,7 +488,8 @@ export async function getBlockedUsersList(currentUserId: string) {
     const users = await Promise.all(
       user.blockedUsers.map((id: string) => getUser(id)),
     );
-    return users.filter((u) => u !== null);
+    // 🔥 CORRECCIÓN: Tipado explícito
+    return users.filter((u: any) => u !== null);
   } catch {
     return [];
   }
