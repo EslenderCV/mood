@@ -8,7 +8,7 @@ import {
   getUnreadNotificationCount,
   getUnreadMessagesCount,
   getStories,
-  client,
+  client, // 🔥 NECESARIO PARA REALTIME
   appwriteConfig,
   getUser,
   uploadFile,
@@ -194,6 +194,51 @@ export const useHomeLogic = () => {
     },
     [],
   );
+
+  // --- 🔥 REALTIME SUBSCRIPTIONS (NOTIFICATIONS & MESSAGES) ---
+  useEffect(() => {
+    if (!userId) return;
+
+    // Canales a escuchar
+    const notiChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.notificationsCollectionId}.documents`;
+    const msgChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`;
+
+    const unsubscribe = client.subscribe(
+      [notiChannel, msgChannel],
+      (response) => {
+        // Filtramos solo eventos de creación
+        if (
+          response.events.includes(
+            "databases.*.collections.*.documents.*.create",
+          )
+        ) {
+          const payload = response.payload as any;
+
+          // 1. Nueva Notificación para mí
+          if (
+            response.channels.includes(notiChannel) &&
+            payload.userId === userId
+          ) {
+            // Actualizamos el contador (o incrementamos +1 localmente)
+            fetchCounts(userId);
+          }
+
+          // 2. Nuevo Mensaje para mí
+          if (
+            response.channels.includes(msgChannel) &&
+            payload.receiverId === userId
+          ) {
+            // Actualizamos el contador
+            fetchCounts(userId);
+          }
+        }
+      },
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [userId]);
 
   // --- SYNC REFS & MOUNT ---
   useEffect(() => {

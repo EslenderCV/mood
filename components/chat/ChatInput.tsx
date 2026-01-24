@@ -5,11 +5,12 @@ import {
   TouchableOpacity,
   Text,
   Platform,
-  Keyboard, // 🔥 Importamos Keyboard
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
+import { BlurView } from "expo-blur"; // Si quieres blur, si no, usa View solido
 
 interface ChatInputProps {
   text: string;
@@ -37,97 +38,77 @@ export const ChatInput = ({
   const insets = useSafeAreaInsets();
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
-  // 🔥 DETECTAR TECLADO PARA AJUSTAR EL PADDING
   useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent =
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
-    const showListener = Keyboard.addListener(showEvent, () =>
-      setKeyboardVisible(true),
+    const showListener = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setKeyboardVisible(true),
     );
-    const hideListener = Keyboard.addListener(hideEvent, () =>
-      setKeyboardVisible(false),
+    const hideListener = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardVisible(false),
     );
-
     return () => {
       showListener.remove();
       hideListener.remove();
     };
   }, []);
 
-  // Colores
-  const bgInput = isDark ? "#18181B" : "#F4F4F5";
-  const textColor = isDark ? "#FFFFFF" : "#000000";
-  const iconColor = isDark ? "#A1A1AA" : "#71717A";
-  const borderTop = isDark ? "#27272A" : "#E4E4E7";
-  const backgroundColor = isDark ? "#000" : "#fff";
-
-  // Lógica de Padding Dinámico
-  const bottomPadding = isKeyboardVisible
-    ? 350 // Si hay teclado, solo 10px de respiro
-    : Math.max(insets.bottom, 10); // Si no, respeta la zona segura (Home Indicator / Nav Bar)
+  const backgroundColor = isDark ? "#000000" : "#FFFFFF";
+  const inputBg = isDark ? "#27272A" : "#F2F2F2"; // Gris muy suave
+  const iconColor = "#5E17EB"; // Color de marca
 
   return (
     <View
       style={{
-        borderTopWidth: 1,
-        borderTopColor: borderTop,
         backgroundColor: backgroundColor,
-        paddingBottom: bottomPadding,
+        paddingBottom: isKeyboardVisible ? 10 : insets.bottom + 10,
+        paddingTop: 10,
       }}
     >
-      {/* --- BANNER DE RESPUESTA / EDICIÓN --- */}
+      {/* Banner de Respuesta */}
       {(replyingTo || editingMessage) && (
-        <View
-          className="flex-row items-center justify-between px-4 py-2 mx-2 mt-2 rounded-xl border-l-4"
-          style={{
-            backgroundColor: isDark ? "#27272A" : "#F3F4F6",
-            borderColor: editingMessage ? "#EAB308" : "#5E17EB",
-          }}
-        >
-          <View className="flex-1 mr-2">
-            <Text
-              className="text-xs font-bold mb-0.5"
-              style={{ color: editingMessage ? "#EAB308" : "#5E17EB" }}
-            >
+        <View className="flex-row items-center justify-between px-4 py-2 mx-4 mb-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border-l-4 border-[#5E17EB]">
+          <View className="flex-1">
+            <Text className="text-xs font-bold text-[#5E17EB] mb-0.5">
               {editingMessage
-                ? "Editando mensaje"
-                : `Respondiendo a ${replyingTo?.senderName || "Usuario"}`}
+                ? "Editando"
+                : `Respondiendo a ${replyingTo?.senderName || "..."}`}
             </Text>
-            <Text className="text-xs text-zinc-500" numberOfLines={1}>
+            <Text
+              className="text-xs text-zinc-500 dark:text-zinc-400"
+              numberOfLines={1}
+            >
               {editingMessage ? editingMessage.body : replyingTo?.body}
             </Text>
           </View>
           <TouchableOpacity
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              if (editingMessage) onCancelEdit();
-              else onCancelReply();
+              editingMessage ? onCancelEdit() : onCancelReply();
             }}
           >
-            <Ionicons name="close" size={20} color={iconColor} />
+            <Ionicons
+              name="close-circle"
+              size={24}
+              color={isDark ? "#555" : "#ccc"}
+            />
           </TouchableOpacity>
         </View>
       )}
 
-      {/* --- BARRA DE ENTRADA --- */}
-      <View className="flex-row items-end px-3 py-2">
-        <TouchableOpacity className="p-2 mr-1 mb-1">
-          <Ionicons name="add" size={24} color="#5E17EB" />
+      {/* Input Cápsula */}
+      <View className="flex-row items-end px-3">
+        {/* Botón Multimedia (Cámara/Fotos) - Estilo iOS */}
+        <TouchableOpacity className="mb-2 mr-2 bg-zinc-200 dark:bg-zinc-800 w-10 h-10 rounded-full items-center justify-center">
+          <Ionicons name="add" size={24} color={isDark ? "white" : "black"} />
         </TouchableOpacity>
 
         <View
-          className="flex-1 rounded-2xl border"
+          className="flex-1 flex-row items-end rounded-[24px] px-4 py-2 mr-2 border border-transparent focus:border-purple-500/30"
           style={{
-            backgroundColor: bgInput,
-            borderColor: isDark ? "#333" : "#E5E5E5",
-            minHeight: 40,
+            backgroundColor: inputBg,
+            minHeight: 44,
             maxHeight: 120,
-            paddingHorizontal: 12,
-            paddingVertical: Platform.OS === "ios" ? 8 : 4,
-            justifyContent: "center",
           }}
         >
           <TextInput
@@ -135,38 +116,32 @@ export const ChatInput = ({
             value={text}
             onChangeText={setText}
             placeholder="Mensaje..."
-            placeholderTextColor="#71717A"
+            placeholderTextColor="#9ca3af"
             multiline
             style={{
-              color: textColor,
+              flex: 1,
+              color: isDark ? "white" : "black",
               fontSize: 16,
-              textAlignVertical: "center",
-              paddingTop: 0,
-              paddingBottom: 0,
+              paddingTop: Platform.OS === "ios" ? 6 : 2,
+              paddingBottom: Platform.OS === "ios" ? 6 : 2,
+              maxHeight: 100,
             }}
           />
         </View>
 
-        <TouchableOpacity
-          onPress={onSend}
-          disabled={!text.trim()}
-          className="ml-2 w-10 h-10 rounded-full items-center justify-center mb-1"
-          style={{
-            backgroundColor: text.trim()
-              ? editingMessage
-                ? "#EAB308"
-                : "#5E17EB"
-              : bgInput,
-            opacity: text.trim() ? 1 : 0.7,
-          }}
-        >
-          <Ionicons
-            name={editingMessage ? "checkmark" : "send"}
-            size={18}
-            color={text.trim() ? "white" : iconColor}
-            style={{ marginLeft: text.trim() ? 2 : 0 }}
-          />
-        </TouchableOpacity>
+        {/* Botón de Enviar (Solo visible si hay texto) */}
+        {text.trim().length > 0 && (
+          <TouchableOpacity
+            onPress={onSend}
+            className="mb-2 w-10 h-10 rounded-full items-center justify-center bg-[#5E17EB] shadow-sm"
+          >
+            <Ionicons
+              name={editingMessage ? "checkmark" : "arrow-up"}
+              size={24}
+              color="white"
+            />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

@@ -6,17 +6,13 @@ import {
   Platform,
   KeyboardAvoidingView,
   StyleSheet,
+  Animated,
 } from "react-native";
 import { useColorScheme } from "nativewind";
 import { usePostModalController } from "@/hooks/usePostModalController";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import Animated, {
-  FadeIn,
-  FadeOut,
-  ZoomIn,
-  ZoomOut,
-} from "react-native-reanimated";
+
 import PostModalHeader from "./PostModalHeader";
 import PostComposer from "./PostComposer";
 import MoodStyleSelector from "./MoodStyleSelector";
@@ -149,25 +145,23 @@ export default function PostModal() {
         onRequestClose={controller.closeModal}
         statusBarTranslucent
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ flex: 1 }}
-        >
-          <TouchableWithoutFeedback onPress={controller.closeModal}>
-            <Animated.View
-              entering={FadeIn.duration(300)}
-              exiting={FadeOut.duration(200)}
-              style={styles.backdrop}
+        {/* 🔥 CORRECCIÓN: Estructura reorganizada para fluidez de animación */}
+        <TouchableWithoutFeedback onPress={controller.closeModal}>
+          <Animated.View
+            style={[styles.backdrop, { opacity: controller.backgroundOpacity }]}
+          >
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              style={styles.keyboardView}
             >
               <TouchableWithoutFeedback>
                 <Animated.View
-                  entering={ZoomIn.springify().damping(18).mass(0.9)}
-                  exiting={ZoomOut.duration(150)}
                   style={[
                     styles.glassContainer,
                     {
                       borderColor: glassBorder,
                       shadowColor: isDark ? "#5E17EB" : "#A78BFA",
+                      transform: [{ translateY: controller.contentTranslateY }],
                     },
                   ]}
                 >
@@ -246,14 +240,15 @@ export default function PostModal() {
                         currentPlayingUrl={controller.currentPlayingUrl}
                         onShazam={controller.handleShazam}
                         isRecording={controller.recorder.isRecording}
+                        isShazamScanning={controller.isShazamScanning}
                       />
                     </View>
                   </View>
                 </Animated.View>
               </TouchableWithoutFeedback>
-            </Animated.View>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
+            </KeyboardAvoidingView>
+          </Animated.View>
+        </TouchableWithoutFeedback>
       </Modal>
     </>
   );
@@ -263,9 +258,13 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.65)",
+  },
+  keyboardView: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 16,
+    width: "100%",
   },
   glassContainer: {
     width: "100%",

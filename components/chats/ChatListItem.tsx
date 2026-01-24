@@ -41,7 +41,6 @@ export const ChatListItem = ({
     );
   };
 
-  // Formato de hora inteligente (10:30 AM o Ayer)
   const formatTime = (isoString: string) => {
     if (!isoString) return "";
     const date = new Date(isoString);
@@ -58,6 +57,26 @@ export const ChatListItem = ({
       return date.toLocaleDateString([], { day: "2-digit", month: "2-digit" });
     }
   };
+
+  // 🔥 LÓGICA DE VISUALIZACIÓN CORREGIDA
+  let previewMessage = chat.lastMessage || "Empezar chat...";
+  let isReply = false;
+  let isTyping = false;
+
+  // Validamos que isTyping exista y sea Array antes de usar .includes
+  if (chat.isTyping && Array.isArray(chat.isTyping)) {
+    if (chat.isTyping.includes(otherUser.$id)) {
+      isTyping = true;
+      previewMessage = "Escribiendo...";
+    }
+  }
+
+  // Limpieza de REPLY (Solo si no está escribiendo)
+  if (!isTyping && previewMessage.includes(":::REPLY:::")) {
+    const parts = previewMessage.split(":::REPLY:::");
+    previewMessage = parts[1] || "Respuesta";
+    isReply = true;
+  }
 
   return (
     <Swipeable renderRightActions={renderRightActions}>
@@ -97,21 +116,44 @@ export const ChatListItem = ({
                 />
               )}
             </View>
-            <Text className="text-zinc-500 text-xs font-medium">
-              {formatTime(chat.lastMessageTime)}
+            {/* Si está escribiendo, mostramos puntos suspensivos o indicador */}
+            <Text
+              className={`text-xs font-medium ${isTyping ? "text-[#5E17EB]" : "text-zinc-500"}`}
+            >
+              {isTyping ? "● ● ●" : formatTime(chat.lastMessageTime)}
             </Text>
           </View>
 
           <View className="flex-row justify-between items-center">
-            <Text
-              className={`text-[14px] flex-1 mr-4 ${isUnread ? (isDark ? "text-white font-bold" : "text-black font-bold") : "text-zinc-500"}`}
-              numberOfLines={1}
-            >
-              {chat.lastMessage || "Empezar chat..."}
-            </Text>
+            <View className="flex-1 mr-4 flex-row items-center">
+              {/* Icono de Reply solo si NO está escribiendo */}
+              {!isTyping && isReply && (
+                <Ionicons
+                  name="arrow-undo"
+                  size={12}
+                  color={isDark ? "#A1A1AA" : "#71717A"}
+                  style={{ marginRight: 4 }}
+                />
+              )}
 
-            {/* Badge de No Leídos */}
-            {isUnread && (
+              <Text
+                className={`text-[14px] ${
+                  isTyping
+                    ? "text-[#5E17EB] font-bold italic" // Color destacado para "Escribiendo..."
+                    : isUnread
+                      ? isDark
+                        ? "text-white font-bold"
+                        : "text-black font-bold"
+                      : "text-zinc-500"
+                }`}
+                numberOfLines={1}
+              >
+                {previewMessage}
+              </Text>
+            </View>
+
+            {/* Badge de No Leídos (solo si no está escribiendo, para no saturar) */}
+            {!isTyping && isUnread && (
               <View className="bg-[#5E17EB] min-w-[20px] h-5 px-1.5 rounded-full items-center justify-center">
                 <Text className="text-white text-[10px] font-bold">
                   {unreadCount}

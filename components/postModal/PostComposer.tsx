@@ -9,6 +9,8 @@ import {
 } from "react-native";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
+// 🔥 IMPORTAMOS EL OPTIMIZADOR
+import { getOptimizedImageUrl } from "@/lib/appwrite/imageOptimizer";
 
 interface PostComposerProps {
   user: any;
@@ -38,38 +40,45 @@ const PostComposer = React.memo(
 
     const selectionColor = "#5E17EB";
 
+    // 🔥 GENERAMOS LA URL OPTIMIZADA (Avatar pequeño: 100x100 es suficiente)
+    const optimizedAvatar = getOptimizedImageUrl(user?.pfp, 100, 100);
+
     const renderUserItem = ({ item }: { item: any }) => (
       <TouchableOpacity
         onPress={() => onSelectUser(item.username)}
-        className="flex-row items-center px-4 py-3 border-b active:bg-zinc-100 dark:active:bg-zinc-800"
+        className="flex-row items-center p-3 border-b"
         style={{ borderColor }}
       >
         <Image
-          source={{ uri: item.pfp }}
-          className="w-9 h-9 rounded-full mr-3 bg-zinc-800"
+          // Usamos el optimizador aquí también para las sugerencias
+          source={{ uri: getOptimizedImageUrl(item.pfp, 80, 80) }}
+          className="w-8 h-8 rounded-full bg-zinc-200"
         />
-        <View>
-          <Text className="font-bold text-sm" style={{ color: textColor }}>
-            {item.username}
+        <View className="ml-3">
+          <Text className="font-bold" style={{ color: textColor }}>
+            {item.name}
           </Text>
           <Text className="text-xs" style={{ color: placeholderColor }}>
-            {item.name}
+            @{item.username}
           </Text>
         </View>
       </TouchableOpacity>
     );
 
     return (
-      <View className="flex-1">
-        <View className="flex-row gap-4 mb-2 h-full">
+      <View className="flex-1 w-full">
+        <View className="flex-row items-start w-full">
           <Image
+            // 🔥 USAMOS LA IMAGEN OPTIMIZADA
             source={
-              user?.pfp ? { uri: user.pfp } : require("@/assets/noPfp.jpg")
+              optimizedAvatar
+                ? { uri: optimizedAvatar }
+                : require("@/assets/noPfp.jpg")
             }
-            className="w-12 h-12 rounded-full border-2"
+            className="w-12 h-12 rounded-full border-[1px]"
             style={{ borderColor: "#5E17EB" }}
           />
-          <View className="flex-1 h-full">
+          <View className="flex-1 h-full ml-3">
             <TextInput
               placeholder={t("post.placeholder")}
               placeholderTextColor={placeholderColor}

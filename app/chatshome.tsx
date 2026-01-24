@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
+
+// 🔥 IMPORTAMOS APPWRITE
+import { client, appwriteConfig } from "@/lib/appwrite";
 
 import { useChatGlobal } from "@/context/ChatContext";
 import { useGlobalContext } from "@/context/GlobalProvider";
@@ -28,6 +31,36 @@ const ChatsHome = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showNewChatModal, setShowNewChatModal] = useState(false);
+
+  // 🔥 LISTENER PARA REFRESCAR LISTA DE CHATS
+  useEffect(() => {
+    if (!user?.$id) return;
+
+    const chatChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.chatsCollectionId}.documents`;
+    const msgChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`;
+
+    const unsubscribe = client.subscribe(
+      [chatChannel, msgChannel],
+      (response) => {
+        // Si hay una nueva conversación o mensaje, refrescamos la lista
+        if (
+          response.events.includes(
+            "databases.*.collections.*.documents.*.create",
+          ) ||
+          response.events.includes(
+            "databases.*.collections.*.documents.*.update",
+          )
+        ) {
+          // Refrescamos sin spinner (silencioso)
+          refreshConversations(false);
+        }
+      },
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.$id]);
 
   // Filtrado local para búsqueda rápida
   const filteredChats = conversations.filter((c) => {

@@ -10,7 +10,6 @@ import { createPost, searchUsers } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
 const { height } = Dimensions.get("window");
-const AUDD_API_TOKEN = "a3c6cdb39b3b57fe634900cdc67077c7";
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
 
 export interface Song {
@@ -27,6 +26,7 @@ export const usePostModalController = () => {
   const { user } = useGlobalContext();
   const { t } = useLanguage();
 
+  // --- MANEJO DEL FEED CONTEXT (Pa' que no explote si no ta cargao) ---
   let feedContext;
   try {
     feedContext = useFeed();
@@ -37,30 +37,39 @@ export const usePostModalController = () => {
   const viralSongToUse = feedContext?.viralSongToUse;
   const setViralSongToUse = feedContext?.setViralSongToUse;
 
-  // --- STATE ---
+  // --- ESTADOS DE LA VAINA ---
   const [text, setText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [linkedSong, setLinkedSong] = useState<Song | null>(null);
+
+  // Búsqueda manual
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [isSearchingMusic, setIsSearchingMusic] = useState(false);
   const [isLoadingSearch, setIsLoadingSearch] = useState(false);
+
+  // Sugerencias de panas (@users)
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
+
+  // Estilo del post
   const [moodStyle, setMoodStyle] = useState<"standard" | "card">("standard");
 
-  // Audio State
+  // --- ESTADO NUEVO: SHAZAM SCANNING (El bulto de carga) ---
+  const [isShazamScanning, setIsShazamScanning] = useState(false);
+
+  // Audio Player (La rocola)
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentPlayingUrl, setCurrentPlayingUrl] = useState<string | null>(
     null,
   );
 
-  // Animation Refs
+  // Animaciones del Modal
   const backgroundOpacity = useRef(new Animated.Value(0)).current;
   const contentTranslateY = useRef(new Animated.Value(height)).current;
 
-  // Toast State
+  // Toast (Las notificaciones flotantes)
   const [toast, setToast] = useState({
     visible: false,
     type: "success" as "success" | "error",
@@ -69,7 +78,7 @@ export const usePostModalController = () => {
   });
   const toastAnim = useRef(new Animated.Value(-150)).current;
 
-  // Recorder
+  // Recorder (Dejamo' esto aquí pa' cuando conectemos el SDK de Apple de verdad)
   const recorder = useAudioRecorder({
     extension: ".m4a",
     sampleRate: 44100,
@@ -80,14 +89,14 @@ export const usePostModalController = () => {
     web: { mimeType: "audio/mp4", bitsPerSecond: 128000 },
   });
 
-  // --- AUDIO CLEANUP ---
+  // --- LIMPIEZA DE AUDIO (Si cierran la vaina, se calla) ---
   useEffect(() => {
     return () => {
       if (sound) sound.unloadAsync();
     };
   }, [sound]);
 
-  // --- VIRAL SONG IMPORT ---
+  // --- SI VIENE UNA CANCIÓN VIRAL DE OTRO LAO' ---
   useEffect(() => {
     if (isPostModalVisible && viralSongToUse) {
       const formattedSong: Song = {
@@ -106,7 +115,7 @@ export const usePostModalController = () => {
     }
   }, [isPostModalVisible, viralSongToUse]);
 
-  // --- ANIMATIONS ---
+  // --- ANIMACIONES DE ENTRADA Y SALIDA DEL MODAL ---
   useEffect(() => {
     if (isPostModalVisible) {
       backgroundOpacity.setValue(0);
@@ -149,7 +158,7 @@ export const usePostModalController = () => {
     ]).start(() => setPostModalVisible(false));
   }, []);
 
-  // --- DEBOUNCE SEARCH ---
+  // --- BÚSQUEDA DEEZER (Con delay pa' no saturar) ---
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchQuery.length > 2) {
@@ -161,7 +170,7 @@ export const usePostModalController = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
 
-  // --- METHODS ---
+  // --- MÉTODOS ---
 
   const resetForm = () => {
     setText("");
@@ -171,6 +180,7 @@ export const usePostModalController = () => {
     setIsSearchingMusic(false);
     setShowSuggestions(false);
     setMoodStyle("standard");
+    setIsShazamScanning(false); // Reseteamos el scanner también
   };
 
   const showToast = useCallback(
@@ -301,94 +311,22 @@ export const usePostModalController = () => {
     }
   };
 
+  // 🔥 AQUÍ ESTÁ EL CAMBIO KLK:
+  // Remplazamos la lógica de AuuD por el simulador de Shazam (pa' preparar el terreno)
   const handleShazam = async () => {
-    if (linkedSong) return;
+    if (linkedSong) return; // Si ya tiene canción, no jodemo
     await stopAudio();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    try {
-      await recorder.record();
-      setTimeout(async () => {
-        try {
-          if (recorder.isRecording) {
-            await recorder.stop();
-            const uri = recorder.uri;
-            if (!uri) throw new Error("No audio uri");
+    // Activamos la pantalla de carga (El Modal con las onditas)
+    setIsShazamScanning(true);
 
-            const formData = new FormData();
-            formData.append("api_token", AUDD_API_TOKEN);
-            formData.append("file", {
-              uri: uri,
-              name: "recording.m4a",
-              type: "audio/m4a",
-            } as any);
-
-            const response = await fetch("https://api.audd.io/", {
-              method: "POST",
-              body: formData,
-              headers: { "Content-Type": "multipart/form-data" },
-            });
-            const result = await response.json();
-
-            if (result.status === "success" && result.result) {
-              const auddTrack = result.result;
-              const searchTerm = `${auddTrack.title} ${auddTrack.artist}`;
-              const deezerResults = await fetch(
-                `https://api.deezer.com/search?q=${encodeURIComponent(searchTerm)}&limit=1`,
-              )
-                .then((r) => r.json())
-                .catch(() => ({ data: [] }));
-
-              if (deezerResults.data && deezerResults.data.length > 0) {
-                const bestMatch = deezerResults.data[0];
-                setLinkedSong({
-                  trackId: String(bestMatch.id),
-                  trackName: bestMatch.title,
-                  artistName: bestMatch.artist.name,
-                  artworkUrl100: bestMatch.album.cover_xl,
-                  previewUrl: bestMatch.preview,
-                  isExplicit: bestMatch.explicit_lyrics,
-                });
-                showToast(
-                  "success",
-                  t("post.alerts.found"),
-                  `"${bestMatch.title}"`,
-                );
-              } else {
-                setLinkedSong({
-                  trackId: String(Math.random()),
-                  trackName: auddTrack.title,
-                  artistName: auddTrack.artist,
-                  artworkUrl100: "https://via.placeholder.com/600",
-                  previewUrl: null,
-                  isExplicit: false,
-                });
-                showToast(
-                  "success",
-                  t("post.alerts.found"),
-                  `"${auddTrack.title}"`,
-                );
-              }
-            } else {
-              showToast(
-                "error",
-                t("post.alerts.notFound"),
-                t("post.alerts.tryManual"),
-              );
-              setIsSearchingMusic(true);
-            }
-          }
-        } catch {
-          showToast("error", t("post.alerts.errorTitle"), "Ocurrió un error.");
-        }
-      }, 5000);
-    } catch {
-      showToast(
-        "error",
-        t("post.alerts.permission"),
-        t("post.alerts.enableMic"),
-      );
-    }
+    // Simulamos que estamos escuchando por 5 segundos
+    setTimeout(() => {
+      setIsShazamScanning(false);
+      // Aquí luego meteremos el ShazamKit real.
+      // Por ahora, cerramos y ya, o podrías mostrar un toast "No se escuchó na'" si quieres.
+    }, 5000);
   };
 
   const handlePost = async () => {
@@ -493,6 +431,7 @@ export const usePostModalController = () => {
     isPlaying,
     recorder,
     handleShazam,
+    isShazamScanning, // <--- EXPORTAMOS EL ESTADO NUEVO
     handlePost,
     isLoading,
     backgroundOpacity,

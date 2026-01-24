@@ -34,7 +34,7 @@ export async function getOrCreateConversation(
         lastMessage: "👋 Chat iniciado",
         lastMessageTime: new Date().toISOString(),
         unreadCounts: initialUnread,
-        isTyping: [],
+        isTyping: [], // Array vacío inicial
       },
     );
   } catch (error: any) {
@@ -71,12 +71,11 @@ export async function getUserConversations(userId: string) {
 
 // 2. MENSAJERÍA PREMIUM
 
-// 🔥 Función de envío con Objeto Payload (para corregir el error de argumentos)
 export async function sendMessage(payload: {
   chatId: string;
   senderId: string;
   receiverId: string;
-  body: string; // Usamos 'body' consistentemente
+  body: string;
   type: "text" | "image" | "audio" | "post";
   attachments?: string[];
   replyToId?: string;
@@ -89,7 +88,7 @@ export async function sendMessage(payload: {
       {
         chatId: payload.chatId,
         senderId: payload.senderId,
-        body: payload.body, // Guardamos en 'body'
+        body: payload.body,
         type: payload.type,
         attachments: payload.attachments || [],
         readBy: [payload.senderId],
@@ -127,7 +126,6 @@ export async function sendMessage(payload: {
   }
 }
 
-// 🔥 Renombrado correctamente a getMessages (para coincidir con el hook)
 export async function getMessages(chatId: string) {
   try {
     const res = await databases.listDocuments(
@@ -145,7 +143,6 @@ export async function getMessages(chatId: string) {
   }
 }
 
-// 🔥 Agregamos deleteMessage (Faltaba)
 export async function deleteMessage(messageId: string) {
   try {
     await databases.deleteDocument(
@@ -160,14 +157,13 @@ export async function deleteMessage(messageId: string) {
   }
 }
 
-// 🔥 Agregamos updateMessage (Faltaba)
 export async function updateMessage(messageId: string, newBody: string) {
   try {
     await databases.updateDocument(
       appwriteConfig.databaseId,
       appwriteConfig.messagesCollectionId,
       messageId,
-      { body: newBody }, // Actualizamos 'body'
+      { body: newBody },
     );
     return true;
   } catch (error) {
@@ -200,6 +196,7 @@ export async function markChatAsRead(chatId: string, userId: string) {
   } catch (e) {}
 }
 
+// 🔥 FUNCIÓN CORREGIDA Y ROBUSTA
 export async function setTypingStatus(
   chatId: string,
   userId: string,
@@ -211,9 +208,20 @@ export async function setTypingStatus(
       appwriteConfig.chatsCollectionId,
       chatId,
     );
+
+    // Aseguramos que sea un array
     let list: string[] = doc.isTyping || [];
-    if (isTyping && !list.includes(userId)) list.push(userId);
-    else if (!isTyping) list = list.filter((id) => id !== userId);
+
+    // Verificamos si ya estaba en la lista para no hacer llamadas innecesarias
+    const wasTyping = list.includes(userId);
+
+    if (isTyping && !wasTyping) {
+      list.push(userId); // Agregamos al usuario
+    } else if (!isTyping && wasTyping) {
+      list = list.filter((id) => id !== userId); // Lo sacamos
+    } else {
+      return; // Si el estado es el mismo, no tocamos la base de datos
+    }
 
     await databases.updateDocument(
       appwriteConfig.databaseId,
@@ -221,7 +229,9 @@ export async function setTypingStatus(
       chatId,
       { isTyping: list },
     );
-  } catch (e) {}
+  } catch (e: any) {
+    console.error("❌ Error en setTypingStatus:", e.message);
+  }
 }
 
 export async function getUnreadMessagesCount(userId: string): Promise<number> {
@@ -229,14 +239,17 @@ export async function getUnreadMessagesCount(userId: string): Promise<number> {
     const result = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.chatsCollectionId,
-      [Query.equal("participants", userId)]
+      [Query.equal("participants", userId)],
     );
 
     let total = 0;
 
     for (const chat of result.documents) {
       try {
-        const counts = JSON.parse(chat.unreadCounts || "{}") as Record<string, number>;
+        const counts = JSON.parse(chat.unreadCounts || "{}") as Record<
+          string,
+          number
+        >;
         total += counts[userId] || 0;
       } catch {
         // si unreadCounts está corrupto o no es JSON válido, lo ignoramos

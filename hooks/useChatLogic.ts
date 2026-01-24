@@ -2,10 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { Alert, FlatList, TextInput } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import * as Haptics from "expo-haptics";
-// 1. IMPORTACIONES CORREGIDAS
 import {
   getCurrentUser,
-  getMessages, // ✅ Antes getChatMessages
+  getMessages,
   sendMessage,
   deleteMessage,
   updateMessage,
@@ -15,6 +14,7 @@ import {
   getUser,
   databases,
   sendPushNotification,
+  setTypingStatus,
 } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -30,21 +30,26 @@ export const useChatLogic = () => {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [editingMessage, setEditingMessage] = useState<any>(null);
 
-  // Datos del otro usuario
+  // Estado "Escribiendo"
+  const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
+  const typingTimeoutRef = useRef<any>(null);
+
+  // Datos del otro usuario (Incluyendo Online/LastSeen)
   const [chatUser, setChatUser] = useState({
     name: (params.otherUserName as string) || "Usuario",
     avatar: (params.otherUserAvatar as string) || null,
     id: (params.otherUserId as string) || null,
     expoPushToken: null as string | null,
     isVerified: false as boolean,
+    isOnline: false, // 🔥 Nuevo
+    lastSeen: null as string | null, // 🔥 Nuevo
   });
 
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
-  const rowRefs = useRef(new Map()).current;
 
   // --- LECTURA ---
-  const performReadUpdate = async (userId: string, currentMessages: any[]) => {
+  const performReadUpdate = async (userId: string) => {
     if (!chatId || !userId) return;
     try {
       await markChatAsRead(chatId, userId);
@@ -61,50 +66,53 @@ export const useChatLogic = () => {
         setCurrentUser(user);
       }
 
-      // Cargar info del otro usuario si falta
-      if (!chatUser.id || !chatUser.avatar) {
+      // 1. Cargar datos iniciales del usuario
+      if (chatUser.id) {
+        // Intentamos obtener datos frescos (online/lastSeen)
         try {
-          if (chatUser.id) {
-            const u = await getUser(chatUser.id);
-            if (u)
-              setChatUser({
-                name: u.name,
-                avatar: u.pfp,
-                id: u.$id,
-                expoPushToken: u.expoPushToken,
-                isVerified: u.isVerified,
-              });
-          } else {
-            // Fallback buscando en el documento del chat
-            const doc = await databases.getDocument(
-              appwriteConfig.databaseId,
-              appwriteConfig.chatsCollectionId,
-              chatId,
-            );
-            const otherId = doc.participants.find(
-              (p: string) => p !== user.$id,
-            );
-            if (otherId) {
-              const u = await getUser(otherId);
-              if (u)
-                setChatUser({
-                  name: u.name,
-                  avatar: u.pfp,
-                  id: u.$id,
-                  expoPushToken: u.expoPushToken,
-                  isVerified: u.isVerified,
-                });
-            }
+          const u = await getUser(chatUser.id);
+          if (u) {
+            setChatUser((prev) => ({
+              ...prev,
+              name: u.name,
+              avatar: u.pfp,
+              id: u.$id,
+              expoPushToken: u.expoPushToken,
+              isVerified: u.isVerified,
+              isOnline: u.isOnline || false, // 🔥
+              lastSeen: u.lastSeen || null, // 🔥
+            }));
           }
         } catch (e) {}
+      } else {
+        // Si no tenemos ID, lo buscamos en el documento del chat
+        const doc = await databases.getDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.chatsCollectionId,
+          chatId,
+        );
+        const otherId = doc.participants.find((p: string) => p !== user.$id);
+        if (otherId) {
+          const u = await getUser(otherId);
+          if (u) {
+            setChatUser({
+              name: u.name,
+              avatar: u.pfp,
+              id: u.$id,
+              expoPushToken: u.expoPushToken,
+              isVerified: u.isVerified,
+              isOnline: u.isOnline || false,
+              lastSeen: u.lastSeen || null,
+            });
+          }
+        }
       }
 
-      // 2. USO DE FUNCIÓN CORRECTA
       const msgs = await getMessages(chatId);
       setMessages(msgs);
-      if (msgs.length > 0) performReadUpdate(user.$id, msgs);
+      if (msgs.length > 0) performReadUpdate(user.$id);
     } catch (error) {
-      console.log("Error:", error);
+      console.log("Error loading chat:", error);
     } finally {
       setIsLoading(false);
     }
@@ -113,55 +121,115 @@ export const useChatLogic = () => {
   // --- REALTIME ---
   useEffect(() => {
     loadData();
-    const unsubscribe = client.subscribe(
-      `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`,
-      (response) => {
+
+    const messagesChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`;
+    const chatsCollectionChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.chatsCollectionId}.documents`;
+
+    // 🔥 Suscripción extra: Escuchar al OTRO USUARIO para saber si se conecta
+    let userChannel = null;
+    if (chatUser.id) {
+      userChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.usersCollectionId}.documents.${chatUser.id}`;
+    }
+
+    const channelsToSubscribe = [messagesChannel, chatsCollectionChannel];
+    if (userChannel) channelsToSubscribe.push(userChannel);
+
+    const unsubscribe = client.subscribe(channelsToSubscribe, (response) => {
+      // 1. MENSAJES
+      if (response.channels.includes(messagesChannel)) {
         const payload = response.payload as any;
         if (payload.chatId === chatId) {
-          if (response.events.includes(".create")) {
+          if (response.events.some((e) => e.includes(".create"))) {
             setMessages((prev) => {
               if (prev.find((m) => m.$id === payload.$id)) return prev;
               return [payload, ...prev];
             });
+            setIsOtherUserTyping(false);
             if (currentUser?.$id && payload.senderId !== currentUser.$id)
-              performReadUpdate(currentUser.$id, [payload]);
+              performReadUpdate(currentUser.$id);
           }
-          if (response.events.includes(".update")) {
+          if (response.events.some((e) => e.includes(".update"))) {
             setMessages((prev) =>
               prev.map((msg) => (msg.$id === payload.$id ? payload : msg)),
             );
           }
-          if (response.events.includes(".delete")) {
+          if (response.events.some((e) => e.includes(".delete"))) {
             setMessages((prev) =>
               prev.filter((msg) => msg.$id !== payload.$id),
             );
           }
         }
-      },
-    );
-    return () => unsubscribe();
-  }, [chatId]);
+      }
 
-  // --- ACCIONES ---
+      // 2. ESCRIBIENDO (Chat Update)
+      if (response.channels.includes(chatsCollectionChannel)) {
+        const payload = response.payload as any;
+        if (
+          payload.$id === chatId &&
+          response.events.some((e) => e.includes(".update"))
+        ) {
+          const typingList = payload.isTyping || [];
+          if (currentUser) {
+            const isSomeoneElseTyping = typingList.some(
+              (id: string) => id !== currentUser.$id,
+            );
+            setIsOtherUserTyping(isSomeoneElseTyping);
+          }
+        }
+      }
+
+      // 3. 🔥 ESTADO EN LÍNEA (User Update)
+      if (userChannel && response.channels.includes(userChannel)) {
+        if (response.events.some((e) => e.includes(".update"))) {
+          const payload = response.payload as any;
+          setChatUser((prev) => ({
+            ...prev,
+            isOnline: payload.isOnline,
+            lastSeen: payload.lastSeen,
+          }));
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [chatId, currentUser?.$id, chatUser.id]); // Re-suscribir si obtenemos el ID del otro usuario
+
+  // --- HANDLERS ---
+  const handleTyping = async (text: string) => {
+    setNewMessage(text);
+    if (!currentUser || !chatId) return;
+
+    if (text.length > 0 && !typingTimeoutRef.current) {
+      try {
+        await setTypingStatus(chatId, currentUser.$id, true);
+      } catch (e) {}
+    }
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(async () => {
+      try {
+        await setTypingStatus(chatId, currentUser.$id, false);
+      } catch (e) {}
+      typingTimeoutRef.current = null;
+    }, 2000);
+  };
+
   const handleSend = async () => {
     if (!newMessage.trim() || !currentUser || !chatUser.id) return;
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    setTypingStatus(chatId, currentUser.$id, false).catch(() => {});
+    typingTimeoutRef.current = null;
 
-    // EDICIÓN
     if (editingMessage) {
       const tempId = editingMessage.$id;
       let finalBody = newMessage;
-      // Mantener metadata si existe
       if (editingMessage.body && editingMessage.body.includes(":::REPLY:::")) {
         const parts = editingMessage.body.split(":::REPLY:::");
         finalBody = `${parts[0]}:::REPLY:::${newMessage}`;
       }
-
       setNewMessage("");
       setEditingMessage(null);
       setMessages((prev) =>
         prev.map((m) => (m.$id === tempId ? { ...m, body: finalBody } : m)),
       );
-
       try {
         await updateMessage(tempId, finalBody);
       } catch {
@@ -170,7 +238,6 @@ export const useChatLogic = () => {
       return;
     }
 
-    // ENVÍO NUEVO
     let bodyToSend = newMessage;
     if (replyingTo) {
       const replyName =
@@ -187,7 +254,6 @@ export const useChatLogic = () => {
     setNewMessage("");
     setReplyingTo(null);
 
-    // 3. ENVÍO COMO OBJETO (FIX ERROR ARGUMENTOS)
     try {
       await sendMessage({
         chatId: chatId,
@@ -196,7 +262,6 @@ export const useChatLogic = () => {
         body: tempBody,
         type: "text",
       });
-
       if (chatUser.expoPushToken) {
         await sendPushNotification(
           chatUser.expoPushToken,
@@ -207,7 +272,7 @@ export const useChatLogic = () => {
         );
       }
     } catch (e) {
-      setNewMessage(tempBody); // Restaurar si falla
+      setNewMessage(tempBody);
       Alert.alert("Error", "No se pudo enviar");
     }
   };
@@ -254,6 +319,8 @@ export const useChatLogic = () => {
     messages,
     newMessage,
     setNewMessage,
+    handleTyping,
+    isOtherUserTyping,
     currentUser,
     chatUser,
     replyingTo,
@@ -262,7 +329,6 @@ export const useChatLogic = () => {
     setEditingMessage,
     flatListRef,
     inputRef,
-    rowRefs,
     handleSend,
     confirmDelete,
     startEditing,

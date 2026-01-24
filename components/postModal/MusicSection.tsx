@@ -1,15 +1,26 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   TouchableOpacity,
   ScrollView,
   Text,
   TextInput,
+  Modal,
+  StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-
+import Animated, {
+  FadeIn,
+  FadeOut,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
+import { BlurView } from "expo-blur";
+import { Fontisto } from "@expo/vector-icons";
 // Subcomponentes
 import LinkedSongCard from "./LinkedSongCard";
 import SongResultRow from "./SongResultRow";
@@ -29,7 +40,48 @@ interface MusicSectionProps {
   currentPlayingUrl: string | null;
   onShazam: () => void;
   isRecording: boolean;
+  // 🔥 Props nuevos
+  isShazamScanning: boolean;
 }
+
+// Componente pa' las onditas de la animación (Pulsing Circles)
+const PulsingCircle = ({ delay, size }: { delay: number; size: number }) => {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(0.5);
+
+  useEffect(() => {
+    scale.value = withRepeat(
+      withTiming(2, { duration: 2000, easing: Easing.out(Easing.ease) }),
+      -1,
+      false,
+    );
+    opacity.value = withRepeat(
+      withTiming(0, { duration: 2000, easing: Easing.out(Easing.ease) }),
+      -1,
+      false,
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: "absolute",
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: "#5E17EB", // Morado Mood
+        },
+        animatedStyle,
+      ]}
+    />
+  );
+};
 
 export default function MusicSection({
   isSearchingMusic,
@@ -45,7 +97,8 @@ export default function MusicSection({
   isPlaying,
   currentPlayingUrl,
   onShazam,
-  isRecording,
+  isRecording, // Ya no se usa tanto porque usamos isShazamScanning, pero lo dejamos por si acaso
+  isShazamScanning, // <--- EL ESTADO DEL BULTO
 }: MusicSectionProps) {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -127,35 +180,113 @@ export default function MusicSection({
       className="flex-row items-center justify-between pt-2"
     >
       <View className="flex-row gap-4">
+        {/* BOTÓN DE BÚSQUEDA NORMAL */}
         <TouchableOpacity
           onPress={() => setIsSearchingMusic(true)}
           className="w-10 h-10 rounded-full items-center justify-center"
           style={{
-            backgroundColor: isDark
-              ? "rgba(255,255,255,0.1)"
-              : "rgba(0,0,0,0.05)",
+            backgroundColor: isDark ? "#181818" : "rgba(0,0,0,0.05)",
+            borderColor: "#5E17EB",
+            borderWidth: 0.9,
           }}
         >
-          <Ionicons name="musical-notes" size={20} color="#5E17EB" />
+          <Ionicons name="musical-notes" size={25} color="#5E17EB" />
         </TouchableOpacity>
+
+        {/* 🔥 BOTÓN SHAZAM MORADO 🔥 */}
         <TouchableOpacity
           onPress={onShazam}
-          className="w-10 h-10 rounded-full items-center justify-center"
+          className="flex w-auto h-auto rounded-full items-center justify-center bg-primaryy"
           style={{
-            backgroundColor: isRecording
-              ? "#EF4444"
-              : isDark
-                ? "rgba(255,255,255,0.1)"
-                : "rgba(0,0,0,0.05)",
+            shadowColor: "#5E17EB",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 5,
           }}
         >
-          <Ionicons
-            name={isRecording ? "mic" : "mic-outline"}
-            size={22}
-            color={isRecording ? "white" : iconColor}
+          {/* Usamos el icono de Shazam real o algo parecido si no está disponible */}
+          <Fontisto
+            name="shazam"
+            size={38}
+            color={isDark ? "#181818" : "rgba(0,0,0,0.05)"}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 100,
+              textAlign: "center",
+            }}
           />
         </TouchableOpacity>
       </View>
+
+      {/* 🔥 EL MODAL DE ESCANEO (OVERLAY) 🔥 */}
+      <Modal
+        visible={isShazamScanning}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View style={styles.overlayContainer}>
+          {/* Fondo con Blur */}
+          <BlurView
+            intensity={20}
+            style={StyleSheet.absoluteFill}
+            tint="dark"
+          />
+          <View
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              backgroundColor: "rgba(0,0,0,0.7)",
+            }}
+          />
+
+          {/* Contenedor Central */}
+          <View className="items-center justify-center">
+            {/* Ondas de Animación */}
+            <View className="absolute bottom-44 left-9">
+              <PulsingCircle delay={0} size={150} />
+              <PulsingCircle delay={1000} size={150} />
+            </View>
+            {/* Logo Central */}
+            <View
+              className="flex w-auto h-auto rounded-full items-center justify-center bg-white"
+              style={{
+                shadowColor: "#5E17EB",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 5,
+              }}
+            >
+              <Fontisto
+                name="shazam"
+                size={100}
+                color="#5E17EB"
+                style={{
+                  borderRadius: 100,
+                  width: 105,
+                  height: 105,
+                  textAlign: "center",
+                }}
+              />
+            </View>
+
+            {/* Texto */}
+            <Text className="text-white font-bold text-xl mt-8 tracking-wide">
+              Hold up, I'm listening...
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  overlayContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});

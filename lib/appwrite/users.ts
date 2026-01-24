@@ -2,10 +2,10 @@ import { Query, ID, AppwriteException } from "react-native-appwrite";
 import { databases, appwriteConfig, account } from "./config";
 import { uploadFile } from "./storage";
 import { createNotification } from "./notifications";
-// ✅ IMPORTAR desde utils (Asegúrate de que el archivo se llame userUtils.ts y no userUtils.t)
+// ✅ IMPORTAR desde utils
 import { getUser } from "./userUtils";
 
-// ✅ RE-EXPORTAR para compatibilidad con el resto de la app
+// ✅ RE-EXPORTAR para compatibilidad
 export { getUser } from "./userUtils";
 
 // Sincronizar usuario
@@ -38,10 +38,12 @@ export const syncOrCreateUserDocument = async () => {
           Math.floor(Math.random() * 1000),
         preferredPlatform: "spotify",
         allowTags: true,
-        notificationsEnabled: true, // Valor por defecto
+        notificationsEnabled: true,
         blockedUsers: [],
         isBanned: false,
         isPrivate: false,
+        isOnline: true, // 🔥 Default online al crear
+        lastSeen: new Date().toISOString(),
       },
     );
   } catch (error) {
@@ -81,7 +83,6 @@ export async function updateProfile(userId: string, form: any) {
     if (form.isPrivate !== undefined) updates.isPrivate = form.isPrivate;
     if (form.allowTags !== undefined) updates.allowTags = form.allowTags;
 
-    // 🔥 CORRECCIÓN: Permitir guardar la preferencia de notificaciones
     if (form.notificationsEnabled !== undefined)
       updates.notificationsEnabled = form.notificationsEnabled;
 
@@ -243,7 +244,6 @@ export async function followUser(followerId: string, followedId: string) {
       { followerId, followedId, status },
     );
 
-    // Notificación
     const follower = await getUser(followerId);
     if (follower) {
       const type = target.isPrivate ? "follow_request" : "follow";
@@ -315,7 +315,6 @@ export async function getUserFollowers(userId: string) {
     const users = await Promise.all(
       res.documents.map((d) => getUser(d.followerId)),
     );
-    // 🔥 CORRECCIÓN: Tipado explícito (u: any) para evitar error de TypeScript
     return users.filter((u: any) => u !== null);
   } catch {
     return [];
@@ -332,7 +331,6 @@ export async function getUserFollowing(userId: string) {
     const users = await Promise.all(
       res.documents.map((d) => getUser(d.followedId)),
     );
-    // 🔥 CORRECCIÓN: Tipado explícito
     return users.filter((u: any) => u !== null);
   } catch {
     return [];
@@ -378,7 +376,6 @@ export async function acceptFollowRequest(
       );
     } catch {}
 
-    // Notificaciones cruzadas
     const follower = await getUser(followerId);
     if (follower) {
       await createNotification({
@@ -488,9 +485,26 @@ export async function getBlockedUsersList(currentUserId: string) {
     const users = await Promise.all(
       user.blockedUsers.map((id: string) => getUser(id)),
     );
-    // 🔥 CORRECCIÓN: Tipado explícito
     return users.filter((u: any) => u !== null);
   } catch {
     return [];
+  }
+}
+
+// 🔥🔥 NUEVA FUNCIÓN PARA ACTUALIZAR PRESENCIA (Online/Offline) 🔥🔥
+export async function updateUserPresence(userId: string, isOnline: boolean) {
+  try {
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId,
+      {
+        isOnline: isOnline,
+        lastSeen: new Date().toISOString(),
+      },
+    );
+  } catch (e) {
+    // Si falla silenciosamente no importa, no rompemos la app
+    // console.log("Presence Error:", e);
   }
 }

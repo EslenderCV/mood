@@ -5,16 +5,21 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-  // RefreshControl, // 🗑 Eliminado
   ScrollView,
   Keyboard,
-  Animated, // ✨ Nuevo
-  Platform, // ✨ Nuevo
-  LayoutAnimation, // ✨ Nuevo
-  UIManager, // ✨ Nuevo
-  useWindowDimensions, // ✨ Nuevo
+  Animated,
+  Platform,
+  LayoutAnimation,
+  UIManager,
 } from "react-native";
-import React, { useCallback, useState, useMemo, memo, useEffect, useRef } from "react";
+import React, {
+  useCallback,
+  useState,
+  useMemo,
+  memo,
+  useEffect,
+  useRef,
+} from "react";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -45,7 +50,15 @@ import PlayerPostModal from "@/components/explore/PlayerPostModal";
 import DirectShareSheet from "@/components/home/DirectShareSheet";
 import StoryCreationModal from "@/components/home/StoryCreationModal";
 
-// Habilitar animaciones de Layout en Android
+// 🔥 MODALES
+import { TrackOptionsModal } from "@/components/explore/TrackOptionsModal";
+// ✅ CORRECCIÓN 1: Ruta exacta (Case Sensitive)
+import PostModal from "@/components/postModal/PostModal";
+
+// ✅ CORRECCIÓN 2: Silenciamos el error de tipos forzando el componente a 'any'
+// Esto permite pasarle props aunque TypeScript no las reconozca en la definición original.
+const PostModalAny = PostModal as any;
+
 if (
   Platform.OS === "android" &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -53,7 +66,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// --- CONSTANTES DE UX ---
 const PULL_THRESHOLD = -80;
 const VISIBLE_THRESHOLD = -40;
 const SPINNER_HEIGHT = 60;
@@ -96,8 +108,6 @@ const CATEGORIES = [
   },
 ];
 
-// --- COMPONENTES UI EXTERNOS ---
-
 const CategoryTabs = memo(
   ({
     activeCategory,
@@ -106,8 +116,9 @@ const CategoryTabs = memo(
     borderColor,
     subTextColor,
     accentColor,
+    bgColor,
   }: any) => (
-    <View style={{ height: 50, marginBottom: 10 }}>
+    <View style={{ height: 50, marginBottom: 10, backgroundColor: bgColor }}>
       <FlatList
         horizontal
         data={CATEGORIES}
@@ -129,8 +140,8 @@ const CategoryTabs = memo(
               style={{
                 marginRight: 12,
                 paddingHorizontal: 20,
-                paddingVertical: 10,
-                borderRadius: 999,
+                paddingVertical: 8,
+                borderRadius: 20,
                 flexDirection: "row",
                 alignItems: "center",
                 backgroundColor: isActive ? accentColor : "transparent",
@@ -147,7 +158,7 @@ const CategoryTabs = memo(
               <Text
                 style={{
                   fontWeight: isActive ? "bold" : "500",
-                  fontSize: 15,
+                  fontSize: 14,
                   color: isActive ? "white" : subTextColor,
                 }}
               >
@@ -173,123 +184,120 @@ const ExploreHeader = memo(
   }: any) => {
     return (
       <View>
-        <CategoryTabs
-          activeCategory={logic.activeCategory}
-          setActiveCategory={logic.setActiveCategory}
-          t={t}
-          borderColor={borderColor}
-          subTextColor={subTextColor}
-          accentColor={accentColor}
-        />
-
         {logic.activeCategory === "posts" && (
           <View>
-            <View className="mb-6 mt-2">
+            <View className="mb-8 mt-2">
               <Text
-                className="text-lg font-bold mb-3 ml-5"
+                className="text-lg font-bold mb-3 ml-5 tracking-tight"
                 style={{ color: textColor }}
               >
                 Mood's Daily Top Picks
               </Text>
               {logic.isLoading ? (
                 <View>
-                  {[1, 2, 3, 4, 5].map((i) => (
+                  {[1, 2, 3].map((i) => (
                     <TrendingVibeSkeleton key={i} isDark={isDark} />
                   ))}
                 </View>
               ) : (
-                logic.dailyVibes.map((item: any) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    onPress={() => {
-                      const fakePost = {
-                        $id: item.postId,
-                        songData: JSON.stringify(item),
-                        likedBy: [],
-                        savedBy: [],
-                      };
-                      logic.setPlayerPostsList([fakePost]);
-                      logic.setPlayerInitialIndex(0);
-                      logic.setIsPlayerModalVisible(true);
-                    }}
-                    className="flex-row items-center px-5 py-3 mb-2 mx-2 active:opacity-70"
-                  >
-                    <Image
-                      source={{ uri: item.cover }}
-                      style={{
-                        width: 56,
-                        height: 56,
-                        borderRadius: 12,
-                        backgroundColor: "#27272A",
-                      }}
-                      contentFit="cover"
-                      transition={200}
-                    />
-                    <View className="flex-1 justify-center ml-4 mr-2">
-                      <Text
-                        className="font-bold text-[15px] mb-1"
-                        numberOfLines={1}
-                        style={{ color: textColor }}
-                      >
-                        {item.title}
-                      </Text>
-                      <Text
-                        className="text-xs font-medium"
-                        numberOfLines={1}
-                        style={{ color: subTextColor }}
-                      >
-                        {item.artist}
-                      </Text>
-                    </View>
+                logic.dailyVibes.map((item: any) => {
+                  const isPlaying =
+                    logic.playingPreviewId === (item.trackId || item.id);
+                  return (
                     <TouchableOpacity
-                      onPress={(e) => {
-                        e.stopPropagation();
+                      key={item.id}
+                      activeOpacity={0.7}
+                      onPress={() => {
                         Haptics.selectionAsync();
                         logic.playPreview(
                           item.preview,
                           item.trackId || item.id,
                         );
                       }}
-                      className="w-10 h-10 rounded-full items-center justify-center"
-                      style={{
-                        backgroundColor:
-                          logic.playingPreviewId === (item.trackId || item.id)
-                            ? accentColor
-                            : isDark
-                              ? "#27272A"
-                              : "#F3F4F6",
-                      }}
+                      className="flex-row items-center px-5 py-3 mb-2 mx-2 rounded-2xl"
                     >
-                      <Ionicons
-                        name={
-                          logic.playingPreviewId === (item.trackId || item.id)
-                            ? "pause"
-                            : "play"
-                        }
-                        size={18}
-                        color={
-                          logic.playingPreviewId === (item.trackId || item.id)
-                            ? "white"
-                            : subTextColor
-                        }
-                      />
+                      <View className="relative">
+                        <Image
+                          source={{ uri: item.cover }}
+                          style={{
+                            width: 56,
+                            height: 56,
+                            borderRadius: 12,
+                            backgroundColor: "#27272A",
+                          }}
+                          contentFit="cover"
+                          transition={200}
+                        />
+                        {isPlaying && (
+                          <View className="absolute inset-0 bg-black/40 items-center justify-center rounded-12">
+                            <Ionicons
+                              name="stats-chart"
+                              size={16}
+                              color={accentColor}
+                            />
+                          </View>
+                        )}
+                      </View>
+                      <View className="flex-1 justify-center ml-4 mr-2">
+                        <Text
+                          className={`font-bold text-[15px] mb-1 ${isPlaying ? "text-[#5E17EB]" : ""}`}
+                          numberOfLines={1}
+                          style={{ color: isPlaying ? accentColor : textColor }}
+                        >
+                          {item.title}
+                        </Text>
+                        <Text
+                          className="text-xs font-medium"
+                          numberOfLines={1}
+                          style={{ color: subTextColor }}
+                        >
+                          {item.artist}
+                        </Text>
+                      </View>
+                      <View className="flex-row items-center gap-3">
+                        <TouchableOpacity
+                          disabled={true}
+                          className="w-8 h-8 rounded-full items-center justify-center border border-zinc-200 dark:border-zinc-800"
+                        >
+                          <Ionicons
+                            name={isPlaying ? "pause" : "play"}
+                            size={16}
+                            color={isPlaying ? accentColor : subTextColor}
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            Haptics.impactAsync(
+                              Haptics.ImpactFeedbackStyle.Light,
+                            );
+                            logic.openTrackOptions(item);
+                          }}
+                          className="w-8 h-8 rounded-full items-center justify-center bg-[#5E17EB]"
+                        >
+                          <Ionicons name="add" size={20} color="white" />
+                        </TouchableOpacity>
+                      </View>
                     </TouchableOpacity>
-                  </TouchableOpacity>
-                ))
+                  );
+                })
               )}
             </View>
 
             <View className="mb-8">
-              <Text
-                className="text-lg font-bold mb-3 ml-5"
-                style={{ color: textColor }}
-              >
-                Discover Creators
-              </Text>
+              <View className="flex-row justify-between items-center px-5 mb-3">
+                <Text
+                  className="text-lg font-bold"
+                  style={{ color: textColor }}
+                >
+                  Discover Creators
+                </Text>
+                <Ionicons name="arrow-forward" size={20} color={subTextColor} />
+              </View>
               {logic.isLoading ? (
                 <FlatList
                   horizontal
-                  data={[1, 2, 3, 4, 5]}
+                  data={[1, 2, 3]}
                   contentContainerStyle={{ paddingHorizontal: 20 }}
                   keyExtractor={(i) => i.toString()}
                   renderItem={() => <CreatorSkeleton isDark={isDark} />}
@@ -304,32 +312,60 @@ const ExploreHeader = memo(
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       onPress={() => router.push(`/user/${item.$id}` as any)}
-                      className="mr-5 items-center w-20"
+                      className="mr-3 p-3 rounded-2xl border"
+                      style={{
+                        width: 110,
+                        borderColor: borderColor,
+                        backgroundColor: isDark ? "#18181B" : "#FFFFFF",
+                      }}
                     >
-                      <Image
-                        source={
-                          item.pfp
-                            ? { uri: item.pfp }
-                            : require("@/assets/noPfp.jpg")
-                        }
-                        style={{
-                          width: 68,
-                          height: 68,
-                          borderRadius: 34,
-                          borderColor: borderColor,
-                          borderWidth: 2,
-                          backgroundColor: "#27272A",
-                        }}
-                        contentFit="cover"
-                        transition={200}
-                      />
+                      <View className="items-center mb-2">
+                        <Image
+                          source={
+                            item.pfp
+                              ? { uri: item.pfp }
+                              : require("@/assets/noPfp.jpg")
+                          }
+                          style={{
+                            width: 50,
+                            height: 50,
+                            borderRadius: 25,
+                            backgroundColor: "#27272A",
+                          }}
+                          contentFit="cover"
+                          transition={200}
+                        />
+                        {item.isVerified && (
+                          <View className="absolute bottom-0 right-0 bg-white dark:bg-black rounded-full p-[2px]">
+                            <MaterialIcons
+                              name="verified"
+                              size={14}
+                              color={accentColor}
+                            />
+                          </View>
+                        )}
+                      </View>
                       <Text
-                        className="text-xs font-medium mt-2 text-center"
+                        className="text-xs font-bold text-center mb-1"
                         numberOfLines={1}
                         style={{ color: textColor }}
                       >
                         {item.name || item.username}
                       </Text>
+                      <Text
+                        className="text-[10px] text-center mb-3"
+                        style={{ color: subTextColor }}
+                      >
+                        @{item.username}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => logic.handleFollowUser(item.$id)}
+                        className="w-full py-1.5 rounded-lg items-center justify-center bg-[#5E17EB]"
+                      >
+                        <Text className="text-[10px] font-bold text-white">
+                          Seguir
+                        </Text>
+                      </TouchableOpacity>
                     </TouchableOpacity>
                   )}
                 />
@@ -368,7 +404,7 @@ const SearchResultsView = memo(
     const hasResults =
       logic.searchResults.users.length > 0 ||
       logic.searchResults.posts.length > 0;
-    if (!hasResults && logic.searchText.trim().length > 0) {
+    if (!hasResults && logic.searchText.trim().length > 0)
       return (
         <View className="py-20 items-center opacity-50">
           <Text style={{ color: subTextColor }}>
@@ -376,7 +412,6 @@ const SearchResultsView = memo(
           </Text>
         </View>
       );
-    }
     return (
       <ScrollView
         className="flex-1"
@@ -511,23 +546,16 @@ const Explore = () => {
   const isDark = colorScheme === "dark";
   const logic = useExploreLogic();
   const { t, user } = logic;
-
   const [localSearchText, setLocalSearchText] = useState(logic.searchText);
   const [followedIds, setFollowedIds] = useState<string[]>([]);
-
-  // 🔥 CUSTOM REFRESH STATE
   const scrollY = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef(0);
   const [showSpinner, setShowSpinner] = useState(false);
 
-  // --- ANIMACIONES & SCROLL ---
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    if (!logic.isRefreshing) {
-      setShowSpinner(false);
-    }
+    if (!logic.isRefreshing) setShowSpinner(false);
   }, [logic.isRefreshing]);
-
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
     {
@@ -535,39 +563,32 @@ const Explore = () => {
       listener: (event: any) => {
         const offsetY = event.nativeEvent.contentOffset.y;
         scrollRef.current = offsetY;
-
-        // Lógica reactiva de visibilidad
         if (offsetY < VISIBLE_THRESHOLD) {
-           if (!showSpinner) setShowSpinner(true);
+          if (!showSpinner) setShowSpinner(true);
         } else if (!logic.isRefreshing) {
-           if (showSpinner) setShowSpinner(false);
+          if (showSpinner) setShowSpinner(false);
         }
       },
-    }
+    },
   );
-
   const handleScrollEndDrag = () => {
     const offsetY = scrollRef.current;
     if (offsetY < PULL_THRESHOLD && !logic.isRefreshing) {
-      setShowSpinner(true); 
+      setShowSpinner(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       logic.onRefresh();
     }
   };
-
   const spinnerScale = scrollY.interpolate({
     inputRange: [PULL_THRESHOLD * 1.5, PULL_THRESHOLD, 0],
     outputRange: [1.3, 1, 0],
     extrapolate: "clamp",
   });
-
   const spinnerRotate = scrollY.interpolate({
     inputRange: [PULL_THRESHOLD * 2, 0],
     outputRange: ["360deg", "0deg"],
     extrapolate: "clamp",
   });
-
-  // 🔥 DEBOUNCE LOGIC
   useEffect(() => {
     if (localSearchText === logic.searchText) return;
     const delayDebounceFn = setTimeout(() => {
@@ -575,11 +596,9 @@ const Explore = () => {
     }, 500);
     return () => clearTimeout(delayDebounceFn);
   }, [localSearchText]);
-
   useEffect(() => {
     setLocalSearchText(logic.searchText);
   }, [logic.searchText]);
-
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -599,10 +618,8 @@ const Explore = () => {
       };
     }, [user?.$id]),
   );
-
   const handleFollowOptimistic = (id: string) =>
     setFollowedIds((prev) => [...prev, id]);
-
   const filteredProfiles = useMemo(() => {
     if (!logic.users) return [];
     return logic.users.filter((u: any) => {
@@ -617,9 +634,7 @@ const Explore = () => {
   const inputBg = isDark ? "#18181B" : "#F3F4F6";
   const borderColor = isDark ? "#27272A" : "#E5E5E5";
   const accentColor = "#5E17EB";
-
   const showResults = logic.searchText.trim().length > 0;
-
   const handleClearSearch = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLocalSearchText("");
@@ -636,12 +651,13 @@ const Explore = () => {
         className="flex-row items-center px-5 py-4 border-b active:opacity-70"
         style={{ borderColor: borderColor }}
       >
+        {" "}
         <Text
           className="font-bold text-lg mr-4 w-6 text-center"
           style={{ color: index < 3 ? accentColor : subTextColor }}
         >
           {index + 1}
-        </Text>
+        </Text>{" "}
         <Image
           source={{ uri: item.cover }}
           style={{
@@ -652,22 +668,23 @@ const Explore = () => {
           }}
           contentFit="cover"
           transition={300}
-        />
+        />{" "}
         <View className="flex-1 ml-4">
+          {" "}
           <Text
             className="font-bold text-base mb-0.5"
             numberOfLines={1}
             style={{ color: textColor }}
           >
             {item.title}
-          </Text>
+          </Text>{" "}
           <Text className="text-sm" style={{ color: subTextColor }}>
             {item.artist}
-          </Text>
+          </Text>{" "}
           <Text className="text-xs mt-1" style={{ color: accentColor }}>
             {item.score} likes
-          </Text>
-        </View>
+          </Text>{" "}
+        </View>{" "}
         <TouchableOpacity
           onPress={(e) => {
             e.stopPropagation();
@@ -683,16 +700,16 @@ const Explore = () => {
                 : "#E5E5E5",
           }}
         >
+          {" "}
           <Ionicons
             name={isPlaying ? "pause" : "play"}
             size={20}
             color={isPlaying ? "white" : accentColor}
-          />
-        </TouchableOpacity>
+          />{" "}
+        </TouchableOpacity>{" "}
       </TouchableOpacity>
     );
   };
-
   const renderArtistRow = ({ item }: any) => (
     <TouchableOpacity
       onPress={() =>
@@ -701,6 +718,7 @@ const Explore = () => {
       className="flex-row items-center px-5 py-4 border-b active:opacity-70"
       style={{ borderColor: borderColor }}
     >
+      {" "}
       <Image
         source={{ uri: item.cover }}
         style={{
@@ -711,16 +729,17 @@ const Explore = () => {
         }}
         contentFit="cover"
         transition={300}
-      />
+      />{" "}
       <View className="flex-1 ml-4">
+        {" "}
         <Text className="font-bold text-base" style={{ color: textColor }}>
           {item.name}
-        </Text>
+        </Text>{" "}
         <Text className="text-sm" style={{ color: subTextColor }}>
           {item.count} canciones en Mood
-        </Text>
-      </View>
-      <Ionicons name="chevron-forward" size={20} color={subTextColor} />
+        </Text>{" "}
+      </View>{" "}
+      <Ionicons name="chevron-forward" size={20} color={subTextColor} />{" "}
     </TouchableOpacity>
   );
 
@@ -729,8 +748,11 @@ const Explore = () => {
       <View style={{ flex: 1 }}>
         <StatusBar style={isDark ? "light" : "dark"} />
         <SafeAreaView className="flex-1" edges={["top"]}>
-          {/* BARRA DE BÚSQUEDA */}
-          <View className="px-5 pt-2 pb-4" style={{ backgroundColor: bgColor, zIndex: 10 }}>
+          {/* SEARCH */}
+          <View
+            className="px-5 pt-2 pb-4"
+            style={{ backgroundColor: bgColor, zIndex: 10 }}
+          >
             <View
               className="flex-row items-center h-12 rounded-2xl px-4 border"
               style={{ backgroundColor: inputBg, borderColor: "transparent" }}
@@ -788,18 +810,16 @@ const Explore = () => {
               keyExtractor={(item, index) =>
                 item?.$id || item?.id || index.toString()
               }
-              // 🔥 HANDLERS PARA REFRESH
               onScroll={handleScroll}
               onScrollEndDrag={handleScrollEndDrag}
               scrollEventThrottle={16}
-              
               ListHeaderComponent={
-                <View>
-                  {/* Contenedor del Spinner Animado */}
+                <View style={{ backgroundColor: bgColor }}>
                   <Animated.View
                     style={{
-                      height: (showSpinner || logic.isRefreshing) ? SPINNER_HEIGHT : 0,
-                      opacity: (showSpinner || logic.isRefreshing) ? 1 : 0,
+                      height:
+                        showSpinner || logic.isRefreshing ? SPINNER_HEIGHT : 0,
+                      opacity: showSpinner || logic.isRefreshing ? 1 : 0,
                       alignItems: "center",
                       justifyContent: "center",
                       overflow: "hidden",
@@ -811,19 +831,28 @@ const Explore = () => {
                   >
                     <ActivityIndicator size="small" color="#5E17EB" />
                   </Animated.View>
-
-                  <ExploreHeader
-                    logic={logic}
+                  <CategoryTabs
+                    activeCategory={logic.activeCategory}
+                    setActiveCategory={logic.setActiveCategory}
                     t={t}
-                    textColor={textColor}
-                    subTextColor={subTextColor}
                     borderColor={borderColor}
+                    subTextColor={subTextColor}
                     accentColor={accentColor}
-                    isDark={isDark}
+                    bgColor={bgColor}
                   />
+                  {logic.activeCategory === "posts" && (
+                    <ExploreHeader
+                      logic={logic}
+                      t={t}
+                      textColor={textColor}
+                      subTextColor={subTextColor}
+                      borderColor={borderColor}
+                      accentColor={accentColor}
+                      isDark={isDark}
+                    />
+                  )}
                 </View>
               }
-              
               key={logic.activeCategory === "posts" ? "grid-3" : "list-1"}
               numColumns={logic.activeCategory === "posts" ? 3 : 1}
               renderItem={({ item, index }) => {
@@ -888,11 +917,10 @@ const Explore = () => {
                 });
               }}
               showsVerticalScrollIndicator={false}
-              // refreshControl eliminado
             />
           )}
 
-          {/* MODALES */}
+          {/* 🔥 MODALES */}
           <PlayerPostModal
             visible={logic.isPlayerModalVisible}
             onClose={() => logic.setIsPlayerModalVisible(false)}
@@ -948,6 +976,23 @@ const Explore = () => {
                     getCreatorFromPost(logic.selectedPost).id) === user.$id
                 : false
             }
+          />
+
+          <TrackOptionsModal
+            visible={logic.isTrackOptionsVisible}
+            onClose={() => logic.setTrackOptionsVisible(false)}
+            track={logic.selectedTrackForAction}
+            onCreateStory={logic.handleStartStory}
+            onCreatePost={logic.handleStartPost}
+          />
+
+          {/* 🔥 MODAL EXISTENTE CONECTADO Y ARREGLADO */}
+          {/* Usamos PostModalAny para evitar el error de TS mientras le pasamos las props correctas */}
+          <PostModalAny
+            visible={logic.isPostModalVisible} // Probamos con 'visible' (estándar)
+            isVisible={logic.isPostModalVisible} // Y también 'isVisible' por seguridad (algunos libs usan esto)
+            onClose={() => logic.setIsPostModalVisible(false)}
+            prefillData={{ song: logic.selectedTrackForAction }}
           />
         </SafeAreaView>
       </View>

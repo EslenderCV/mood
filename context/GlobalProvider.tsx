@@ -9,7 +9,9 @@ import {
   useCallback,
   useMemo,
 } from "react";
-import { getCurrentUser } from "@/lib/appwrite";
+// 🔥 IMPORTAMOS AppState y la función nueva
+import { AppState } from "react-native";
+import { getCurrentUser, updateUserPresence } from "@/lib/appwrite";
 import { Models } from "react-native-appwrite";
 import { useColorScheme } from "nativewind";
 import { useRouter, useSegments } from "expo-router";
@@ -27,6 +29,9 @@ export interface User extends Models.Document {
   preferredPlatform?: string;
   isPrivate?: boolean;
   blockedUsers?: string[];
+  // Campos de presencia opcionales
+  isOnline?: boolean;
+  lastSeen?: string;
 }
 
 interface Props {
@@ -41,7 +46,6 @@ interface GlobalContextType {
   loading: boolean;
   isLogged: boolean;
   setIsLogged: Dispatch<SetStateAction<boolean>>;
-  // 🔥 ACTUALIZACIÓN: checkAuth ahora acepta un parámetro opcional 'force'
   checkAuth: (force?: boolean) => Promise<void>;
   chats: any[];
   setChats: Dispatch<SetStateAction<any[]>>;
@@ -77,36 +81,35 @@ const GlobalProvider = ({ children }: Props) => {
   const router = useRouter();
   const segments = useSegments();
 
-  // 🔥 LÓGICA CORREGIDA
-  const checkAuth = useCallback(async (force = false) => {
-    // Si estamos cambiando de cuenta (isSwitching) y NO es una llamada forzada,
-    // bloqueamos la ejecución para evitar condiciones de carrera o fetches basura.
-    // Pero si force === true, permitimos que pase para actualizar el contexto tras el setJWT.
-    if (isSwitching && !force) return;
+  const checkAuth = useCallback(
+    async (force = false) => {
+      if (isSwitching && !force) return;
 
-    try {
-      const res = await getCurrentUser();
-      if (res) {
-        setLoggedIn(true);
-        setUser(res as unknown as User);
-      } else {
+      try {
+        const res = await getCurrentUser();
+        if (res) {
+          setLoggedIn(true);
+          setUser(res as unknown as User);
+        } else {
+          setLoggedIn(false);
+          setUser(null);
+        }
+      } catch (error: any) {
+        console.log("Error verificando sesión:", error);
         setLoggedIn(false);
         setUser(null);
+      } finally {
+        setLoading(false);
       }
-    } catch (error: any) {
-      console.log("Error verificando sesión:", error);
-      setLoggedIn(false);
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [isSwitching]);
+    },
+    [isSwitching],
+  );
 
   useEffect(() => {
     if (colorScheme !== "dark") {
       setColorScheme("dark");
     }
-    checkAuth(); // Llamada normal (sin force) al montar
+    checkAuth();
   }, []);
 
   useEffect(() => {
@@ -117,6 +120,31 @@ const GlobalProvider = ({ children }: Props) => {
       router.replace("/signIn");
     }
   }, [loggedIn, loading, segments]);
+
+  // 🔥🔥 DETECCIÓN AUTOMÁTICA DE ESTADO (ONLINE / OFFLINE) 🔥🔥
+  useEffect(() => {
+    if (!user?.$id) return;
+
+    // 1. Al montar el componente (App abierta), marcamos online
+    updateUserPresence(user.$id, true);
+
+    // 2. Escuchar cambios de estado (Background / Active)
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        // App vuelve a primer plano -> ONLINE
+        updateUserPresence(user.$id, true);
+      } else if (nextAppState.match(/inactive|background/)) {
+        // App se minimiza o cierra -> OFFLINE
+        updateUserPresence(user.$id, false);
+      }
+    });
+
+    return () => {
+      // 3. Al desmontar (Logout o cerrar app), marcamos offline
+      updateUserPresence(user.$id, false);
+      subscription.remove();
+    };
+  }, [user?.$id]);
 
   const contextValue = useMemo(
     () => ({
