@@ -3,14 +3,13 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  Text,
   Platform,
   Keyboard,
+  Text, // ✅ Importado explícitamente de react-native
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { BlurView } from "expo-blur"; // Si quieres blur, si no, usa View solido
 
 interface ChatInputProps {
   text: string;
@@ -53,26 +52,29 @@ export const ChatInput = ({
     };
   }, []);
 
-  const backgroundColor = isDark ? "#000000" : "#FFFFFF";
-  const inputBg = isDark ? "#27272A" : "#F2F2F2"; // Gris muy suave
-  const iconColor = "#5E17EB"; // Color de marca
+  // Colores dinámicos
+  const containerBg = isDark ? "#000000" : "#FFFFFF";
+  const inputBg = isDark ? "#18181B" : "#F3F4F6"; // Gris suave para el input
+  const buttonBg = isDark ? "#27272A" : "#E4E4E7"; // Gris más fuerte para botones
+  const iconColor = "#5E17EB"; // Color de marca para iconos inactivos
 
   return (
     <View
       style={{
-        backgroundColor: backgroundColor,
-        paddingBottom: isKeyboardVisible ? 10 : insets.bottom + 10,
+        backgroundColor: containerBg,
+        paddingBottom: isKeyboardVisible ? 16 : insets.bottom + 10,
         paddingTop: 10,
+        paddingHorizontal: 10,
       }}
     >
-      {/* Banner de Respuesta */}
+      {/* Banner de Respuesta / Edición */}
       {(replyingTo || editingMessage) && (
-        <View className="flex-row items-center justify-between px-4 py-2 mx-4 mb-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border-l-4 border-[#5E17EB]">
-          <View className="flex-1">
+        <View className="flex-row items-center justify-between px-4 py-3 mx-1 mb-3 rounded-2xl bg-zinc-100 dark:bg-zinc-800 border-l-4 border-[#5E17EB]">
+          <View className="flex-1 mr-2">
             <Text className="text-xs font-bold text-[#5E17EB] mb-0.5">
               {editingMessage
-                ? "Editando"
-                : `Respondiendo a ${replyingTo?.senderName || "..."}`}
+                ? "Editando mensaje"
+                : `Respondiendo a ${replyingTo?.senderName || "Usuario"}`}
             </Text>
             <Text
               className="text-xs text-zinc-500 dark:text-zinc-400"
@@ -86,28 +88,35 @@ export const ChatInput = ({
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               editingMessage ? onCancelEdit() : onCancelReply();
             }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons
               name="close-circle"
-              size={24}
-              color={isDark ? "#555" : "#ccc"}
+              size={22}
+              color={isDark ? "#71717A" : "#A1A1AA"}
             />
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Input Cápsula */}
-      <View className="flex-row items-end px-3">
-        {/* Botón Multimedia (Cámara/Fotos) - Estilo iOS */}
-        <TouchableOpacity className="mb-2 mr-2 bg-zinc-200 dark:bg-zinc-800 w-10 h-10 rounded-full items-center justify-center">
-          <Ionicons name="add" size={24} color={isDark ? "white" : "black"} />
+      {/* INPUT AREA */}
+      <View className="flex-row items-center justify-middle">
+        <TouchableOpacity
+          className="mr-2 w-10 h-10 rounded-full items-center justify-center"
+          style={{ backgroundColor: buttonBg }}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+        >
+          <Ionicons name="musical-notes" size={24} color={iconColor} />
         </TouchableOpacity>
 
+        {/* Input de Texto */}
         <View
-          className="flex-1 flex-row items-end rounded-[24px] px-4 py-2 mr-2 border border-transparent focus:border-purple-500/30"
+          className="flex-1 flex-row items-end rounded-[24px] px-4 py-2 border border-transparent"
           style={{
             backgroundColor: inputBg,
-            minHeight: 44,
+            minHeight: 48,
             maxHeight: 120,
           }}
         >
@@ -122,26 +131,28 @@ export const ChatInput = ({
               flex: 1,
               color: isDark ? "white" : "black",
               fontSize: 16,
-              paddingTop: Platform.OS === "ios" ? 6 : 2,
-              paddingBottom: Platform.OS === "ios" ? 6 : 2,
+              paddingTop: Platform.OS === "ios" ? 8 : 4,
+              paddingBottom: Platform.OS === "ios" ? 8 : 4,
               maxHeight: 100,
             }}
           />
         </View>
 
-        {/* Botón de Enviar (Solo visible si hay texto) */}
-        {text.trim().length > 0 && (
-          <TouchableOpacity
-            onPress={onSend}
-            className="mb-2 w-10 h-10 rounded-full items-center justify-center bg-[#5E17EB] shadow-sm"
-          >
-            <Ionicons
-              name={editingMessage ? "checkmark" : "arrow-up"}
-              size={24}
-              color="white"
-            />
-          </TouchableOpacity>
-        )}
+        {/* Botón Derecho: Micrófono (Si vacío) o Enviar (Si texto) */}
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            onSend();
+          }}
+          className={`ml-2 w-10 h-10 rounded-full items-center justify-center bg-${text.trim().length > 0 ? "[#5E17EB]" : "gray"} shadow-sm`}
+          disabled={text.trim().length === 0}
+        >
+          <Ionicons
+            name={editingMessage ? "checkmark" : "arrow-up"}
+            size={24}
+            color="white"
+          />
+        </TouchableOpacity>
       </View>
     </View>
   );

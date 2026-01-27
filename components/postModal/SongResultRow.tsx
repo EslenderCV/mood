@@ -21,10 +21,7 @@ export default function SongResultRow({
   const isDark = colorScheme === "dark";
 
   return (
-    <View
-      className="flex-row items-center justify-between py-2 px-1 mb-1 rounded-xl"
-      // style={{ backgroundColor: "transparent" }} // Opcional: hover effect
-    >
+    <View className="flex-row items-center justify-between py-2 px-1 mb-1 rounded-xl">
       <TouchableOpacity
         onPress={onSelect}
         className="flex-row items-center flex-1"

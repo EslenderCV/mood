@@ -31,11 +31,7 @@ import { BrainEmitter } from "@/src/brain/signals/emitters";
 import { InteractionType } from "@/src/brain/signals/InteractionSignals";
 
 import { useLanguage } from "@/context/LanguageContext";
-import {
-  getDeezerTrackUrl,
-  viewStory,
-  deleteStory,
-} from "@/lib/appwrite";
+import { getDeezerTrackUrl, viewStory, deleteStory } from "@/lib/appwrite";
 import ViewersModal from "./ViewersModal";
 
 const { width } = Dimensions.get("window");
@@ -70,8 +66,17 @@ const StoryViewer = ({
   onRefreshFeed,
   moodOfficialId,
 }: StoryViewerProps) => {
+  // Fix: Forzar inicio en 0 al abrir
   const [currentIndex, setCurrentIndex] = useState(0);
-  
+
+  useEffect(() => {
+    if (visible) {
+      setCurrentIndex(0);
+      lastProgressValue.current = 0;
+      progressAnim.setValue(0);
+    }
+  }, [visible, group?.$id]);
+
   const {
     playTrack,
     pauseTrack,
@@ -169,13 +174,23 @@ const StoryViewer = ({
             }
           },
         },
-      ]
+      ],
     );
   };
 
+  // Fix: Animación fluida y duración correcta
   const startAnimation = (fromValue = 0) => {
     progressAnim.setValue(fromValue);
-    const duration = isMediaStory && !isVideo ? 5000 : 10000;
+
+    // Calcular duración basada en tipo de contenido
+    let duration = 5000;
+    if (isVideo) {
+      duration = 15000;
+    } else if (songData && !isMediaStory) {
+      // Usar duración real si existe, sino 30s estándar
+      duration = songData.duration ? songData.duration * 1000 : 30000;
+    }
+
     const remainingDuration = duration * (1 - fromValue);
 
     Animated.timing(progressAnim, {
@@ -203,7 +218,9 @@ const StoryViewer = ({
       });
       return;
     }
+
     startAnimation(lastProgressValue.current);
+
     return () => progressAnim.stopAnimation();
   }, [
     currentIndex,
@@ -213,6 +230,29 @@ const StoryViewer = ({
     viewersModalVisible,
     imageLoaded,
   ]);
+
+  const loadStoryAudio = async () => {
+    if (!visible || isMediaStory || !songData) return;
+
+    try {
+      let url =
+        songData.id || songData.spotifyId
+          ? await getDeezerTrackUrl(songData.id || songData.spotifyId)
+          : null;
+      if (!url && songData.preview?.startsWith("http")) url = songData.preview;
+
+      if (url && visible) {
+        const trackId = songData.id || `story_${currentStory?.$id}`;
+        await playTrack(trackId, url, {
+          title: songData.title,
+          artist: songData.artist,
+          cover: songData.cover,
+        });
+      }
+    } catch (e) {
+      console.log("Audio Error", e);
+    }
+  };
 
   const handleNext = async () => {
     if (isPaused) return;
@@ -238,6 +278,10 @@ const StoryViewer = ({
 
     if (currentIndex === 0) {
       if (player) player.replay();
+      if (!isMediaStory) {
+        await stopTrack();
+        loadStoryAudio(); // Fix: Recargar audio al reiniciar
+      }
       startAnimation(0);
     } else {
       if (player) player.pause();
@@ -277,33 +321,11 @@ const StoryViewer = ({
 
   useEffect(() => {
     let isMounted = true;
-    const loadAudio = async () => {
-      if (!visible || isMediaStory) return;
-
-      if (songData) {
-        try {
-          let url =
-            songData.id || songData.spotifyId
-              ? await getDeezerTrackUrl(songData.id || songData.spotifyId)
-              : null;
-          if (!url && songData.preview?.startsWith("http"))
-            url = songData.preview;
-
-          if (url && visible && isMounted) {
-            const trackId = songData.id || `story_${currentStory.$id}`;
-            await playTrack(trackId, url, {
-              title: songData.title,
-              artist: songData.artist,
-              cover: songData.cover,
-            });
-          }
-        } catch (e) {
-          console.log("Audio Error", e);
-        }
-      }
+    const run = async () => {
+      await new Promise((r) => setTimeout(r, 100));
+      if (isMounted) await loadStoryAudio();
     };
-
-    loadAudio();
+    run();
     return () => {
       isMounted = false;
     };
@@ -318,6 +340,7 @@ const StoryViewer = ({
   useEffect(() => {
     if (!visible) {
       void stopTrack();
+      setReplyText("");
     }
   }, [visible]);
 
@@ -338,7 +361,7 @@ const StoryViewer = ({
           <PanGestureHandler
             onGestureEvent={Animated.event(
               [{ nativeEvent: { translationY: translateY } }],
-              { useNativeDriver: true }
+              { useNativeDriver: true },
             )}
             onHandlerStateChange={({ nativeEvent }: any) => {
               if (
@@ -462,11 +485,11 @@ const StoryViewer = ({
                             width: isFinished
                               ? "100%"
                               : isCurrent
-                              ? progressAnim.interpolate({
-                                  inputRange: [0, 1],
-                                  outputRange: ["0%", "100%"],
-                                })
-                              : "0%",
+                                ? progressAnim.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: ["0%", "100%"],
+                                  })
+                                : "0%",
                           }}
                           className="h-full bg-white"
                         />
@@ -486,8 +509,11 @@ const StoryViewer = ({
                     />
                     <View>
                       <View className="flex-row items-center">
+                        {/* 🔥 CORRECCIÓN: Mostrar NAME en lugar de USERNAME */}
                         <Text className="text-white font-bold text-[15px] mr-1">
-                          {group.user?.username || "Usuario"}
+                          {group.user?.name ||
+                            group.user?.username ||
+                            "Usuario"}
                         </Text>
                         {isVerified && (
                           <MaterialIcons
@@ -527,7 +553,10 @@ const StoryViewer = ({
 
               <Animated.View
                 className="absolute bottom-0 w-full z-30 px-4"
-                style={{ paddingBottom: insets.bottom + 20, opacity: uiOpacity }}
+                style={{
+                  paddingBottom: insets.bottom + 20,
+                  opacity: uiOpacity,
+                }}
               >
                 {isOwner ? (
                   <TouchableOpacity
@@ -562,7 +591,7 @@ const StoryViewer = ({
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         BrainEmitter.interaction(
                           InteractionType.LIKE,
-                          currentStory.$id
+                          currentStory.$id,
                         );
                       }}
                     >

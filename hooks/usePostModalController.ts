@@ -13,20 +13,35 @@ const { height } = Dimensions.get("window");
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
 
 export interface Song {
-  trackId: string;
-  trackName: string;
-  artistName: string;
-  artworkUrl100: string;
-  previewUrl: string | null;
+  id: string;
+  title: string;
+  artist: string;
+  cover: string;
+  preview: string | null;
   isExplicit: boolean;
 }
 
-export const usePostModalController = () => {
-  const { isPostModalVisible, setPostModalVisible } = useModal();
+export interface MoodState {
+  emoji: string;
+  text: string;
+}
+// 🔥 ACEPTAMOS PROPS OPCIONALES PARA CONTROLARLO DESDE FUERA
+export const usePostModalController = (props?: any) => {
+  // Contexto Global (para cuando se abre desde el Tab Bar)
+  const {
+    isPostModalVisible: isGlobalVisible,
+    setPostModalVisible: setGlobalVisible,
+  } = useModal();
+
+  // Determinamos quién manda: ¿Las props externas o el contexto global?
+  const isVisible = props?.isVisible ?? props?.visible ?? isGlobalVisible;
+  const setVisible = props?.onClose
+    ? (val: boolean) => !val && props.onClose()
+    : setGlobalVisible;
+
   const { user } = useGlobalContext();
   const { t } = useLanguage();
 
-  // --- MANEJO DEL FEED CONTEXT (Pa' que no explote si no ta cargao) ---
   let feedContext;
   try {
     feedContext = useFeed();
@@ -37,39 +52,36 @@ export const usePostModalController = () => {
   const viralSongToUse = feedContext?.viralSongToUse;
   const setViralSongToUse = feedContext?.setViralSongToUse;
 
-  // --- ESTADOS DE LA VAINA ---
+  // --- ESTADOS ---
   const [text, setText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [linkedSong, setLinkedSong] = useState<Song | null>(null);
 
-  // Búsqueda manual
+  const [mood, setMood] = useState<MoodState | null>(null);
+  const [isMoodPopupVisible, setIsMoodPopupVisible] = useState(false);
+
+  // Búsqueda
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [isSearchingMusic, setIsSearchingMusic] = useState(false);
   const [isLoadingSearch, setIsLoadingSearch] = useState(false);
-
-  // Sugerencias de panas (@users)
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
-
-  // Estilo del post
   const [moodStyle, setMoodStyle] = useState<"standard" | "card">("standard");
-
-  // --- ESTADO NUEVO: SHAZAM SCANNING (El bulto de carga) ---
   const [isShazamScanning, setIsShazamScanning] = useState(false);
 
-  // Audio Player (La rocola)
+  // Audio
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentPlayingUrl, setCurrentPlayingUrl] = useState<string | null>(
     null,
   );
 
-  // Animaciones del Modal
+  // Animaciones
   const backgroundOpacity = useRef(new Animated.Value(0)).current;
   const contentTranslateY = useRef(new Animated.Value(height)).current;
 
-  // Toast (Las notificaciones flotantes)
+  // Toast
   const [toast, setToast] = useState({
     visible: false,
     type: "success" as "success" | "error",
@@ -78,7 +90,6 @@ export const usePostModalController = () => {
   });
   const toastAnim = useRef(new Animated.Value(-150)).current;
 
-  // Recorder (Dejamo' esto aquí pa' cuando conectemos el SDK de Apple de verdad)
   const recorder = useAudioRecorder({
     extension: ".m4a",
     sampleRate: 44100,
@@ -89,38 +100,55 @@ export const usePostModalController = () => {
     web: { mimeType: "audio/mp4", bitsPerSecond: 128000 },
   });
 
-  // --- LIMPIEZA DE AUDIO (Si cierran la vaina, se calla) ---
   useEffect(() => {
     return () => {
       if (sound) sound.unloadAsync();
     };
   }, [sound]);
 
-  // --- SI VIENE UNA CANCIÓN VIRAL DE OTRO LAO' ---
+  // --- 🔥 LÓGICA DE INYECCIÓN DE DATOS (PREFILL) ---
   useEffect(() => {
-    if (isPostModalVisible && viralSongToUse) {
+    if (isVisible && props?.prefillData?.song) {
+      const incoming = props.prefillData.song;
+
+      // Mapeamos lo que llega de Explore a la estructura Song del modal
+      const mappedSong: Song = {
+        id: String(incoming.id || incoming.id || incoming.spotifyId),
+        title: incoming.title || incoming.title,
+        artist: incoming.artist || incoming.artist,
+        cover: incoming.cover || incoming.cover,
+        preview: incoming.preview || incoming.preview,
+        isExplicit: false, // Default
+      };
+
+      setLinkedSong(mappedSong);
+    }
+  }, [isVisible, props?.prefillData]);
+
+  // --- LÓGICA DE CANCIÓN VIRAL (CONTEXTO) ---
+  useEffect(() => {
+    if (isVisible && viralSongToUse) {
       const formattedSong: Song = {
-        trackId: String(viralSongToUse.id),
-        trackName: viralSongToUse.title,
-        artistName: viralSongToUse.artist?.name || viralSongToUse.artist,
-        artworkUrl100:
+        id: String(viralSongToUse.id),
+        title: viralSongToUse.title,
+        artist: viralSongToUse.artist?.name || viralSongToUse.artist,
+        cover:
           viralSongToUse.cover ||
           viralSongToUse.album?.cover_xl ||
           viralSongToUse.album?.cover_medium,
-        previewUrl: viralSongToUse.preview,
+        preview: viralSongToUse.preview,
         isExplicit: !!viralSongToUse.explicit_lyrics,
       };
       setLinkedSong(formattedSong);
       if (setViralSongToUse) setViralSongToUse(null);
     }
-  }, [isPostModalVisible, viralSongToUse]);
+  }, [isVisible, viralSongToUse]);
 
-  // --- ANIMACIONES DE ENTRADA Y SALIDA DEL MODAL ---
+  // --- ANIMACIONES ---
   useEffect(() => {
-    if (isPostModalVisible) {
+    if (isVisible) {
       backgroundOpacity.setValue(0);
       contentTranslateY.setValue(height);
-
       Animated.parallel([
         Animated.timing(backgroundOpacity, {
           toValue: 1,
@@ -139,7 +167,7 @@ export const usePostModalController = () => {
       if (recorder.isRecording) recorder.stop();
       stopAudio();
     }
-  }, [isPostModalVisible]);
+  }, [isVisible]);
 
   const closeModal = useCallback(() => {
     Keyboard.dismiss();
@@ -155,32 +183,32 @@ export const usePostModalController = () => {
         easing: Easing.in(Easing.ease),
         useNativeDriver: true,
       }),
-    ]).start(() => setPostModalVisible(false));
-  }, []);
+    ]).start(() => setVisible(false));
+  }, [setVisible]);
 
-  // --- BÚSQUEDA DEEZER (Con delay pa' no saturar) ---
+  // Búsqueda Deezer
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
-      if (searchQuery.length > 2) {
-        searchDeezerTracks(searchQuery);
-      } else {
-        setSearchResults([]);
-      }
+      if (searchQuery.length > 2) searchDeezerTracks(searchQuery);
+      else setSearchResults([]);
     }, 500);
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
 
-  // --- MÉTODOS ---
-
   const resetForm = () => {
     setText("");
-    setLinkedSong(null);
+    // Solo reseteamos si NO estamos en modo controlado con prefill
+    if (!props?.prefillData) {
+      setLinkedSong(null);
+    }
+    setMood(null);
+    setIsMoodPopupVisible(false);
     setSearchQuery("");
     setSearchResults([]);
     setIsSearchingMusic(false);
     setShowSuggestions(false);
     setMoodStyle("standard");
-    setIsShazamScanning(false); // Reseteamos el scanner también
+    setIsShazamScanning(false);
   };
 
   const showToast = useCallback(
@@ -208,6 +236,16 @@ export const usePostModalController = () => {
     [],
   );
 
+  const openMoodPopup = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsMoodPopupVisible(true);
+  }, []);
+
+  const closeMoodPopup = useCallback(() => {
+    setIsMoodPopupVisible(false);
+    // No reseteamos el mood aquí, solo cerramos el popup
+  }, []);
+
   const stopAudio = async () => {
     if (sound) {
       await sound.unloadAsync();
@@ -227,7 +265,6 @@ export const usePostModalController = () => {
       return;
     }
     Haptics.selectionAsync();
-
     try {
       if (sound && currentPlayingUrl === url) {
         const status = await sound.getStatusAsync();
@@ -244,7 +281,6 @@ export const usePostModalController = () => {
         }
         return;
       }
-
       await stopAudio();
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
@@ -295,11 +331,11 @@ export const usePostModalController = () => {
       if (data.data) {
         setSearchResults(
           data.data.map((item: any) => ({
-            trackId: String(item.id),
-            trackName: item.title,
-            artistName: item.artist.name,
-            artworkUrl100: item.album.cover_xl || item.album.cover_medium,
-            previewUrl: item.preview,
+            id: String(item.id),
+            title: item.title,
+            artist: item.artist.name,
+            cover: item.album.cover_xl || item.album.cover_medium,
+            preview: item.preview,
             isExplicit: item.explicit_lyrics === true,
           })),
         );
@@ -311,21 +347,13 @@ export const usePostModalController = () => {
     }
   };
 
-  // 🔥 AQUÍ ESTÁ EL CAMBIO KLK:
-  // Remplazamos la lógica de AuuD por el simulador de Shazam (pa' preparar el terreno)
   const handleShazam = async () => {
-    if (linkedSong) return; // Si ya tiene canción, no jodemo
+    if (linkedSong) return;
     await stopAudio();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-
-    // Activamos la pantalla de carga (El Modal con las onditas)
     setIsShazamScanning(true);
-
-    // Simulamos que estamos escuchando por 5 segundos
     setTimeout(() => {
       setIsShazamScanning(false);
-      // Aquí luego meteremos el ShazamKit real.
-      // Por ahora, cerramos y ya, o podrías mostrar un toast "No se escuchó na'" si quieres.
     }, 5000);
   };
 
@@ -343,19 +371,26 @@ export const usePostModalController = () => {
 
     let songDataObj: any = {};
     if (linkedSong) {
+      console.log(linkedSong.title);
+
       songDataObj = {
-        title: linkedSong.trackName,
-        artist: linkedSong.artistName,
-        cover: linkedSong.artworkUrl100,
-        preview: linkedSong.previewUrl,
-        trackId: linkedSong.trackId,
+        title: linkedSong.title,
+        artist: linkedSong.artist,
+        cover: linkedSong.cover,
+        preview: linkedSong.preview,
+        id: linkedSong.id,
       };
+
+      console.log(songDataObj);
     } else if (user.$id === MOOD_OFFICIAL_ID) {
       songDataObj = { moodStyle: moodStyle };
     }
 
+    if (mood) {
+      songDataObj.mood = mood;
+    }
+
     if (createPostOptimistic) {
-      // @ts-ignore
       createPostOptimistic(text, songDataObj, user);
       closeModal();
       setTimeout(
@@ -366,7 +401,6 @@ export const usePostModalController = () => {
     } else {
       setIsLoading(true);
       try {
-        // @ts-ignore
         await createPost(text, JSON.stringify(songDataObj), user.$id);
         closeModal();
         setTimeout(
@@ -407,7 +441,7 @@ export const usePostModalController = () => {
   };
 
   return {
-    isPostModalVisible,
+    isPostModalVisible: isVisible, // 🔥 Usamos el estado calculado
     closeModal,
     user,
     text,
@@ -431,7 +465,7 @@ export const usePostModalController = () => {
     isPlaying,
     recorder,
     handleShazam,
-    isShazamScanning, // <--- EXPORTAMOS EL ESTADO NUEVO
+    isShazamScanning,
     handlePost,
     isLoading,
     backgroundOpacity,
@@ -440,5 +474,10 @@ export const usePostModalController = () => {
     toastAnim,
     MOOD_OFFICIAL_ID,
     t,
+    mood,
+    setMood,
+    isMoodPopupVisible,
+    openMoodPopup,
+    closeMoodPopup,
   };
 };

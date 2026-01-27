@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import {
   View,
   TouchableOpacity,
@@ -24,6 +24,7 @@ import { Fontisto } from "@expo/vector-icons";
 // Subcomponentes
 import LinkedSongCard from "./LinkedSongCard";
 import SongResultRow from "./SongResultRow";
+import { MoodState } from "@/hooks/usePostModalController";
 
 interface MusicSectionProps {
   isSearchingMusic: boolean;
@@ -40,10 +41,13 @@ interface MusicSectionProps {
   currentPlayingUrl: string | null;
   onShazam: () => void;
   isRecording: boolean;
-  // 🔥 Props nuevos
   isShazamScanning: boolean;
+  openMoodPopup: () => void;
+  mood: any;
+  setMood: (v: MoodState | null) => void;
 }
 
+const moodButtonBorder = "#5E17EB";
 // Componente pa' las onditas de la animación (Pulsing Circles)
 const PulsingCircle = ({ delay, size }: { delay: number; size: number }) => {
   const scale = useSharedValue(1);
@@ -97,8 +101,10 @@ export default function MusicSection({
   isPlaying,
   currentPlayingUrl,
   onShazam,
-  isRecording, // Ya no se usa tanto porque usamos isShazamScanning, pero lo dejamos por si acaso
-  isShazamScanning, // <--- EL ESTADO DEL BULTO
+  isShazamScanning,
+  openMoodPopup,
+  mood,
+  setMood,
 }: MusicSectionProps) {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -106,13 +112,58 @@ export default function MusicSection({
 
   if (linkedSong) {
     return (
-      <Animated.View entering={FadeIn} exiting={FadeOut}>
+      <Animated.View
+        entering={FadeIn}
+        exiting={FadeOut}
+        className="flex-column"
+      >
         <LinkedSongCard
           song={linkedSong}
           onRemove={onRemoveSong}
           onPlay={() => onPlayPreview(linkedSong.preview)}
           isPlaying={isPlaying && currentPlayingUrl === linkedSong.preview}
         />
+        <View className="mt-4 flex-row justify-center w-full">
+          <TouchableOpacity
+            onPress={openMoodPopup}
+            style={[
+              styles.moodButton,
+              {
+                backgroundColor: "transparent",
+                borderColor: moodButtonBorder,
+              },
+            ]}
+          >
+            {mood ? (
+              // Estado: Mood Seleccionado
+              <View className="flex-row items-center">
+                <Text style={{ fontSize: 18, marginRight: 6 }}>
+                  {mood.emoji}
+                </Text>
+                <Text style={styles.selectedMoodText} numberOfLines={1}>
+                  {mood.text || "Mood"}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setMood(null)}
+                  style={{ marginLeft: 8, padding: 2 }}
+                  hitSlop={10}
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={18}
+                    color="#5E17EB"
+                    opacity={0.7}
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              // Estado: Sin Mood (Agregar)
+              <View className="flex-row items-center">
+                <Fontisto name="night-alt-cloudy" size={24} color="#5E17EB" />
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </Animated.View>
     );
   }
@@ -218,6 +269,43 @@ export default function MusicSection({
             }}
           />
         </TouchableOpacity>
+        <TouchableOpacity
+          onPress={openMoodPopup}
+          style={[
+            styles.moodButton,
+            {
+              backgroundColor: "transparent",
+              borderColor: moodButtonBorder,
+            },
+          ]}
+        >
+          {mood ? (
+            // Estado: Mood Seleccionado
+            <View className="flex-row items-center">
+              <Text style={{ fontSize: 18, marginRight: 6 }}>{mood.emoji}</Text>
+              <Text style={styles.selectedMoodText} numberOfLines={1}>
+                {mood.text || "Mood"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setMood(null)}
+                style={{ marginLeft: 8, padding: 2 }}
+                hitSlop={10}
+              >
+                <Ionicons
+                  name="close-circle"
+                  size={18}
+                  color="#5E17EB"
+                  opacity={0.7}
+                />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            // Estado: Sin Mood (Agregar)
+            <View className="flex-row items-center">
+              <Fontisto name="night-alt-cloudy" size={24} color="#5E17EB" />
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* 🔥 EL MODAL DE ESCANEO (OVERLAY) 🔥 */}
@@ -288,5 +376,26 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  moodButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    alignSelf: "flex-start",
+    borderWidth: 0.8,
+  },
+  moodButtonText: {
+    color: "#5E17EB",
+    fontWeight: "700",
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  selectedMoodText: {
+    color: "#5E17EB",
+    fontWeight: "700",
+    fontSize: 14,
+    maxWidth: 150,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   View,
   Modal,
@@ -12,70 +12,22 @@ import { useColorScheme } from "nativewind";
 import { usePostModalController } from "@/hooks/usePostModalController";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-
 import PostModalHeader from "./PostModalHeader";
 import PostComposer from "./PostComposer";
 import MoodStyleSelector from "./MoodStyleSelector";
 import MusicSection from "./MusicSection";
 import PostToast from "./PostToast";
+import MoodSelectorPopup from "./MoodSelectorPopup";
 
-const searchDeezer = async (query: string) => {
-  try {
-    const response = await fetch(
-      `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=15`,
-    );
-    const data = await response.json();
-    return data.data.map((track: any) => ({
-      id: track.id.toString(),
-      title: track.title,
-      artist: track.artist.name,
-      cover: track.album.cover_medium,
-      preview: track.preview,
-      duration: track.duration,
-    }));
-  } catch (e) {
-    console.error("Error buscando en Deezer:", e);
-    return [];
-  }
-};
+interface PostModalProps {
+  isVisible?: boolean;
+  onClose?: () => void;
+  prefillData?: { song?: any };
+  visible?: boolean;
+}
 
-const fetchSuggestedSongs = async () => {
-  try {
-    const response = await fetch(
-      "https://api.deezer.com/chart/0/tracks?limit=50",
-    );
-    const json = await response.json();
-
-    if (!json.data) return [];
-
-    const uniqueTracks: any[] = [];
-    const seenArtists = new Set();
-
-    for (const track of json.data) {
-      if (!seenArtists.has(track.artist.id)) {
-        seenArtists.add(track.artist.id);
-        uniqueTracks.push(track);
-      }
-    }
-
-    const shuffled = uniqueTracks.sort(() => 0.5 - Math.random());
-
-    return shuffled.slice(0, 5).map((track: any) => ({
-      id: track.id.toString(),
-      title: track.title,
-      artist: track.artist.name,
-      cover: track.album.cover_medium,
-      preview: track.preview,
-      duration: track.duration,
-    }));
-  } catch (e) {
-    console.error("Error fetching suggestions:", e);
-    return [];
-  }
-};
-
-export default function PostModal() {
-  const controller = usePostModalController();
+export default function PostModal(props: PostModalProps) {
+  const controller = usePostModalController(props);
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
@@ -84,37 +36,6 @@ export default function PostModal() {
     (controller.linkedSong ||
       controller.user?.$id === controller.MOOD_OFFICIAL_ID),
   );
-
-  const [localSearchResults, setLocalSearchResults] = useState<any[]>([]);
-  const [isLocalLoading, setIsLocalLoading] = useState(false);
-
-  useEffect(() => {
-    const query = controller.searchQuery;
-
-    if (!query || query.trim().length === 0) {
-      const loadSuggestions = async () => {
-        if (controller.isSearchingMusic) {
-          setIsLocalLoading(true);
-          const suggestions = await fetchSuggestedSongs();
-          setLocalSearchResults(suggestions);
-          setIsLocalLoading(false);
-        }
-      };
-      loadSuggestions();
-      return;
-    }
-
-    if (query.trim().length >= 2) {
-      setIsLocalLoading(true);
-      const timer = setTimeout(async () => {
-        const results = await searchDeezer(query);
-        setLocalSearchResults(results);
-        setIsLocalLoading(false);
-      }, 500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [controller.searchQuery, controller.isSearchingMusic]);
 
   const blurTint = isDark
     ? "systemUltraThinMaterialDark"
@@ -145,7 +66,6 @@ export default function PostModal() {
         onRequestClose={controller.closeModal}
         statusBarTranslucent
       >
-        {/* 🔥 CORRECCIÓN: Estructura reorganizada para fluidez de animación */}
         <TouchableWithoutFeedback onPress={controller.closeModal}>
           <Animated.View
             style={[styles.backdrop, { opacity: controller.backgroundOpacity }]}
@@ -212,43 +132,51 @@ export default function PostModal() {
                         onSelectUser={controller.handleSelectUser}
                       />
                     </View>
-                    <View style={{ height: 10 }} />
-                    <View>
-                      {!controller.linkedSong &&
-                        controller.user?.$id ===
-                          controller.MOOD_OFFICIAL_ID && (
-                          <View className="mb-3">
-                            <MoodStyleSelector
-                              moodStyle={controller.moodStyle}
-                              setMoodStyle={controller.setMoodStyle}
-                            />
-                          </View>
-                        )}
 
-                      <MusicSection
-                        isSearchingMusic={controller.isSearchingMusic}
-                        setIsSearchingMusic={controller.setIsSearchingMusic}
-                        linkedSong={controller.linkedSong}
-                        onRemoveSong={controller.removeLinkedSong}
-                        searchQuery={controller.searchQuery}
-                        setSearchQuery={controller.setSearchQuery}
-                        isLoadingSearch={isLocalLoading}
-                        searchResults={localSearchResults}
-                        onSelectSong={controller.handleSelectSong}
-                        onPlayPreview={controller.handlePlayMusic}
-                        isPlaying={controller.isPlaying}
-                        currentPlayingUrl={controller.currentPlayingUrl}
-                        onShazam={controller.handleShazam}
-                        isRecording={controller.recorder.isRecording}
-                        isShazamScanning={controller.isShazamScanning}
-                      />
-                    </View>
+                    <View style={{ height: 10 }} />
+
+                    {!controller.linkedSong &&
+                      controller.user?.$id === controller.MOOD_OFFICIAL_ID && (
+                        <View className="mb-3">
+                          <MoodStyleSelector
+                            moodStyle={controller.moodStyle}
+                            setMoodStyle={controller.setMoodStyle}
+                          />
+                        </View>
+                      )}
+
+                    <MusicSection
+                      isSearchingMusic={controller.isSearchingMusic}
+                      setIsSearchingMusic={controller.setIsSearchingMusic}
+                      linkedSong={controller.linkedSong}
+                      onRemoveSong={controller.removeLinkedSong}
+                      searchQuery={controller.searchQuery}
+                      setSearchQuery={controller.setSearchQuery}
+                      isLoadingSearch={controller.isLoadingSearch}
+                      searchResults={controller.searchResults}
+                      onSelectSong={controller.handleSelectSong}
+                      onPlayPreview={controller.handlePlayMusic}
+                      isPlaying={controller.isPlaying}
+                      currentPlayingUrl={controller.currentPlayingUrl}
+                      onShazam={controller.handleShazam}
+                      isRecording={controller.recorder.isRecording}
+                      isShazamScanning={controller.isShazamScanning}
+                      openMoodPopup={controller.openMoodPopup}
+                      mood={controller.mood}
+                      setMood={controller.setMood}
+                    />
                   </View>
                 </Animated.View>
               </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
           </Animated.View>
         </TouchableWithoutFeedback>
+        <MoodSelectorPopup
+          isVisible={controller.isMoodPopupVisible}
+          onClose={controller.closeMoodPopup}
+          selectedMood={controller.mood}
+          onSelectMood={controller.setMood}
+        />
       </Modal>
     </>
   );

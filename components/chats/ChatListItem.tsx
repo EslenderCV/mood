@@ -25,18 +25,21 @@ export const ChatListItem = ({
   const unreadCount = chat.unreadCount || 0;
   const isUnread = unreadCount > 0;
 
-  const displayName = otherUser.name || otherUser.username || "Usuario";
-  const avatarUrl =
-    otherUser.pfp ||
-    `https://cloud.appwrite.io/v1/avatars/initials?name=${displayName}`;
+  const displayName = otherUser.name || otherUser.username || "Usuario Mood";
+
+  // Fallback seguro para avatar
+  const avatarUrl = otherUser.pfp
+    ? otherUser.pfp
+    : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=5E17EB&color=fff&bold=true`;
 
   const renderRightActions = (_: any, dragX: any) => {
     return (
       <TouchableOpacity
         onPress={onDelete}
-        className="bg-red-500 justify-center items-center w-20"
+        className="bg-red-500 justify-center items-center w-[80px]"
       >
         <Ionicons name="trash-outline" size={24} color="white" />
+        <Text className="text-white text-xs font-bold mt-1">Borrar</Text>
       </TouchableOpacity>
     );
   };
@@ -45,25 +48,29 @@ export const ChatListItem = ({
     if (!isoString) return "";
     const date = new Date(isoString);
     const now = new Date();
-    const isToday =
-      date.getDate() === now.getDate() && date.getMonth() === now.getMonth();
 
-    if (isToday) {
+    // Si es hoy
+    if (
+      date.getDate() === now.getDate() &&
+      date.getMonth() === now.getMonth()
+    ) {
       return date.toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       });
-    } else {
-      return date.toLocaleDateString([], { day: "2-digit", month: "2-digit" });
     }
+    // Si fue en la semana (menos de 7 días)
+    const diff = now.getTime() - date.getTime();
+    if (diff < 7 * 24 * 60 * 60 * 1000) {
+      const days = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+      return days[date.getDay()];
+    }
+    return date.toLocaleDateString([], { day: "2-digit", month: "2-digit" });
   };
 
-  // 🔥 LÓGICA DE VISUALIZACIÓN CORREGIDA
-  let previewMessage = chat.lastMessage || "Empezar chat...";
-  let isReply = false;
+  let previewMessage = chat.lastMessage || "Iniciar conversación";
   let isTyping = false;
 
-  // Validamos que isTyping exista y sea Array antes de usar .includes
   if (chat.isTyping && Array.isArray(chat.isTyping)) {
     if (chat.isTyping.includes(otherUser.$id)) {
       isTyping = true;
@@ -71,11 +78,8 @@ export const ChatListItem = ({
     }
   }
 
-  // Limpieza de REPLY (Solo si no está escribiendo)
   if (!isTyping && previewMessage.includes(":::REPLY:::")) {
-    const parts = previewMessage.split(":::REPLY:::");
-    previewMessage = parts[1] || "Respuesta";
-    isReply = true;
+    previewMessage = "Respondió a un mensaje";
   }
 
   return (
@@ -83,24 +87,27 @@ export const ChatListItem = ({
       <TouchableOpacity
         onPress={onPress}
         activeOpacity={0.7}
-        className={`flex-row px-5 py-3 items-center ${isDark ? "bg-black" : "bg-white"}`}
+        className={`flex-row px-4 py-3.5 items-center ${isDark ? "bg-black" : "bg-white"}`}
       >
-        {/* Avatar */}
-        <Image
-          source={{ uri: avatarUrl }}
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 28,
-            backgroundColor: "#27272A",
-          }}
-          contentFit="cover"
-        />
+        {/* Avatar Grande con Borde si no leído */}
+        <View
+          className={`rounded-full p-[2px] ${isUnread ? "border-2 border-[#5E17EB]" : "border-transparent"}`}
+        >
+          <Image
+            source={{ uri: avatarUrl }}
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 26,
+              backgroundColor: "#27272A",
+            }}
+            contentFit="cover"
+          />
+        </View>
 
-        {/* Contenido */}
-        <View className="flex-1 ml-4 justify-center h-full border-b border-zinc-800/50 pb-3">
+        <View className="flex-1 ml-3.5 justify-center h-full">
           <View className="flex-row justify-between items-center mb-1">
-            <View className="flex-row items-center max-w-[70%]">
+            <View className="flex-row items-center max-w-[75%]">
               <Text
                 className={`font-bold text-[16px] ${isDark ? "text-white" : "text-black"}`}
                 numberOfLines={1}
@@ -116,49 +123,32 @@ export const ChatListItem = ({
                 />
               )}
             </View>
-            {/* Si está escribiendo, mostramos puntos suspensivos o indicador */}
             <Text
-              className={`text-xs font-medium ${isTyping ? "text-[#5E17EB]" : "text-zinc-500"}`}
+              className={`text-[12px] ${isUnread ? "text-[#5E17EB] font-bold" : "text-zinc-500"}`}
             >
-              {isTyping ? "● ● ●" : formatTime(chat.lastMessageTime)}
+              {isTyping ? "" : formatTime(chat.lastMessageTime)}
             </Text>
           </View>
 
-          <View className="flex-row justify-between items-center">
-            <View className="flex-1 mr-4 flex-row items-center">
-              {/* Icono de Reply solo si NO está escribiendo */}
-              {!isTyping && isReply && (
-                <Ionicons
-                  name="arrow-undo"
-                  size={12}
-                  color={isDark ? "#A1A1AA" : "#71717A"}
-                  style={{ marginRight: 4 }}
-                />
-              )}
+          <View className="flex-row justify-between items-center pr-2">
+            <Text
+              className={`text-[14px] leading-5 flex-1 mr-2 ${
+                isTyping
+                  ? "text-[#5E17EB] font-bold italic"
+                  : isUnread
+                    ? isDark
+                      ? "text-white font-semibold"
+                      : "text-black font-semibold"
+                    : "text-zinc-500"
+              }`}
+              numberOfLines={2}
+            >
+              {previewMessage}
+            </Text>
 
-              <Text
-                className={`text-[14px] ${
-                  isTyping
-                    ? "text-[#5E17EB] font-bold italic" // Color destacado para "Escribiendo..."
-                    : isUnread
-                      ? isDark
-                        ? "text-white font-bold"
-                        : "text-black font-bold"
-                      : "text-zinc-500"
-                }`}
-                numberOfLines={1}
-              >
-                {previewMessage}
-              </Text>
-            </View>
-
-            {/* Badge de No Leídos (solo si no está escribiendo, para no saturar) */}
+            {/* Punto Azul de No Leído (Classic iOS Style) */}
             {!isTyping && isUnread && (
-              <View className="bg-[#5E17EB] min-w-[20px] h-5 px-1.5 rounded-full items-center justify-center">
-                <Text className="text-white text-[10px] font-bold">
-                  {unreadCount}
-                </Text>
-              </View>
+              <View className="w-3 h-3 bg-[#5E17EB] rounded-full shadow-sm" />
             )}
           </View>
         </View>

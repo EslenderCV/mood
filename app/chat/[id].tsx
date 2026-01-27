@@ -6,7 +6,9 @@ import {
   Text,
   KeyboardAvoidingView,
   Platform,
-  TouchableOpacity, // ✅ AÑADIDO: Faltaba este import
+  TouchableOpacity,
+  Keyboard, // 🔥 NUEVO: Para controlar el teclado
+  TouchableWithoutFeedback, // 🔥 NUEVO: Para detectar toques fuera
 } from "react-native";
 import { Stack, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -92,113 +94,129 @@ const ChatRoom = () => {
             behavior={Platform.OS === "ios" ? "padding" : undefined}
             keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
           >
-            {/* --- HEADER --- */}
-            <View
-              className="flex-row items-center px-4 py-3 border-b z-10 shadow-sm"
-              style={{ backgroundColor: headerBg, borderColor: borderColor }}
+            {/* 🔥 WRAPPER: Detecta toques en cualquier lugar para cerrar teclado */}
+            <TouchableWithoutFeedback
+              onPress={Keyboard.dismiss}
+              accessible={false}
             >
-              <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-                <Ionicons name="chevron-back" size={28} color={textColor} />
-              </TouchableOpacity>
-
-              <Image
-                source={
-                  logic.chatUser.avatar
-                    ? { uri: logic.chatUser.avatar }
-                    : require("@/assets/images/icon.png")
-                }
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  marginLeft: 10,
-                  backgroundColor: "#333",
-                }}
-                contentFit="cover"
-              />
-              <View className="ml-3 flex-1">
-                <View className="flex-row items-center">
-                  <Text
-                    className="font-bold text-[16px]"
-                    numberOfLines={1}
-                    style={{ color: textColor }}
-                  >
-                    {logic.chatUser.name}
-                  </Text>
-                  {logic.chatUser.isVerified && (
-                    <MaterialIcons
-                      name="verified"
-                      size={14}
-                      color="#5E17EB"
-                      style={{ marginLeft: 4 }}
-                    />
-                  )}
-                </View>
-
-                {/* Estado: En línea / Escribiendo / Visto */}
-                <Text
-                  className="text-xs"
+              <View style={{ flex: 1 }}>
+                {/* --- HEADER --- */}
+                <View
+                  className="flex-row items-center px-4 py-3 border-b z-10 shadow-sm"
                   style={{
-                    color: statusColor,
-                    fontWeight: statusFontWeight,
+                    backgroundColor: headerBg,
+                    borderColor: borderColor,
                   }}
                 >
-                  {statusText}
-                </Text>
-              </View>
-            </View>
+                  <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
+                    <Ionicons name="chevron-back" size={28} color={textColor} />
+                  </TouchableOpacity>
 
-            {/* --- BODY --- */}
-            <View style={{ flex: 1 }}>
-              {/* 1. Lista de Mensajes */}
-              <FlatList
-                ref={logic.flatListRef}
-                data={logic.messages}
-                keyExtractor={(item) => item.$id}
-                renderItem={({ item, index }) => (
-                  <MessageItem
-                    item={item}
-                    index={index} // 🔥 Pasamos index para agrupar burbujas
-                    messages={logic.messages} // 🔥 Pasamos la lista completa
-                    currentUserId={logic.currentUser?.$id}
-                    isDark={isDark}
-                    onSwipeToReply={logic.onSwipeToReply}
-                    onDelete={logic.confirmDelete}
-                    onEdit={logic.startEditing}
+                  <Image
+                    source={
+                      logic.chatUser.avatar
+                        ? { uri: logic.chatUser.avatar }
+                        : require("@/assets/images/icon.png")
+                    }
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      marginLeft: 10,
+                      backgroundColor: "#333",
+                    }}
+                    contentFit="cover"
                   />
-                )}
-                inverted
-                contentContainerStyle={{ paddingVertical: 15 }}
-                keyboardShouldPersistTaps="handled"
-              />
+                  <View className="ml-3 flex-1">
+                    <View className="flex-row items-center">
+                      <Text
+                        className="font-bold text-[16px]"
+                        numberOfLines={1}
+                        style={{ color: textColor }}
+                      >
+                        {logic.chatUser.name}
+                      </Text>
+                      {logic.chatUser.isVerified && (
+                        <MaterialIcons
+                          name="verified"
+                          size={14}
+                          color="#5E17EB"
+                          style={{ marginLeft: 4 }}
+                        />
+                      )}
+                    </View>
 
-              {/* 2. Burbuja Escribiendo (Flotante encima del input) */}
-              <View
-                style={{
-                  paddingLeft: 10,
-                  paddingBottom: 5,
-                  display: logic.isOtherUserTyping ? "flex" : "none",
-                }}
-              >
-                <TypingIndicator isVisible={true} />
+                    {/* Estado: En línea / Escribiendo / Visto */}
+                    <Text
+                      className="text-xs"
+                      style={{
+                        color: statusColor,
+                        fontWeight: statusFontWeight,
+                      }}
+                    >
+                      {statusText}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* --- BODY --- */}
+                <View style={{ flex: 1 }}>
+                  {/* 1. Lista de Mensajes */}
+                  <FlatList
+                    ref={logic.flatListRef}
+                    data={logic.messages}
+                    keyExtractor={(item) => item.$id}
+                    renderItem={({ item, index }) => (
+                      <MessageItem
+                        item={item}
+                        index={index}
+                        messages={logic.messages}
+                        currentUserId={logic.currentUser?.$id}
+                        isDark={isDark}
+                        onSwipeToReply={logic.onSwipeToReply}
+                        onDelete={logic.confirmDelete}
+                        onEdit={logic.startEditing}
+                        otherUserAvatar={logic.chatUser.avatar}
+                      />
+                    )}
+                    inverted
+                    contentContainerStyle={{ paddingVertical: 15 }}
+                    keyboardShouldPersistTaps="handled"
+                    // 🔥 FIX: Cerrar teclado al arrastrar la lista (Estilo WhatsApp)
+                    keyboardDismissMode="on-drag"
+                    onScrollBeginDrag={Keyboard.dismiss}
+                    showsVerticalScrollIndicator={false}
+                  />
+
+                  {/* 2. Burbuja Escribiendo (Flotante encima del input) */}
+                  <View
+                    style={{
+                      paddingLeft: 10,
+                      paddingBottom: 5,
+                      display: logic.isOtherUserTyping ? "flex" : "none",
+                    }}
+                  >
+                    <TypingIndicator isVisible={true} />
+                  </View>
+
+                  {/* 3. Input */}
+                  <ChatInput
+                    text={logic.newMessage}
+                    setText={logic.handleTyping}
+                    onSend={logic.handleSend}
+                    replyingTo={logic.replyingTo}
+                    onCancelReply={() => logic.setReplyingTo(null)}
+                    editingMessage={logic.editingMessage}
+                    onCancelEdit={() => {
+                      logic.setEditingMessage(null);
+                      logic.setNewMessage("");
+                    }}
+                    inputRef={logic.inputRef}
+                    isDark={isDark}
+                  />
+                </View>
               </View>
-
-              {/* 3. Input */}
-              <ChatInput
-                text={logic.newMessage}
-                setText={logic.handleTyping}
-                onSend={logic.handleSend}
-                replyingTo={logic.replyingTo}
-                onCancelReply={() => logic.setReplyingTo(null)}
-                editingMessage={logic.editingMessage}
-                onCancelEdit={() => {
-                  logic.setEditingMessage(null);
-                  logic.setNewMessage("");
-                }}
-                inputRef={logic.inputRef}
-                isDark={isDark}
-              />
-            </View>
+            </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
         </SafeAreaView>
       </View>
