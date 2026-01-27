@@ -190,10 +190,55 @@ export const usePostModalController = (props?: any) => {
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchQuery.length > 2) searchDeezerTracks(searchQuery);
-      else setSearchResults([]);
+      else {
+        const loadSuggestions = async () => {
+          if (isSearchingMusic) {
+            setIsLoading(true);
+            const suggestions = await fetchSuggestedSongs();
+            setSearchResults(suggestions as any);
+            setIsLoading(false);
+          }
+        };
+        loadSuggestions();
+        return;
+      }
     }, 500);
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
+  const fetchSuggestedSongs = async () => {
+    try {
+      const response = await fetch(
+        "https://api.deezer.com/chart/0/tracks?limit=50",
+      );
+      const json = await response.json();
+
+      if (!json.data) return [];
+
+      const uniqueTracks: any[] = [];
+      const seenArtists = new Set();
+
+      for (const track of json.data) {
+        if (!seenArtists.has(track.artist.id)) {
+          seenArtists.add(track.artist.id);
+          uniqueTracks.push(track);
+        }
+      }
+
+      const shuffled = uniqueTracks.sort(() => 0.5 - Math.random());
+
+      return shuffled.slice(0, 5).map((track: any) => ({
+        id: track.id.toString(),
+        title: track.title,
+        artist: track.artist.name,
+        cover: track.album.cover_medium,
+        preview: track.preview,
+        duration: track.duration,
+      }));
+    } catch (e) {
+      console.error("Error fetching suggestions:", e);
+      return [];
+    }
+  };
 
   const resetForm = () => {
     setText("");

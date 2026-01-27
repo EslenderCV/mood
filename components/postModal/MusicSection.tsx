@@ -159,7 +159,7 @@ export default function MusicSection({
             ) : (
               // Estado: Sin Mood (Agregar)
               <View className="flex-row items-center">
-                <Fontisto name="night-alt-cloudy" size={24} color="#5E17EB" />
+                <Ionicons name="cloudy" size={24} color="#5E17EB" />
               </View>
             )}
           </TouchableOpacity>
@@ -302,7 +302,7 @@ export default function MusicSection({
           ) : (
             // Estado: Sin Mood (Agregar)
             <View className="flex-row items-center">
-              <Fontisto name="night-alt-cloudy" size={24} color="#5E17EB" />
+              <Ionicons name="cloudy-night" size={24} color="#5E17EB" />
             </View>
           )}
         </TouchableOpacity>

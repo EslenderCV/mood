@@ -9,7 +9,7 @@ import {
 import { ID } from "react-native-appwrite";
 
 export type FeedItemType = "post" | "suggested_users" | "trending_song";
-
+0;
 export interface FeedItem {
   _id: string;
   type: FeedItemType;
@@ -211,7 +211,7 @@ export const FeedProvider = ({ children }: { children: React.ReactNode }) => {
 
       setFeed((prev) => {
         const pending = prev.filter(
-          (i) => i.status === "uploading" || i.status === "error"
+          (i) => i.status === "uploading" || i.status === "error",
         );
         return [...pending, ...newFeed];
       });
@@ -226,7 +226,7 @@ export const FeedProvider = ({ children }: { children: React.ReactNode }) => {
   const createPostOptimistic = async (
     text: string,
     songData: any,
-    user: any
+    user: any,
   ) => {
     if (songData?.artistName) trackUserInterest(songData.artistName);
 
@@ -266,14 +266,14 @@ export const FeedProvider = ({ children }: { children: React.ReactNode }) => {
               };
             }
             return item;
-          })
+          }),
         );
       } catch (error) {
         console.error("Upload error", error);
         setFeed((prev) =>
           prev.map((item) =>
-            item._id === tempId ? { ...item, status: "error" } : item
-          )
+            item._id === tempId ? { ...item, status: "error" } : item,
+          ),
         );
         Alert.alert("Error", "No se pudo publicar.");
       }
