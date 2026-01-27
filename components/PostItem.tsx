@@ -24,9 +24,10 @@ import { useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
 import { useAudioContext } from "@/context/AudioContext";
 
+import { MoodTag } from "@/components/posts/MoodTag";
+
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
 
-// Visualizador de Audio (Barras animadas)
 const AudioVisualizer = ({
   isPlaying,
   color,
@@ -93,16 +94,14 @@ const PostItem: React.FC<PostItemProps> = ({
   const { currentPlayingId, isPlaying, playTrack, isLoading } =
     useAudioContext();
 
-  // Colores y Estilos
   const textColor = isDark ? "#FFFFFF" : "#09090B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const accentColor = "#5E17EB";
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
 
-  // Gradiente de la tarjeta de música (Volumen)
   const musicCardGradient = isDark
-    ? (["#18181B", "#09090B"] as const) // Zinc oscuro
-    : (["#FFFFFF", "#F4F4F5"] as const); // Blanco suave
+    ? (["#18181B", "#09090B"] as const)
+    : (["#FFFFFF", "#F4F4F5"] as const);
 
   const initialLikedBy = Array.isArray(post?.likedBy) ? post.likedBy : [];
   const initialSavedBy = Array.isArray(post?.savedBy) ? post.savedBy : [];
@@ -120,6 +119,7 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const songData = parseSongData(post.songData);
   const hasMusic = songData && songData.title;
+  const mood = songData?.mood;
 
   const isPlayingThis = currentPlayingId === post.$id && isPlaying;
   const isLoadingThis = currentPlayingId === post.$id && isLoading;
@@ -152,7 +152,6 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const isMoodPost =
     creator.id === MOOD_OFFICIAL_ID && !hasMusic && post.comment;
-  const moodStyle = songData?.moodStyle || "standard";
 
   const handlePlayPause = async () => {
     Haptics.selectionAsync();
@@ -235,9 +234,8 @@ const PostItem: React.FC<PostItemProps> = ({
 
   return (
     <View className="px-5 mb-2">
-      {/* --- HEADER (AVATAR + NOMBRE) --- */}
       <View className="flex-row items-start justify-between mb-3">
-        <View className="flex-row items-center flex-1">
+        <View className="flex-row items-start flex-1">
           <TouchableOpacity
             onPress={() =>
               onProfilePress
@@ -246,7 +244,6 @@ const PostItem: React.FC<PostItemProps> = ({
             }
             activeOpacity={0.8}
           >
-            {/* Anillo de Avatar */}
             <View
               className={`p-[2px] rounded-full border ${isDark ? "border-zinc-800" : "border-zinc-200"}`}
             >
@@ -289,6 +286,21 @@ const PostItem: React.FC<PostItemProps> = ({
             >
               @{creator.username} · {getRelativeTime(post.$createdAt, language)}
             </Text>
+
+            {mood && (
+              <View className="mt-1.5">
+                <View
+                  style={{
+                    transform: [{ scale: 0.85 }],
+                    alignSelf: "flex-start",
+                    marginLeft: -8,
+                    marginTop: -2,
+                  }}
+                >
+                  <MoodTag mood={mood} />
+                </View>
+              </View>
+            )}
           </View>
         </View>
 
@@ -300,9 +312,7 @@ const PostItem: React.FC<PostItemProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* --- LÍNEA DE CONTENIDO --- */}
       <View className="pl-[52px]">
-        {/* TEXTO / MOOD CARD */}
         {isMoodPost ? (
           <TapGestureHandler
             numberOfTaps={2}
@@ -322,7 +332,6 @@ const PostItem: React.FC<PostItemProps> = ({
                 <Text className="text-white font-bold text-[22px] text-center leading-8 tracking-tight">
                   {post.comment}
                 </Text>
-                {/* Elemento decorativo de fondo */}
                 <Ionicons
                   name="chatbubble-ellipses"
                   size={100}
@@ -335,7 +344,6 @@ const PostItem: React.FC<PostItemProps> = ({
                   }}
                 />
               </LinearGradient>
-              {/* Animación Corazón */}
               <Animated.View
                 style={[
                   styles.heartOverlay,
@@ -358,7 +366,6 @@ const PostItem: React.FC<PostItemProps> = ({
           )
         )}
 
-        {/* REPRODUCTOR DE MÚSICA PREMIUM */}
         {hasMusic && (
           <TapGestureHandler
             numberOfTaps={2}
@@ -370,7 +377,6 @@ const PostItem: React.FC<PostItemProps> = ({
                 borderColor: isDark
                   ? "rgba(255,255,255,0.08)"
                   : "rgba(0,0,0,0.05)",
-                // Sombra de color para darle vida
                 shadowColor: isDark ? "#5E17EB" : "#000",
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: isDark ? 0.2 : 0.05,
@@ -384,7 +390,6 @@ const PostItem: React.FC<PostItemProps> = ({
                 end={{ x: 1, y: 1 }}
                 className="p-3 flex-row items-center"
               >
-                {/* Portada */}
                 <View className="relative shadow-md">
                   <Image
                     source={{ uri: songData.cover }}
@@ -392,13 +397,11 @@ const PostItem: React.FC<PostItemProps> = ({
                     contentFit="cover"
                     transition={300}
                   />
-                  {/* Pequeño icono de app sobre la portada */}
                   <View className="absolute bottom-1 right-1 bg-black/40 rounded-full p-1 backdrop-blur-md">
                     <Ionicons name="musical-note" size={8} color="white" />
                   </View>
                 </View>
 
-                {/* Info Central */}
                 <View className="flex-1 ml-4 justify-center mr-2">
                   <Text
                     className="font-bold text-[16px] mb-1"
@@ -415,7 +418,6 @@ const PostItem: React.FC<PostItemProps> = ({
                     {songData.artist}
                   </Text>
 
-                  {/* Visualizador de Audio Integrado */}
                   <View className="mt-2 flex-row items-center">
                     <AudioVisualizer
                       isPlaying={isPlayingThis}
@@ -424,7 +426,6 @@ const PostItem: React.FC<PostItemProps> = ({
                   </View>
                 </View>
 
-                {/* Botón Play Flotante */}
                 <TouchableOpacity
                   onPress={handlePlayPause}
                   className="w-12 h-12 rounded-full items-center justify-center shadow-lg"
@@ -461,9 +462,7 @@ const PostItem: React.FC<PostItemProps> = ({
           </TapGestureHandler>
         )}
 
-        {/* --- BARRA DE ACCIONES (Limpia y espaciada) --- */}
         <View className="flex-row justify-between items-center pr-1 mt-1">
-          {/* 🔥 CORRECCIÓN: Agregado 'items-center' para alinear verticalmente el botón de guardar */}
           <View className="flex-row gap-6 items-center">
             <TouchableOpacity
               className="flex-row items-center gap-1.5"

@@ -54,18 +54,15 @@ const MoodSelectorPopup = ({
     }
 
     // 2. REGEX: Bloquear letras (a-z), números (0-9) y símbolos básicos de teclado.
-    // Solo dejamos pasar caracteres complejos (Unicode alto) que suelen ser Emojis.
     const hasRestrictedChars =
       /[a-zA-Z0-9`~!@#$%^&*()_|+\-=?;:'",.<>\{\}\[\]\\\/]/.test(text);
 
     if (hasRestrictedChars) {
-      // Feedback de error si intenta escribir texto
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
 
-    // 3. Limitar longitud (Un emoji puede ocupar 2-4 caracteres en JS, así que permitimos un slice generoso pero corto)
-    // Tomamos los últimos caracteres para simular que reemplaza al anterior
+    // 3. Limitar longitud
     const cleanEmoji = text.slice(-2);
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -77,14 +74,12 @@ const MoodSelectorPopup = ({
 
   const handleTextChange = (text: string) => {
     setLocalText(text);
-    // Solo actualizamos el padre si ya tenemos un emoji definido
     if (localEmoji) {
       onSelectMood({ emoji: localEmoji, text: text });
     }
   };
 
   const handleClose = () => {
-    // Si no hay emoji, limpiamos todo al salir
     if (!localEmoji) {
       onSelectMood(null);
     }
@@ -143,8 +138,8 @@ const MoodSelectorPopup = ({
                   ? "rgba(94, 23, 235, 0.15)"
                   : inputBg,
                 borderColor: localEmoji ? accentColor : borderColor,
-                borderWidth: 2, // Borde más grueso
-                borderStyle: localEmoji ? "solid" : "dashed", // Dashed si está vacío
+                borderWidth: 2,
+                borderStyle: localEmoji ? "solid" : "dashed",
               }}
               className="items-center justify-center mb-3 shadow-lg shadow-purple-900/20"
             >
@@ -161,9 +156,9 @@ const MoodSelectorPopup = ({
                 }}
                 placeholder="+"
                 placeholderTextColor="rgba(255,255,255,0.2)"
-                caretHidden={true} // Ocultar cursor para que parezca un botón
-                maxLength={5} // Margen técnico para el emoji
-                autoFocus={true} // Abrir teclado directo
+                caretHidden={true}
+                maxLength={5}
+                autoFocus={false} // 🔥 CAMBIO: Ahora el teclado NO abre automáticamente
               />
             </View>
             <Text className="text-zinc-500 text-xs font-medium uppercase tracking-widest">
