@@ -8,3 +8,4 @@ export * from "./posts";
 export * from "./chats";
 export * from "./stories";
 export * from "./playlists";
+export * from "./vibe";

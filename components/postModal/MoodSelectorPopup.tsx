@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Modal,
   StyleSheet,
   Platform,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -26,9 +27,15 @@ const MoodSelectorPopup = ({
   selectedMood,
   onSelectMood,
 }: MoodSelectorPopupProps) => {
-  // Estado local para manejar el input antes de guardar
+  // Estado local
   const [localEmoji, setLocalEmoji] = useState("");
   const [localText, setLocalText] = useState("");
+
+  // Referencia para el input oculto (teclado)
+  const customEmojiInputRef = useRef<TextInput>(null);
+
+  // Emojis sugeridos (Estilo WhatsApp)
+  const SUGGESTED_EMOJIS = ["🔥", "😂", "😍", "😭", "🤯", "❤️"];
 
   // Sincronizar estado local al abrir
   useEffect(() => {
@@ -38,7 +45,7 @@ const MoodSelectorPopup = ({
     }
   }, [isVisible, selectedMood]);
 
-  // Colores (Estilo Dark/Premium)
+  // Colores
   const popupBg = "#1A1A1A";
   const accentColor = "#5E17EB";
   const inputBg = "#27272A";
@@ -46,14 +53,14 @@ const MoodSelectorPopup = ({
   const placeholderColor = "#71717A";
 
   const handleEmojiInput = (text: string) => {
-    // 1. Si borra todo, limpiamos
+    // 1. Limpiar si borra todo
     if (text === "") {
       setLocalEmoji("");
       onSelectMood(null);
       return;
     }
 
-    // 2. REGEX: Bloquear letras (a-z), números (0-9) y símbolos básicos de teclado.
+    // 2. Bloquear caracteres no deseados (letras/números)
     const hasRestrictedChars =
       /[a-zA-Z0-9`~!@#$%^&*()_|+\-=?;:'",.<>\{\}\[\]\\\/]/.test(text);
 
@@ -62,13 +69,11 @@ const MoodSelectorPopup = ({
       return;
     }
 
-    // 3. Limitar longitud
+    // 3. Tomar el último emoji ingresado
     const cleanEmoji = text.slice(-2);
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLocalEmoji(cleanEmoji);
-
-    // Actualizamos el padre en tiempo real
     onSelectMood({ emoji: cleanEmoji, text: localText });
   };
 
@@ -86,6 +91,18 @@ const MoodSelectorPopup = ({
     onClose();
   };
 
+  const handleSelectSuggestion = (emoji: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setLocalEmoji(emoji);
+    onSelectMood({ emoji: emoji, text: localText });
+  };
+
+  const handleCustomEmojiPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Enfocamos el input oculto para abrir el teclado
+    customEmojiInputRef.current?.focus();
+  };
+
   return (
     <Modal
       animationType="fade"
@@ -93,7 +110,6 @@ const MoodSelectorPopup = ({
       visible={isVisible}
       onRequestClose={handleClose}
     >
-      {/* Fondo borroso oscuro */}
       <BlurView
         intensity={Platform.OS === "ios" ? 25 : 60}
         tint="dark"
@@ -101,13 +117,12 @@ const MoodSelectorPopup = ({
       />
 
       <View className="flex-1 justify-center items-center px-6 bg-black/50">
-        {/* Contenedor Principal */}
         <View
           style={{ backgroundColor: popupBg, width: "100%", maxWidth: 340 }}
           className="rounded-[36px] p-6 shadow-2xl border border-zinc-800"
         >
           {/* Header */}
-          <View className="flex-row justify-between items-center mb-8">
+          <View className="flex-row justify-between items-center mb-6">
             <View className="flex-row items-center">
               <View
                 style={{ backgroundColor: "rgba(94, 23, 235, 0.2)" }}
@@ -127,13 +142,14 @@ const MoodSelectorPopup = ({
             </TouchableOpacity>
           </View>
 
-          {/* --- INPUT DE EMOJI (CÍRCULO GIGANTE) --- */}
-          <View className="items-center mb-8">
+          {/* --- DISPLAY DE EMOJI (CÍRCULO GIGANTE) --- */}
+          {/* Ya no abre el teclado directamente, solo muestra el estado */}
+          <View className="items-center mb-6">
             <View
               style={{
-                width: 120,
-                height: 120,
-                borderRadius: 60,
+                width: 100,
+                height: 100,
+                borderRadius: 50,
                 backgroundColor: localEmoji
                   ? "rgba(94, 23, 235, 0.15)"
                   : inputBg,
@@ -143,28 +159,70 @@ const MoodSelectorPopup = ({
               }}
               className="items-center justify-center mb-3 shadow-lg shadow-purple-900/20"
             >
-              {/* Input invisible superpuesto para capturar el emoji */}
-              <TextInput
-                value={localEmoji}
-                onChangeText={handleEmojiInput}
-                style={{
-                  fontSize: 60,
-                  color: "white",
-                  textAlign: "center",
-                  width: "100%",
-                  height: "100%",
-                }}
-                placeholder="+"
-                placeholderTextColor="rgba(255,255,255,0.2)"
-                caretHidden={true}
-                maxLength={5}
-                autoFocus={false} // 🔥 CAMBIO: Ahora el teclado NO abre automáticamente
-              />
+              <Text style={{ fontSize: 50, color: "white" }}>
+                {localEmoji || "🫥"}
+              </Text>
             </View>
-            <Text className="text-zinc-500 text-xs font-medium uppercase tracking-widest">
-              {localEmoji ? "Emoji Seleccionado" : "Toca para añadir Emoji"}
-            </Text>
           </View>
+
+          {/* --- SLIDE DE EMOJIS SUGERIDOS (REACTION PICKER) --- */}
+          <View className="mb-6">
+            <Text className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-3 ml-1">
+              Selecciona una reacción
+            </Text>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 10 }}
+            >
+              {SUGGESTED_EMOJIS.map((emoji) => (
+                <TouchableOpacity
+                  key={emoji}
+                  onPress={() => handleSelectSuggestion(emoji)}
+                  style={{
+                    backgroundColor:
+                      localEmoji === emoji ? accentColor : "#27272A",
+                    width: 50,
+                    height: 50,
+                    borderRadius: 25,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: localEmoji === emoji ? accentColor : "#3F3F46",
+                  }}
+                >
+                  <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+
+              {/* BOTÓN + (BUSCAR OTRO) */}
+              <TouchableOpacity
+                onPress={handleCustomEmojiPress}
+                style={{
+                  backgroundColor: "#27272A",
+                  width: 50,
+                  height: 50,
+                  borderRadius: 25,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: "#3F3F46",
+                }}
+              >
+                <Ionicons name="add" size={26} color="white" />
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+
+          {/* --- INPUT OCULTO PARA EL TECLADO --- */}
+          <TextInput
+            ref={customEmojiInputRef}
+            value={localEmoji}
+            onChangeText={handleEmojiInput}
+            style={{ height: 0, width: 0, opacity: 0, position: "absolute" }}
+            caretHidden={true}
+          />
 
           {/* --- INPUT DE TEXTO --- */}
           <View
@@ -195,7 +253,7 @@ const MoodSelectorPopup = ({
             )}
           </View>
 
-          {/* Botón Guardar (Visual) */}
+          {/* Botón Guardar */}
           <TouchableOpacity
             onPress={handleClose}
             disabled={!localEmoji}

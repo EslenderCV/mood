@@ -1,4 +1,4 @@
-import React, { useState, useRef, memo } from "react";
+import React, { useState, useRef, memo, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Animated,
   StyleSheet,
+  Easing,
 } from "react-native";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
@@ -25,6 +26,7 @@ import { getRelativeTime } from "@/lib/dateUtils";
 import { useAudioContext } from "@/context/AudioContext";
 
 import { MoodTag } from "@/components/posts/MoodTag";
+import StreakBadge from "@/components/StreakBadge";
 
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
 
@@ -117,6 +119,41 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const heartScaleAnim = useRef(new Animated.Value(0)).current;
 
+  // Estado para badge "NEW"
+  const [showNewBadge, setShowNewBadge] = useState(() => {
+    if (!post?.$createdAt) return false;
+    const created = new Date(post.$createdAt).getTime();
+    const now = new Date().getTime();
+    return now - created < 3600000;
+  });
+
+  const badgeBounceAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (showNewBadge) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(badgeBounceAnim, {
+            toValue: -5,
+            duration: 1200,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(badgeBounceAnim, {
+            toValue: 0,
+            duration: 1200,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    }
+  }, [showNewBadge]);
+
+  const handleInteraction = () => {
+    if (showNewBadge) setShowNewBadge(false);
+  };
+
   const songData = parseSongData(post.songData);
   const hasMusic = songData && songData.title;
   const mood = songData?.mood;
@@ -138,6 +175,7 @@ const PostItem: React.FC<PostItemProps> = ({
         name: userObj.name || defaultName,
         avatar: userObj.avatar || userObj.pfp,
         isVerified: userObj.isVerified,
+        streak: userObj.streak || 0,
       };
     }
     return {
@@ -146,14 +184,20 @@ const PostItem: React.FC<PostItemProps> = ({
       name: defaultName,
       avatar: null,
       isVerified: false,
+      streak: 0,
     };
   };
   const creator = getCreator();
+
+  // 🔥 TEST MODE: Forzar que se vea el badge si soy yo (BORRAR EN PRODUCCIÓN)
+  const displayStreak =
+    creator.id === currentUserId && creator.streak === 0 ? 1 : creator.streak;
 
   const isMoodPost =
     creator.id === MOOD_OFFICIAL_ID && !hasMusic && post.comment;
 
   const handlePlayPause = async () => {
+    handleInteraction();
     Haptics.selectionAsync();
     const trackId = songData?.id || songData?.spotifyId;
     if (!trackId) return;
@@ -177,12 +221,12 @@ const PostItem: React.FC<PostItemProps> = ({
   };
 
   const handleLike = async () => {
+    handleInteraction();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const prevLiked = isLiked;
     setIsLiked(!isLiked);
     setLikesCount(isLiked ? likesCount - 1 : likesCount + 1);
     if (!prevLiked) onLike?.();
-
     try {
       const currentLikesArray = Array.isArray(post?.likedBy)
         ? post.likedBy
@@ -196,9 +240,9 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const onDoubleTap = (event: any) => {
     if (event.nativeEvent.state === State.ACTIVE) {
+      handleInteraction();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (!isLiked) handleLike();
-
       heartScaleAnim.setValue(0);
       Animated.sequence([
         Animated.spring(heartScaleAnim, {
@@ -218,12 +262,12 @@ const PostItem: React.FC<PostItemProps> = ({
   };
 
   const handleSave = async () => {
+    handleInteraction();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const prevSaved = isSaved;
     setIsSaved(!isSaved);
     setSavesCount(isSaved ? savesCount - 1 : savesCount + 1);
     if (!prevSaved) onSave?.();
-
     try {
       await toggleSavePost(post.$id, currentUserId);
     } catch {
@@ -233,15 +277,57 @@ const PostItem: React.FC<PostItemProps> = ({
   };
 
   return (
-    <View className="px-5 mb-2">
+    <View className="px-5 mb-2 relative">
+      {showNewBadge && (
+        <Animated.View
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 50,
+            zIndex: 20,
+            transform: [{ translateY: badgeBounceAnim }],
+          }}
+        >
+          <LinearGradient
+            colors={["#8B5CF6", "#EC4899"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: "rgba(255, 255, 255, 0.3)",
+              shadowColor: "#EC4899",
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.8,
+              shadowRadius: 8,
+              elevation: 5,
+            }}
+          >
+            <Text
+              style={{
+                color: "white",
+                fontWeight: "800",
+                fontSize: 9,
+                letterSpacing: 0.5,
+              }}
+            >
+              NEW ✨
+            </Text>
+          </LinearGradient>
+        </Animated.View>
+      )}
+
       <View className="flex-row items-start justify-between mb-3">
         <View className="flex-row items-start flex-1">
           <TouchableOpacity
-            onPress={() =>
+            onPress={() => {
+              handleInteraction();
               onProfilePress
                 ? onProfilePress(creator.id)
-                : router.push(`/user/${creator.id}` as any)
-            }
+                : router.push(`/user/${creator.id}` as any);
+            }}
             activeOpacity={0.8}
           >
             <View
@@ -271,6 +357,10 @@ const PostItem: React.FC<PostItemProps> = ({
               {creator.isVerified && (
                 <MaterialIcons name="verified" size={14} color={accentColor} />
               )}
+
+              {/* 🔥 BADGE DE RACHA CON HACK VISUAL PARA TEST */}
+              <StreakBadge days={displayStreak} />
+
               {!!post.isPrivate && (
                 <Ionicons
                   name="lock-closed"
@@ -286,7 +376,6 @@ const PostItem: React.FC<PostItemProps> = ({
             >
               @{creator.username} · {getRelativeTime(post.$createdAt, language)}
             </Text>
-
             {mood && (
               <View className="mt-1.5">
                 <View
@@ -401,7 +490,6 @@ const PostItem: React.FC<PostItemProps> = ({
                     <Ionicons name="musical-note" size={8} color="white" />
                   </View>
                 </View>
-
                 <View className="flex-1 ml-4 justify-center mr-2">
                   <Text
                     className="font-bold text-[16px] mb-1"
@@ -417,7 +505,6 @@ const PostItem: React.FC<PostItemProps> = ({
                   >
                     {songData.artist}
                   </Text>
-
                   <View className="mt-2 flex-row items-center">
                     <AudioVisualizer
                       isPlaying={isPlayingThis}
@@ -425,7 +512,6 @@ const PostItem: React.FC<PostItemProps> = ({
                     />
                   </View>
                 </View>
-
                 <TouchableOpacity
                   onPress={handlePlayPause}
                   className="w-12 h-12 rounded-full items-center justify-center shadow-lg"
@@ -444,7 +530,6 @@ const PostItem: React.FC<PostItemProps> = ({
                   )}
                 </TouchableOpacity>
               </LinearGradient>
-
               <Animated.View
                 style={[
                   styles.heartOverlay,
@@ -483,14 +568,14 @@ const PostItem: React.FC<PostItemProps> = ({
                 </Text>
               )}
             </TouchableOpacity>
-
             <TouchableOpacity
               className="flex-row items-center gap-1.5"
-              onPress={() =>
+              onPress={() => {
+                handleInteraction();
                 onCommentPress
                   ? onCommentPress(post.$id)
-                  : router.push(`/post/${post.$id}` as any)
-              }
+                  : router.push(`/post/${post.$id}` as any);
+              }}
               activeOpacity={0.6}
             >
               <Ionicons name="chatbubble-outline" size={23} color={iconColor} />
@@ -503,7 +588,6 @@ const PostItem: React.FC<PostItemProps> = ({
                 </Text>
               )}
             </TouchableOpacity>
-
             <TouchableOpacity
               onPress={handleSave}
               activeOpacity={0.6}
@@ -516,9 +600,11 @@ const PostItem: React.FC<PostItemProps> = ({
               />
             </TouchableOpacity>
           </View>
-
           <TouchableOpacity
-            onPress={onSharePress}
+            onPress={() => {
+              handleInteraction();
+              onSharePress?.();
+            }}
             activeOpacity={0.6}
             className="relative top-1"
           >

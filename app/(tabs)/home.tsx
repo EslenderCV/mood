@@ -7,10 +7,8 @@ import React, {
 } from "react";
 import {
   View,
-  Animated,
-  Image,
-  TouchableOpacity,
   Text,
+  Animated,
   ActivityIndicator,
   Platform,
   LayoutAnimation,
@@ -18,35 +16,39 @@ import {
   ViewToken,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { router, useNavigation } from "expo-router";
 import * as Haptics from "expo-haptics";
 
 // --- HOOK ---
-import { useHomeLogic, EnrichedFeedItem } from "@/hooks/useHomeLogic";
-import { FeedItem } from "@/context/FeedProvider";
+import { useHomeLogic } from "@/hooks/useHomeLogic";
 
-// --- IMPORTS DE COMPONENTES ---
+// --- COMPONENTES ---
 import StoriesRail from "@/components/home/StoriesRail";
-import StoryViewer from "@/components/home/StoryViewer";
-import CreatorModal from "@/components/home/CreatorModal";
-import StoryCreationModal from "@/components/home/StoryCreationModal";
-import DirectShareSheet from "@/components/home/DirectShareSheet";
 import FeedSkeleton from "@/components/home/FeedSkeleton";
 import EmptyStateWithSuggestions from "@/components/home/EmptyStateWithSuggestions";
 import PostItem from "@/components/PostItem";
-import PostModal from "@/components/postModal/PostModal";
-import OptionsModal from "@/components/OptionsModal";
-import MoodShareCard from "@/components/MoodShareCard";
-import ShareModal from "@/components/ShareModal";
+import AdItem from "@/components/AdItem";
 import SuggestedUsersCarousel from "@/components/SuggestedUsersCarousel";
 import TrendingSongCard from "@/components/TrendingSongCard";
+import WeeklyVibeBanner from "@/components/vibe/WeeklyVibeBanner";
 
-// IMPORTS DE ADS
-import AdItem from "@/components/AdItem";
+// 🔥 MODALES IMPORTS (Restaurados)
+import CreatorModal from "@/components/home/CreatorModal";
+import StoryCreationModal from "@/components/home/StoryCreationModal";
+import StoryViewer from "@/components/home/StoryViewer";
+import DirectShareSheet from "@/components/home/DirectShareSheet";
+import MoodShareCard from "@/components/MoodShareCard";
+import OptionsModal from "@/components/OptionsModal";
+import ShareModal from "@/components/ShareModal";
+import PostModal from "@/components/postModal/PostModal";
+
+// 🔥 COMPONENTES ORGANIZADOS
+import HomeHeader from "@/components/home/HomeHeader";
+import HomeModals from "@/components/home/HomeModals";
+import StreakSuccessModal from "@/components/StreakSuccessModal";
+
 import { injectAdsInFeed } from "@/lib/mockAds";
-
 import { createStory, deletePost } from "@/lib/appwrite";
 
 if (
@@ -59,15 +61,7 @@ if (
 const SPINNER_HEIGHT = 60;
 const PULL_THRESHOLD = -80;
 const VISIBLE_THRESHOLD = -40;
-const RANDOM_SEARCH_TERMS = [
-  "global top 50",
-  "viral hits",
-  "pop hits",
-  "lo-fi beats",
-  "rock classics",
-];
 
-// Helper dummy
 const searchSongsWrapper = async (query: string) => {
   try {
     const response = await fetch(
@@ -86,6 +80,13 @@ const searchSongsWrapper = async (query: string) => {
     return [];
   }
 };
+const RANDOM_SEARCH_TERMS = [
+  "global top 50",
+  "viral hits",
+  "pop hits",
+  "lo-fi beats",
+  "rock classics",
+];
 
 const Home = () => {
   const isDark = true;
@@ -96,7 +97,10 @@ const Home = () => {
   const scrollRef = useRef(0);
   const [showSpinner, setShowSpinner] = useState(false);
 
-  // ADS INJECTION
+  // 🔥 ESTADOS PARA RACHAS
+  const [showStreakModal, setShowStreakModal] = useState(false);
+  const [currentStreak, setCurrentStreak] = useState(0);
+
   const feedWithAds = useMemo(() => {
     return injectAdsInFeed(logic.sortedFeed);
   }, [logic.sortedFeed]);
@@ -106,9 +110,7 @@ const Home = () => {
   }, [showSpinner, logic.isRefreshing]);
 
   useEffect(() => {
-    if (!logic.isRefreshing) {
-      setShowSpinner(false);
-    }
+    if (!logic.isRefreshing) setShowSpinner(false);
   }, [logic.isRefreshing]);
 
   const handleScroll = Animated.event(
@@ -118,7 +120,6 @@ const Home = () => {
       listener: (event: any) => {
         const offsetY = event.nativeEvent.contentOffset.y;
         scrollRef.current = offsetY;
-
         if (offsetY < VISIBLE_THRESHOLD) {
           if (!showSpinner) setShowSpinner(true);
         } else if (!logic.isRefreshing) {
@@ -148,15 +149,6 @@ const Home = () => {
     outputRange: ["360deg", "0deg"],
     extrapolate: "clamp",
   });
-
-  const handleAddStoryPress = () => {
-    if (logic.user?.$id === logic.MOOD_OFFICIAL_ID) {
-      logic.toggleModal("isCreator", true);
-    } else {
-      logic.setStoryInitialSongData(null);
-      logic.toggleModal("isCreation", true);
-    }
-  };
 
   const renderFeedItem = useCallback(
     ({ item }: { item: any }) => {
@@ -198,10 +190,8 @@ const Home = () => {
               />
             </View>
           );
-
         case "ad":
           return <AdItem ad={item} />;
-
         case "suggested_users":
           return (
             <SuggestedUsersCarousel
@@ -209,10 +199,8 @@ const Home = () => {
               currentUserId={logic.user?.$id || ""}
             />
           );
-
         case "trending_song":
           return <TrendingSongCard song={item.data} />;
-
         default:
           return null;
       }
@@ -220,30 +208,18 @@ const Home = () => {
     [logic, isDark],
   );
 
-  const handleDeleteAction = () => {
-    if (logic.selectedPost) {
-      deletePost(logic.selectedPost.$id).then(() => logic.onRefresh());
-      logic.toggleModal("isOptions", false);
-    }
-  };
-
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 60,
     minimumViewTime: 250,
   }).current;
-
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       const validItems = viewableItems.filter(
         (v) => v.isViewable && v.index !== null,
       );
       if (validItems.length === 0) return;
-
-      const indices = validItems.map((v) => v.index as number);
-      if (indices.length > 0) {
-        const minIndex = Math.min(...indices);
-        logic.updateViewableIndex(minIndex);
-      }
+      const minIndex = Math.min(...validItems.map((v) => v.index as number));
+      logic.updateViewableIndex(minIndex);
     },
   ).current;
 
@@ -270,58 +246,50 @@ const Home = () => {
     return unsubscribe;
   }, [navigation, logic.onRefresh, logic.isFeedLoading, logic.isRefreshing]);
 
+  const handleAddStoryPress = () => {
+    if (logic.user?.$id === logic.MOOD_OFFICIAL_ID) {
+      logic.toggleModal("isCreator", true);
+    } else {
+      logic.setStoryInitialSongData(null);
+      logic.toggleModal("isCreation", true);
+    }
+  };
+
+  const handleDeleteAction = () => {
+    if (logic.selectedPost) {
+      deletePost(logic.selectedPost.$id).then(() => logic.onRefresh());
+      logic.toggleModal("isOptions", false);
+    }
+  };
+
+  // 🔥 NUEVA FUNCIÓN: Se ejecuta cuando PostModal termina de crear un post exitosamente
+  const handlePostCreated = () => {
+    logic.fetchAuxiliaryData(); // Refrescar feed
+
+    // Simular incremento (mientras backend no lo haga)
+    const currentStreakVal = (logic.user as any)?.streak || 0;
+    const simulatedNewStreak = currentStreakVal + 1;
+    setCurrentStreak(simulatedNewStreak);
+
+    // Lanzar el modal de fuego
+    setTimeout(() => {
+      setShowStreakModal(true);
+    }, 500);
+  };
+
   return (
     <GestureHandlerRootView
       style={{ flex: 1, backgroundColor: isDark ? "#000" : "#fff" }}
     >
       <SafeAreaView
         edges={["top"]}
-        style={{
-          flex: 1,
-          backgroundColor: isDark ? "#000000" : "#FFFFFF",
-        }}
+        style={{ flex: 1, backgroundColor: isDark ? "#000000" : "#FFFFFF" }}
       >
-        <View className="flex-row justify-between items-center px-5 py-3 border-b border-transparent z-50 bg-black">
-          <View className="h-[40px] w-[80px] justify-center">
-            <Image
-              source={require("@/assets/fullLogo.png")}
-              resizeMode="contain"
-              className="w-full h-full"
-              style={{ tintColor: isDark ? undefined : "#5E17EB" }}
-            />
-          </View>
-          <View className="flex-row items-center gap-4">
-            <TouchableOpacity
-              onPress={() => router.push("/notifications" as any)}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={26}
-                color={isDark ? "#5E17EB" : "black"}
-              />
-              {logic.notiCount > 0 && (
-                <View className="absolute top-0 right-0 bg-red-500 w-3 h-3 rounded-full border border-black" />
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => router.push("/chatshome")}
-              className="relative"
-            >
-              <Ionicons
-                name="chatbubble-outline"
-                size={26}
-                color={isDark ? "#5E17EB" : "black"}
-              />
-              {logic.msgCount > 0 && (
-                <View className="absolute top-[-2px] right-[-2px] bg-red-500 w-4 h-4 rounded-full items-center justify-center border border-black">
-                  <Text className="text-white text-[9px] font-bold">
-                    {logic.msgCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
+        <HomeHeader
+          isDark={isDark}
+          notiCount={logic.notiCount}
+          msgCount={logic.msgCount}
+        />
 
         {logic.isFeedLoading ? (
           <FeedSkeleton isDark={isDark} />
@@ -335,11 +303,9 @@ const Home = () => {
             onScrollEndDrag={handleScrollEndDrag}
             scrollEventThrottle={16}
             style={{ backgroundColor: "transparent", zIndex: 1 }}
-            // 🔥 AQUÍ ESTÁ EL CAMBIO PARA QUITAR LA BARRA DE SCROLL
             showsVerticalScrollIndicator={false}
             viewabilityConfig={viewabilityConfig}
             onViewableItemsChanged={onViewableItemsChanged}
-            // Configuración de rendimiento optimizada
             windowSize={15}
             initialNumToRender={5}
             maxToRenderPerBatch={5}
@@ -363,6 +329,7 @@ const Home = () => {
                 >
                   <ActivityIndicator size="small" color="#5E17EB" />
                 </Animated.View>
+
                 <StoriesRail
                   currentUser={logic.user}
                   groupedStories={logic.localData.groupedStories}
@@ -372,6 +339,11 @@ const Home = () => {
                   }}
                   onAddStory={handleAddStoryPress}
                   moodOfficialId={logic.MOOD_OFFICIAL_ID}
+                />
+
+                <WeeklyVibeBanner
+                  userId={logic.user?.$id}
+                  onCreatePost={handleAddStoryPress}
                 />
               </View>
             }
@@ -386,7 +358,29 @@ const Home = () => {
           />
         )}
 
-        <PostModal />
+        {/* --- MODALES MANUALES PARA CONTROLAR SUCCESS --- */}
+
+        <StoryCreationModal
+          visible={logic.modals.isCreation}
+          onClose={() => logic.toggleModal("isCreation", false)}
+          currentUser={logic.user}
+          onSuccess={() => {
+            // 🔙 Restaurado: Solo refresca feed, no lanza racha
+            logic.fetchAuxiliaryData();
+            logic.toggleModal("isCreation", false);
+          }}
+          initialSongData={logic.storyInitialSongData}
+          createStory={createStory}
+          searchSongsWrapper={searchSongsWrapper}
+          RANDOM_SEARCH_TERMS={RANDOM_SEARCH_TERMS}
+        />
+
+        <StreakSuccessModal
+          visible={showStreakModal}
+          days={currentStreak}
+          onClose={() => setShowStreakModal(false)}
+        />
+
         <CreatorModal
           visible={logic.modals.isCreator}
           onClose={() => logic.toggleModal("isCreator", false)}
@@ -401,16 +395,7 @@ const Home = () => {
             if (logic.handleMoodMediaPick) logic.handleMoodMediaPick();
           }}
         />
-        <StoryCreationModal
-          visible={logic.modals.isCreation}
-          onClose={() => logic.toggleModal("isCreation", false)}
-          currentUser={logic.user}
-          onSuccess={() => logic.fetchAuxiliaryData()}
-          initialSongData={logic.storyInitialSongData}
-          createStory={createStory}
-          searchSongsWrapper={searchSongsWrapper}
-          RANDOM_SEARCH_TERMS={RANDOM_SEARCH_TERMS}
-        />
+
         <StoryViewer
           visible={logic.modals.isStoryViewer}
           onClose={() => {
@@ -426,6 +411,7 @@ const Home = () => {
           onRefreshFeed={() => logic.fetchAuxiliaryData()}
           moodOfficialId={logic.MOOD_OFFICIAL_ID}
         />
+
         <DirectShareSheet
           visible={logic.modals.isShareSelector}
           onClose={() => logic.toggleModal("isShareSelector", false)}
@@ -442,11 +428,13 @@ const Home = () => {
           onSystemShare={logic.handleSystemShare}
           onCopyLink={logic.handleCopyLink}
         />
+
         <MoodShareCard
           isVisible={logic.modals.isViral}
           onClose={() => logic.toggleModal("isViral", false)}
           post={logic.getViralPostData()}
         />
+
         <OptionsModal
           isVisible={logic.modals.isOptions}
           onClose={() => logic.toggleModal("isOptions", false)}
@@ -458,11 +446,15 @@ const Home = () => {
               logic.selectedPost?.creator?.$id)
           }
         />
+
         <ShareModal
           isVisible={logic.modals.isShare}
           onClose={() => logic.toggleModal("isShare", false)}
           postId={logic.sharePostId}
         />
+
+        {/* 🔥 AQUÍ CONECTAMOS EL POST MODAL CON LA RACHA */}
+        <PostModal onPostCreated={handlePostCreated} />
       </SafeAreaView>
     </GestureHandlerRootView>
   );

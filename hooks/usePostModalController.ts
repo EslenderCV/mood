@@ -25,7 +25,8 @@ export interface MoodState {
   emoji: string;
   text: string;
 }
-// 🔥 ACEPTAMOS PROPS OPCIONALES PARA CONTROLARLO DESDE FUERA
+
+// 🔥 ACEPTAMOS PROPS PARA CONTROLARLO DESDE FUERA (incluyendo onPostCreated)
 export const usePostModalController = (props?: any) => {
   // Contexto Global (para cuando se abre desde el Tab Bar)
   const {
@@ -111,14 +112,13 @@ export const usePostModalController = (props?: any) => {
     if (isVisible && props?.prefillData?.song) {
       const incoming = props.prefillData.song;
 
-      // Mapeamos lo que llega de Explore a la estructura Song del modal
       const mappedSong: Song = {
         id: String(incoming.id || incoming.id || incoming.spotifyId),
         title: incoming.title || incoming.title,
         artist: incoming.artist || incoming.artist,
         cover: incoming.cover || incoming.cover,
         preview: incoming.preview || incoming.preview,
-        isExplicit: false, // Default
+        isExplicit: false,
       };
 
       setLinkedSong(mappedSong);
@@ -186,7 +186,6 @@ export const usePostModalController = (props?: any) => {
     ]).start(() => setVisible(false));
   }, [setVisible]);
 
-  // Búsqueda Deezer
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchQuery.length > 2) searchDeezerTracks(searchQuery);
@@ -205,6 +204,7 @@ export const usePostModalController = (props?: any) => {
     }, 500);
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
+
   const fetchSuggestedSongs = async () => {
     try {
       const response = await fetch(
@@ -242,7 +242,6 @@ export const usePostModalController = (props?: any) => {
 
   const resetForm = () => {
     setText("");
-    // Solo reseteamos si NO estamos en modo controlado con prefill
     if (!props?.prefillData) {
       setLinkedSong(null);
     }
@@ -288,7 +287,6 @@ export const usePostModalController = (props?: any) => {
 
   const closeMoodPopup = useCallback(() => {
     setIsMoodPopupVisible(false);
-    // No reseteamos el mood aquí, solo cerramos el popup
   }, []);
 
   const stopAudio = async () => {
@@ -416,8 +414,6 @@ export const usePostModalController = (props?: any) => {
 
     let songDataObj: any = {};
     if (linkedSong) {
-      console.log(linkedSong.title);
-
       songDataObj = {
         title: linkedSong.title,
         artist: linkedSong.artist,
@@ -425,8 +421,6 @@ export const usePostModalController = (props?: any) => {
         preview: linkedSong.preview,
         id: linkedSong.id,
       };
-
-      console.log(songDataObj);
     } else if (user.$id === MOOD_OFFICIAL_ID) {
       songDataObj = { moodStyle: moodStyle };
     }
@@ -438,6 +432,10 @@ export const usePostModalController = (props?: any) => {
     if (createPostOptimistic) {
       createPostOptimistic(text, songDataObj, user);
       closeModal();
+
+      // 🔥 AVISAMOS AL HOME QUE EL POST SE CREÓ PARA LANZAR LA RACHA
+      props?.onPostCreated?.();
+
       setTimeout(
         () =>
           showToast("success", t("post.alerts.successTitle"), "Publicando..."),
@@ -448,6 +446,10 @@ export const usePostModalController = (props?: any) => {
       try {
         await createPost(text, JSON.stringify(songDataObj), user.$id);
         closeModal();
+
+        // 🔥 AVISAMOS AL HOME QUE EL POST SE CREÓ PARA LANZAR LA RACHA
+        props?.onPostCreated?.();
+
         setTimeout(
           () =>
             showToast(
@@ -486,7 +488,7 @@ export const usePostModalController = (props?: any) => {
   };
 
   return {
-    isPostModalVisible: isVisible, // 🔥 Usamos el estado calculado
+    isPostModalVisible: isVisible,
     closeModal,
     user,
     text,

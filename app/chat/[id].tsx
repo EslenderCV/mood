@@ -34,10 +34,10 @@ const formatLastSeen = (dateString: string | null) => {
 
   // Si es hoy, mostrar hora
   if (date.getDate() === now.getDate() && date.getMonth() === now.getMonth()) {
-    return `Visto hoy a las ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    return `Última Vez hoy a las ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
   }
   // Si no, mostrar fecha corta
-  return `Visto el ${date.toLocaleDateString([], { day: "2-digit", month: "2-digit" })}`;
+  return `Última Vez el ${date.toLocaleDateString([], { day: "2-digit", month: "2-digit" })}`;
 };
 
 const ChatRoom = () => {

@@ -12,7 +12,7 @@ import GlobalProvider, { useGlobalContext } from "@/context/GlobalProvider";
 import { ModalProvider } from "@/context/ModalContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { NotificationProvider } from "@/context/NotificationContext";
-import { ChatProvider } from "@/context/ChatContext"; // 🔥 IMPORTAR CHAT PROVIDER
+import { ChatProvider } from "@/context/ChatContext";
 import { ConnectionProvider } from "@/context/ConnectionProvider";
 import { FeedProvider } from "@/context/FeedProvider";
 import { CommentsModalProvider } from "@/context/CommentsModalContext";
@@ -21,6 +21,8 @@ import { CommentsModalProvider } from "@/context/CommentsModalContext";
 import CustomSplashScreen from "@/components/CustomSplashScreen";
 import CommentsSheet from "@/components/comments/CommentsSheet";
 import InAppNotification from "@/components/InAppNotification";
+// 🔥 IMPORT NUEVO
+import GlobalAudioPlayerBar from "@/components/GlobalAudioPlayerBar";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -34,7 +36,6 @@ const StackLayout = () => {
     useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  // 1. Configuración de Audio básica
   useEffect(() => {
     (async () => {
       try {
@@ -50,7 +51,6 @@ const StackLayout = () => {
     })();
   }, []);
 
-  // 2. Control de Navegación
   useEffect(() => {
     if (loading) return;
     const segmentsArray = segments as string[];
@@ -63,7 +63,6 @@ const StackLayout = () => {
     }
   }, [loading, loggedIn, segments]);
 
-  // 3. Splash Control
   useEffect(() => {
     if (!loading) setIsAppReady(true);
   }, [loading]);
@@ -114,7 +113,6 @@ export default function RootLayout() {
         <BottomSheetModalProvider>
           <GlobalProvider>
             <NotificationProvider>
-              {/* 🔥 AQUÍ ENVOLVEMOS CON EL CHAT PROVIDER */}
               <ChatProvider>
                 <ConnectionProvider>
                   <FeedProvider>
@@ -122,15 +120,17 @@ export default function RootLayout() {
                       <AudioProvider>
                         <ModalProvider>
                           <StackLayout />
+
+                          {/* 🔥 COMPONENTES GLOBALES (Sobre todo lo demás) */}
                           <CommentsSheet />
                           <InAppNotification />
+                          <GlobalAudioPlayerBar />
                         </ModalProvider>
                       </AudioProvider>
                     </CommentsModalProvider>
                   </FeedProvider>
                 </ConnectionProvider>
               </ChatProvider>
-              {/* 🔥 FIN CHAT PROVIDER */}
             </NotificationProvider>
           </GlobalProvider>
         </BottomSheetModalProvider>

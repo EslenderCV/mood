@@ -16,7 +16,6 @@ import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-// 🔥 CAMBIO: Usamos expo-av para controlar el modo silencio
 import { Audio } from "expo-av";
 import { Databases, Query, ID } from "react-native-appwrite";
 import { Image } from "expo-image";
@@ -53,6 +52,8 @@ import PostDetailSkeleton from "@/components/PostDetailSkeleton";
 import PostHeader from "@/components/PostHeader";
 import DirectShareSheet from "@/components/home/DirectShareSheet";
 import StoryCreationModal from "@/components/home/StoryCreationModal";
+// 🔥 IMPORT NUEVO
+import { MoodTag } from "@/components/posts/MoodTag";
 
 const databases = new Databases(client);
 
@@ -133,7 +134,7 @@ const PostDetails = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
 
-  // Audio (Logica migrada de PostItem)
+  // Audio
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
@@ -152,7 +153,6 @@ const PostDetails = () => {
     }
   }, [allComments]);
 
-  // Limpieza del audio al salir
   useEffect(() => {
     return () => {
       if (sound) {
@@ -177,6 +177,10 @@ const PostDetails = () => {
     }
   };
 
+  // 🔥 CALCULAR MOOD
+  const songData = post ? parseSongData(post.songData) : null;
+  const mood = songData?.mood;
+
   const getViralPostData = () => {
     if (!post) return null;
     const song = parseSongData(post.songData);
@@ -191,11 +195,9 @@ const PostDetails = () => {
     };
   };
 
-  // 🔥 NUEVA LÓGICA DE AUDIO (Igual a PostItem)
   const handlePlayPause = async () => {
     Haptics.selectionAsync();
 
-    // 1. Si ya hay sonido cargado, controlamos play/pause/replay
     if (sound) {
       const status = await sound.getStatusAsync();
       if (status.isLoaded) {
@@ -203,7 +205,6 @@ const PostDetails = () => {
           await sound.pauseAsync();
           setIsPlaying(false);
         } else {
-          // Si terminó, replay; si no, play
           if (status.positionMillis >= status.durationMillis!) {
             await sound.replayAsync();
           } else {
@@ -215,7 +216,6 @@ const PostDetails = () => {
       return;
     }
 
-    // 2. Si no hay sonido, configuramos sesión y cargamos
     try {
       setIsLoadingAudio(true);
       const songData = parseSongData(post.songData);
@@ -234,7 +234,6 @@ const PostDetails = () => {
         return;
       }
 
-      // 🔥 CONFIGURACIÓN CLAVE PARA IPHONE EN SILENCIO
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         allowsRecordingIOS: false,
@@ -626,19 +625,27 @@ const PostDetails = () => {
             />
           )}
           ListHeaderComponent={
-            <PostHeader
-              post={post}
-              user={user}
-              isPlaying={isPlaying}
-              isLoadingAudio={isLoadingAudio}
-              onPlayPause={handlePlayPause}
-              onLike={handleLike}
-              onSave={handleSave}
-              onOpenShare={openShare}
-              t={t}
-              allCommentsCount={allComments.length}
-              styles={styles}
-            />
+            <View>
+              <PostHeader
+                post={post}
+                user={user}
+                isPlaying={isPlaying}
+                isLoadingAudio={isLoadingAudio}
+                onPlayPause={handlePlayPause}
+                onLike={handleLike}
+                onSave={handleSave}
+                onOpenShare={openShare}
+                t={t}
+                allCommentsCount={allComments.length}
+                styles={styles}
+              />
+              {/* 🔥 MOOD TAG AÑADIDO AQUÍ */}
+              {mood && (
+                <View className="px-5 mb-4 flex-row items-center">
+                  <MoodTag mood={mood} />
+                </View>
+              )}
+            </View>
           }
           contentContainerStyle={{ paddingBottom: 20 }}
           showsVerticalScrollIndicator={false}

@@ -11,6 +11,7 @@ export const appwriteConfig = {
   followsCollectionId: "6949a7500026f2cf2850",
   commentsCollectionId: "6949afd6002150b37f0f",
   notificationsCollectionId: "6949b7490030640f0fb1",
+  weeklyVibesCollectionId: "weekly_vibes",
 
   // 🔥 NUEVAS COLECCIONES DE CHAT (PREMIUM)
   chatsCollectionId: "6971493e000481d5a067", // Antes: conversations
@@ -20,7 +21,6 @@ export const appwriteConfig = {
   playlistsCollectionId: "6959a8460009615dfbcb",
   storiesCollectionId: "69631b240013f47f559f",
   feedEventsCollectionId: "69728245001c3be9cfe9",
-
 };
 
 export const client = new Client();
