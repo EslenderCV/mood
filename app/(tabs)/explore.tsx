@@ -49,14 +49,10 @@ import {
 import PlayerPostModal from "@/components/explore/PlayerPostModal";
 import DirectShareSheet from "@/components/home/DirectShareSheet";
 import StoryCreationModal from "@/components/home/StoryCreationModal";
-
-// 🔥 MODALES
+import { useAudioContext } from "@/context/AudioContext";
 import { TrackOptionsModal } from "@/components/explore/TrackOptionsModal";
-// ✅ CORRECCIÓN 1: Ruta exacta (Case Sensitive)
 import PostModal from "@/components/postModal/PostModal";
 
-// ✅ CORRECCIÓN 2: Silenciamos el error de tipos forzando el componente a 'any'
-// Esto permite pasarle props aunque TypeScript no las reconozca en la definición original.
 const PostModalAny = PostModal as any;
 
 if (
@@ -107,6 +103,139 @@ const CATEGORIES = [
     icon: "person-add-outline",
   },
 ];
+
+// --- COMPONENTES AUXILIARES ---
+
+const renderArtistRow = ({
+  item,
+  borderColor,
+  textColor,
+  subTextColor,
+}: any) => (
+  <TouchableOpacity
+    onPress={() =>
+      router.push(`/artist/${encodeURIComponent(item.name)}` as any)
+    }
+    className="flex-row items-center px-5 py-4 border-b active:opacity-70"
+    style={{ borderColor: borderColor }}
+  >
+    <Image
+      source={{ uri: item.cover }}
+      style={{
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: "#27272A",
+      }}
+      contentFit="cover"
+      transition={300}
+    />
+    <View className="flex-1 ml-4">
+      <Text className="font-bold text-base" style={{ color: textColor }}>
+        {item.name}
+      </Text>
+      <Text className="text-sm" style={{ color: subTextColor }}>
+        {item.count} canciones en Mood
+      </Text>
+    </View>
+    <Ionicons name="chevron-forward" size={20} color={subTextColor} />
+  </TouchableOpacity>
+);
+
+const MusicListRow = ({
+  item,
+  index,
+  accentColor,
+  subTextColor,
+  textColor,
+  borderColor,
+  isDark,
+  logic,
+}: any) => {
+  // 🔥 Usamos AudioContext aquí también para evitar conflictos si el usuario cambia de tab
+  const {
+    playTrack,
+    pauseTrack,
+    resumeTrack,
+    currentPlayingId,
+    isPlaying: isGlobalPlaying,
+  } = useAudioContext();
+
+  const trackId = item.trackId || item.id;
+  const isCurrentTrack = currentPlayingId === trackId;
+  const isPlaying = isCurrentTrack && isGlobalPlaying;
+
+  return (
+    <TouchableOpacity
+      onPress={() => router.push(`/post/${item.postId}` as any)}
+      className="flex-row items-center px-5 py-4 border-b active:opacity-70"
+      style={{ borderColor: borderColor }}
+    >
+      <Text
+        className="font-bold text-lg mr-4 w-6 text-center"
+        style={{ color: index < 3 ? accentColor : subTextColor }}
+      >
+        {index + 1}
+      </Text>
+      <Image
+        source={{ uri: item.cover }}
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 8,
+          backgroundColor: "#27272A",
+        }}
+        contentFit="cover"
+        transition={300}
+      />
+      <View className="flex-1 ml-4">
+        <Text
+          className="font-bold text-base mb-0.5"
+          numberOfLines={1}
+          style={{ color: textColor }}
+        >
+          {item.title}
+        </Text>
+        <Text className="text-sm" style={{ color: subTextColor }}>
+          {item.artist}
+        </Text>
+        <Text className="text-xs mt-1" style={{ color: accentColor }}>
+          {item.score} likes
+        </Text>
+      </View>
+      <TouchableOpacity
+        onPress={(e) => {
+          e.stopPropagation();
+          Haptics.selectionAsync();
+          if (isCurrentTrack) {
+            if (isGlobalPlaying) pauseTrack();
+            else resumeTrack();
+          } else {
+            playTrack(trackId, item.preview, {
+              title: item.title,
+              artist: item.artist,
+              cover: item.cover,
+            });
+          }
+        }}
+        className="w-10 h-10 rounded-full items-center justify-center"
+        style={{
+          backgroundColor: isPlaying
+            ? accentColor
+            : isDark
+              ? "#27272A"
+              : "#E5E5E5",
+        }}
+      >
+        <Ionicons
+          name={isPlaying ? "pause" : "play"}
+          size={20}
+          color={isPlaying ? "white" : accentColor}
+        />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+};
 
 const CategoryTabs = memo(
   ({
@@ -172,6 +301,7 @@ const CategoryTabs = memo(
   ),
 );
 
+// --- HEADER CON MOOD DAILY PICKS (AUDIO CONTEXT AQUI) ---
 const ExploreHeader = memo(
   ({
     logic,
@@ -182,6 +312,15 @@ const ExploreHeader = memo(
     accentColor,
     isDark,
   }: any) => {
+    // 🔥 1. Hook del contexto para los Daily Picks
+    const {
+      playTrack,
+      pauseTrack,
+      resumeTrack,
+      currentPlayingId,
+      isPlaying: isGlobalPlaying,
+    } = useAudioContext();
+
     return (
       <View>
         {logic.activeCategory === "posts" && (
@@ -201,18 +340,27 @@ const ExploreHeader = memo(
                 </View>
               ) : (
                 logic.dailyVibes.map((item: any) => {
-                  const isPlaying =
-                    logic.playingPreviewId === (item.trackId || item.id);
+                  const trackId = item.trackId || item.id;
+                  const isCurrentTrack = currentPlayingId === trackId;
+                  const isPlaying = isCurrentTrack && isGlobalPlaying;
+
                   return (
                     <TouchableOpacity
                       key={item.id}
                       activeOpacity={0.7}
                       onPress={() => {
                         Haptics.selectionAsync();
-                        logic.playPreview(
-                          item.preview,
-                          item.trackId || item.id,
-                        );
+                        // 🔥 Lógica Global para Daily Picks
+                        if (isCurrentTrack) {
+                          if (isGlobalPlaying) pauseTrack();
+                          else resumeTrack();
+                        } else {
+                          playTrack(trackId, item.preview, {
+                            title: item.title,
+                            artist: item.artist,
+                            cover: item.cover,
+                          });
+                        }
                       }}
                       className="flex-row items-center px-5 py-3 mb-2 mx-2 rounded-2xl"
                     >
@@ -228,7 +376,7 @@ const ExploreHeader = memo(
                           contentFit="cover"
                           transition={200}
                         />
-                        {isPlaying && (
+                        {isCurrentTrack && (
                           <View className="absolute inset-0 bg-black/40 items-center justify-center rounded-12">
                             <Ionicons
                               name="stats-chart"
@@ -240,9 +388,13 @@ const ExploreHeader = memo(
                       </View>
                       <View className="flex-1 justify-center ml-4 mr-2">
                         <Text
-                          className={`font-bold text-[15px] mb-1 ${isPlaying ? "text-[#5E17EB]" : ""}`}
+                          className={`font-bold text-[15px] mb-1 ${
+                            isCurrentTrack ? "text-[#5E17EB]" : ""
+                          }`}
                           numberOfLines={1}
-                          style={{ color: isPlaying ? accentColor : textColor }}
+                          style={{
+                            color: isCurrentTrack ? accentColor : textColor,
+                          }}
                         >
                           {item.title}
                         </Text>
@@ -262,7 +414,7 @@ const ExploreHeader = memo(
                           <Ionicons
                             name={isPlaying ? "pause" : "play"}
                             size={16}
-                            color={isPlaying ? accentColor : subTextColor}
+                            color={isCurrentTrack ? accentColor : subTextColor}
                           />
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -283,100 +435,6 @@ const ExploreHeader = memo(
                 })
               )}
             </View>
-
-            <View className="mb-8">
-              <View className="flex-row justify-between items-center px-5 mb-3">
-                <Text
-                  className="text-lg font-bold"
-                  style={{ color: textColor }}
-                >
-                  Discover Creators
-                </Text>
-                <Ionicons name="arrow-forward" size={20} color={subTextColor} />
-              </View>
-              {logic.isLoading ? (
-                <FlatList
-                  horizontal
-                  data={[1, 2, 3]}
-                  contentContainerStyle={{ paddingHorizontal: 20 }}
-                  keyExtractor={(i) => i.toString()}
-                  renderItem={() => <CreatorSkeleton isDark={isDark} />}
-                />
-              ) : (
-                <FlatList
-                  horizontal
-                  data={logic.trendingPeople}
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingHorizontal: 20 }}
-                  keyExtractor={(item) => item.$id}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      onPress={() => router.push(`/user/${item.$id}` as any)}
-                      className="mr-3 p-3 rounded-2xl border"
-                      style={{
-                        width: 110,
-                        borderColor: borderColor,
-                        backgroundColor: isDark ? "#18181B" : "#FFFFFF",
-                      }}
-                    >
-                      <View className="items-center mb-2">
-                        <Image
-                          source={
-                            item.pfp
-                              ? { uri: item.pfp }
-                              : require("@/assets/noPfp.jpg")
-                          }
-                          style={{
-                            width: 50,
-                            height: 50,
-                            borderRadius: 25,
-                            backgroundColor: "#27272A",
-                          }}
-                          contentFit="cover"
-                          transition={200}
-                        />
-                        {item.isVerified && (
-                          <View className="absolute bottom-0 right-0 bg-white dark:bg-black rounded-full p-[2px]">
-                            <MaterialIcons
-                              name="verified"
-                              size={14}
-                              color={accentColor}
-                            />
-                          </View>
-                        )}
-                      </View>
-                      <Text
-                        className="text-xs font-bold text-center mb-1"
-                        numberOfLines={1}
-                        style={{ color: textColor }}
-                      >
-                        {item.name || item.username}
-                      </Text>
-                      <Text
-                        className="text-[10px] text-center mb-3"
-                        style={{ color: subTextColor }}
-                      >
-                        @{item.username}
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => logic.handleFollowUser(item.$id)}
-                        className="w-full py-1.5 rounded-lg items-center justify-center bg-[#5E17EB]"
-                      >
-                        <Text className="text-[10px] font-bold text-white">
-                          Seguir
-                        </Text>
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  )}
-                />
-              )}
-            </View>
-            <Text
-              className="font-bold text-xl px-5 mb-4"
-              style={{ color: textColor }}
-            >
-              Explore More
-            </Text>
           </View>
         )}
       </View>
@@ -643,106 +701,6 @@ const Explore = () => {
     Keyboard.dismiss();
   };
 
-  const renderMusicRow = ({ item, index }: any) => {
-    const isPlaying = logic.playingPreviewId === (item.trackId || item.id);
-    return (
-      <TouchableOpacity
-        onPress={() => router.push(`/post/${item.postId}` as any)}
-        className="flex-row items-center px-5 py-4 border-b active:opacity-70"
-        style={{ borderColor: borderColor }}
-      >
-        {" "}
-        <Text
-          className="font-bold text-lg mr-4 w-6 text-center"
-          style={{ color: index < 3 ? accentColor : subTextColor }}
-        >
-          {index + 1}
-        </Text>{" "}
-        <Image
-          source={{ uri: item.cover }}
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 8,
-            backgroundColor: "#27272A",
-          }}
-          contentFit="cover"
-          transition={300}
-        />{" "}
-        <View className="flex-1 ml-4">
-          {" "}
-          <Text
-            className="font-bold text-base mb-0.5"
-            numberOfLines={1}
-            style={{ color: textColor }}
-          >
-            {item.title}
-          </Text>{" "}
-          <Text className="text-sm" style={{ color: subTextColor }}>
-            {item.artist}
-          </Text>{" "}
-          <Text className="text-xs mt-1" style={{ color: accentColor }}>
-            {item.score} likes
-          </Text>{" "}
-        </View>{" "}
-        <TouchableOpacity
-          onPress={(e) => {
-            e.stopPropagation();
-            Haptics.selectionAsync();
-            logic.playPreview(item.preview, item.trackId || item.id);
-          }}
-          className="w-10 h-10 rounded-full items-center justify-center"
-          style={{
-            backgroundColor: isPlaying
-              ? accentColor
-              : isDark
-                ? "#27272A"
-                : "#E5E5E5",
-          }}
-        >
-          {" "}
-          <Ionicons
-            name={isPlaying ? "pause" : "play"}
-            size={20}
-            color={isPlaying ? "white" : accentColor}
-          />{" "}
-        </TouchableOpacity>{" "}
-      </TouchableOpacity>
-    );
-  };
-  const renderArtistRow = ({ item }: any) => (
-    <TouchableOpacity
-      onPress={() =>
-        router.push(`/artist/${encodeURIComponent(item.name)}` as any)
-      }
-      className="flex-row items-center px-5 py-4 border-b active:opacity-70"
-      style={{ borderColor: borderColor }}
-    >
-      {" "}
-      <Image
-        source={{ uri: item.cover }}
-        style={{
-          width: 56,
-          height: 56,
-          borderRadius: 28,
-          backgroundColor: "#27272A",
-        }}
-        contentFit="cover"
-        transition={300}
-      />{" "}
-      <View className="flex-1 ml-4">
-        {" "}
-        <Text className="font-bold text-base" style={{ color: textColor }}>
-          {item.name}
-        </Text>{" "}
-        <Text className="text-sm" style={{ color: subTextColor }}>
-          {item.count} canciones en Mood
-        </Text>{" "}
-      </View>{" "}
-      <Ionicons name="chevron-forward" size={20} color={subTextColor} />{" "}
-    </TouchableOpacity>
-  );
-
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: bgColor }}>
       <View style={{ flex: 1 }}>
@@ -903,9 +861,26 @@ const Explore = () => {
                   );
                 }
                 if (logic.activeCategory === "music")
-                  return renderMusicRow({ item, index });
+                  // Usamos MusicListRow que ahora es un componente independiente
+                  return (
+                    <MusicListRow
+                      item={item}
+                      index={index}
+                      accentColor={accentColor}
+                      subTextColor={subTextColor}
+                      textColor={textColor}
+                      borderColor={borderColor}
+                      isDark={isDark}
+                      logic={logic}
+                    />
+                  );
                 if (logic.activeCategory === "artists")
-                  return renderArtistRow({ item });
+                  return renderArtistRow({
+                    item,
+                    borderColor,
+                    textColor,
+                    subTextColor,
+                  });
                 return renderProfileRow({
                   item,
                   logic,
@@ -986,11 +961,9 @@ const Explore = () => {
             onCreatePost={logic.handleStartPost}
           />
 
-          {/* 🔥 MODAL EXISTENTE CONECTADO Y ARREGLADO */}
-          {/* Usamos PostModalAny para evitar el error de TS mientras le pasamos las props correctas */}
           <PostModalAny
-            visible={logic.isPostModalVisible} // Probamos con 'visible' (estándar)
-            isVisible={logic.isPostModalVisible} // Y también 'isVisible' por seguridad (algunos libs usan esto)
+            visible={logic.isPostModalVisible}
+            isVisible={logic.isPostModalVisible}
             onClose={() => logic.setIsPostModalVisible(false)}
             prefillData={{ song: logic.selectedTrackForAction }}
           />

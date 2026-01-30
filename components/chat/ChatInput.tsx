@@ -5,11 +5,12 @@ import {
   TouchableOpacity,
   Platform,
   Keyboard,
-  Text, // ✅ Importado explícitamente de react-native
+  Text,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
+import { ChatMusicModal } from "./ChatMusicModal"; // 🔥 Importamos el Modal
 
 interface ChatInputProps {
   text: string;
@@ -21,6 +22,7 @@ interface ChatInputProps {
   onCancelEdit: () => void;
   inputRef: any;
   isDark: boolean;
+  onSendSong: (song: any) => void; // 🔥 Nueva Prop
 }
 
 export const ChatInput = ({
@@ -33,9 +35,11 @@ export const ChatInput = ({
   onCancelEdit,
   inputRef,
   isDark,
+  onSendSong, // 🔥
 }: ChatInputProps) => {
   const insets = useSafeAreaInsets();
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const [isMusicModalVisible, setMusicModalVisible] = useState(false); // 🔥
 
   useEffect(() => {
     const showListener = Keyboard.addListener(
@@ -52,11 +56,10 @@ export const ChatInput = ({
     };
   }, []);
 
-  // Colores dinámicos
   const containerBg = isDark ? "#000000" : "#FFFFFF";
-  const inputBg = isDark ? "#18181B" : "#F3F4F6"; // Gris suave para el input
-  const buttonBg = isDark ? "#27272A" : "#E4E4E7"; // Gris más fuerte para botones
-  const iconColor = "#5E17EB"; // Color de marca para iconos inactivos
+  const inputBg = isDark ? "#18181B" : "#F3F4F6";
+  const buttonBg = isDark ? "#27272A" : "#E4E4E7";
+  const iconColor = "#5E17EB";
 
   return (
     <View
@@ -67,7 +70,6 @@ export const ChatInput = ({
         paddingHorizontal: 10,
       }}
     >
-      {/* Banner de Respuesta / Edición */}
       {(replyingTo || editingMessage) && (
         <View className="flex-row items-center justify-between px-4 py-3 mx-1 mb-3 rounded-2xl bg-zinc-100 dark:bg-zinc-800 border-l-4 border-[#5E17EB]">
           <View className="flex-1 mr-2">
@@ -99,19 +101,19 @@ export const ChatInput = ({
         </View>
       )}
 
-      {/* INPUT AREA */}
       <View className="flex-row items-center justify-middle">
+        {/* 🔥 Botón de Música Activo */}
         <TouchableOpacity
           className="mr-2 w-10 h-10 rounded-full items-center justify-center"
           style={{ backgroundColor: buttonBg }}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setMusicModalVisible(true);
           }}
         >
           <Ionicons name="musical-notes" size={24} color={iconColor} />
         </TouchableOpacity>
 
-        {/* Input de Texto */}
         <View
           className="flex-1 flex-row items-end rounded-[24px] px-4 py-2 border border-transparent"
           style={{
@@ -138,7 +140,6 @@ export const ChatInput = ({
           />
         </View>
 
-        {/* Botón Derecho: Micrófono (Si vacío) o Enviar (Si texto) */}
         <TouchableOpacity
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -154,6 +155,13 @@ export const ChatInput = ({
           />
         </TouchableOpacity>
       </View>
+
+      {/* 🔥 Renderizamos el Modal */}
+      <ChatMusicModal
+        visible={isMusicModalVisible}
+        onClose={() => setMusicModalVisible(false)}
+        onSendSong={onSendSong}
+      />
     </View>
   );
 };

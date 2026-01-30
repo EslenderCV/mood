@@ -6,6 +6,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { Image } from "expo-image";
+import { MusicMessageBubble } from "./MusicMessageBubble"; // 🔥 Importar
 
 const { width } = Dimensions.get("window");
 
@@ -18,7 +19,6 @@ interface MessageItemProps {
   onSwipeToReply: (item: any) => void;
   onDelete: (id: string) => void;
   onEdit: (item: any) => void;
-  // 🔥 NUEVA PROP: Recibimos la foto desde el padre
   otherUserAvatar: string | null;
 }
 
@@ -31,9 +31,10 @@ export const MessageItem = ({
   onSwipeToReply,
   onDelete,
   onEdit,
-  otherUserAvatar, // 🔥 La desestructuramos aquí
+  otherUserAvatar,
 }: MessageItemProps) => {
   const isMe = item.senderId === currentUserId;
+  const isAudio = item.type === "audio"; // 🔥 Detectar audio
 
   const previousMessage = messages[index + 1];
   const nextMessage = messages[index - 1];
@@ -42,7 +43,6 @@ export const MessageItem = ({
     !previousMessage || previousMessage.senderId !== item.senderId;
   const isLastInGroup = !nextMessage || nextMessage.senderId !== item.senderId;
 
-  // Bordes dinámicos
   const borderTopLeft = isMe ? 20 : isFirstInGroup ? 20 : 4;
   const borderTopRight = isMe ? (isFirstInGroup ? 20 : 4) : 20;
   const borderBottomLeft = isMe ? 20 : isLastInGroup ? 4 : 4;
@@ -113,13 +113,12 @@ export const MessageItem = ({
             alignItems: "flex-end",
           }}
         >
-          {/* AVATAR (Solo si es el otro usuario y es el último del grupo) */}
           {!isMe && (
             <View style={{ width: 34, marginRight: 8 }}>
               {isLastInGroup ? (
                 <Image
                   source={
-                    otherUserAvatar // 🔥 USAMOS LA PROP AQUÍ
+                    otherUserAvatar
                       ? { uri: otherUserAvatar }
                       : require("@/assets/images/icon.png")
                   }
@@ -130,10 +129,9 @@ export const MessageItem = ({
             </View>
           )}
 
-          {/* BURBUJA */}
           <View
             style={{
-              maxWidth: width * 0.72,
+              maxWidth: width * 0.75,
               borderTopLeftRadius: borderTopLeft,
               borderTopRightRadius: borderTopRight,
               borderBottomLeftRadius: borderBottomLeft,
@@ -147,14 +145,28 @@ export const MessageItem = ({
                 colors={myGradientColors as any}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={{ paddingHorizontal: 14, paddingVertical: 10 }}
+                style={{
+                  paddingHorizontal: isAudio ? 10 : 14,
+                  paddingVertical: 10,
+                }}
               >
-                {renderReply()}
-                <Text
-                  style={{ color: myTextColor, fontSize: 16, lineHeight: 22 }}
-                >
-                  {cleanBody}
-                </Text>
+                {isAudio ? (
+                  <MusicMessageBubble songData={cleanBody} isMe={true} />
+                ) : (
+                  <>
+                    {renderReply()}
+                    <Text
+                      style={{
+                        color: myTextColor,
+                        fontSize: 16,
+                        lineHeight: 22,
+                      }}
+                    >
+                      {cleanBody}
+                    </Text>
+                  </>
+                )}
+
                 <View className="flex-row justify-end items-center mt-1 space-x-1">
                   <Text style={{ fontSize: 9, color: "rgba(255,255,255,0.7)" }}>
                     {new Date(item.$createdAt).toLocaleTimeString([], {
@@ -168,17 +180,29 @@ export const MessageItem = ({
                 </View>
               </LinearGradient>
             ) : (
-              <View style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
-                {renderReply()}
-                <Text
-                  style={{
-                    color: otherTextColor,
-                    fontSize: 16,
-                    lineHeight: 22,
-                  }}
-                >
-                  {cleanBody}
-                </Text>
+              <View
+                style={{
+                  paddingHorizontal: isAudio ? 10 : 14,
+                  paddingVertical: 10,
+                }}
+              >
+                {isAudio ? (
+                  <MusicMessageBubble songData={cleanBody} isMe={false} />
+                ) : (
+                  <>
+                    {renderReply()}
+                    <Text
+                      style={{
+                        color: otherTextColor,
+                        fontSize: 16,
+                        lineHeight: 22,
+                      }}
+                    >
+                      {cleanBody}
+                    </Text>
+                  </>
+                )}
+
                 <Text
                   style={{
                     fontSize: 9,

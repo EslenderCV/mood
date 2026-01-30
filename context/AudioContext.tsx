@@ -6,6 +6,7 @@ import React, {
   useRef,
 } from "react";
 import { Audio, AVPlaybackStatus } from "expo-av";
+// Asegúrate de que estas rutas de importación existan en tu proyecto, si no, coméntalas
 import { BrainEmitter } from "@/src/brain/signals/emitters";
 import { AudioEventType } from "@/src/brain/signals/AudioSignals";
 
@@ -18,7 +19,7 @@ export interface TrackMetadata {
 
 interface AudioContextType {
   currentPlayingId: string | null;
-  activeTrackMetadata: TrackMetadata | null; // 🔥 NUEVO: Datos visuales
+  activeTrackMetadata: TrackMetadata | null;
   isPlaying: boolean;
   isLoading: boolean;
   durationMillis: number;
@@ -51,7 +52,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [currentPlayingId, setCurrentPlayingId] = useState<string | null>(null);
   const [activeTrackMetadata, setActiveTrackMetadata] =
-    useState<TrackMetadata | null>(null); // 🔥 Estado visual
+    useState<TrackMetadata | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [durationMillis, setDurationMillis] = useState(0);
@@ -59,9 +60,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const soundRef = useRef<Audio.Sound | null>(null);
   const currentTrackIdRef = useRef<string | null>(null);
-  // Eliminamos currentMetaRef porque ahora usamos state para la UI
   const playbackStateRef = useRef({ position: 0, duration: 0 });
 
+  // Configuración inicial
   useEffect(() => {
     Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
@@ -71,6 +72,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   }, []);
 
+  // Limpieza al desmontar
   useEffect(() => {
     return () => {
       if (soundRef.current) {
@@ -99,13 +101,16 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     if (status.didJustFinish && currentTrackIdRef.current) {
-      BrainEmitter.audio(
-        AudioEventType.TRACK_COMPLETE,
-        currentTrackIdRef.current,
-        status.durationMillis || 0,
-        status.positionMillis,
-        activeTrackMetadata?.features,
-      );
+      // Señal opcional al cerebro de la app
+      if (BrainEmitter) {
+        BrainEmitter.audio(
+          AudioEventType.TRACK_COMPLETE,
+          currentTrackIdRef.current,
+          status.durationMillis || 0,
+          status.positionMillis,
+          activeTrackMetadata?.features,
+        );
+      }
       setIsPlaying(false);
       setPositionMillis(0);
     }
@@ -114,21 +119,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
   const stopTrack = async () => {
     const sound = soundRef.current;
     if (sound) {
-      const { position, duration } = playbackStateRef.current;
-      if (
-        currentTrackIdRef.current &&
-        position > 1000 &&
-        position < duration - 500
-      ) {
-        BrainEmitter.audio(
-          AudioEventType.TRACK_SKIP,
-          currentTrackIdRef.current,
-          duration,
-          position,
-          activeTrackMetadata?.features,
-        );
-      }
-
       try {
         await sound.stopAsync();
         await sound.unloadAsync();
@@ -137,16 +127,26 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     setCurrentPlayingId(null);
-    setActiveTrackMetadata(null); // 🔥 Limpiamos la barra al cerrar
+    setActiveTrackMetadata(null);
     currentTrackIdRef.current = null;
     setIsPlaying(false);
     setPositionMillis(0);
     setDurationMillis(0);
-    playbackStateRef.current = { position: 0, duration: 0 };
   };
 
   const playTrack = async (id: string, uri: string, meta?: TrackMetadata) => {
     try {
+      // 1. 🔥 IMPORTANTE: Forzar modo Altavoz (Playback) siempre que empiece una canción.
+      // Esto arregla el volumen bajo si venías del grabador de voz.
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+
+      // Si es la misma canción, toggle play/pause
       if (currentTrackIdRef.current === id && soundRef.current) {
         const status = await soundRef.current.getStatusAsync();
         if (status.isLoaded) {
@@ -163,6 +163,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
 
+      // Si hay otra canción sonando, la matamos antes de empezar la nueva
       if (soundRef.current) {
         await soundRef.current.unloadAsync();
         soundRef.current = null;
@@ -170,7 +171,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
 
       setIsLoading(true);
       setCurrentPlayingId(id);
-      setActiveTrackMetadata(meta || null); // 🔥 Actualizamos metadata visual
+      setActiveTrackMetadata(meta || null);
       currentTrackIdRef.current = id;
 
       const { sound: newSound, status } = await Audio.Sound.createAsync(
@@ -181,7 +182,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
 
       soundRef.current = newSound;
 
-      if (status.isLoaded) {
+      if (status.isLoaded && BrainEmitter) {
         BrainEmitter.audio(
           AudioEventType.TRACK_START,
           id,

@@ -12,11 +12,43 @@ import {
   appwriteConfig,
   getDeezerTrackUrl,
   followUser,
+  searchPosts, // 🔥 IMPORTAR LA NUEVA FUNCIÓN
 } from "@/lib/appwrite";
 import { parseSongData, normalize, shuffleArray } from "@/utils/exploreHelpers";
 
 const databases = new Databases(client);
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
+
+// 🔥 PALABRAS CLAVE PARA DETECTAR MOODS
+const MOOD_KEYWORDS = [
+  "sad",
+  "triste",
+  "llorar",
+  "cry",
+  "depre",
+  "happy",
+  "feliz",
+  "alegre",
+  "fiesta",
+  "party",
+  "gym",
+  "entreno",
+  "workout",
+  "power",
+  "energy",
+  "energia",
+  "chill",
+  "relax",
+  "calma",
+  "paz",
+  "love",
+  "amor",
+  "romantico",
+  "focus",
+  "estudio",
+  "trabajo",
+  "enfoque",
+];
 
 export const useExploreLogic = () => {
   const { user } = useGlobalContext();
@@ -50,7 +82,7 @@ export const useExploreLogic = () => {
   const [playerInitialIndex, setPlayerInitialIndex] = useState(0);
   const [playerPostsList, setPlayerPostsList] = useState<any[]>([]);
 
-  // 🔥 AUDIO FIX: Referencia persistente para el sonido
+  // Audio Ref
   const soundRef = useRef<Audio.Sound | null>(null);
   const [playingPreviewId, setPlayingPreviewId] = useState<string | null>(null);
 
@@ -65,19 +97,16 @@ export const useExploreLogic = () => {
   const [shareContacts, setShareContacts] = useState<any[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
 
-  // 🔥 CREACIÓN DE CONTENIDO
-  const [isTrackOptionsVisible, setTrackOptionsVisible] = useState(false); // Menú de selección
+  // Creación de contenido
+  const [isTrackOptionsVisible, setTrackOptionsVisible] = useState(false);
   const [selectedTrackForAction, setSelectedTrackForAction] =
-    useState<any>(null); // Canción seleccionada
-
-  const [isCreationVisible, setCreationVisible] = useState(false); // Story Modal
+    useState<any>(null);
+  const [isCreationVisible, setCreationVisible] = useState(false);
   const [storyInitialSongData, setStoryInitialSongData] = useState<any>(null);
-
-  const [isPostModalVisible, setIsPostModalVisible] = useState(false); // Post Modal (Tu modal existente)
+  const [isPostModalVisible, setIsPostModalVisible] = useState(false);
 
   // --- AUDIO LOGIC ---
   useEffect(() => {
-    // Limpieza al desmontar
     return () => {
       if (soundRef.current) {
         soundRef.current.unloadAsync();
@@ -87,7 +116,6 @@ export const useExploreLogic = () => {
 
   const playPreview = async (previewUrl: string, trackId: string) => {
     try {
-      // 1. Si tocamos la misma canción que suena -> PAUSE/STOP
       if (playingPreviewId === trackId) {
         if (soundRef.current) {
           await soundRef.current.stopAsync();
@@ -98,7 +126,6 @@ export const useExploreLogic = () => {
         return;
       }
 
-      // 2. Si hay otra sonando -> STOP anterior
       if (soundRef.current) {
         try {
           await soundRef.current.stopAsync();
@@ -108,7 +135,6 @@ export const useExploreLogic = () => {
         setPlayingPreviewId(null);
       }
 
-      // 3. Obtener URL válida
       let finalUrl = previewUrl;
       if (!finalUrl && trackId) {
         const deezerUrl = await getDeezerTrackUrl(trackId);
@@ -120,7 +146,6 @@ export const useExploreLogic = () => {
         return;
       }
 
-      // 4. Reproducir nueva
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: finalUrl },
         { shouldPlay: true },
@@ -129,7 +154,6 @@ export const useExploreLogic = () => {
       soundRef.current = newSound;
       setPlayingPreviewId(trackId);
 
-      // Listener para cuando termine
       newSound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {
           setPlayingPreviewId(null);
@@ -143,18 +167,13 @@ export const useExploreLogic = () => {
   };
 
   // --- CREACIÓN ---
-
-  // Abre el menú de opciones (Story vs Post)
   const openTrackOptions = (trackItem: any) => {
     setSelectedTrackForAction(trackItem);
     setTrackOptionsVisible(true);
   };
 
-  // Iniciar Historia
   const handleStartStory = () => {
     setTrackOptionsVisible(false);
-
-    // Normalizar datos para Story
     let data = selectedTrackForAction;
     if (typeof selectedTrackForAction.songData === "string") {
       try {
@@ -178,13 +197,9 @@ export const useExploreLogic = () => {
     setTimeout(() => setCreationVisible(true), 300);
   };
 
-  // Iniciar Post (Abre tu modal existente)
   const handleStartPost = () => {
     setTrackOptionsVisible(false);
-
-    // Normalizar datos para PostModal
     let data = selectedTrackForAction;
-    // Si viene de Daily Vibes, a veces songData es string JSON
     if (typeof selectedTrackForAction.songData === "string") {
       try {
         data = JSON.parse(selectedTrackForAction.songData);
@@ -201,11 +216,11 @@ export const useExploreLogic = () => {
       id: data.id || selectedTrackForAction.id,
     };
 
-    setSelectedTrackForAction(songForPost); // Guardamos la versión limpia
-    setTimeout(() => setIsPostModalVisible(true), 300); // 🔥 Abrimos TU modal
+    setSelectedTrackForAction(songForPost);
+    setTimeout(() => setIsPostModalVisible(true), 300);
   };
 
-  // --- DATA FETCHING (Sin Cambios Lógicos Mayores) ---
+  // --- DATA FETCHING ---
   const isHighQualityTrack = (track: any) => {
     const title = track.title.toLowerCase();
     const artist = track.artist.name.toLowerCase();
@@ -374,7 +389,7 @@ export const useExploreLogic = () => {
     }
   };
 
-  // Buscador (Igual)
+  // 🔥 BUSCADOR INTELIGENTE CON LÓGICA DE MOODS
   useEffect(() => {
     const delay = setTimeout(async () => {
       if (!searchText.trim()) {
@@ -383,6 +398,7 @@ export const useExploreLogic = () => {
       }
       setSearchResults((prev) => ({ ...prev, isLoading: true }));
       try {
+        // 1. Buscar Usuarios (Siempre útil)
         const usersRes = await databases.listDocuments(
           appwriteConfig.databaseId,
           appwriteConfig.usersCollectionId,
@@ -395,59 +411,22 @@ export const useExploreLogic = () => {
           ],
         );
         const foundUsers = usersRes.documents;
-        const foundUserIds = foundUsers.map((u) => u.$id);
-        const userMap = new Map();
-        foundUsers.forEach((u) =>
-          userMap.set(u.$id, {
-            $id: u.$id,
-            username: u.username,
-            name: u.name,
-            avatar: u.pfp || u.avatar,
-            isVerified: u.isVerified,
-          }),
+
+        // 2. DETECTOR DE INTENCIÓN: ¿Es un Mood?
+        const isMoodSearch = MOOD_KEYWORDS.some((k) =>
+          searchText.toLowerCase().includes(k),
         );
-        const queries = [
-          databases
-            .listDocuments(
-              appwriteConfig.databaseId,
-              appwriteConfig.postsCollectionId,
-              [Query.search("comment", searchText), Query.limit(20)],
-            )
-            .catch(() => ({ documents: [] })),
-          databases
-            .listDocuments(
-              appwriteConfig.databaseId,
-              appwriteConfig.postsCollectionId,
-              [Query.search("songData", searchText), Query.limit(20)],
-            )
-            .catch(() => ({ documents: [] })),
-        ];
-        if (foundUserIds.length > 0)
-          queries.push(
-            databases
-              .listDocuments(
-                appwriteConfig.databaseId,
-                appwriteConfig.postsCollectionId,
-                [
-                  Query.equal("postedBy", foundUserIds),
-                  Query.limit(20),
-                  Query.orderDesc("$createdAt"),
-                ],
-              )
-              .catch(() => ({ documents: [] })),
-          );
-        const results = await Promise.all(queries);
-        const combinedPosts = results.flatMap((res) => res?.documents || []);
-        const uniquePosts = Array.from(
-          new Map(combinedPosts.map((item) => [item.$id, item])).values(),
-        );
+
+        // 3. Buscar Posts usando la función centralizada
+        const foundPosts = await searchPosts(searchText, isMoodSearch);
+
         setSearchResults({
           users: foundUsers.map((d) => ({
             ...d,
             id: d.$id,
             avatar: d.pfp || d.avatar,
           })),
-          posts: uniquePosts,
+          posts: foundPosts,
           isLoading: false,
         });
       } catch (e) {
@@ -457,7 +436,7 @@ export const useExploreLogic = () => {
     return () => clearTimeout(delay);
   }, [searchText]);
 
-  // Helpers UI (Igual)
+  // Helpers UI
   const handleOpenOptions = (post: any) => {
     setSelectedPost(post);
     setOptionsVisible(true);
@@ -525,8 +504,6 @@ export const useExploreLogic = () => {
     user,
     t,
     handleFollowUser,
-
-    // 🔥 NUEVOS EXPORTS CORREGIDOS
     isTrackOptionsVisible,
     setTrackOptionsVisible,
     selectedTrackForAction,
@@ -537,6 +514,6 @@ export const useExploreLogic = () => {
     setCreationVisible,
     storyInitialSongData,
     isPostModalVisible,
-    setIsPostModalVisible, // Exportamos para el modal existente
+    setIsPostModalVisible,
   };
 };

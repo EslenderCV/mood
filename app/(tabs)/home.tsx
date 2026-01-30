@@ -33,7 +33,7 @@ import SuggestedUsersCarousel from "@/components/SuggestedUsersCarousel";
 import TrendingSongCard from "@/components/TrendingSongCard";
 import WeeklyVibeBanner from "@/components/vibe/WeeklyVibeBanner";
 
-// 🔥 MODALES IMPORTS (Restaurados)
+// 🔥 MODALES IMPORTS
 import CreatorModal from "@/components/home/CreatorModal";
 import StoryCreationModal from "@/components/home/StoryCreationModal";
 import StoryViewer from "@/components/home/StoryViewer";
@@ -45,7 +45,6 @@ import PostModal from "@/components/postModal/PostModal";
 
 // 🔥 COMPONENTES ORGANIZADOS
 import HomeHeader from "@/components/home/HomeHeader";
-import HomeModals from "@/components/home/HomeModals";
 import StreakSuccessModal from "@/components/StreakSuccessModal";
 
 import { injectAdsInFeed } from "@/lib/mockAds";
@@ -262,16 +261,17 @@ const Home = () => {
     }
   };
 
-  // 🔥 NUEVA FUNCIÓN: Se ejecuta cuando PostModal termina de crear un post exitosamente
-  const handlePostCreated = () => {
+  // 🔥 NUEVA FUNCIÓN: Solo se dispara si hay un nuevo streak válido
+  const handlePostCreated = (newStreakVal?: number | null) => {
     logic.fetchAuxiliaryData(); // Refrescar feed
 
-    // Simular incremento (mientras backend no lo haga)
-    const currentStreakVal = (logic.user as any)?.streak || 0;
-    const simulatedNewStreak = currentStreakVal + 1;
-    setCurrentStreak(simulatedNewStreak);
+    // Si newStreakVal es null o undefined, significa que posteó el mismo día
+    // y la racha no cambió -> NO mostramos animación.
+    if (!newStreakVal) return;
 
-    // Lanzar el modal de fuego
+    // Si hay nueva racha, actualizamos estado y mostramos fuego
+    setCurrentStreak(newStreakVal);
+
     setTimeout(() => {
       setShowStreakModal(true);
     }, 500);
@@ -365,7 +365,6 @@ const Home = () => {
           onClose={() => logic.toggleModal("isCreation", false)}
           currentUser={logic.user}
           onSuccess={() => {
-            // 🔙 Restaurado: Solo refresca feed, no lanza racha
             logic.fetchAuxiliaryData();
             logic.toggleModal("isCreation", false);
           }}

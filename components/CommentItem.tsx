@@ -1,31 +1,78 @@
-import { View, Text, Image, TouchableOpacity, Alert } from "react-native";
-import React, { useState, useMemo, useEffect } from "react";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  ActionSheetIOS,
+} from "react-native";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { toggleCommentLike, searchUsers, getUser } from "@/lib/appwrite";
 import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
 import { useLanguage } from "@/context/LanguageContext";
 import { formatTimeAgo } from "@/lib/postUtils";
-import * as Haptics from "expo-haptics"; // 🔥 IMPORTAMOS HAPTICS
+import * as Haptics from "expo-haptics";
+import { Audio } from "expo-av";
+import * as FileSystem from "expo-file-system/legacy";
+
+// 🔥 Importamos el contexto para pausar/reanudar la música global
+import { useAudioContext } from "@/context/AudioContext";
 
 interface CommentProps {
   item: any;
   currentUserId: string;
   onReply: (item: any) => void;
+  onDelete?: (commentId: string) => void;
   allComments: any[];
   depth?: number;
+}
+
+// Función de caché (se mantiene igual)
+async function getCachedVoiceUri(remoteUrl: string) {
+  try {
+    const fileIdMatch = remoteUrl.match(/files\/([^\/]+)\//);
+    let uniqueId = "";
+    if (fileIdMatch && fileIdMatch[1]) {
+      uniqueId = fileIdMatch[1];
+    } else {
+      uniqueId = remoteUrl.replace(/[^a-zA-Z0-9]/g, "").slice(-30);
+    }
+
+    const cacheDir = FileSystem.cacheDirectory || "";
+    const localUri = `${cacheDir}voice_${uniqueId}.m4a`;
+
+    const info = await FileSystem.getInfoAsync(localUri);
+    if (!info.exists) {
+      await FileSystem.downloadAsync(remoteUrl, localUri);
+    }
+    return localUri;
+  } catch (error) {
+    console.error("Error caching voice:", error);
+    return remoteUrl;
+  }
 }
 
 const CommentItem = ({
   item,
   currentUserId,
   onReply,
+  onDelete,
   allComments,
   depth = 0,
 }: CommentProps) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
+
+  // 🔥 Contexto Global (para pausar/reanudar música de fondo)
+  const {
+    pauseTrack: pauseGlobalTrack,
+    resumeTrack: resumeGlobalTrack,
+    isPlaying: isGlobalPlaying,
+  } = useAudioContext();
 
   const textColor = isDark ? "#FAFAFA" : "#18181B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
@@ -34,8 +81,49 @@ const CommentItem = ({
 
   const [likes, setLikes] = useState<string[]>(item.likedBy || []);
   const [showReplies, setShowReplies] = useState(false);
-
   const [userData, setUserData] = useState<any>(item.user || null);
+
+  // 🔥 Estados LOCALES para la nota de voz (ya no usamos playTrack global aquí)
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // Referencia para recordar si debemos reanudar la música global al terminar
+  const shouldResumeGlobalRef = useRef(false);
+
+  const isOwner = currentUserId === item.userId;
+
+  let isVoice = false;
+  let voiceData: any = null;
+  let contentText = item.content || item.body || "";
+  let isUrlValid = false;
+
+  if (typeof contentText === "object" && contentText !== null) {
+    if (contentText.type === "voice_vibe" || contentText.audioUrl) {
+      isVoice = true;
+      voiceData = contentText;
+    }
+  } else if (typeof contentText === "string") {
+    const trimmed = contentText.trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed.type === "voice_vibe" || parsed.audioUrl) {
+          isVoice = true;
+          voiceData = parsed;
+        }
+      } catch (e) {
+        isVoice = false;
+      }
+    }
+  }
+
+  if (
+    isVoice &&
+    voiceData?.audioUrl &&
+    typeof voiceData.audioUrl === "string"
+  ) {
+    isUrlValid = true;
+  }
 
   useEffect(() => {
     setLikes(item.likedBy || []);
@@ -55,10 +143,16 @@ const CommentItem = ({
     };
   }, [item.userId]);
 
+  // Limpieza al desmontar: detener audio local y liberar memoria
+  useEffect(() => {
+    return () => {
+      if (sound) sound.unloadAsync();
+    };
+  }, [sound]);
+
   const displayName = userData?.name || item.username || "Usuario";
   const isVerified = userData?.isVerified || item.isVerified;
   const avatarUrl = userData?.pfp || item.avatar;
-
   const isLiked = likes.includes(currentUserId);
 
   const replies = useMemo(() => {
@@ -66,9 +160,7 @@ const CommentItem = ({
   }, [allComments, item.$id]);
 
   const handleLike = async () => {
-    // 🔥 HAPTIC FEEDBACK AL DAR LIKE A COMENTARIO
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
     const newLikes = isLiked
       ? likes.filter((id) => id !== currentUserId)
       : [...likes, currentUserId];
@@ -80,25 +172,141 @@ const CommentItem = ({
     }
   };
 
+  const handleDeletePress = () => {
+    Alert.alert(
+      "Eliminar comentario",
+      "¿Estás seguro de que quieres eliminar este comentario?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => {
+            if (onDelete) onDelete(item.$id);
+          },
+        },
+      ],
+    );
+  };
+
+  const handleOptionsPress = () => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ["Cancelar", "Eliminar comentario"],
+          destructiveButtonIndex: 1,
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) handleDeletePress();
+        },
+      );
+    } else {
+      Alert.alert("Opciones", "Selecciona una acción", [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Eliminar", onPress: handleDeletePress },
+      ]);
+    }
+  };
+
+  // 🔥 LÓGICA DE REPRODUCCIÓN: INTERRUPCIÓN INTELIGENTE
+  const handlePlayVoice = async () => {
+    if (!isUrlValid) {
+      Alert.alert("Audio no disponible", "El audio no se pudo cargar.");
+      return;
+    }
+
+    // 1. Si ya está sonando ESTE audio local, lo pausamos
+    if (isPlaying && sound) {
+      await sound.pauseAsync();
+      setIsPlaying(false);
+      return;
+    }
+
+    // 2. Si está pausado pero cargado, reanudamos
+    if (sound) {
+      // Antes de reanudar local, pausamos global si está sonando
+      if (isGlobalPlaying) {
+        shouldResumeGlobalRef.current = true;
+        await pauseGlobalTrack();
+      }
+      await sound.playAsync();
+      setIsPlaying(true);
+      return;
+    }
+
+    // 3. Primera reproducción (Cargar y Play)
+    try {
+      // a) Si hay música global sonando, la pausamos y recordamos reanudarla después
+      if (isGlobalPlaying) {
+        shouldResumeGlobalRef.current = true;
+        await pauseGlobalTrack();
+      } else {
+        shouldResumeGlobalRef.current = false;
+      }
+
+      // b) Forzar salida por altavoz
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+
+      let playUri = voiceData.audioUrl;
+      if (Platform.OS === "ios") {
+        playUri = await getCachedVoiceUri(voiceData.audioUrl);
+      }
+
+      // c) Crear sonido local
+      const { sound: voiceSound } = await Audio.Sound.createAsync(
+        { uri: playUri },
+        { shouldPlay: true, volume: 1.0 },
+      );
+      setSound(voiceSound);
+      setIsPlaying(true);
+
+      // d) Escuchar cuando termine
+      voiceSound.setOnPlaybackStatusUpdate(async (status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setIsPlaying(false);
+          // Reiniciar posición del audio local por si quieren oírlo de nuevo
+          await voiceSound.setPositionAsync(0);
+          await voiceSound.pauseAsync();
+
+          // 🔥 e) REANUDAR MÚSICA GLOBAL SI ESTABA SONANDO
+          if (shouldResumeGlobalRef.current) {
+            shouldResumeGlobalRef.current = false; // Resetear flag
+            await resumeGlobalTrack();
+          }
+        }
+      });
+    } catch (e) {
+      console.log("Error playing voice:", e);
+      Alert.alert("Error", "No se pudo reproducir el audio.");
+    }
+  };
+
   const handleMentionPress = async (username: string) => {
     try {
       const users = await searchUsers(username);
       const targetUser = users.find((u) => u.username === username);
-      if (targetUser) {
-        router.push(`/user/${targetUser.$id}` as any);
-      } else {
+      if (targetUser) router.push(`/user/${targetUser.$id}` as any);
+      else
         Alert.alert(
           "Usuario no encontrado",
           "Es posible que haya cambiado su nombre.",
         );
-      }
     } catch (error) {
       console.log("Error perfil:", error);
     }
   };
 
-  const renderContent = (content: string) => {
-    const words = content.split(/(\s+)/);
+  const renderContent = (content: any) => {
+    const text =
+      typeof content === "string" ? content : JSON.stringify(content);
+    const words = text.split(/(\s+)/);
     return words.map((word, index) => {
       const cleanWord = word.trim().replace(/[^a-zA-Z0-9@_]/g, "");
       if (cleanWord.startsWith("@") && cleanWord.length > 1) {
@@ -134,8 +342,7 @@ const CommentItem = ({
                 "https://cloud.appwrite.io/v1/avatars/initials?name=" +
                   displayName,
             }}
-            className="w-9 h-9 rounded-full mt-1"
-            style={{ backgroundColor: avatarBg }}
+            className="w-9 h-9 rounded-full mt-1 bg-zinc-800"
           />
         </TouchableOpacity>
 
@@ -160,18 +367,79 @@ const CommentItem = ({
             </Text>
           </View>
 
-          <Text className="text-[14px] leading-5 mt-0.5">
-            {renderContent(item.content)}
-          </Text>
-
-          <TouchableOpacity className="mt-2" onPress={() => onReply(item)}>
-            <Text
-              className="text-xs font-semibold"
-              style={{ color: subTextColor }}
+          {isVoice ? (
+            <View
+              className={`mt-1 rounded-2xl p-3 border self-start ${isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"}`}
             >
-              Responder
+              <View className="flex-row items-center gap-3">
+                <TouchableOpacity
+                  onPress={handlePlayVoice}
+                  disabled={!isUrlValid}
+                  className={`w-10 h-10 rounded-full items-center justify-center shadow-sm ${isUrlValid ? "bg-[#5E17EB]" : "bg-zinc-500"}`}
+                >
+                  <Ionicons
+                    name={isPlaying ? "square" : "play"}
+                    size={16}
+                    color="white"
+                    style={{ marginLeft: isPlaying ? 0 : 2 }}
+                  />
+                </TouchableOpacity>
+                <View>
+                  <Text
+                    className={`font-bold text-xs ${isDark ? "text-white" : "text-black"}`}
+                  >
+                    Voice Vibe
+                  </Text>
+                  <Text className="text-[10px] text-zinc-500 font-medium">
+                    {isUrlValid
+                      ? `${voiceData?.duration || 0}s • ${voiceData?.songContext ? "Con música" : "Voz"}`
+                      : "Audio no disponible"}
+                  </Text>
+                </View>
+                {isUrlValid && (
+                  <View className="flex-row gap-0.5 h-4 items-center opacity-50 ml-2">
+                    {[...Array(5)].map((_, i) => (
+                      <View
+                        key={i}
+                        className="w-1 bg-[#5E17EB] rounded-full"
+                        style={{
+                          height: isPlaying ? Math.random() * 12 + 4 : 4,
+                        }}
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
+          ) : (
+            <Text
+              className="text-[14px] leading-5 mt-0.5"
+              style={{ color: textColor }}
+            >
+              {renderContent(contentText)}
             </Text>
-          </TouchableOpacity>
+          )}
+
+          <View className="flex-row items-center gap-4 mt-2">
+            <TouchableOpacity onPress={() => onReply(item)}>
+              <Text
+                className="text-xs font-semibold"
+                style={{ color: subTextColor }}
+              >
+                Responder
+              </Text>
+            </TouchableOpacity>
+
+            {isOwner && (
+              <TouchableOpacity onPress={handleOptionsPress}>
+                <Ionicons
+                  name="ellipsis-horizontal"
+                  size={16}
+                  color={subTextColor}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         <View className="items-center justify-start mt-2 ml-2">
@@ -213,7 +481,6 @@ const CommentItem = ({
               </Text>
             </TouchableOpacity>
           )}
-
           {showReplies && (
             <View>
               {replies.map((reply) => (
@@ -222,6 +489,7 @@ const CommentItem = ({
                   item={reply}
                   currentUserId={currentUserId}
                   onReply={onReply}
+                  onDelete={onDelete}
                   allComments={allComments}
                   depth={depth + 1}
                 />

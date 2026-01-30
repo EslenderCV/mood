@@ -30,25 +30,22 @@ export const useChatLogic = () => {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [editingMessage, setEditingMessage] = useState<any>(null);
 
-  // Estado "Escribiendo"
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
   const typingTimeoutRef = useRef<any>(null);
 
-  // Datos del otro usuario (Incluyendo Online/LastSeen)
   const [chatUser, setChatUser] = useState({
     name: (params.otherUserName as string) || "Usuario",
     avatar: (params.otherUserAvatar as string) || null,
     id: (params.otherUserId as string) || null,
     expoPushToken: null as string | null,
     isVerified: false as boolean,
-    isOnline: false, // 🔥 Nuevo
-    lastSeen: null as string | null, // 🔥 Nuevo
+    isOnline: false,
+    lastSeen: null as string | null,
   });
 
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
 
-  // --- LECTURA ---
   const performReadUpdate = async (userId: string) => {
     if (!chatId || !userId) return;
     try {
@@ -56,7 +53,6 @@ export const useChatLogic = () => {
     } catch (e) {}
   };
 
-  // --- CARGA DE DATOS ---
   const loadData = async () => {
     try {
       let user = currentUser;
@@ -66,9 +62,7 @@ export const useChatLogic = () => {
         setCurrentUser(user);
       }
 
-      // 1. Cargar datos iniciales del usuario
       if (chatUser.id) {
-        // Intentamos obtener datos frescos (online/lastSeen)
         try {
           const u = await getUser(chatUser.id);
           if (u) {
@@ -79,13 +73,12 @@ export const useChatLogic = () => {
               id: u.$id,
               expoPushToken: u.expoPushToken,
               isVerified: u.isVerified,
-              isOnline: u.isOnline || false, // 🔥
-              lastSeen: u.lastSeen || null, // 🔥
+              isOnline: u.isOnline || false,
+              lastSeen: u.lastSeen || null,
             }));
           }
         } catch (e) {}
       } else {
-        // Si no tenemos ID, lo buscamos en el documento del chat
         const doc = await databases.getDocument(
           appwriteConfig.databaseId,
           appwriteConfig.chatsCollectionId,
@@ -118,14 +111,12 @@ export const useChatLogic = () => {
     }
   };
 
-  // --- REALTIME ---
   useEffect(() => {
     loadData();
 
     const messagesChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`;
     const chatsCollectionChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.chatsCollectionId}.documents`;
 
-    // 🔥 Suscripción extra: Escuchar al OTRO USUARIO para saber si se conecta
     let userChannel = null;
     if (chatUser.id) {
       userChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.usersCollectionId}.documents.${chatUser.id}`;
@@ -135,11 +126,11 @@ export const useChatLogic = () => {
     if (userChannel) channelsToSubscribe.push(userChannel);
 
     const unsubscribe = client.subscribe(channelsToSubscribe, (response) => {
-      // 1. MENSAJES
       if (response.channels.includes(messagesChannel)) {
         const payload = response.payload as any;
         if (payload.chatId === chatId) {
           if (response.events.some((e) => e.includes(".create"))) {
+            // 🔥 REALTIME: Aquí es donde llega el mensaje real
             setMessages((prev) => {
               if (prev.find((m) => m.$id === payload.$id)) return prev;
               return [payload, ...prev];
@@ -161,7 +152,6 @@ export const useChatLogic = () => {
         }
       }
 
-      // 2. ESCRIBIENDO (Chat Update)
       if (response.channels.includes(chatsCollectionChannel)) {
         const payload = response.payload as any;
         if (
@@ -178,7 +168,6 @@ export const useChatLogic = () => {
         }
       }
 
-      // 3. 🔥 ESTADO EN LÍNEA (User Update)
       if (userChannel && response.channels.includes(userChannel)) {
         if (response.events.some((e) => e.includes(".update"))) {
           const payload = response.payload as any;
@@ -191,9 +180,8 @@ export const useChatLogic = () => {
       }
     });
     return () => unsubscribe();
-  }, [chatId, currentUser?.$id, chatUser.id]); // Re-suscribir si obtenemos el ID del otro usuario
+  }, [chatId, currentUser?.$id, chatUser.id]);
 
-  // --- HANDLERS ---
   const handleTyping = async (text: string) => {
     setNewMessage(text);
     if (!currentUser || !chatId) return;
@@ -210,6 +198,44 @@ export const useChatLogic = () => {
       } catch (e) {}
       typingTimeoutRef.current = null;
     }, 2000);
+  };
+
+  // 🔥 FIX DUPLICADOS: Quitamos la actualización optimista manual
+  const sendSong = async (song: any) => {
+    if (!currentUser || !chatUser.id) return;
+
+    const songPayload = JSON.stringify({
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      cover: song.cover,
+      preview: song.preview,
+    });
+
+    // ❌ BLOQUE ELIMINADO: No añadimos manualmenta al estado.
+    // Esperamos a que el Realtime (listener arriba) lo añada.
+
+    try {
+      await sendMessage({
+        chatId: chatId,
+        senderId: currentUser.$id,
+        receiverId: chatUser.id,
+        body: songPayload,
+        type: "audio",
+      });
+
+      if (chatUser.expoPushToken) {
+        await sendPushNotification(
+          chatUser.expoPushToken,
+          currentUser.name || "Mood Chat",
+          "🎵 Te envió una canción: " + song.title,
+          { type: "chat", chatId: chatId, url: `/chat/${chatId}` },
+          currentUser.pfp,
+        );
+      }
+    } catch (e) {
+      Alert.alert("Error", "No se pudo enviar la canción");
+    }
   };
 
   const handleSend = async () => {
@@ -254,6 +280,8 @@ export const useChatLogic = () => {
     setNewMessage("");
     setReplyingTo(null);
 
+    // Mantenemos Optimistic UI para TEXTO porque es lo que el usuario espera instantáneamente
+    // Pero podríamos quitarlo si también da problemas, aunque suele ser más tolerado en texto.
     try {
       await sendMessage({
         chatId: chatId,
@@ -334,5 +362,6 @@ export const useChatLogic = () => {
     startEditing,
     onSwipeToReply,
     t,
+    sendSong,
   };
 };

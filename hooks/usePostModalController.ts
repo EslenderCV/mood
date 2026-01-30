@@ -26,15 +26,12 @@ export interface MoodState {
   text: string;
 }
 
-// 🔥 ACEPTAMOS PROPS PARA CONTROLARLO DESDE FUERA (incluyendo onPostCreated)
 export const usePostModalController = (props?: any) => {
-  // Contexto Global (para cuando se abre desde el Tab Bar)
   const {
     isPostModalVisible: isGlobalVisible,
     setPostModalVisible: setGlobalVisible,
   } = useModal();
 
-  // Determinamos quién manda: ¿Las props externas o el contexto global?
   const isVisible = props?.isVisible ?? props?.visible ?? isGlobalVisible;
   const setVisible = props?.onClose
     ? (val: boolean) => !val && props.onClose()
@@ -53,7 +50,6 @@ export const usePostModalController = (props?: any) => {
   const viralSongToUse = feedContext?.viralSongToUse;
   const setViralSongToUse = feedContext?.setViralSongToUse;
 
-  // --- ESTADOS ---
   const [text, setText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [linkedSong, setLinkedSong] = useState<Song | null>(null);
@@ -61,7 +57,6 @@ export const usePostModalController = (props?: any) => {
   const [mood, setMood] = useState<MoodState | null>(null);
   const [isMoodPopupVisible, setIsMoodPopupVisible] = useState(false);
 
-  // Búsqueda
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [isSearchingMusic, setIsSearchingMusic] = useState(false);
@@ -71,18 +66,15 @@ export const usePostModalController = (props?: any) => {
   const [moodStyle, setMoodStyle] = useState<"standard" | "card">("standard");
   const [isShazamScanning, setIsShazamScanning] = useState(false);
 
-  // Audio
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentPlayingUrl, setCurrentPlayingUrl] = useState<string | null>(
     null,
   );
 
-  // Animaciones
   const backgroundOpacity = useRef(new Animated.Value(0)).current;
   const contentTranslateY = useRef(new Animated.Value(height)).current;
 
-  // Toast
   const [toast, setToast] = useState({
     visible: false,
     type: "success" as "success" | "error",
@@ -107,11 +99,9 @@ export const usePostModalController = (props?: any) => {
     };
   }, [sound]);
 
-  // --- 🔥 LÓGICA DE INYECCIÓN DE DATOS (PREFILL) ---
   useEffect(() => {
     if (isVisible && props?.prefillData?.song) {
       const incoming = props.prefillData.song;
-
       const mappedSong: Song = {
         id: String(incoming.id || incoming.id || incoming.spotifyId),
         title: incoming.title || incoming.title,
@@ -120,12 +110,10 @@ export const usePostModalController = (props?: any) => {
         preview: incoming.preview || incoming.preview,
         isExplicit: false,
       };
-
       setLinkedSong(mappedSong);
     }
   }, [isVisible, props?.prefillData]);
 
-  // --- LÓGICA DE CANCIÓN VIRAL (CONTEXTO) ---
   useEffect(() => {
     if (isVisible && viralSongToUse) {
       const formattedSong: Song = {
@@ -144,7 +132,6 @@ export const usePostModalController = (props?: any) => {
     }
   }, [isVisible, viralSongToUse]);
 
-  // --- ANIMACIONES ---
   useEffect(() => {
     if (isVisible) {
       backgroundOpacity.setValue(0);
@@ -211,21 +198,16 @@ export const usePostModalController = (props?: any) => {
         "https://api.deezer.com/chart/0/tracks?limit=50",
       );
       const json = await response.json();
-
       if (!json.data) return [];
-
       const uniqueTracks: any[] = [];
       const seenArtists = new Set();
-
       for (const track of json.data) {
         if (!seenArtists.has(track.artist.id)) {
           seenArtists.add(track.artist.id);
           uniqueTracks.push(track);
         }
       }
-
       const shuffled = uniqueTracks.sort(() => 0.5 - Math.random());
-
       return shuffled.slice(0, 5).map((track: any) => ({
         id: track.id.toString(),
         title: track.title,
@@ -429,41 +411,46 @@ export const usePostModalController = (props?: any) => {
       songDataObj.mood = mood;
     }
 
-    if (createPostOptimistic) {
-      createPostOptimistic(text, songDataObj, user);
+    // 🔴 NOTA: Si usas createPostOptimistic, la actualización del Streak
+    // será visualmente retrasada hasta que el backend responda realmente en segundo plano.
+    // Para simplificar y asegurar consistencia con el Streak, usaremos la vía normal aquí.
+    // Si prefieres la UI Optimista, el streak podría no ser preciso instantáneamente.
+
+    // Aquí desactivamos temporalmente el path optimista para priorizar la lógica de Streak del backend
+    // o puedes mantenerlo, pero sabiendo que el modal de fuego saldrá después.
+
+    // Mantenemos la lógica robusta:
+    setIsLoading(true);
+    try {
+      // 🔥 AQUI EL CAMBIO: Recibimos la respuesta completa con el streak real del backend
+      const result: any = await createPost(
+        text,
+        JSON.stringify(songDataObj),
+        user.$id,
+      );
+
       closeModal();
 
-      // 🔥 AVISAMOS AL HOME QUE EL POST SE CREÓ PARA LANZAR LA RACHA
-      props?.onPostCreated?.();
+      // Pasamos el streak real y si cambió. Si no cambió, pasamos null.
+      if (result && result.hasStreakChanged) {
+        props?.onPostCreated?.(result.currentStreak);
+      } else {
+        props?.onPostCreated?.(null); // No mostrar fuego si es el mismo día
+      }
 
       setTimeout(
         () =>
-          showToast("success", t("post.alerts.successTitle"), "Publicando..."),
+          showToast(
+            "success",
+            t("post.alerts.successTitle"),
+            t("post.alerts.successMsg"),
+          ),
         300,
       );
-    } else {
-      setIsLoading(true);
-      try {
-        await createPost(text, JSON.stringify(songDataObj), user.$id);
-        closeModal();
-
-        // 🔥 AVISAMOS AL HOME QUE EL POST SE CREÓ PARA LANZAR LA RACHA
-        props?.onPostCreated?.();
-
-        setTimeout(
-          () =>
-            showToast(
-              "success",
-              t("post.alerts.successTitle"),
-              t("post.alerts.successMsg"),
-            ),
-          300,
-        );
-      } catch (error: any) {
-        showToast("error", t("post.alerts.errorTitle"), error.message);
-      } finally {
-        setIsLoading(false);
-      }
+    } catch (error: any) {
+      showToast("error", t("post.alerts.errorTitle"), error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 

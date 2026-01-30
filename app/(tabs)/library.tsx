@@ -1,4 +1,10 @@
-import React, { useCallback, useMemo, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useMemo,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   View,
   Text,
@@ -102,18 +108,18 @@ const Library = () => {
 
         // Lógica reactiva de visibilidad
         if (offsetY < VISIBLE_THRESHOLD) {
-           if (!showSpinner) setShowSpinner(true);
+          if (!showSpinner) setShowSpinner(true);
         } else if (!logic.refreshing) {
-           if (showSpinner) setShowSpinner(false);
+          if (showSpinner) setShowSpinner(false);
         }
       },
-    }
+    },
   );
 
   const handleScrollEndDrag = () => {
     const offsetY = scrollRef.current;
     if (offsetY < PULL_THRESHOLD && !logic.refreshing) {
-      setShowSpinner(true); 
+      setShowSpinner(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       logic.onRefresh();
     }
@@ -189,8 +195,8 @@ const Library = () => {
   const CustomSpinner = () => (
     <Animated.View
       style={{
-        height: (showSpinner || logic.refreshing) ? SPINNER_HEIGHT : 0,
-        opacity: (showSpinner || logic.refreshing) ? 1 : 0,
+        height: showSpinner || logic.refreshing ? SPINNER_HEIGHT : 0,
+        opacity: showSpinner || logic.refreshing ? 1 : 0,
         alignItems: "center",
         justifyContent: "center",
         overflow: "hidden",
@@ -254,10 +260,8 @@ const Library = () => {
             onScroll={handleScroll}
             onScrollEndDrag={handleScrollEndDrag}
             scrollEventThrottle={16}
-            
             // 🔥 SPINNER EN EL HEADER
             ListHeaderComponent={<CustomSpinner />}
-            
             ListEmptyComponent={
               !logic.isLoading ? (
                 <EmptyState
@@ -303,7 +307,6 @@ const Library = () => {
               onScroll={handleScroll}
               onScrollEndDrag={handleScrollEndDrag}
               scrollEventThrottle={16}
-              
               ListHeaderComponent={
                 <View>
                   <CustomSpinner />
@@ -335,7 +338,6 @@ const Library = () => {
                   </TouchableOpacity>
                 </View>
               }
-              
               ListEmptyComponent={
                 !logic.isLoading ? (
                   <Text

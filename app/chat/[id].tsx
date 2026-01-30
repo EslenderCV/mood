@@ -7,8 +7,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
-  Keyboard, // 🔥 NUEVO: Para controlar el teclado
-  TouchableWithoutFeedback, // 🔥 NUEVO: Para detectar toques fuera
+  Keyboard,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { Stack, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,20 +23,16 @@ import { useChatLogic } from "@/hooks/useChatLogic";
 // Componentes
 import { ChatInput } from "@/components/chat/ChatInput";
 import { MessageItem } from "@/components/chat/MessageItem";
-// Asegúrate de que el componente TypingIndicator exista en esta ruta
 import { TypingIndicator } from "@/components/chat/TypingIndicator";
 
-// Función auxiliar para formatear la última conexión
 const formatLastSeen = (dateString: string | null) => {
   if (!dateString) return "Desconectado";
   const date = new Date(dateString);
   const now = new Date();
 
-  // Si es hoy, mostrar hora
   if (date.getDate() === now.getDate() && date.getMonth() === now.getMonth()) {
     return `Última Vez hoy a las ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
   }
-  // Si no, mostrar fecha corta
   return `Última Vez el ${date.toLocaleDateString([], { day: "2-digit", month: "2-digit" })}`;
 };
 
@@ -45,24 +41,22 @@ const ChatRoom = () => {
   const isDark = colorScheme === "dark";
   const logic = useChatLogic();
 
-  // Colores dinámicos
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const headerBg = isDark ? "#000000" : "#FFFFFF";
   const borderColor = isDark ? "#27272A" : "#E4E4E7";
   const textColor = isDark ? "#FFFFFF" : "#000000";
 
-  // Lógica del Texto de Estado (Header)
   let statusText = "";
-  let statusColor = "#71717A"; // Gris por defecto
+  let statusColor = "#71717A";
   let statusFontWeight: "normal" | "bold" = "normal";
 
   if (logic.isOtherUserTyping) {
     statusText = "Escribiendo...";
-    statusColor = "#5E17EB"; // Morado Mood
+    statusColor = "#5E17EB";
     statusFontWeight = "bold";
   } else if (logic.chatUser.isOnline) {
     statusText = "En línea";
-    statusColor = "#22C55E"; // Verde
+    statusColor = "#22C55E";
     statusFontWeight = "bold";
   } else {
     statusText = formatLastSeen(logic.chatUser.lastSeen);
@@ -94,7 +88,6 @@ const ChatRoom = () => {
             behavior={Platform.OS === "ios" ? "padding" : undefined}
             keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
           >
-            {/* 🔥 WRAPPER: Detecta toques en cualquier lugar para cerrar teclado */}
             <TouchableWithoutFeedback
               onPress={Keyboard.dismiss}
               accessible={false}
@@ -146,7 +139,6 @@ const ChatRoom = () => {
                       )}
                     </View>
 
-                    {/* Estado: En línea / Escribiendo / Visto */}
                     <Text
                       className="text-xs"
                       style={{
@@ -161,7 +153,6 @@ const ChatRoom = () => {
 
                 {/* --- BODY --- */}
                 <View style={{ flex: 1 }}>
-                  {/* 1. Lista de Mensajes */}
                   <FlatList
                     ref={logic.flatListRef}
                     data={logic.messages}
@@ -182,13 +173,11 @@ const ChatRoom = () => {
                     inverted
                     contentContainerStyle={{ paddingVertical: 15 }}
                     keyboardShouldPersistTaps="handled"
-                    // 🔥 FIX: Cerrar teclado al arrastrar la lista (Estilo WhatsApp)
                     keyboardDismissMode="on-drag"
                     onScrollBeginDrag={Keyboard.dismiss}
                     showsVerticalScrollIndicator={false}
                   />
 
-                  {/* 2. Burbuja Escribiendo (Flotante encima del input) */}
                   <View
                     style={{
                       paddingLeft: 10,
@@ -199,7 +188,6 @@ const ChatRoom = () => {
                     <TypingIndicator isVisible={true} />
                   </View>
 
-                  {/* 3. Input */}
                   <ChatInput
                     text={logic.newMessage}
                     setText={logic.handleTyping}
@@ -213,6 +201,7 @@ const ChatRoom = () => {
                     }}
                     inputRef={logic.inputRef}
                     isDark={isDark}
+                    onSendSong={logic.sendSong} // 🔥 Conectado
                   />
                 </View>
               </View>

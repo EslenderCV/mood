@@ -23,7 +23,10 @@ import {
   getFollowedUserIds,
 } from "@/lib/appwrite";
 import { parseSongData, getCreatorFromPost } from "@/utils/exploreHelpers";
-import CommentsSheet from "./CommentsSheet"; // Crearemos este en el siguiente paso
+import CommentsSheet from "./CommentsSheet";
+
+// 🔥 1. IMPORTAR EL CONTEXTO
+import { useAudioContext } from "@/context/AudioContext";
 
 const { width, height } = Dimensions.get("window");
 
@@ -32,6 +35,9 @@ const FullScreenPostItem = React.memo(
     const insets = useSafeAreaInsets();
     const song = parseSongData(item.songData);
     const creator = getCreatorFromPost(item);
+
+    // 🔥 2. OBTENER LA FUNCIÓN PARA DETENER EL AUDIO GLOBAL
+    const { stopTrack } = useAudioContext();
 
     const [isLiked, setIsLiked] = useState(
       item.likedBy?.includes(currentUser?.$id) || false,
@@ -70,6 +76,10 @@ const FullScreenPostItem = React.memo(
       const manageAudio = async () => {
         try {
           if (isActive) {
+            // 🔥 3. SI EL POST ES ACTIVO, DETENER MÚSICA GLOBAL
+            // Esto cierra la barra global y evita cacofonía, pero NO reemplaza los datos de la barra.
+            stopTrack();
+
             let previewUrl = song?.preview;
             if (!previewUrl && (song?.id || song?.spotifyId)) {
               previewUrl = await getDeezerTrackUrl(song.id || song.spotifyId);
@@ -106,6 +116,8 @@ const FullScreenPostItem = React.memo(
           await soundRef.current.pauseAsync();
           setIsAudioPlaying(false);
         } else {
+          // 🔥 4. ASEGURAR QUE AL DAR PLAY MANUAL, TAMBIÉN SE CALLE LO GLOBAL
+          stopTrack();
           await soundRef.current.playAsync();
           setIsAudioPlaying(true);
         }

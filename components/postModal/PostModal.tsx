@@ -24,6 +24,8 @@ interface PostModalProps {
   onClose?: () => void;
   prefillData?: { song?: any };
   visible?: boolean;
+  // 🔥 FIX: Agregamos la definición que faltaba para corregir el error en Home
+  onPostCreated?: (streak?: number | null) => void;
 }
 
 export default function PostModal(props: PostModalProps) {

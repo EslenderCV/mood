@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Alert, FlatList, Share as SystemShare } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import { useFocusEffect } from "expo-router"; // 🔥 IMPORTANTE: Para detectar cuando vuelves al Home
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useFeed, FeedItem } from "@/context/FeedProvider";
 import {
@@ -8,7 +9,7 @@ import {
   getUnreadNotificationCount,
   getUnreadMessagesCount,
   getStories,
-  client, // 🔥 NECESARIO PARA REALTIME
+  client,
   appwriteConfig,
   getUser,
   uploadFile,
@@ -78,7 +79,6 @@ const toRankableFeedItem = (
       item.data?.id || item.data?.title?.replace(/\s+/g, "") || "unknown";
     baseId = `trending_${safeId}`;
   } else if (item.type === "suggested_users") {
-    // Hash simple basado en los IDs de los usuarios del chunk
     const idsHash = Array.isArray(item.data)
       ? item.data
           .map((u: any) => u.$id)
@@ -90,7 +90,6 @@ const toRankableFeedItem = (
     baseId = `sys_${item.type}`;
   }
 
-  // ID Final: Base + Batch + Index Absoluto (Garantiza unicidad en FlatList)
   const stableId = `${baseId}__${batchSuffix}__${absoluteIndex}`;
 
   let creatorId = "system";
@@ -133,18 +132,18 @@ export const useHomeLogic = () => {
   const flatListRef = useRef<FlatList>(null);
   const isMounted = useRef(true);
 
-  // --- REFS PARA LÓGICA DE FEED (POOLS & CURSORS) ---
+  // --- REFS PARA LÓGICA DE FEED ---
   const itemsMapRef = useRef<Map<string, EnrichedFeedItem>>(new Map());
   const lastAnchorRef = useRef<number>(-1);
   const lastOrderHashRef = useRef<string>("");
   const sortedFeedRef = useRef<EnrichedFeedItem[]>([]);
+  const realtimePostsCacheRef = useRef<EnrichedFeedItem[]>([]);
 
-  // Pools para scroll infinito y reciclaje
   const postsPoolRef = useRef<FeedItem[]>([]);
   const specialPoolRef = useRef<FeedItem[]>([]);
   const postCursorRef = useRef(0);
   const specialCursorRef = useRef(0);
-  const batchCounterRef = useRef(0); // Contador incremental para batches (no random)
+  const batchCounterRef = useRef(0);
 
   // --- TELEMETRY REFS ---
   const telemetryEnabledRef = useRef<boolean>(true);
@@ -160,7 +159,6 @@ export const useHomeLogic = () => {
   const [myFollowedIds, setMyFollowedIds] = useState<string[]>([]);
   const [smartSuggestions, setSmartSuggestions] = useState<any[]>([]);
 
-  // UI States
   const [notiCount, setNotiCount] = useState(0);
   const [msgCount, setMsgCount] = useState(0);
   const [localData, setLocalData] = useState({
@@ -177,7 +175,6 @@ export const useHomeLogic = () => {
     isCreator: false,
   });
 
-  // Share & Interaction States
   const [activeStoryGroup, setActiveStoryGroup] = useState<any>(null);
   const [postToShareData, setPostToShareData] = useState<any>(null);
   const [selectedPostToShare, setSelectedPostToShare] = useState<any>(null);
@@ -187,7 +184,6 @@ export const useHomeLogic = () => {
   const [shareContacts, setShareContacts] = useState<any[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
 
-  // --- HELPER: TOGGLE MODAL ---
   const toggleModal = useCallback(
     (modalName: keyof typeof modals, value: boolean) => {
       setModals((prev) => ({ ...prev, [modalName]: value }));
@@ -195,41 +191,95 @@ export const useHomeLogic = () => {
     [],
   );
 
-  // --- 🔥 REALTIME SUBSCRIPTIONS (NOTIFICATIONS & MESSAGES) ---
+  // --- 🔥 FETCH COUNTS HELPER ---
+  const fetchCounts = useCallback(async (uId: string) => {
+    try {
+      const [n, m] = await Promise.all([
+        getUnreadNotificationCount(uId),
+        getUnreadMessagesCount(uId),
+      ]);
+      if (isMounted.current) {
+        setNotiCount(n);
+        setMsgCount(m);
+      }
+      return { noti: n, msg: m };
+    } catch {
+      return { noti: 0, msg: 0 };
+    }
+  }, []);
+
+  // --- 🔥 FOCUS EFFECT: ACTUALIZA AL VOLVER AL HOME ---
+  useFocusEffect(
+    useCallback(() => {
+      if (userId) {
+        fetchCounts(userId);
+      }
+    }, [userId, fetchCounts]),
+  );
+
+  // --- REALTIME ---
   useEffect(() => {
     if (!userId) return;
 
-    // Canales a escuchar
     const notiChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.notificationsCollectionId}.documents`;
     const msgChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.messagesCollectionId}.documents`;
+    const postsChannel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.postsCollectionId}.documents`;
 
     const unsubscribe = client.subscribe(
-      [notiChannel, msgChannel],
+      [notiChannel, msgChannel, postsChannel],
       (response) => {
-        // Filtramos solo eventos de creación
-        if (
-          response.events.includes(
-            "databases.*.collections.*.documents.*.create",
-          )
-        ) {
-          const payload = response.payload as any;
+        const payload = response.payload as any;
+        const events = response.events;
 
-          // 1. Nueva Notificación para mí
+        // 1. Notificaciones
+        if (
+          response.channels.includes(notiChannel) &&
+          payload.userId === userId
+        ) {
+          fetchCounts(userId);
+        }
+
+        // 2. Mensajes (Create OR Update)
+        // 🔥 FIX: Escuchamos updates también por si cambia el estado "read" desde otro lado
+        if (
+          response.channels.includes(msgChannel) &&
+          payload.receiverId === userId
+        ) {
           if (
-            response.channels.includes(notiChannel) &&
-            payload.userId === userId
+            events.some((e) => e.includes(".create") || e.includes(".update"))
           ) {
-            // Actualizamos el contador (o incrementamos +1 localmente)
             fetchCounts(userId);
           }
+        }
 
-          // 2. Nuevo Mensaje para mí
-          if (
-            response.channels.includes(msgChannel) &&
-            payload.receiverId === userId
-          ) {
-            // Actualizamos el contador
-            fetchCounts(userId);
+        // 3. Posts
+        if (response.channels.includes(postsChannel)) {
+          if (events.some((e) => e.includes(".create"))) {
+            const creatorId =
+              typeof payload.postedBy === "object"
+                ? payload.postedBy.$id
+                : payload.postedBy;
+            if (creatorId === userId) {
+              const newFeedItem: FeedItem = {
+                _id: payload.$id,
+                type: "post",
+                data: {
+                  ...payload,
+                  postedBy: user,
+                  creator: user,
+                },
+              };
+              const rankable = toRankableFeedItem(
+                newFeedItem,
+                0,
+                "realtime_" + Date.now(),
+              );
+              realtimePostsCacheRef.current = [
+                rankable,
+                ...realtimePostsCacheRef.current,
+              ];
+              setSortedFeed((prev) => [rankable, ...prev]);
+            }
           }
         }
       },
@@ -238,9 +288,9 @@ export const useHomeLogic = () => {
     return () => {
       unsubscribe();
     };
-  }, [userId]);
+  }, [userId, user, fetchCounts]);
 
-  // --- SYNC REFS & MOUNT ---
+  // --- SYNC REFS ---
   useEffect(() => {
     sortedFeedRef.current = sortedFeed;
   }, [sortedFeed]);
@@ -321,7 +371,8 @@ export const useHomeLogic = () => {
     };
   }, [userId, flushQueue]);
 
-  // --- TRACKING HELPERS ---
+  // --- FETCHERS ---
+  // (getContext, trackLike, etc. se mantienen igual)
   const getContext = useCallback((feedItemId: string) => {
     const item = sortedFeedRef.current.find((i) => i.id === feedItemId);
     return item
@@ -336,55 +387,28 @@ export const useHomeLogic = () => {
           features: { energy: 0.5, valence: 0.5 },
         };
   }, []);
-
   const trackLike = useCallback(
-    (postId: string, feedItemId: string) => {
-      enqueueEvent("like", postId, feedItemId);
-      const ctx = getContext(feedItemId);
-      BrainEmitter.interaction(InteractionType.LIKE, {
-        postId,
-        creatorId: ctx.creatorId,
-        emotionalTag: ctx.emotionalTag,
-        postFeatures: ctx.features,
-      });
-    },
-    [enqueueEvent, getContext],
+    (postId: string, feedItemId: string) =>
+      enqueueEvent("like", postId, feedItemId),
+    [enqueueEvent],
   );
   const trackSave = useCallback(
-    (postId: string, feedItemId: string) => {
-      enqueueEvent("save", postId, feedItemId);
-      const ctx = getContext(feedItemId);
-      BrainEmitter.interaction(InteractionType.SAVE, {
-        postId,
-        creatorId: ctx.creatorId,
-        emotionalTag: ctx.emotionalTag,
-        postFeatures: ctx.features,
-      });
-    },
-    [enqueueEvent, getContext],
+    (postId: string, feedItemId: string) =>
+      enqueueEvent("save", postId, feedItemId),
+    [enqueueEvent],
   );
   const trackShare = useCallback(
-    (postId: string, feedItemId: string) => {
-      enqueueEvent("share", postId, feedItemId);
-      const ctx = getContext(feedItemId);
-      BrainEmitter.interaction(InteractionType.SHARE, {
-        postId,
-        creatorId: ctx.creatorId,
-        emotionalTag: ctx.emotionalTag,
-        postFeatures: ctx.features,
-      });
-    },
-    [enqueueEvent, getContext],
+    (postId: string, feedItemId: string) =>
+      enqueueEvent("share", postId, feedItemId),
+    [enqueueEvent],
   );
   const trackOpenComments = useCallback(
-    (postId: string, feedItemId: string) => {
-      enqueueEvent("open_comments", postId, feedItemId);
-      BrainEmitter.interaction(InteractionType.OPEN_COMMENTS, postId);
-    },
+    (postId: string, feedItemId: string) =>
+      enqueueEvent("open_comments", postId, feedItemId),
     [enqueueEvent],
   );
   const trackOpenProfile = useCallback(
-    (postId: string, feedItemId: string, creatorId: string) => {
+    (postId: string, feedItemId: string, creatorId: string) =>
       enqueueEvent(
         "open_profile",
         postId,
@@ -392,19 +416,11 @@ export const useHomeLogic = () => {
         undefined,
         undefined,
         creatorId,
-      );
-      const ctx = getContext(feedItemId);
-      BrainEmitter.interaction(InteractionType.OPEN_PROFILE, {
-        postId,
-        creatorId: creatorId || ctx.creatorId,
-        emotionalTag: ctx.emotionalTag,
-        postFeatures: ctx.features,
-      });
-    },
-    [enqueueEvent, getContext],
+      ),
+    [enqueueEvent],
   );
   const trackFollow = useCallback(
-    (postId: string, feedItemId: string, creatorId: string) => {
+    (postId: string, feedItemId: string, creatorId: string) =>
       enqueueEvent(
         "follow",
         postId,
@@ -412,34 +428,9 @@ export const useHomeLogic = () => {
         undefined,
         undefined,
         creatorId,
-      );
-      const ctx = getContext(feedItemId);
-      BrainEmitter.interaction(InteractionType.FOLLOW, {
-        postId,
-        creatorId,
-        emotionalTag: ctx.emotionalTag,
-        postFeatures: ctx.features,
-      });
-    },
-    [enqueueEvent, getContext],
+      ),
+    [enqueueEvent],
   );
-
-  // --- FETCHERS ---
-  const fetchCounts = useCallback(async (uId: string) => {
-    try {
-      const [n, m] = await Promise.all([
-        getUnreadNotificationCount(uId),
-        getUnreadMessagesCount(uId),
-      ]);
-      if (isMounted.current) {
-        setNotiCount(n);
-        setMsgCount(m);
-      }
-      return { noti: n, msg: m };
-    } catch {
-      return { noti: 0, msg: 0 };
-    }
-  }, []);
 
   const fetchStoriesInternal = useCallback(
     async (uId: string) => {
@@ -504,7 +495,6 @@ export const useHomeLogic = () => {
       const now = Date.now();
       if (!force && now - lastFetchTimeRef.current < 5000) return;
       lastFetchTimeRef.current = now;
-
       try {
         const officialStoriesRes = await databases
           .listDocuments(
@@ -516,7 +506,6 @@ export const useHomeLogic = () => {
         if (!isMounted.current) return;
         const myStories: any[] = await fetchStoriesInternal(userId);
         if (!isMounted.current) return;
-
         const officialDocs = officialStoriesRes.documents;
         if (officialDocs.length > 0) {
           let officialUserData: any = {
@@ -545,7 +534,6 @@ export const useHomeLogic = () => {
             myStories.splice(officialGroupIndex, 1);
           myStories.unshift(officialGroup);
         }
-
         const myGroupIndex = myStories.findIndex((g) => g.userId === userId);
         if (myGroupIndex > 0) {
           const myGroup = myStories.splice(myGroupIndex, 1)[0];
@@ -558,8 +546,6 @@ export const useHomeLogic = () => {
           myStories.splice(insertIndex, 0, myGroup);
         }
         setLocalData((prev) => ({ ...prev, groupedStories: myStories }));
-
-        // FETCH SMART SUGGESTIONS (Active Discovery)
         try {
           const usersRes = await databases.listDocuments(
             appwriteConfig.databaseId,
@@ -583,7 +569,6 @@ export const useHomeLogic = () => {
         } catch (e) {
           console.log("Error suggestions", e);
         }
-
         await fetchCounts(userId);
       } catch {}
     },
@@ -591,11 +576,11 @@ export const useHomeLogic = () => {
   );
 
   const onRefresh = useCallback(() => {
+    realtimePostsCacheRef.current = [];
     refreshFeed();
     fetchAuxiliaryData(true);
   }, [refreshFeed, fetchAuxiliaryData]);
 
-  // --- INIT EFFECT ---
   useEffect(() => {
     let isActive = true;
     const fetchFollows = async () => {
@@ -616,7 +601,7 @@ export const useHomeLogic = () => {
     if (userId) fetchAuxiliaryData();
   }, [userId, fetchAuxiliaryData]);
 
-  // --- FEED CONSTRUCTION (FIXED LOGIC) ---
+  // --- FEED CONSTRUCTION ---
   useEffect(() => {
     if (!feed || feed.length === 0 || !userId) {
       if (
@@ -631,28 +616,22 @@ export const useHomeLogic = () => {
     lastAnchorRef.current = -1;
     lastOrderHashRef.current = "";
     currentAnchorRef.current = null;
-    batchCounterRef.current = 0; // Reset batch counter
+    batchCounterRef.current = 0;
 
     const posts: FeedItem[] = [];
     const specials: FeedItem[] = [];
-
     const priorityPosts: FeedItem[] = [];
     const discoveryPosts: FeedItem[] = [];
     const generalPool: FeedItem[] = [];
-
     const FRESHNESS_THRESHOLD = 48 * 60 * 60 * 1000;
     const now = Date.now();
 
-    // 1. Clasificar y Filtrar
     feed.forEach((item) => {
-      if (item.type === "suggested_users") return; // Ignoramos sugerencias del backend (usamos smart local)
-
+      if (item.type === "suggested_users") return;
       if (item.type !== "post") {
-        specials.push(item); // Trending songs, etc.
+        specials.push(item);
         return;
       }
-
-      // Clasificación de posts
       const post = item.data;
       const creatorId =
         post.creator?.$id ||
@@ -676,14 +655,13 @@ export const useHomeLogic = () => {
       }
     });
 
-    // 2. Procesar Smart Suggestions (Chunks de 5)
     if (smartSuggestions.length >= 3) {
       const USERS_PER_CHUNK = 5;
       for (let i = 0; i < smartSuggestions.length; i += USERS_PER_CHUNK) {
         const chunk = smartSuggestions.slice(i, i + USERS_PER_CHUNK);
         if (chunk.length >= 3) {
           specials.push({
-            _id: `smart_sugg_${i}`, // Base ID
+            _id: `smart_sugg_${i}`,
             type: "suggested_users",
             data: chunk,
           });
@@ -691,7 +669,6 @@ export const useHomeLogic = () => {
       }
     }
 
-    // 3. Ordenar Posts y Specials
     priorityPosts.sort(
       (a, b) =>
         new Date(b.data.$createdAt).getTime() -
@@ -703,75 +680,62 @@ export const useHomeLogic = () => {
         new Date(a.data.$createdAt).getTime(),
     );
 
-    // Todos los posts disponibles ordenados
     const sortedPosts = [
       ...priorityPosts,
       ...discoveryPosts,
       ...shuffleArray(generalPool),
     ];
-
-    // Todos los specials disponibles barajados
     const shuffledSpecials = shuffleArray(specials);
 
-    // 4. Llenar Pools (Refs)
     postsPoolRef.current = sortedPosts;
     specialPoolRef.current = shuffledSpecials;
     postCursorRef.current = 0;
     specialCursorRef.current = 0;
 
-    // 5. Construir Batch Inicial (Ej. 20 posts + inyecciones)
     const initialBatchSize = 20;
     const initialPosts = postsPoolRef.current.slice(0, initialBatchSize);
-    postCursorRef.current = initialPosts.length % postsPoolRef.current.length; // Avanzar cursor
+    postCursorRef.current = initialPosts.length % postsPoolRef.current.length;
 
-    // Inyección Estricta: Cada 5 posts, 1 special.
-    // Insertamos en índices: 4, 10, 16...
     let insertIndex = 4;
     const GAP = 5;
-
-    // Iteramos sobre los posts iniciales e inyectamos si hay espacio y specials
     while (
       insertIndex < initialPosts.length &&
       specialPoolRef.current.length > 0
     ) {
-      // Obtenemos special del pool (rotativo o lineal)
-      // Para inicial, usamos lineal hasta que se acaben o completemos
       if (specialCursorRef.current < specialPoolRef.current.length) {
         const special = specialPoolRef.current[specialCursorRef.current];
         initialPosts.splice(insertIndex, 0, special);
-
         specialCursorRef.current =
           (specialCursorRef.current + 1) % specialPoolRef.current.length;
-        insertIndex += GAP + 1; // +1 porque acabamos de insertar
+        insertIndex += GAP + 1;
       } else {
-        break; // No hay más specials por ahora
+        break;
       }
     }
 
-    // 6. Enriquecer y Setear (Batch "init")
     const enrichedFeed = initialPosts.map((item, index) =>
       toRankableFeedItem(item, index, "init"),
     );
 
-    // Sync Brain
     itemsMapRef.current.clear();
     enrichedFeed.forEach((item) => itemsMapRef.current.set(item.id, item));
     MoodSessionManager.getInstance().initializeFeed(enrichedFeed);
 
     if (isMounted.current) {
-      setSortedFeed(enrichedFeed);
+      const realtimePosts = realtimePostsCacheRef.current;
+      const feedIds = new Set(enrichedFeed.map((i) => i.data?.$id));
+      const uniqueRealtime = realtimePosts.filter(
+        (rp) => !feedIds.has(rp.data?.$id),
+      );
+      const finalFeed = [...uniqueRealtime, ...enrichedFeed];
+      setSortedFeed(finalFeed);
     }
   }, [feed, myFollowedIds, userId, smartSuggestions]);
 
-  // --- HANDLE LOAD MORE (INFINITO & RÍTMICO) ---
   const handleLoadMore = useCallback(() => {
     if (postsPoolRef.current.length === 0) return;
-
-    // Incrementar batch suffix para IDs únicos
     batchCounterRef.current += 1;
     const batchSuffix = `batch_${batchCounterRef.current}`;
-
-    // 1. Obtener 10 Posts del Pool (Reciclaje circular)
     const newBatch: FeedItem[] = [];
     for (let i = 0; i < 10; i++) {
       const item = postsPoolRef.current[postCursorRef.current];
@@ -779,41 +743,29 @@ export const useHomeLogic = () => {
       postCursorRef.current =
         (postCursorRef.current + 1) % postsPoolRef.current.length;
     }
-
-    // 2. Inyectar 1 Special del Pool (Reciclaje circular)
     if (specialPoolRef.current.length > 0) {
       const special = specialPoolRef.current[specialCursorRef.current];
-
-      // Insertamos en el medio del batch (índice 4)
-      // Esto garantiza ~5 posts de distancia con el último special del batch anterior
       if (newBatch.length >= 5) {
         newBatch.splice(4, 0, special);
       } else {
         newBatch.push(special);
       }
-
       specialCursorRef.current =
         (specialCursorRef.current + 1) % specialPoolRef.current.length;
     }
-
-    // 3. Enriquecer (Stable IDs)
-    const startIndex = sortedFeedRef.current.length; // Para index absoluto
+    const startIndex = sortedFeedRef.current.length;
     const enrichedBatch = newBatch.map((item, idx) =>
       toRankableFeedItem(item, startIndex + idx, batchSuffix),
     );
-
-    // 4. Update Brain & State
     enrichedBatch.forEach((item) => itemsMapRef.current.set(item.id, item));
     const currentBrainFeed = MoodSessionManager.getInstance().getFeed();
     const fullList = [...currentBrainFeed, ...enrichedBatch];
     MoodSessionManager.getInstance().initializeFeed(
       fullList as EnrichedFeedItem[],
     );
-
     setSortedFeed((prev) => [...prev, ...enrichedBatch]);
-  }, []); // Dependencias vacías: usamos refs
+  }, []);
 
-  // --- ACTIONS (Share, Load Contacts, etc) ---
   const loadShareContacts = useCallback(async (uId: string) => {
     setIsLoadingContacts(true);
     try {
@@ -825,7 +777,6 @@ export const useHomeLogic = () => {
       setIsLoadingContacts(false);
     }
   }, []);
-
   const openShareSelector = useCallback(
     async (post: any) => {
       setPostToShareData(post);
@@ -836,7 +787,6 @@ export const useHomeLogic = () => {
     },
     [user, shareContacts.length, loadShareContacts, toggleModal],
   );
-
   const openShare = useCallback(
     async (post: any) => {
       setSelectedPostToShare(post);
@@ -847,7 +797,6 @@ export const useHomeLogic = () => {
     },
     [user, shareContacts.length, loadShareContacts, toggleModal],
   );
-
   const handleShareSearch = useCallback(
     async (text: string) => {
       setIsLoadingContacts(true);
@@ -874,7 +823,6 @@ export const useHomeLogic = () => {
     },
     [user, loadShareContacts],
   );
-
   const handleSendShare = useCallback(
     async (userIds: string[], message: string) => {
       const post = selectedPostToShare || postToShareData;
@@ -907,7 +855,6 @@ export const useHomeLogic = () => {
     },
     [user, selectedPostToShare, postToShareData, trackShare, toggleModal],
   );
-
   const getViralPostData = useCallback(() => {
     if (!postToShareData) return null;
     const song = parseSongData(postToShareData.songData);
@@ -921,7 +868,6 @@ export const useHomeLogic = () => {
       comment: postToShareData.comment || null,
     };
   }, [postToShareData]);
-
   const handleAddStoryFromPost = useCallback(() => {
     if (!postToShareData) return;
     const songData = parseSongData(postToShareData.songData);
@@ -931,7 +877,6 @@ export const useHomeLogic = () => {
       setTimeout(() => toggleModal("isCreation", true), 300);
     }
   }, [postToShareData, toggleModal]);
-
   const handleCopyLink = useCallback(async () => {
     const post = selectedPostToShare || postToShareData;
     if (!post) return;
@@ -943,7 +888,6 @@ export const useHomeLogic = () => {
     await Clipboard.setStringAsync(link);
     Alert.alert("Copiado", "Enlace en el portapapeles.");
   }, [selectedPostToShare, postToShareData, trackShare]);
-
   const handleSystemShare = useCallback(async () => {
     const post = selectedPostToShare || postToShareData;
     if (!post) return;
@@ -954,7 +898,6 @@ export const useHomeLogic = () => {
     const link = `https://moodapp.com/post/${post.$id}`;
     await SystemShare.share({ message: `¡Escucha esto en Mood! ${link}` });
   }, [selectedPostToShare, postToShareData, trackShare]);
-
   const handleMoodMediaPick = useCallback(async () => {
     setModals((prev) => ({ ...prev, isCreator: false }));
     setTimeout(async () => {
@@ -966,7 +909,6 @@ export const useHomeLogic = () => {
       ]);
     }, 500);
   }, [userId]);
-
   const processMediaUpload = useCallback(
     async (type: "image" | "video") => {
       if (!userId) {
@@ -1012,24 +954,20 @@ export const useHomeLogic = () => {
     [userId, fetchAuxiliaryData],
   );
 
-  // --- VIEWABILITY SYNC ---
   const updateViewableIndex = useCallback(
     (index: number) => {
       if (index === lastAnchorRef.current) return;
       lastAnchorRef.current = index;
       const list = sortedFeedRef.current;
       const now = Date.now();
-
       if (index >= 0 && index < list.length) {
         const currentItem = list[index];
-        // ... (Lógica de eventos igual)
         if (currentItem.type === "post" && currentItem.data?.$id) {
           const postId = currentItem.data.$id;
           const feedItemId = currentItem.id;
           const creatorId = currentItem.creatorId;
           const itemFeatures = currentItem.features;
           const emotionalTag = itemFeatures.emotionalTag;
-
           if (
             currentAnchorRef.current &&
             currentAnchorRef.current.feedItemId !== feedItemId
@@ -1064,7 +1002,6 @@ export const useHomeLogic = () => {
               postFeatures: prev.features,
             });
           }
-
           if (currentAnchorRef.current?.feedItemId !== feedItemId) {
             currentAnchorRef.current = {
               feedItemId,
@@ -1086,8 +1023,6 @@ export const useHomeLogic = () => {
           }
         }
       }
-
-      // Brain Sync
       const manager = MoodSessionManager.getInstance();
       manager.updateViewableIndex(index);
     },

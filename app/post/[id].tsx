@@ -2,10 +2,8 @@ import {
   View,
   Text,
   TouchableOpacity,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
   FlatList,
   Alert,
   Clipboard,
@@ -14,11 +12,9 @@ import {
 } from "react-native";
 import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
 import { Databases, Query, ID } from "react-native-appwrite";
-import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 
 import { useGlobalContext } from "@/context/GlobalProvider";
@@ -29,7 +25,6 @@ import {
   toggleLikePost,
   toggleSavePost,
   searchUsers,
-  sendTagNotification,
   deletePost,
   reportPost,
   getDeezerTrackUrl,
@@ -38,22 +33,28 @@ import {
   getFollowedUserIds,
   getUser,
   createStory,
+  uploadVoiceNote,
+  deleteComment,
 } from "@/lib/appwrite";
 import { parseSongData, sendReplyNotification } from "@/lib/postUtils";
 import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
 
-// Componentes importados
-import ShareModal from "@/components/ShareModal";
-import OptionsModal from "@/components/OptionsModal";
-import MoodShareCard from "@/components/MoodShareCard";
+// Componentes UI Básicos
 import CommentItem from "@/components/CommentItem";
 import PostDetailSkeleton from "@/components/PostDetailSkeleton";
 import PostHeader from "@/components/PostHeader";
-import DirectShareSheet from "@/components/home/DirectShareSheet";
-import StoryCreationModal from "@/components/home/StoryCreationModal";
-// 🔥 IMPORT NUEVO
 import { MoodTag } from "@/components/posts/MoodTag";
+
+// Componentes Modulares
+import { PostNavbar } from "@/components/post/PostNavbar";
+import { UserSuggestions } from "@/components/post/UserSuggestions";
+import { CommentComposer } from "@/components/post/CommentComposer";
+import { PostModals } from "@/components/post/PostModals";
+import { EmptyComments } from "@/components/post/EmptyComments";
+
+// 🔥 1. IMPORTAR CONTEXTO DE AUDIO
+import { useAudioContext } from "@/context/AudioContext";
 
 const databases = new Databases(client);
 
@@ -88,6 +89,7 @@ const PostDetails = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
 
   const styles = {
     bgColor: isDark ? "#000000" : "#FFFFFF",
@@ -106,25 +108,42 @@ const PostDetails = () => {
   const { user } = useGlobalContext();
   const postId = Array.isArray(id) ? id[0] : id;
 
+  // 🔥 2. USAR EL CONTEXTO GLOBAL
+  const {
+    playTrack,
+    pauseTrack,
+    resumeTrack,
+    currentPlayingId,
+    isPlaying,
+    isLoading: isGlobalLoading,
+  } = useAudioContext();
+
+  // Estados de Datos
   const [post, setPost] = useState<any>(null);
   const [allComments, setAllComments] = useState<any[]>([]);
   const [rootComments, setRootComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
-  // Modales
-  const [isOptionsVisible, setOptionsVisible] = useState(false);
-  const [isShareVisible, setShareVisible] = useState(false);
-  const [isViralModalVisible, setViralModalVisible] = useState(false);
-  const [isShareSelectorVisible, setShareSelectorVisible] = useState(false);
-  const [isCreationVisible, setCreationVisible] = useState(false);
-  const [storyInitialSongData, setStoryInitialSongData] = useState<any>(null);
+  // Estados de Visibilidad Modales
+  const [visibilities, setVisibilities] = useState({
+    isOptions: false,
+    isShare: false,
+    isViral: false,
+    isShareSelector: false,
+    isCreation: false,
+  });
 
-  // Compartir
+  const toggleModal = (key: keyof typeof visibilities, value: boolean) => {
+    setVisibilities((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // Estados Auxiliares
+  const [storyInitialSongData, setStoryInitialSongData] = useState<any>(null);
   const [shareContacts, setShareContacts] = useState<any[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
 
-  // Comentarios
+  // Comentarios y Voz
   const [replyingTo, setReplyingTo] = useState<{
     rootId: string;
     username: string;
@@ -133,15 +152,16 @@ const PostDetails = () => {
   const [commentText, setCommentText] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [isRecordingMode, setIsRecordingMode] = useState(false);
 
-  // Audio
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  // 🔥 3. ESTADOS DERIVADOS (Ya no usamos estados locales de audio)
+  const isThisPostPlaying = currentPlayingId === postId && isPlaying;
+  const isThisPostLoading = currentPlayingId === postId && isGlobalLoading;
 
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<any>(null);
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
+  // --- EFECTOS ---
   useEffect(() => {
     fetchData();
   }, [postId]);
@@ -150,17 +170,12 @@ const PostDetails = () => {
     if (allComments.length > 0) {
       const roots = allComments.filter((c) => !c.parentId);
       setRootComments(roots);
+    } else {
+      setRootComments([]);
     }
   }, [allComments]);
 
-  useEffect(() => {
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
-  }, [sound]);
-
+  // --- LOGICA DE DATOS ---
   const fetchData = async () => {
     try {
       const [postData, commentsData] = await Promise.all([
@@ -177,9 +192,9 @@ const PostDetails = () => {
     }
   };
 
-  // 🔥 CALCULAR MOOD
   const songData = post ? parseSongData(post.songData) : null;
   const mood = songData?.mood;
+  const activeSongPreview = songData?.preview || null;
 
   const getViralPostData = () => {
     if (!post) return null;
@@ -195,127 +210,60 @@ const PostDetails = () => {
     };
   };
 
+  // --- LOGICA DE AUDIO GLOBAL ---
   const handlePlayPause = async () => {
     Haptics.selectionAsync();
 
-    if (sound) {
-      const status = await sound.getStatusAsync();
-      if (status.isLoaded) {
-        if (status.isPlaying) {
-          await sound.pauseAsync();
-          setIsPlaying(false);
-        } else {
-          if (status.positionMillis >= status.durationMillis!) {
-            await sound.replayAsync();
-          } else {
-            await sound.playAsync();
-          }
-          setIsPlaying(true);
-        }
+    // Si ya es el track actual, alternamos play/pause
+    if (currentPlayingId === postId) {
+      if (isPlaying) {
+        await pauseTrack();
+      } else {
+        await resumeTrack();
       }
       return;
     }
 
+    // Si no es el actual, cargamos y reproducimos
     try {
-      setIsLoadingAudio(true);
-      const songData = parseSongData(post.songData);
       const trackId = songData?.id || songData?.spotifyId;
+      if (!trackId) return;
 
-      if (!trackId) {
-        Alert.alert("Error", "ID de canción no disponible.");
-        setIsLoadingAudio(false);
-        return;
-      }
-
-      const previewUrl = await getDeezerTrackUrl(trackId);
+      let previewUrl = activeSongPreview;
       if (!previewUrl) {
-        Alert.alert("Error", "No se pudo obtener el audio.");
-        setIsLoadingAudio(false);
-        return;
+        // Intentamos buscarlo si no viene en el post
+        try {
+          previewUrl = await getDeezerTrackUrl(trackId);
+        } catch (e) {
+          Alert.alert("Error", "URL no disponible");
+          return;
+        }
       }
 
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        allowsRecordingIOS: false,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-      });
-
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: previewUrl },
-        { shouldPlay: true },
-      );
-
-      setSound(newSound);
-      setIsPlaying(true);
-
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded) {
-          if (status.didJustFinish) {
-            setIsPlaying(false);
-          }
-        }
-      });
-
-      setIsLoadingAudio(false);
+      if (previewUrl) {
+        await playTrack(postId, previewUrl, {
+          title: songData?.title || "Música",
+          artist: songData?.artist || "Artista",
+          cover: songData?.cover,
+        });
+      }
     } catch (error) {
-      console.log("Error playing audio:", error);
-      Alert.alert("Error", "Ocurrió un error al reproducir.");
-      setIsLoadingAudio(false);
+      Alert.alert("Error", "No se pudo reproducir el audio.");
     }
   };
 
-  const handleDeleteAction = () => {
-    setOptionsVisible(false);
-    Alert.alert("¿Eliminar?", "Esta acción es irreversible.", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Eliminar",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deletePost(post.$id);
-            router.back();
-          } catch (e) {
-            Alert.alert("Error", "No se pudo eliminar");
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleReportAction = () => {
-    setOptionsVisible(false);
-    Alert.alert("Reportar", "Selecciona una razón:", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Spam/Inapropiado", onPress: () => submitReport("spam") },
-      { text: "Otro", onPress: () => submitReport("other") },
-    ]);
-  };
-
-  const submitReport = async (reason: string) => {
-    if (!user) return;
-    try {
-      await reportPost(post.$id, user.$id, reason);
-      Alert.alert("Reporte enviado", "Gracias por ayudarnos.");
-    } catch (e) {
-      Alert.alert("Error", "Inténtalo más tarde.");
-    }
-  };
-
+  // --- LOGICA DE COMENTARIOS ---
   const handleTextChange = (text: string) => {
     setCommentText(text);
     const words = text.split(" ");
     const lastWord = words[words.length - 1];
-
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-
     if (lastWord && lastWord.startsWith("@") && lastWord.length > 1) {
       const query = lastWord.substring(1);
       searchTimeout.current = setTimeout(async () => {
         try {
-          const results = await searchUsers(query);
-          const filtered = results.filter((u) => u.$id !== user?.$id);
+          const results = await searchUsersInAppwrite(query);
+          const filtered = results.filter((u: any) => u.$id !== user?.$id);
           setSuggestions(filtered);
           setShowSuggestions(filtered.length > 0);
         } catch (error) {
@@ -340,14 +288,28 @@ const PostDetails = () => {
     const rootId = targetComment.parentId
       ? targetComment.parentId
       : targetComment.$id;
-    const replyName = targetComment.user?.username || targetComment.username;
     setReplyingTo({
       rootId,
-      username: replyName,
+      username: targetComment.user?.username || targetComment.username,
       userId: targetComment.userId,
     });
-    setCommentText(`@${replyName} `);
+    setCommentText(
+      `@${targetComment.user?.username || targetComment.username} `,
+    );
     inputRef.current?.focus();
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    const previousComments = [...allComments];
+    setAllComments((prev) => prev.filter((c) => c.$id !== commentId));
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    try {
+      await deleteComment(commentId);
+    } catch (error) {
+      Alert.alert("Error", "No se pudo eliminar el comentario.");
+      setAllComments(previousComments);
+    }
   };
 
   const submitComment = async () => {
@@ -355,16 +317,14 @@ const PostDetails = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSending(true);
     try {
-      const displayName = user?.name || user?.username;
-      const isUserVerified = (user as any)?.isVerified;
       const newComment = await createComment(
         postId,
         {
           content: commentText,
           userId: user?.$id,
-          username: displayName,
+          username: user?.name || user?.username,
           avatar: user?.pfp,
-          isVerified: isUserVerified,
+          isVerified: (user as any)?.isVerified,
         },
         replyingTo ? replyingTo.rootId : null,
       );
@@ -383,50 +343,103 @@ const PostDetails = () => {
     }
   };
 
-  const handleLike = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (!post || !user) return;
-    const originalPost = { ...post };
-    const originalLikes = post.likedBy || [];
-    const newLikes = originalLikes.includes(user.$id)
-      ? originalLikes.filter((id: string) => id !== user.$id)
-      : [...originalLikes, user.$id];
-    setPost({ ...post, likedBy: newLikes });
+  const handleVoiceUpload = async (uri: string, duration: number) => {
+    if (!user || !post) return;
+    setIsRecordingMode(false);
+    setSending(true);
     try {
-      await toggleLikePost(post.$id, user.$id, originalLikes);
-    } catch (error) {
-      setPost(originalPost);
+      const fileUrl = await uploadVoiceNote(uri);
+      const voicePayload = JSON.stringify({
+        audioUrl: fileUrl,
+        duration: duration,
+        songContext: activeSongPreview,
+        type: "voice_vibe",
+      });
+      const newComment = await createComment(
+        postId,
+        {
+          content: voicePayload,
+          userId: user.$id,
+          username: user?.name || user?.username,
+          avatar: user.pfp,
+          isVerified: (user as any)?.isVerified,
+        },
+        replyingTo ? replyingTo.rootId : null,
+      );
+      setAllComments((prev) => [newComment, ...prev]);
+    } catch (e) {
+      Alert.alert("Error", "No se pudo subir el audio.");
+    } finally {
+      setSending(false);
     }
   };
 
+  // --- ACTIONS Y MODALES ---
+  const handleDeleteAction = () => {
+    toggleModal("isOptions", false);
+    Alert.alert("¿Eliminar?", "Esta acción es irreversible.", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Eliminar",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deletePost(post.$id);
+            router.back();
+          } catch (e) {
+            Alert.alert("Error", "No se pudo eliminar");
+          }
+        },
+      },
+    ]);
+  };
+  const handleReportAction = () => {
+    toggleModal("isOptions", false);
+    Alert.alert("Reportar", "Selecciona una razón:", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Spam/Inapropiado", onPress: () => submitReport("spam") },
+      { text: "Otro", onPress: () => submitReport("other") },
+    ]);
+  };
+  const submitReport = async (reason: string) => {
+    if (!user) return;
+    try {
+      await reportPost(post.$id, user.$id, reason);
+      Alert.alert("Reporte enviado", "Gracias.");
+    } catch (e) {
+      Alert.alert("Error", "Error al reportar.");
+    }
+  };
+  const handleLike = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!post || !user) return;
+    const original = { ...post };
+    const likes = post.likedBy || [];
+    const newLikes = likes.includes(user.$id)
+      ? likes.filter((id: string) => id !== user.$id)
+      : [...likes, user.$id];
+    setPost({ ...post, likedBy: newLikes });
+    try {
+      await toggleLikePost(post.$id, user.$id, likes);
+    } catch (error) {
+      setPost(original);
+    }
+  };
   const handleSave = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!post || !user) return;
-    const originalSaved = post.savedBy || [];
-    const newSaved = originalSaved.includes(user.$id)
-      ? originalSaved.filter((id: string) => id !== user.$id)
-      : [...originalSaved, user.$id];
+    const saved = post.savedBy || [];
+    const newSaved = saved.includes(user.$id)
+      ? saved.filter((id: string) => id !== user.$id)
+      : [...saved, user.$id];
     setPost({ ...post, savedBy: newSaved });
     try {
       await toggleSavePost(post.$id, user.$id);
     } catch (e) {}
   };
-
-  const fetchFollowedUsers = async (userId: string) => {
-    try {
-      const followedIds = await getFollowedUserIds(userId);
-      if (followedIds.length > 0) {
-        const promises = followedIds.map((id) => getUser(id));
-        const users = await Promise.all(promises);
-        return users.filter((u) => u !== null);
-      }
-    } catch (error) {}
-    return [];
-  };
-
   const searchUsersInAppwrite = async (query: string) => {
     try {
-      const response = await databases.listDocuments(
+      const res = await databases.listDocuments(
         appwriteConfig.databaseId,
         appwriteConfig.usersCollectionId,
         [
@@ -437,15 +450,24 @@ const PostDetails = () => {
           Query.limit(10),
         ],
       );
-      return response.documents;
+      return res.documents;
     } catch (error) {
       return [];
     }
   };
-
+  const fetchFollowedUsers = async (userId: string) => {
+    try {
+      const ids = await getFollowedUserIds(userId);
+      if (ids.length > 0) {
+        const users = await Promise.all(ids.map((id) => getUser(id)));
+        return users.filter((u) => u !== null);
+      }
+    } catch (error) {}
+    return [];
+  };
   const openShare = async () => {
     Haptics.selectionAsync();
-    setShareSelectorVisible(true);
+    toggleModal("isShareSelector", true);
     if (user?.$id && shareContacts.length === 0) {
       setIsLoadingContacts(true);
       const contacts = await fetchFollowedUsers(user.$id);
@@ -453,19 +475,17 @@ const PostDetails = () => {
       setIsLoadingContacts(false);
     }
   };
-
   const handleShareSearch = async (text: string) => {
     setIsLoadingContacts(true);
     if (text.length > 0) {
-      const results = await searchUsersInAppwrite(text);
-      setShareContacts(results);
+      const res = await searchUsersInAppwrite(text);
+      setShareContacts(res);
     } else if (user?.$id) {
       const contacts = await fetchFollowedUsers(user.$id);
       setShareContacts(contacts);
     }
     setIsLoadingContacts(false);
   };
-
   const handleSendShare = async (userIds: string[], message: string) => {
     if (!user?.$id || !post) return;
     try {
@@ -484,12 +504,11 @@ const PostDetails = () => {
         ),
       );
       await Promise.all(promises);
-      Alert.alert("Enviado", "El post se ha compartido correctamente.");
+      Alert.alert("Enviado", "Compartido correctamente.");
     } catch (error) {
-      Alert.alert("Error", "No se pudo compartir el post.");
+      Alert.alert("Error", "No se pudo compartir.");
     }
   };
-
   const handleAddToStoryFromPost = async () => {
     if (!post) return;
     const songData = parseSongData(post.songData);
@@ -503,11 +522,10 @@ const PostDetails = () => {
         } catch (e) {}
       }
       setStoryInitialSongData({ ...songData, preview: freshPreview });
-      setShareSelectorVisible(false);
-      setTimeout(() => setCreationVisible(true), 300);
+      toggleModal("isShareSelector", false);
+      setTimeout(() => toggleModal("isCreation", true), 300);
     }
   };
-
   const handleSystemShare = async () => {
     if (!post) return;
     const link = `https://moodapp.com/post/${post.$id}`;
@@ -515,98 +533,51 @@ const PostDetails = () => {
       await SystemShare.share({
         message: `¡Mira esta canción en Mood! ${link}`,
         url: link,
-        title: "Compartir desde Mood",
       });
     } catch (error) {}
-    setShareSelectorVisible(false);
+    toggleModal("isShareSelector", false);
   };
-
   const handleCopyLink = () => {
     if (!post) return;
     const link = `https://moodapp.com/post/${post.$id}`;
     Clipboard.setString(link);
-    Alert.alert("Enlace copiado", "Enlace copiado al portapapeles.");
-    setShareSelectorVisible(false);
+    Alert.alert("Copiado", "Enlace en portapapeles.");
+    toggleModal("isShareSelector", false);
   };
 
   if (loading) {
     return (
-      <SafeAreaView
-        className="flex-1"
-        edges={["top"]}
-        style={{ backgroundColor: styles.bgColor }}
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: styles.bgColor,
+          paddingTop: insets.top,
+        }}
       >
-        <View
-          className="flex-row items-center justify-between px-4 h-[50px] border-b"
-          style={{
-            backgroundColor: styles.bgColor,
-            borderColor: styles.borderColor,
-          }}
-        >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="p-2 -ml-2 rounded-full"
-          >
-            <Ionicons
-              name="arrow-back"
-              size={24}
-              color={styles.backIconColor}
-            />
-          </TouchableOpacity>
-          <Text
-            className="font-bold text-base"
-            style={{ color: styles.textColor }}
-          >
-            Vibe
-          </Text>
-          <View className="w-10" />
-        </View>
+        <PostNavbar styles={styles} onOptions={() => {}} />
         <PostDetailSkeleton isDark={isDark} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   const isOwner = user?.$id === (post?.postedBy?.$id || post?.creator?.$id);
 
   return (
-    <SafeAreaView
-      className="flex-1"
-      edges={["top"]}
-      style={{ backgroundColor: styles.bgColor }}
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: styles.bgColor,
+        paddingTop: insets.top,
+      }}
     >
-      <View
-        className="flex-row items-center justify-between px-4 h-[50px] border-b z-10"
-        style={{
-          backgroundColor: styles.bgColor,
-          borderColor: styles.borderColor,
+      {/* 1. NAVBAR */}
+      <PostNavbar
+        styles={styles}
+        onOptions={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          toggleModal("isOptions", true);
         }}
-      >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          className="p-2 -ml-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
-        >
-          <Ionicons name="arrow-back" size={24} color={styles.backIconColor} />
-        </TouchableOpacity>
-        <Text
-          className="font-bold text-base"
-          style={{ color: styles.textColor }}
-        >
-          Vibe
-        </Text>
-        <TouchableOpacity
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setOptionsVisible(true);
-          }}
-          className="p-2 -mr-2 rounded-full active:bg-zinc-100 dark:active:bg-zinc-800"
-        >
-          <Ionicons
-            name="ellipsis-horizontal"
-            size={24}
-            color={styles.textColor}
-          />
-        </TouchableOpacity>
-      </View>
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -621,6 +592,7 @@ const PostDetails = () => {
               item={item}
               currentUserId={user?.$id || ""}
               onReply={handleReply}
+              onDelete={handleDeleteComment}
               allComments={allComments}
             />
           )}
@@ -629,8 +601,9 @@ const PostDetails = () => {
               <PostHeader
                 post={post}
                 user={user}
-                isPlaying={isPlaying}
-                isLoadingAudio={isLoadingAudio}
+                // 🔥 4. PASAR ESTADOS GLOBALES AL HEADER
+                isPlaying={isThisPostPlaying}
+                isLoadingAudio={isThisPostLoading}
                 onPlayPause={handlePlayPause}
                 onLike={handleLike}
                 onSave={handleSave}
@@ -639,7 +612,6 @@ const PostDetails = () => {
                 allCommentsCount={allComments.length}
                 styles={styles}
               />
-              {/* 🔥 MOOD TAG AÑADIDO AQUÍ */}
               {mood && (
                 <View className="px-5 mb-4 flex-row items-center">
                   <MoodTag mood={mood} />
@@ -651,199 +623,72 @@ const PostDetails = () => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={Keyboard.dismiss}
-          ListEmptyComponent={
-            <View className="items-center justify-center py-10 opacity-60">
-              <Text
-                className="text-center font-medium"
-                style={{ color: styles.subTextColor }}
-              >
-                {t("postDetails.emptyComments")}
-              </Text>
-              <Text
-                className="text-center text-xs mt-2 opacity-60"
-                style={{ color: styles.subTextColor }}
-              >
-                Sé el primero en opinar sobre este Vibe.
-              </Text>
-            </View>
-          }
+          ListEmptyComponent={<EmptyComments t={t} styles={styles} />}
         />
 
         <View style={{ backgroundColor: styles.bgColor }}>
           {showSuggestions && (
-            <View
-              className="w-full border-t border-b"
-              style={{
-                backgroundColor: styles.suggestionBg,
-                borderColor: styles.borderColor,
-                maxHeight: 180,
-              }}
-            >
-              <FlatList
-                data={suggestions}
-                keyboardShouldPersistTaps="handled"
-                keyExtractor={(item) => item.$id}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    onPress={() => handleSelectUser(item.username)}
-                    className="flex-row items-center px-4 py-3 border-b"
-                    style={{ borderColor: styles.borderColor }}
-                  >
-                    <Image
-                      source={{ uri: item.pfp }}
-                      style={{ width: 32, height: 32, borderRadius: 999 }}
-                      className="mr-3 bg-zinc-800"
-                      contentFit="cover"
-                    />
-                    <Text
-                      className="font-bold text-sm"
-                      style={{ color: styles.textColor }}
-                    >
-                      {item.username}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              />
-            </View>
+            <UserSuggestions
+              suggestions={suggestions}
+              onSelectUser={handleSelectUser}
+              styles={styles}
+            />
           )}
 
-          <View
-            className="border-t pt-2 px-2"
-            style={{
-              backgroundColor: styles.bgColor,
-              borderColor: styles.borderColor,
-              paddingBottom: Platform.OS === "ios" ? 10 : 0,
+          <CommentComposer
+            user={user}
+            text={commentText}
+            setText={handleTextChange}
+            onSubmit={submitComment}
+            isSending={sending}
+            replyingTo={replyingTo}
+            onCancelReply={() => {
+              setReplyingTo(null);
+              setCommentText("");
             }}
-          >
-            {replyingTo && (
-              <View className="flex-row items-center justify-between px-4 pb-2 mb-1">
-                <Text
-                  className="text-xs font-medium"
-                  style={{ color: styles.subTextColor }}
-                >
-                  Respondiendo a{" "}
-                  <Text style={{ color: styles.accentColor }}>
-                    @{replyingTo.username}
-                  </Text>
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setReplyingTo(null);
-                    setCommentText("");
-                  }}
-                  className="p-1"
-                >
-                  <Ionicons
-                    name="close"
-                    size={16}
-                    color={styles.subTextColor}
-                  />
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <View className="flex-row items-end gap-3 px-2 mb-2">
-              <Image
-                source={{
-                  uri:
-                    user?.pfp ||
-                    "https://cloud.appwrite.io/v1/avatars/initials?name=Me",
-                }}
-                style={{ width: 40, height: 40, borderRadius: 999 }}
-                className="mb-1 bg-zinc-800"
-                contentFit="cover"
-              />
-              <View
-                className="flex-1 rounded-3xl flex-row items-center px-5 py-1 border"
-                style={{
-                  backgroundColor: styles.inputBg,
-                  borderColor: isDark ? "transparent" : styles.borderColor,
-                }}
-              >
-                <TextInput
-                  ref={inputRef}
-                  placeholder={
-                    replyingTo
-                      ? `Responde a ${replyingTo.username}...`
-                      : "Escribe un comentario..."
-                  }
-                  placeholderTextColor={styles.subTextColor}
-                  className="flex-1 text-[16px] py-3"
-                  style={{ color: styles.textColor, maxHeight: 100 }}
-                  value={commentText}
-                  onChangeText={handleTextChange}
-                  multiline
-                />
-              </View>
-              <TouchableOpacity
-                onPress={submitComment}
-                disabled={!commentText.trim() || sending}
-                className={`w-11 h-11 rounded-full items-center justify-center mb-0.5 ${commentText.trim() ? "opacity-100 scale-100 shadow-md" : "opacity-60 scale-95"}`}
-                style={{
-                  backgroundColor: commentText.trim()
-                    ? styles.accentColor
-                    : styles.inputBg,
-                }}
-              >
-                {sending ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Ionicons
-                    name="arrow-up"
-                    size={24}
-                    color={commentText.trim() ? "white" : styles.subTextColor}
-                  />
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+            isRecordingMode={isRecordingMode}
+            setRecordingMode={setIsRecordingMode}
+            onVoiceUpload={handleVoiceUpload}
+            activeSongPreview={activeSongPreview}
+            styles={styles}
+            inputRef={inputRef}
+          />
         </View>
       </KeyboardAvoidingView>
 
-      <DirectShareSheet
-        visible={isShareSelectorVisible}
-        onClose={() => setShareSelectorVisible(false)}
-        contacts={shareContacts}
+      <PostModals
+        visibilities={visibilities}
+        onClose={{
+          shareSelector: () => toggleModal("isShareSelector", false),
+          creation: () => toggleModal("isCreation", false),
+          options: () => toggleModal("isOptions", false),
+          share: () => toggleModal("isShare", false),
+          viral: () => toggleModal("isViral", false),
+        }}
+        shareContacts={shareContacts}
         isDark={isDark}
         isLoadingContacts={isLoadingContacts}
-        onSearch={handleShareSearch}
-        onSend={handleSendShare}
+        onSearchContacts={handleShareSearch}
+        onSendShare={handleSendShare}
         onAddToStory={handleAddToStoryFromPost}
-        onViralCard={() => {
-          setShareSelectorVisible(false);
-          setTimeout(() => setViralModalVisible(true), 300);
+        onViralCardOpen={() => {
+          toggleModal("isShareSelector", false);
+          setTimeout(() => toggleModal("isViral", true), 300);
         }}
         onSystemShare={handleSystemShare}
         onCopyLink={handleCopyLink}
-      />
-      <StoryCreationModal
-        visible={isCreationVisible}
-        onClose={() => setCreationVisible(false)}
         currentUser={user}
-        onSuccess={() => setCreationVisible(false)}
-        initialSongData={storyInitialSongData}
+        storyInitialSongData={storyInitialSongData}
         createStory={createStory}
         searchSongsWrapper={searchSongsWrapper}
         RANDOM_SEARCH_TERMS={RANDOM_SEARCH_TERMS}
-      />
-      <OptionsModal
-        isVisible={isOptionsVisible}
-        onClose={() => setOptionsVisible(false)}
         onDelete={handleDeleteAction}
         onReport={handleReportAction}
         isOwner={isOwner}
-      />
-      <ShareModal
-        isVisible={isShareVisible}
-        onClose={() => setShareVisible(false)}
         postId={post?.$id || ""}
+        viralPostData={getViralPostData()}
       />
-      <MoodShareCard
-        isVisible={isViralModalVisible}
-        onClose={() => setViralModalVisible(false)}
-        post={getViralPostData()}
-      />
-    </SafeAreaView>
+    </View>
   );
 };
 

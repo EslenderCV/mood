@@ -34,8 +34,9 @@ const MoodSelectorPopup = ({
   // Referencia para el input oculto (teclado)
   const customEmojiInputRef = useRef<TextInput>(null);
 
-  // Emojis sugeridos (Estilo WhatsApp)
-  const SUGGESTED_EMOJIS = ["🔥", "😂", "😍", "😭", "🤯", "❤️"];
+  // 🔥 MEJORA 1: Emojis basados en Contexto Musical (Vibes)
+  // En lugar de solo emociones, usamos contextos: Chill, Party, Sad, Hype, Gym, Love
+  const SUGGESTED_EMOJIS = ["🌌", "⚡", "💔", "💪", "🥂", "🚗", "🏖️", "😴"];
 
   // Sincronizar estado local al abrir
   useEffect(() => {
@@ -53,14 +54,11 @@ const MoodSelectorPopup = ({
   const placeholderColor = "#71717A";
 
   const handleEmojiInput = (text: string) => {
-    // 1. Limpiar si borra todo
     if (text === "") {
       setLocalEmoji("");
       onSelectMood(null);
       return;
     }
-
-    // 2. Bloquear caracteres no deseados (letras/números)
     const hasRestrictedChars =
       /[a-zA-Z0-9`~!@#$%^&*()_|+\-=?;:'",.<>\{\}\[\]\\\/]/.test(text);
 
@@ -68,10 +66,7 @@ const MoodSelectorPopup = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
-
-    // 3. Tomar el último emoji ingresado
     const cleanEmoji = text.slice(-2);
-
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLocalEmoji(cleanEmoji);
     onSelectMood({ emoji: cleanEmoji, text: localText });
@@ -99,7 +94,6 @@ const MoodSelectorPopup = ({
 
   const handleCustomEmojiPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Enfocamos el input oculto para abrir el teclado
     customEmojiInputRef.current?.focus();
   };
 
@@ -131,7 +125,7 @@ const MoodSelectorPopup = ({
                 <Ionicons name="sparkles" size={20} color={accentColor} />
               </View>
               <Text className="text-white font-bold text-xl tracking-tight">
-                Tu Mood
+                Tu Vibe
               </Text>
             </View>
             <TouchableOpacity
@@ -143,39 +137,76 @@ const MoodSelectorPopup = ({
           </View>
 
           {/* --- DISPLAY DE EMOJI (CÍRCULO GIGANTE) --- */}
-          {/* Ya no abre el teclado directamente, solo muestra el estado */}
           <View className="items-center mb-6">
-            <View
-              style={{
-                width: 100,
-                height: 100,
-                borderRadius: 50,
-                backgroundColor: localEmoji
-                  ? "rgba(94, 23, 235, 0.15)"
-                  : inputBg,
-                borderColor: localEmoji ? accentColor : borderColor,
-                borderWidth: 2,
-                borderStyle: localEmoji ? "solid" : "dashed",
-              }}
-              className="items-center justify-center mb-3 shadow-lg shadow-purple-900/20"
+            <TouchableOpacity
+              onPress={handleCustomEmojiPress}
+              activeOpacity={0.8}
             >
-              <Text style={{ fontSize: 50, color: "white" }}>
-                {localEmoji || "🫥"}
+              <View
+                style={{
+                  width: 100,
+                  height: 100,
+                  borderRadius: 50,
+                  backgroundColor: localEmoji
+                    ? "rgba(94, 23, 235, 0.15)"
+                    : inputBg,
+                  borderColor: localEmoji ? accentColor : borderColor,
+                  borderWidth: 2,
+                  // Si no hay emoji, usamos borde punteado para invitar a tocar
+                  borderStyle: localEmoji ? "solid" : "dashed",
+                }}
+                className="items-center justify-center mb-3 shadow-lg shadow-purple-900/20"
+              >
+                {localEmoji ? (
+                  <Text style={{ fontSize: 50, color: "white" }}>
+                    {localEmoji}
+                  </Text>
+                ) : (
+                  <Ionicons
+                    name="happy-outline"
+                    size={40}
+                    color={placeholderColor}
+                  />
+                )}
+              </View>
+            </TouchableOpacity>
+            {!localEmoji && (
+              <Text className="text-zinc-500 text-xs font-medium">
+                Toca para elegir
               </Text>
-            </View>
+            )}
           </View>
 
-          {/* --- SLIDE DE EMOJIS SUGERIDOS (REACTION PICKER) --- */}
+          {/* --- SLIDE DE EMOJIS SUGERIDOS --- */}
           <View className="mb-6">
             <Text className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-3 ml-1">
-              Selecciona una reacción
+              Vibes Populares
             </Text>
 
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 10 }}
+              contentContainerStyle={{ gap: 10, paddingRight: 10 }}
             >
+              {/* 🔥 MEJORA 2: Botón + AL INICIO y destacado */}
+              <TouchableOpacity
+                onPress={handleCustomEmojiPress}
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.05)",
+                  width: 50,
+                  height: 50,
+                  borderRadius: 25,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: accentColor,
+                  borderStyle: "dashed",
+                }}
+              >
+                <Ionicons name="add" size={24} color={accentColor} />
+              </TouchableOpacity>
+
+              {/* Lista de Sugeridos */}
               {SUGGESTED_EMOJIS.map((emoji) => (
                 <TouchableOpacity
                   key={emoji}
@@ -195,23 +226,6 @@ const MoodSelectorPopup = ({
                   <Text style={{ fontSize: 24 }}>{emoji}</Text>
                 </TouchableOpacity>
               ))}
-
-              {/* BOTÓN + (BUSCAR OTRO) */}
-              <TouchableOpacity
-                onPress={handleCustomEmojiPress}
-                style={{
-                  backgroundColor: "#27272A",
-                  width: 50,
-                  height: 50,
-                  borderRadius: 25,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 1,
-                  borderColor: "#3F3F46",
-                }}
-              >
-                <Ionicons name="add" size={26} color="white" />
-              </TouchableOpacity>
             </ScrollView>
           </View>
 
@@ -232,7 +246,7 @@ const MoodSelectorPopup = ({
             <TextInput
               value={localText}
               onChangeText={handleTextChange}
-              placeholder="Describe cómo te sientes..."
+              placeholder="Describe tu vibe..."
               placeholderTextColor={placeholderColor}
               style={{
                 color: "white",
@@ -266,7 +280,7 @@ const MoodSelectorPopup = ({
             <Text
               className={`font-bold text-base ${localEmoji ? "text-white" : "text-zinc-500"}`}
             >
-              {localEmoji ? "Listo" : "Elige un emoji primero"}
+              {localEmoji ? "Listo" : "Elige un Vibe primero"}
             </Text>
           </TouchableOpacity>
         </View>
