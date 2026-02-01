@@ -110,7 +110,7 @@ const ShareModal = ({ isVisible, onClose, postId }: any) => {
       });
 
       Alert.alert("Enviado", `Compartido con ${targetUser.username}`);
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "No se pudo enviar el mensaje.");
     } finally {
       setSendingMap((prev) => ({ ...prev, [targetUser.$id]: false }));

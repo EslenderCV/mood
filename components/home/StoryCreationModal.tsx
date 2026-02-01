@@ -15,21 +15,18 @@ import {
   LayoutAnimation,
   Animated,
   StatusBar,
-  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Audio } from "expo-av"; // 🔥 Usamos expo-av como en PostItem
-import { Video, ResizeMode } from "expo-av";
-import { pickMedia, uploadFile } from "@/lib/appwrite";
+import { Audio, Video, ResizeMode } from "expo-av"; // 🔥 Usamos expo-av como en PostItem
+import { uploadFile } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 import CustomToast from "../shared/CustomToast";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
-const { width } = Dimensions.get("window");
 
 // 🎨 Paleta de colores Premium
 const COLORS = {
@@ -291,20 +288,6 @@ const StoryCreationModal = ({
     setSelectedSong(song);
     setMedia(null);
     setStep("preview");
-  };
-
-  const handlePickMedia = async (type: "image" | "video") => {
-    try {
-      stopSound(); // Paramos música al elegir media
-      const result = await pickMedia(type);
-      if (result) {
-        setMedia({ uri: result.uri, type: type, file: result });
-        setSelectedSong(null);
-        setStep("preview");
-      }
-    } catch (error) {
-      console.log(error);
-    }
   };
 
   const handleUpload = async () => {

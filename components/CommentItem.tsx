@@ -77,7 +77,6 @@ const CommentItem = ({
   const textColor = isDark ? "#FAFAFA" : "#18181B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const lineColor = isDark ? "#3F3F46" : "#E4E4E7";
-  const avatarBg = isDark ? "#27272A" : "#E4E4E7";
 
   const [likes, setLikes] = useState<string[]>(item.likedBy || []);
   const [showReplies, setShowReplies] = useState(false);
@@ -111,7 +110,7 @@ const CommentItem = ({
           isVoice = true;
           voiceData = parsed;
         }
-      } catch (e) {
+      } catch {
         isVoice = false;
       }
     }
@@ -167,7 +166,7 @@ const CommentItem = ({
     setLikes(newLikes);
     try {
       await toggleCommentLike(item.$id, currentUserId, likes);
-    } catch (error) {
+    } catch {
       setLikes(likes);
     }
   };

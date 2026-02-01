@@ -163,6 +163,10 @@ export default function PostModal(props: PostModalProps) {
                       onShazam={controller.handleShazam}
                       isRecording={controller.recorder.isRecording}
                       isShazamScanning={controller.isShazamScanning}
+                      shazamUiState={controller.shazamUiState}
+                      shazamSecondsLeft={controller.shazamSecondsLeft}
+                      shazamDetected={controller.shazamDetected}
+                      onCancelShazam={controller.cancelShazam}
                       openMoodPopup={controller.openMoodPopup}
                       mood={controller.mood}
                       setMood={controller.setMood}

@@ -9,7 +9,6 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
-  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AccountManager, StoredAccount } from "@/lib/accountManager";
@@ -45,7 +44,7 @@ const AccountSelectorModal = ({
     try {
       const doc = await getUser(id);
       if (doc) return doc;
-    } catch (e) {}
+    } catch {}
 
     try {
       const list = await databases.listDocuments(
@@ -54,7 +53,7 @@ const AccountSelectorModal = ({
         [Query.equal("accId", id)]
       );
       if (list.documents.length > 0) return list.documents[0];
-    } catch (e) {}
+    } catch {}
 
     return null;
   };
@@ -82,7 +81,7 @@ const AccountSelectorModal = ({
                   pfp: validPfp,
                 };
               }
-            } catch (e) {}
+            } catch {}
             return acc;
           })
         );
@@ -135,7 +134,9 @@ const AccountSelectorModal = ({
     onClose();
     setUser(null);
     setLoggedIn(false);
-    try { await account.deleteSession("current"); } catch (e) {}
+    try {
+      await account.deleteSession("current");
+    } catch {}
     router.replace("/signIn");
     setTimeout(() => { if (setIsSwitching) setIsSwitching(false); }, 1000);
   };

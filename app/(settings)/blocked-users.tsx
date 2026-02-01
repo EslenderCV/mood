@@ -70,7 +70,7 @@ const BlockedUsers = () => {
               Haptics.notificationAsync(
                 Haptics.NotificationFeedbackType.Success,
               );
-            } catch (error) {
+            } catch {
               Alert.alert(
                 t("blockedUsersPage.errorTitle"),
                 t("blockedUsersPage.errorMsg"),

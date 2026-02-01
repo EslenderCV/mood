@@ -234,7 +234,7 @@ const UserProfile = () => {
       Alert.alert("Bloqueado", "El usuario ha sido bloqueado correctamente.", [
         { text: "OK", onPress: () => router.back() },
       ]);
-    } catch (error) {
+    } catch {
       setShowOptionsModal(false);
       Alert.alert("Error", "No se pudo bloquear al usuario.");
     }

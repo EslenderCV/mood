@@ -9,7 +9,6 @@ import {
   TextInput,
   Animated,
   ActivityIndicator,
-  Dimensions,
 } from "react-native";
 import React, { useEffect, useState } from "react";
 import { useLocalSearchParams, router } from "expo-router";
@@ -32,8 +31,6 @@ import {
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
 import { useGlobalContext } from "@/context/GlobalProvider";
-
-const { width } = Dimensions.get("window");
 
 // --- COMPONENTE VISUALIZADOR DE AUDIO ---
 const AudioVisualizer = ({
@@ -136,14 +133,14 @@ export default function PlaylistDetail() {
         .map((s: string) => {
           try {
             return JSON.parse(s);
-          } catch (e) {
+          } catch {
             return null;
           }
         })
         .filter((s: any) => s !== null);
 
       setSongs(parsedSongs);
-    } catch (e) {
+    } catch {
       Alert.alert("Error", "No se pudo cargar la playlist");
       router.back();
     }
@@ -158,13 +155,13 @@ export default function PlaylistDetail() {
           try {
             const s = JSON.parse(post.songData);
             return { ...s, postId: post.$id };
-          } catch (e) {
+          } catch {
             return null;
           }
         })
         .filter((s) => s !== null);
       setSavedSongs(parsed);
-    } catch (error) {
+    } catch {
       // Silent error
     }
   };
@@ -199,7 +196,7 @@ export default function PlaylistDetail() {
       if (trackId) {
         try {
           finalUrl = await getDeezerTrackUrl(trackId);
-        } catch (e) {}
+        } catch {}
       }
 
       if (!finalUrl && song.preview) {
@@ -217,7 +214,7 @@ export default function PlaylistDetail() {
 
       setPlayingId(songIdKey);
       setCurrentSongUrl(finalUrl);
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Ocurrió un error inesperado al reproducir.");
     } finally {
       setLoadingAudioId(null);
@@ -230,7 +227,7 @@ export default function PlaylistDetail() {
       setSongs((prev) => [...prev, song]);
       setAddSongModalVisible(false);
       Alert.alert("Añadida", `${song.title} agregada a la playlist.`);
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "No se pudo agregar.");
     }
   };
@@ -241,7 +238,7 @@ export default function PlaylistDetail() {
       await renamePlaylist(id as string, newName);
       setPlaylist({ ...playlist, name: newName });
       setEditModalVisible(false);
-    } catch (e) {
+    } catch {
       Alert.alert("Error", "No se pudo renombrar.");
     }
   };
@@ -253,7 +250,7 @@ export default function PlaylistDetail() {
     try {
       const songString = JSON.stringify(song);
       await removeSongFromPlaylist(id as string, songString);
-    } catch (e) {
+    } catch {
       setSongs(previousSongs);
       Alert.alert("Error", "No se pudo eliminar la canción.");
     }

@@ -1,7 +1,5 @@
 import {
   View,
-  Text,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   FlatList,
@@ -13,7 +11,6 @@ import {
 import React, { useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import { Databases, Query, ID } from "react-native-appwrite";
 import * as Haptics from "expo-haptics";
 
@@ -24,7 +21,6 @@ import {
   getPostComments,
   toggleLikePost,
   toggleSavePost,
-  searchUsers,
   deletePost,
   reportPost,
   getDeezerTrackUrl,
@@ -80,7 +76,7 @@ const searchSongsWrapper = async (query: string) => {
       preview: track.preview,
       duration: track.duration,
     }));
-  } catch (e) {
+  } catch {
     return [];
   }
 };
@@ -184,7 +180,7 @@ const PostDetails = () => {
       ]);
       setPost(postData);
       setAllComments(commentsData);
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "No se pudo cargar el post");
       router.back();
     } finally {
@@ -234,7 +230,7 @@ const PostDetails = () => {
         // Intentamos buscarlo si no viene en el post
         try {
           previewUrl = await getDeezerTrackUrl(trackId);
-        } catch (e) {
+        } catch {
           Alert.alert("Error", "URL no disponible");
           return;
         }
@@ -247,7 +243,7 @@ const PostDetails = () => {
           cover: songData?.cover,
         });
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "No se pudo reproducir el audio.");
     }
   };
@@ -306,7 +302,7 @@ const PostDetails = () => {
 
     try {
       await deleteComment(commentId);
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "No se pudo eliminar el comentario.");
       setAllComments(previousComments);
     }
@@ -337,7 +333,7 @@ const PostDetails = () => {
       setCommentText("");
       setReplyingTo(null);
       setShowSuggestions(false);
-    } catch (error) {
+    } catch {
     } finally {
       setSending(false);
     }
@@ -367,7 +363,7 @@ const PostDetails = () => {
         replyingTo ? replyingTo.rootId : null,
       );
       setAllComments((prev) => [newComment, ...prev]);
-    } catch (e) {
+    } catch {
       Alert.alert("Error", "No se pudo subir el audio.");
     } finally {
       setSending(false);
@@ -386,7 +382,7 @@ const PostDetails = () => {
           try {
             await deletePost(post.$id);
             router.back();
-          } catch (e) {
+          } catch {
             Alert.alert("Error", "No se pudo eliminar");
           }
         },
@@ -406,7 +402,7 @@ const PostDetails = () => {
     try {
       await reportPost(post.$id, user.$id, reason);
       Alert.alert("Reporte enviado", "Gracias.");
-    } catch (e) {
+    } catch {
       Alert.alert("Error", "Error al reportar.");
     }
   };
@@ -421,7 +417,7 @@ const PostDetails = () => {
     setPost({ ...post, likedBy: newLikes });
     try {
       await toggleLikePost(post.$id, user.$id, likes);
-    } catch (error) {
+    } catch {
       setPost(original);
     }
   };
@@ -435,7 +431,7 @@ const PostDetails = () => {
     setPost({ ...post, savedBy: newSaved });
     try {
       await toggleSavePost(post.$id, user.$id);
-    } catch (e) {}
+    } catch {}
   };
   const searchUsersInAppwrite = async (query: string) => {
     try {
@@ -451,7 +447,7 @@ const PostDetails = () => {
         ],
       );
       return res.documents;
-    } catch (error) {
+    } catch {
       return [];
     }
   };
@@ -462,7 +458,7 @@ const PostDetails = () => {
         const users = await Promise.all(ids.map((id) => getUser(id)));
         return users.filter((u) => u !== null);
       }
-    } catch (error) {}
+    } catch {}
     return [];
   };
   const openShare = async () => {
@@ -505,7 +501,7 @@ const PostDetails = () => {
       );
       await Promise.all(promises);
       Alert.alert("Enviado", "Compartido correctamente.");
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "No se pudo compartir.");
     }
   };
@@ -519,7 +515,7 @@ const PostDetails = () => {
         try {
           const freshUrl = await getDeezerTrackUrl(trackId);
           if (freshUrl) freshPreview = freshUrl;
-        } catch (e) {}
+        } catch {}
       }
       setStoryInitialSongData({ ...songData, preview: freshPreview });
       toggleModal("isShareSelector", false);
@@ -534,7 +530,7 @@ const PostDetails = () => {
         message: `¡Mira esta canción en Mood! ${link}`,
         url: link,
       });
-    } catch (error) {}
+    } catch {}
     toggleModal("isShareSelector", false);
   };
   const handleCopyLink = () => {

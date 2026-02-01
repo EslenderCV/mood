@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 interface PostToastProps {
   visible: boolean;
-  type: "success" | "error";
+  type: "success" | "error" | "info";
   title: string;
   message: string;
   translateY: Animated.Value;
@@ -16,8 +16,13 @@ const PostToast = React.memo(
     if (!visible) return null;
 
     const isSuccess = type === "success";
-    const iconName = isSuccess ? "checkmark-circle" : "alert-circle";
-    const iconColor = isSuccess ? "#5E17EB" : "#EF4444";
+    const isError = type === "error";
+    const iconName = isSuccess
+      ? "checkmark-circle"
+      : isError
+        ? "alert-circle"
+        : "information-circle";
+    const iconColor = isSuccess ? "#5E17EB" : isError ? "#EF4444" : "#A78BFA";
     const bgColor = "rgba(20, 20, 23, 0.95)";
 
     return (
@@ -50,7 +55,9 @@ const PostToast = React.memo(
             borderRadius: 24,
             backgroundColor: isSuccess
               ? "rgba(94, 23, 235, 0.15)"
-              : "rgba(239, 68, 68, 0.15)",
+              : isError
+                ? "rgba(239, 68, 68, 0.15)"
+                : "rgba(167, 139, 250, 0.15)",
             justifyContent: "center",
             alignItems: "center",
             marginRight: 14,

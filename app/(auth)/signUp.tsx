@@ -19,7 +19,6 @@ import { useGlobalContext, User } from "@/context/GlobalProvider";
 import {
   createUser,
   signInWithOAuth,
-  getCurrentUser,
   syncOrCreateUserDocument,
 } from "@/lib/appwrite";
 import { sendWelcomeEmail } from "@/lib/email";

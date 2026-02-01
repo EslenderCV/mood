@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Keyboard, Animated, Dimensions, Easing } from "react-native";
+import { Keyboard, Animated, Dimensions, Easing, Platform } from "react-native";
 import { Audio } from "expo-av";
 import { useAudioRecorder } from "expo-audio";
 import * as Haptics from "expo-haptics";
@@ -65,6 +65,17 @@ export const usePostModalController = (props?: any) => {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [moodStyle, setMoodStyle] = useState<"standard" | "card">("standard");
   const [isShazamScanning, setIsShazamScanning] = useState(false);
+// Shazam premium UI helpers
+const [shazamUiState, setShazamUiState] = useState<"idle" | "listening" | "matching">("idle");
+const [shazamSecondsLeft, setShazamSecondsLeft] = useState<number>(0);
+const [shazamDetected, setShazamDetected] = useState<{
+  title: string;
+  artist: string;
+  artworkURL?: string;
+} | null>(null);
+const shazamCancelRef = useRef({ cancelled: false });
+const shazamTimerRef = useRef<any>(null);
+
 
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -77,7 +88,7 @@ export const usePostModalController = (props?: any) => {
 
   const [toast, setToast] = useState({
     visible: false,
-    type: "success" as "success" | "error",
+    type: "success" as "success" | "error" | "info",
     title: "",
     message: "",
   });
@@ -175,7 +186,7 @@ export const usePostModalController = (props?: any) => {
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
-      if (searchQuery.length > 2) searchDeezerTracks(searchQuery);
+      if (searchQuery.length > 2) void searchDeezerTracks(searchQuery);
       else {
         const loadSuggestions = async () => {
           if (isSearchingMusic) {
@@ -238,12 +249,14 @@ export const usePostModalController = (props?: any) => {
   };
 
   const showToast = useCallback(
-    (type: "success" | "error", title: string, message: string) => {
+    (type: "success" | "error" | "info", title: string, message: string) => {
       setToast({ visible: true, type, title, message });
       Haptics.notificationAsync(
         type === "success"
           ? Haptics.NotificationFeedbackType.Success
-          : Haptics.NotificationFeedbackType.Error,
+          : type === "error"
+            ? Haptics.NotificationFeedbackType.Error
+            : Haptics.NotificationFeedbackType.Warning,
       );
       Animated.spring(toastAnim, {
         toValue: 0,
@@ -345,41 +358,272 @@ export const usePostModalController = (props?: any) => {
     setLinkedSong(null);
   }, [sound]);
 
-  const searchDeezerTracks = async (query: string) => {
-    if (!query) return;
+  const searchDeezerTracks = async (query: string): Promise<Song[]> => {
+    if (!query) return [];
     setIsLoadingSearch(true);
     try {
       const response = await fetch(
         `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=25`,
       );
       const data = await response.json();
-      if (data.data) {
-        setSearchResults(
-          data.data.map((item: any) => ({
-            id: String(item.id),
-            title: item.title,
-            artist: item.artist.name,
-            cover: item.album.cover_xl || item.album.cover_medium,
-            preview: item.preview,
-            isExplicit: item.explicit_lyrics === true,
-          })),
-        );
+      if (data?.data) {
+        const songs: Song[] = data.data.map((item: any) => ({
+          id: String(item.id),
+          title: item.title,
+          artist: item.artist?.name ?? "",
+          cover: item.album?.cover_xl || item.album?.cover_medium || "",
+          preview: item.preview ?? null,
+          isExplicit: item.explicit_lyrics === true,
+        }));
+        setSearchResults(songs);
+        return songs;
       }
+      return [];
     } catch (e) {
       console.error(e);
+      return [];
     } finally {
       setIsLoadingSearch(false);
     }
   };
 
+  const cancelShazam = useCallback(async () => {
+    if (!isShazamScanning) return;
+    shazamCancelRef.current.cancelled = true;
+
+    // Stop listening ASAP
+    try {
+      const ExpoShazamKit = await import("expo-shazamkit");
+      ExpoShazamKit.stopListening();
+    } catch {}
+
+    // Clear UI + timers immediately
+    try {
+      if (shazamTimerRef.current) clearInterval(shazamTimerRef.current);
+    } catch {}
+    shazamTimerRef.current = null;
+
+    setShazamUiState("idle");
+    setShazamSecondsLeft(0);
+    setShazamDetected(null);
+    setIsShazamScanning(false);
+
+    try {
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        allowsRecordingIOS: false,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+    } catch {}
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [isShazamScanning]);
+
+
   const handleShazam = async () => {
-    if (linkedSong) return;
+    // ShazamKit (expo-shazamkit) es iOS-only. En Android mostramos un mensaje.
+    if (Platform.OS !== "ios") {
+      showToast(
+        "info",
+        "No disponible",
+        "Shazam está disponible solo en iOS por ahora.",
+      );
+      return;
+    }
+
+    if (linkedSong) {
+      showToast(
+        "info",
+        "Ya hay una canción",
+        "Quita la canción actual para usar Shazam.",
+      );
+      return;
+    }
+
+    if (recorder.isRecording) {
+      showToast(
+        "info",
+        "Grabación activa",
+        "Detén la grabación de audio antes de usar Shazam.",
+      );
+      return;
+    }
+
     await stopAudio();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    shazamCancelRef.current.cancelled = false;
+    setShazamDetected(null);
+    setShazamUiState("listening");
+    setShazamSecondsLeft(15);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsShazamScanning(true);
-    setTimeout(() => {
+
+    const timeoutMs = 15000;
+
+    // Countdown timer (premium UX)
+    try {
+      if (shazamTimerRef.current) clearInterval(shazamTimerRef.current);
+    } catch {}
+    shazamTimerRef.current = setInterval(() => {
+      setShazamSecondsLeft((prev) => Math.max(0, prev - 1));
+    }, 1000);
+
+    try {
+      // Aseguramos modo de audio con micrófono permitido (iOS)
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        allowsRecordingIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+
+      if (shazamCancelRef.current.cancelled) return;
+
+      // Request microphone permission up-front for a clean UX
+      const micPerm = await Audio.requestPermissionsAsync();
+      if (micPerm.status !== "granted") {
+        showToast(
+          "error",
+          "Permiso requerido",
+          "Necesitamos acceso al micrófono para reconocer música.",
+        );
+        return;
+      }
+
+      const ExpoShazamKit = await import("expo-shazamkit");
+      const available = await ExpoShazamKit.isAvailable();
+      if (!available) {
+        showToast(
+          "error",
+          "No disponible",
+          "ShazamKit no está disponible en este dispositivo (requiere iOS 15+ y un build nativo).",
+        );
+        return;
+      }
+
+      if (shazamCancelRef.current.cancelled) return;
+
+      // Ejecutamos el reconocimiento con timeout para no quedarnos colgados en el overlay.
+      const result = await new Promise<any[]>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          try {
+            ExpoShazamKit.stopListening();
+          } catch {}
+          reject(new Error("SHAZAM_TIMEOUT"));
+        }, timeoutMs);
+
+        ExpoShazamKit.startListening()
+          .then((matches: any[]) => {
+            clearTimeout(timer);
+            resolve(matches ?? []);
+          })
+          .catch((err: any) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+      });
+
+      if (shazamCancelRef.current.cancelled) return;
+
+      if (!result || result.length === 0) {
+        showToast(
+          "info",
+          "Sin coincidencias",
+          "No pudimos reconocer la canción. Inténtalo de nuevo.",
+        );
+        return;
+      }
+
+      const match = result[0] ?? {};
+      const title = String(match.title ?? "").trim();
+      const artist = String(match.artist ?? "").trim();
+      const artworkURL = String(match.artworkURL ?? "").trim();
+      const query = `${title} ${artist}`.trim();
+      setShazamDetected({
+        title: title || "Canción detectada",
+        artist: artist || "Artista",
+        artworkURL: artworkURL || undefined,
+      });
+      setShazamUiState("matching");
+
+      if (!query) {
+        showToast(
+          "error",
+          "Error",
+          "Se detectó audio, pero no pudimos obtener datos de la canción.",
+        );
+        return;
+      }
+
+      // Intentamos mapear a Deezer para obtener preview/cover consistentes con la app.
+      const deezerResults = await searchDeezerTracks(query);
+      if (deezerResults.length > 0) {
+        const best = deezerResults[0];
+        setLinkedSong(best);
+        setIsSearchingMusic(false);
+        setSearchQuery("");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showToast("success", "¡Listo!", `Detectado: ${best.title} — ${best.artist}`);
+        return;
+      }
+
+      // Fallback: usamos lo que devuelve ShazamKit (sin preview).
+      setLinkedSong({
+        id: `shazam:${match.appleMusicID ?? match.shazamID ?? Date.now()}`,
+        title: title || "Canción detectada",
+        artist: artist || "Artista",
+        cover: artworkURL || "",
+        preview: null,
+        isExplicit: false,
+      });
+
+      // Abrimos el buscador para que el usuario elija una alternativa con preview si quiere.
+      setIsSearchingMusic(true);
+      setSearchQuery(query);
+      showToast(
+        "info",
+        "Reconocido",
+        "Reconocimos la canción, pero no encontramos preview. Puedes seleccionar una alternativa en la búsqueda.",
+      );
+    } catch (error: any) {
+      if (shazamCancelRef.current.cancelled) {
+        // User cancelled: no toast noise.
+        return;
+      }
+      const message =
+        error?.message === "SHAZAM_TIMEOUT"
+          ? "No se detectó ninguna canción. Inténtalo de nuevo."
+          : error?.message || "No se pudo usar Shazam.";
+      showToast(
+        error?.message === "SHAZAM_TIMEOUT" ? "info" : "error",
+        error?.message === "SHAZAM_TIMEOUT" ? "Tiempo agotado" : "Error",
+        message,
+      );
+      try {
+        const ExpoShazamKit = await import("expo-shazamkit");
+        ExpoShazamKit.stopListening();
+      } catch {}
+    } finally {
+      try {
+        if (shazamTimerRef.current) clearInterval(shazamTimerRef.current);
+      } catch {}
+      shazamTimerRef.current = null;
+
       setIsShazamScanning(false);
-    }, 5000);
+      setShazamUiState("idle");
+      setShazamSecondsLeft(0);
+      setShazamDetected(null);
+
+      // Regresamos al modo de reproducción por si el usuario reproduce un preview luego.
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          allowsRecordingIOS: false,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+        });
+      } catch {}
+    }
   };
 
   const handlePost = async () => {
@@ -500,6 +744,10 @@ export const usePostModalController = (props?: any) => {
     recorder,
     handleShazam,
     isShazamScanning,
+    cancelShazam,
+    shazamUiState,
+    shazamSecondsLeft,
+    shazamDetected,
     handlePost,
     isLoading,
     backgroundOpacity,

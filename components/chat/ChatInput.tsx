@@ -88,7 +88,11 @@ export const ChatInput = ({
           <TouchableOpacity
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              editingMessage ? onCancelEdit() : onCancelReply();
+              if (editingMessage) {
+                onCancelEdit();
+              } else {
+                onCancelReply();
+              }
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >

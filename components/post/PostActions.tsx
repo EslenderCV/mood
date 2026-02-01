@@ -74,9 +74,11 @@ export const PostActions = ({
           className="flex-row items-center"
           onPress={() => {
             onInteraction();
-            onCommentPress
-              ? onCommentPress(postId)
-              : router.push(`/post/${postId}` as any);
+            if (onCommentPress) {
+              onCommentPress(postId);
+            } else {
+              router.push(`/post/${postId}` as any);
+            }
           }}
           hapticKind="selection"
           hitSlop={hit}

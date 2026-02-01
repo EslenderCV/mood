@@ -5,9 +5,8 @@ import {
   FlatList,
   ActivityIndicator,
   TouchableOpacity,
-  Image,
 } from "react-native";
-import { useLocalSearchParams, router, Stack } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
@@ -20,8 +19,6 @@ import PostItem from "@/components/PostItem";
 import { useGlobalContext } from "@/context/GlobalProvider";
 
 // Componentes de Modal (Opcional: Si quieres que funcionen las opciones/share desde aquí también)
-import OptionsModal from "@/components/OptionsModal";
-import ShareModal from "@/components/ShareModal";
 // Nota: Puedes reutilizar la lógica de modales de home o explore si deseas full interactividad.
 // Por ahora, haremos una lista simple visualizable.
 

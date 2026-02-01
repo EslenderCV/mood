@@ -59,19 +59,19 @@ export const VoiceVibeRecorder = ({
   const cleanup = async () => {
     try {
       if (recording) await recording.stopAndUnloadAsync();
-    } catch (e) {}
+    } catch {}
     try {
       if (backgroundSound) {
         await backgroundSound.stopAsync();
         await backgroundSound.unloadAsync();
       }
-    } catch (e) {}
+    } catch {}
     try {
       if (previewSound) {
         await previewSound.stopAsync();
         await previewSound.unloadAsync();
       }
-    } catch (e) {}
+    } catch {}
   };
 
   useEffect(() => {
@@ -147,7 +147,7 @@ export const VoiceVibeRecorder = ({
       try {
         await backgroundSound.stopAsync();
         await backgroundSound.unloadAsync();
-      } catch (e) {}
+      } catch {}
       setBackgroundSound(null);
     }
 

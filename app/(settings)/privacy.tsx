@@ -41,7 +41,7 @@ const Privacy = () => {
       await updateProfile(user.$id, { isPrivate: value });
       const updatedUser = { ...user, isPrivate: value };
       if (setUser) setUser(updatedUser as any);
-    } catch (error) {
+    } catch {
       Alert.alert(
         t("privacy.alerts.errorTitle"),
         t("privacy.alerts.errorPrivacy")
@@ -57,7 +57,7 @@ const Privacy = () => {
       await updateProfile(user.$id, { allowTags: value });
       const updatedUser = { ...user, allowTags: value };
       if (setUser) setUser(updatedUser as any);
-    } catch (error) {
+    } catch {
       Alert.alert(
         t("privacy.alerts.errorTitle"),
         t("privacy.alerts.errorConfig")

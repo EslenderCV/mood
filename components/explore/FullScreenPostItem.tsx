@@ -9,7 +9,7 @@ import {
   Dimensions,
   Alert,
 } from "react-native";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Audio } from "expo-av";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -129,7 +129,7 @@ const FullScreenPostItem = React.memo(
       setIsFollowing(true);
       try {
         await followUser(currentUser.$id, creator.id);
-      } catch (error) {
+      } catch {
         setIsFollowing(false);
         Alert.alert("Error", "No se pudo seguir al usuario");
       }
@@ -142,7 +142,7 @@ const FullScreenPostItem = React.memo(
       setLikesCount(prevLiked ? likesCount - 1 : likesCount + 1);
       try {
         await toggleLikePost(item.$id, currentUser.$id, item.likedBy || []);
-      } catch (error) {
+      } catch {
         setIsLiked(prevLiked);
       }
     };
@@ -152,7 +152,7 @@ const FullScreenPostItem = React.memo(
       setIsSaved(!isSaved);
       try {
         await toggleSavePost(item.$id, currentUser.$id);
-      } catch (e) {
+      } catch {
         setIsSaved(isSaved);
       }
     };

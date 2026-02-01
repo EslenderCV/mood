@@ -54,7 +54,7 @@ const CommentsSheet = ({ visible, onClose, postId, currentUser }: any) => {
       setComments((prev) => [comment, ...prev]);
       setNewComment("");
       Keyboard.dismiss();
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "No se pudo enviar el comentario");
     } finally {
       setSending(false);

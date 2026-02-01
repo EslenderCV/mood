@@ -10,7 +10,6 @@ import {
   Animated,
   Easing,
   ActivityIndicator,
-  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
@@ -192,7 +191,7 @@ const WeeklyVibeModal = ({
       try {
         await soundRef.current.stopAsync();
         await soundRef.current.unloadAsync();
-      } catch (e) {}
+      } catch {}
       soundRef.current = null;
     }
   };

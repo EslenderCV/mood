@@ -112,7 +112,7 @@ const Settings = () => {
       if (setUser) {
         setUser({ ...user, preferredPlatform: platform } as User);
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "No se pudo actualizar la preferencia de música.");
     } finally {
       setUpdatingPlatform(false);

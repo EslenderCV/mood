@@ -84,7 +84,7 @@ const UserList = () => {
         if (chatDoc) {
           router.push(`/chat/${chatDoc.$id}` as any);
         }
-      } catch (error) {
+      } catch {
         Alert.alert("Error", "No se pudo abrir el chat");
       } finally {
         setActionLoading(null);

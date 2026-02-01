@@ -1,7 +1,6 @@
 import React, { memo } from "react";
 import { View, Text, TouchableOpacity, Linking } from "react-native";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import * as Haptics from "expo-haptics";
@@ -33,7 +32,7 @@ const AdItem: React.FC<AdItemProps> = ({ ad }) => {
     Haptics.selectionAsync();
     try {
       await Linking.openURL(ad.url);
-    } catch (e) {
+    } catch {
       console.log("Error opening URL");
     }
   };

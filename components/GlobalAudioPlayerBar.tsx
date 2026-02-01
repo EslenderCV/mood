@@ -6,7 +6,6 @@ import {
   Animated,
   Platform,
   StyleSheet, // ✅ IMPORT FALTANTE AGREGADO
-  Dimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,8 +13,6 @@ import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAudioContext } from "@/context/AudioContext";
 import LoadingDots from "@/components/shared/LoadingDots";
-
-const { width } = Dimensions.get("window");
 
 const GlobalAudioPlayerBar = () => {
   const { activeTrackMetadata, isPlaying, isLoading, isBuffering, pauseTrack, resumeTrack, stopTrack } =

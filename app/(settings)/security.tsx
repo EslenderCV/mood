@@ -9,15 +9,10 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  AppState,
 } from "react-native";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  Ionicons,
-  MaterialIcons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as Device from "expo-device";
@@ -37,7 +32,7 @@ const Security = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
-  const { setUser, setIsLogged, user } = useGlobalContext();
+  const { setUser, setIsLogged } = useGlobalContext();
 
   // --- COLORES ---
   const bgColor = isDark ? "#000000" : "#FFFFFF";
@@ -149,7 +144,7 @@ const Security = () => {
       );
       setShowPasswordModal(false);
       setPassForm({ old: "", new: "", confirm: "" });
-    } catch (error: any) {
+    } catch {
       Alert.alert(t("security.alerts.error"), t("security.alerts.passError"));
     } finally {
       setIsUpdatingPass(false);
@@ -196,7 +191,7 @@ const Security = () => {
               setUser(null);
               setIsLogged(false);
               router.replace("/signIn");
-            } catch (error) {
+            } catch {
               Alert.alert(
                 t("security.alerts.error"),
                 t("security.alerts.logoutAllError"),

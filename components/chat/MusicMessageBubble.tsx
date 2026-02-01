@@ -2,7 +2,6 @@ import React from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useAudioContext } from "@/context/AudioContext";
 
 interface MusicMessageBubbleProps {
@@ -20,7 +19,7 @@ export const MusicMessageBubble = ({
   let song: any = {};
   try {
     song = JSON.parse(songData);
-  } catch (e) {
+  } catch {
     return <Text style={{ color: "red" }}>Error loading song</Text>;
   }
 

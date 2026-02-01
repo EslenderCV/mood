@@ -53,7 +53,7 @@ const CommentItem = ({
       voiceData = JSON.parse(item.body);
       isVoice = true;
     }
-  } catch (e) {}
+  } catch {}
 
   return (
     <View className="flex-row items-start px-5 py-3">
@@ -156,7 +156,7 @@ const CommentsSheet = () => {
           try {
             const song = JSON.parse(resPost.songData);
             if (song.preview) setActiveSongUrl(song.preview);
-          } catch (e) {
+          } catch {
             console.log("Error parsing song for preview");
           }
         }

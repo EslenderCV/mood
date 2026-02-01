@@ -65,7 +65,7 @@ const searchSongsWrapper = async (query: string) => {
       preview: track.preview,
       duration: track.duration,
     }));
-  } catch (e) {
+  } catch {
     return [];
   }
 };

@@ -9,10 +9,9 @@ import {
   Platform,
   LayoutAnimation,
   UIManager,
-  useWindowDimensions,
   ActivityIndicator,
 } from "react-native";
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -418,7 +417,7 @@ const NotificationsScreen = () => {
         currentUser.$id,
         notification.$id,
       );
-    } catch (error) {
+    } catch {
       Alert.alert("Error", t("notifications.errorAccept"));
       fetchNotifications(false);
     }
@@ -433,7 +432,7 @@ const NotificationsScreen = () => {
       );
       await deleteFollowRequest(notification.senderId, currentUser.$id);
       await markNotificationAsRead(notification.$id);
-    } catch (error) {
+    } catch {
       Alert.alert("Error", t("notifications.errorDelete"));
     }
   };

@@ -62,7 +62,7 @@ export const ChatMusicModal = ({
       try {
         await soundRef.current.stopAsync();
         await soundRef.current.unloadAsync();
-      } catch (e) {}
+      } catch {}
       soundRef.current = null;
       setPlayingId(null);
     }

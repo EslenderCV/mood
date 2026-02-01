@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   ScrollView,
   Keyboard,
-  Platform,
   RefreshControl,
 } from "react-native";
 import React, {
@@ -16,7 +15,6 @@ import React, {
   useMemo,
   memo,
   useEffect,
-  useRef,
 } from "react";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
@@ -39,7 +37,6 @@ import MoodShareCard from "@/components/MoodShareCard";
 import {
   ExplorePostSkeleton,
   TrendingVibeSkeleton,
-  CreatorSkeleton,
   MusicSkeleton,
   ArtistSkeleton,
   ProfileSkeleton,
@@ -73,7 +70,7 @@ const searchSongsWrapper = async (query: string) => {
       preview: track.preview,
       duration: track.duration,
     }));
-  } catch (e) {
+  } catch {
     return [];
   }
 };

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { Text, TouchableOpacity } from "react-native";
 import { useColorScheme } from "nativewind";
 import { databases, appwriteConfig } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";

@@ -7,6 +7,7 @@ import {
   TextInput,
   Modal,
   StyleSheet,
+  Image,
 } from "react-native";
 import { Ionicons , Fontisto } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
@@ -41,6 +42,10 @@ interface MusicSectionProps {
   onShazam: () => void;
   isRecording: boolean;
   isShazamScanning: boolean;
+  shazamUiState: "idle" | "listening" | "matching";
+  shazamSecondsLeft: number;
+  shazamDetected: { title: string; artist: string; artworkURL?: string } | null;
+  onCancelShazam: () => void;
   openMoodPopup: () => void;
   mood: any;
   setMood: (v: MoodState | null) => void;
@@ -101,6 +106,10 @@ export default function MusicSection({
   currentPlayingUrl,
   onShazam,
   isShazamScanning,
+  shazamUiState,
+  shazamSecondsLeft,
+  shazamDetected,
+  onCancelShazam,
   openMoodPopup,
   mood,
   setMood,
@@ -108,6 +117,15 @@ export default function MusicSection({
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const iconColor = isDark ? "#A1A1AA" : "#71717A";
+
+  const overlayTitle =
+    shazamUiState === "matching" ? "¡Encontrada!" : "Escuchando…";
+  const overlaySubtitle =
+    shazamUiState === "matching"
+      ? "Buscando detalles para añadirla al post…"
+      : shazamSecondsLeft > 0
+        ? `Quedan ${shazamSecondsLeft}s`
+        : "Procesando…";
 
   if (linkedSong) {
     return (
@@ -360,9 +378,110 @@ export default function MusicSection({
             </View>
 
             {/* Texto */}
-            <Text className="text-white font-bold text-xl mt-8 tracking-wide">
-              {`Hold up, I'm listening...`}
-            </Text>
+            
+{/* Track detectada (preview) */}
+{shazamDetected ? (
+  <View
+    style={{
+      marginTop: 22,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+      backgroundColor: "rgba(20, 20, 23, 0.55)",
+      flexDirection: "row",
+      alignItems: "center",
+      maxWidth: 320,
+    }}
+  >
+    {shazamDetected.artworkURL ? (
+      <Image
+        source={{ uri: shazamDetected.artworkURL }}
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: 14,
+          marginRight: 12,
+          backgroundColor: "rgba(255,255,255,0.08)",
+        }}
+      />
+    ) : (
+      <View
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: 14,
+          marginRight: 12,
+          backgroundColor: "rgba(255,255,255,0.08)",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name="musical-notes" size={22} color="#A78BFA" />
+      </View>
+    )}
+
+    <View style={{ flex: 1 }}>
+      <Text
+        numberOfLines={1}
+        style={{
+          color: "white",
+          fontWeight: "800",
+          fontSize: 15,
+        }}
+      >
+        {shazamDetected.title}
+      </Text>
+      <Text
+        numberOfLines={1}
+        style={{
+          color: "rgba(255,255,255,0.7)",
+          fontWeight: "600",
+          fontSize: 13,
+          marginTop: 2,
+        }}
+      >
+        {shazamDetected.artist}
+      </Text>
+    </View>
+  </View>
+) : null}
+
+{/* Texto principal */}
+<Text className="text-white font-bold text-xl mt-8 tracking-wide">
+  {overlayTitle}
+</Text>
+<Text
+  style={{
+    marginTop: 8,
+    color: "rgba(255,255,255,0.75)",
+    fontWeight: "600",
+    fontSize: 13,
+  }}
+>
+  {overlaySubtitle}
+</Text>
+
+{/* Cancel */}
+<TouchableOpacity
+  onPress={onCancelShazam}
+  accessibilityRole="button"
+  accessibilityLabel="Cancelar reconocimiento"
+  style={{
+    marginTop: 22,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  }}
+>
+  <Text style={{ color: "white", fontWeight: "700" }}>
+    Cancelar
+  </Text>
+</TouchableOpacity>
           </View>
         </View>
       </Modal>

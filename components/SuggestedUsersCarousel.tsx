@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-  Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import { useColorScheme } from "nativewind";

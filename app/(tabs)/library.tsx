@@ -1,20 +1,11 @@
-import React, {
-  useCallback,
-  useMemo,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useMemo, useEffect } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   FlatList,
   RefreshControl,
-  Dimensions,
   Alert,
-  Platform,
-  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -33,7 +24,6 @@ import {
   EmptyState,
   SongSkeleton,
   PlaylistSkeleton,
-  CARD_WIDTH,
 } from "@/components/library/LibraryCards";
 import {
   SongOptionsModal,
@@ -41,7 +31,6 @@ import {
   AddToPlaylistModal,
 } from "@/components/library/LibraryModals";
 
-const { width } = Dimensions.get("window");
 const PADDING_HORIZONTAL = 20;
 
 

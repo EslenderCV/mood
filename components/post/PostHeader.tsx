@@ -62,9 +62,11 @@ export const PostHeader = ({
         <PressableScale
           onPress={() => {
             onInteraction();
-            onProfilePress
-              ? onProfilePress(creator.id)
-              : router.push(`/user/${creator.id}` as any);
+            if (onProfilePress) {
+              onProfilePress(creator.id);
+            } else {
+              router.push(`/user/${creator.id}` as any);
+            }
           }}
           hapticKind="selection"
           hitSlop={10}
