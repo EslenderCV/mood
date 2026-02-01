@@ -25,7 +25,8 @@ export default {
     welcomeBack: "Welcome back!",
     subtitleSignIn: "Enter your credentials to continue vibing.",
     joinMood: "Join Mood",
-    subtitleSignUp: "Create an account to discover and share music like never before.",
+    subtitleSignUp:
+      "Create an account to discover and share music like never before.",
     namePlaceholder: "Full Name",
     usernamePlaceholder: "Username",
     emailPlaceholder: "Email",
@@ -125,6 +126,7 @@ export default {
     emptyTitle: "You don't follow anyone yet or there are no posts.",
     emptySubtitle: "Go to the Explore tab to find people.",
     unknownUser: "Unknown User",
+    likedThis: "liked this",
   },
   tabs: {
     home: "Home",
@@ -237,7 +239,8 @@ export default {
   onboarding: {
     titleLine1: "Vibe",
     titleLine2: "Together.",
-    subtitle: "Music isn't just for listening, it's for feeling and sharing with your people.",
+    subtitle:
+      "Music isn't just for listening, it's for feeling and sharing with your people.",
     startButton: "Get Started",
     footer: "Mood App © 2024",
   },
@@ -316,7 +319,8 @@ export default {
     },
     alerts: {
       blockTitle: "Block user",
-      blockMsg: "They won't be able to see your profile, posts, or message you. Are you sure?",
+      blockMsg:
+        "They won't be able to see your profile, posts, or message you. Are you sure?",
       blockSuccess: "User blocked",
       errorBlock: "Could not block user.",
       errorGeneric: "Error",
@@ -398,7 +402,8 @@ export default {
   deleteAccount: {
     title: "Delete account",
     warningTitle: "This action is permanent",
-    warningBody: "Deleting your account will remove your posts, comments, messages, and associated data. You can’t undo this.",
+    warningBody:
+      "Deleting your account will remove your posts, comments, messages, and associated data. You can’t undo this.",
     typeTitle: "Confirmation",
     typeBody: "Type DELETE to continue.",
     confirmWord: "DELETE",
@@ -406,7 +411,8 @@ export default {
     deleting: "Deleting…",
     note: "Note: Best-effort due to permissions/security rules. If something fails, log out and try again.",
     confirmTitle: "Confirm deletion",
-    confirmBody: "Are you sure you want to delete your account and all your data? This cannot be undone.",
+    confirmBody:
+      "Are you sure you want to delete your account and all your data? This cannot be undone.",
     confirmAction: "Yes, delete",
     errorGeneric: "Could not delete the account. Please try again.",
     a11yHint: "Opens a confirmation to delete your account.",
@@ -421,7 +427,8 @@ export default {
     },
     privateAccount: {
       title: "Private Account",
-      subtitle: "Only your followers will be able to see your photos and videos.",
+      subtitle:
+        "Only your followers will be able to see your photos and videos.",
     },
     allowTags: {
       title: "Allow Tags",
@@ -468,7 +475,8 @@ export default {
   },
   plus: {
     title: "PLUS",
-    subtitle: "Unlock the ultimate experience. Studio quality and total freedom.",
+    subtitle:
+      "Unlock the ultimate experience. Studio quality and total freedom.",
     features: {
       f1Title: "Lossless Audio (Hi-Fi)",
       f1Desc: "Hear every detail as the artist intended.",

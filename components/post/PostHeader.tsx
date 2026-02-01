@@ -40,7 +40,10 @@ export const PostHeader = ({
   subTextColor: string;
   accentColor: string;
   isDark: boolean;
-  mood?: string;
+  mood?: {
+    emoji: string;
+    text: string;
+  };
   isPrivate?: boolean;
   displayStreak: number;
   onOptionsPress?: () => void;
@@ -50,29 +53,7 @@ export const PostHeader = ({
 }) => {
   const moodObj = React.useMemo(() => {
     if (!mood) return undefined;
-    const trimmed = String(mood).trim();
-    if (!trimmed) return undefined;
-
-    // If mood was persisted as JSON string, prefer that.
-    if (trimmed.startsWith("{")) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (parsed?.emoji && parsed?.text) {
-          return { emoji: String(parsed.emoji), text: String(parsed.text) };
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    // Common format: "😀 Happy".
-    const parts = trimmed.split(/\s+/);
-    if (parts.length >= 2 && parts[0].length <= 4) {
-      return { emoji: parts[0], text: parts.slice(1).join(" ") };
-    }
-
-    // Fallback: treat the entire string as the mood text.
-    return { emoji: "🙂", text: trimmed };
+    return { emoji: String(mood.emoji), text: String(mood.text) };
   }, [mood]);
 
   return (
@@ -81,7 +62,9 @@ export const PostHeader = ({
         <PressableScale
           onPress={() => {
             onInteraction();
-            onProfilePress ? onProfilePress(creator.id) : router.push(`/user/${creator.id}` as any);
+            onProfilePress
+              ? onProfilePress(creator.id)
+              : router.push(`/user/${creator.id}` as any);
           }}
           hapticKind="selection"
           hitSlop={10}
@@ -131,7 +114,10 @@ export const PostHeader = ({
             )}
           </View>
 
-          <Text className="text-[13px] font-medium" style={{ color: subTextColor }}>
+          <Text
+            className="text-[13px] font-medium"
+            style={{ color: subTextColor }}
+          >
             @{creator.username} · {getRelativeTime(postCreatedAt, language)}
           </Text>
 

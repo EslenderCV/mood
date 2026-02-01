@@ -10,6 +10,7 @@ export enum InteractionType {
   DWELL = "DWELL",
   SKIP = "SKIP",
   FOLLOW = "FOLLOW",
+  REPLY_STORY = "REPLY_STORY",
 }
 
 export interface InteractionSignalPayload {

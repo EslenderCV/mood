@@ -1,5 +1,11 @@
 import React from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, Animated } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  Animated,
+} from "react-native";
 import { TapGestureHandler } from "react-native-gesture-handler";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -42,7 +48,7 @@ export const PostBody = ({
   onDoubleTap: (event: any) => void;
 }) => {
   return (
-    <View className="pl-[52px]">
+    <View>
       {isMoodPost ? (
         <TapGestureHandler numberOfTaps={2} onHandlerStateChange={onDoubleTap}>
           <Animated.View className="mb-4 rounded-[24px] overflow-hidden shadow-sm relative">
@@ -89,7 +95,10 @@ export const PostBody = ({
       ) : (
         !!post.comment &&
         post.comment.trim() !== "" && (
-          <Text className="text-[16px] leading-[22px] mb-3 font-normal" style={{ color: textColor }}>
+          <Text
+            className="text-[16px] leading-[22px] mb-3 font-normal"
+            style={{ color: textColor }}
+          >
             {post.comment}
           </Text>
         )
@@ -100,7 +109,9 @@ export const PostBody = ({
           <Animated.View
             className="mb-4 rounded-[28px] overflow-hidden border"
             style={{
-              borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+              borderColor: isDark
+                ? "rgba(255,255,255,0.08)"
+                : "rgba(0,0,0,0.05)",
               shadowColor: isDark ? "#5E17EB" : "#000",
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: isDark ? 0.2 : 0.05,
@@ -129,17 +140,28 @@ export const PostBody = ({
               </View>
 
               <View className="flex-1 ml-4 justify-center mr-2">
-                <Text className="font-bold text-[16px] mb-1" numberOfLines={1} style={{ color: textColor }}>
+                <Text
+                  className="font-bold text-[16px] mb-1"
+                  numberOfLines={1}
+                  style={{ color: textColor }}
+                >
                   {songData.title}
                 </Text>
-                <Text className="text-[14px] font-medium" numberOfLines={1} style={{ color: subTextColor }}>
+                <Text
+                  className="text-[14px] font-medium"
+                  numberOfLines={1}
+                  style={{ color: subTextColor }}
+                >
                   {songData.artist}
                 </Text>
                 <View className="mt-2 flex-row items-center">
                   {isBufferingThis ? (
                     <LoadingDots color={subTextColor} />
                   ) : (
-                    <AudioVisualizer isPlaying={isPlayingThis} color={subTextColor} />
+                    <AudioVisualizer
+                      isPlaying={isPlayingThis}
+                      color={subTextColor}
+                    />
                   )}
                 </View>
               </View>

@@ -1,6 +1,4 @@
 export default {
-
-  
   common: {
     posted: "¡Publicado!",
     error: "Error",
@@ -24,13 +22,12 @@ export default {
     suggestedUsers: "Quizás conozcas",
   },
 
-
-  
   auth: {
     welcomeBack: "¡Hola de nuevo!",
     subtitleSignIn: "Ingresa tus credenciales para continuar vibra.",
     joinMood: "Únete a Mood",
-    subtitleSignUp: "Crea una cuenta para descubrir y compartir música como nunca antes.",
+    subtitleSignUp:
+      "Crea una cuenta para descubrir y compartir música como nunca antes.",
     namePlaceholder: "Nombre completo",
     usernamePlaceholder: "Nombre de usuario",
     emailPlaceholder: "Correo electrónico",
@@ -46,7 +43,8 @@ export default {
     signInLink: "Inicia sesión",
     // 🔥 Nuevos para Modal/Sesión
     logoutTitle: "Cerrar sesión",
-    logoutConfirm: "¿Estás seguro de que quieres cerrar sesión en todos los dispositivos?",
+    logoutConfirm:
+      "¿Estás seguro de que quieres cerrar sesión en todos los dispositivos?",
     sessionExpiredTitle: "Sesión expirada",
     sessionExpiredMsg: "Por favor, inicia sesión de nuevo.",
     alerts: {
@@ -130,6 +128,7 @@ export default {
     emptyTitle: "Aún no sigues a nadie o no han publicado nada.",
     emptySubtitle: "Ve a la pestaña Explorar para encontrar gente.",
     unknownUser: "Usuario Desconocido",
+    likedThis: "le gustó esto",
   },
   tabs: {
     home: "Inicio",
@@ -209,7 +208,8 @@ export default {
     create: "Crear",
     addTo: "Agregar a Playlist",
     songsCount: "canciones",
-    emptySubtitle: "Guarda publicaciones con música para crear tu colección personal.",
+    emptySubtitle:
+      "Guarda publicaciones con música para crear tu colección personal.",
     open: "ABRIR",
     via: "Vía",
     empty: {
@@ -242,7 +242,8 @@ export default {
   onboarding: {
     titleLine1: "Vibe",
     titleLine2: "Together.",
-    subtitle: "La música no es solo para escuchar, es para sentirla y compartirla con los tuyos.",
+    subtitle:
+      "La música no es solo para escuchar, es para sentirla y compartirla con los tuyos.",
     startButton: "Comenzar Ahora",
     footer: "Mood App © 2024",
   },
@@ -321,7 +322,8 @@ export default {
     },
     alerts: {
       blockTitle: "Bloquear usuario",
-      blockMsg: "No podrán ver tu perfil, posts ni enviarte mensajes. ¿Estás seguro?",
+      blockMsg:
+        "No podrán ver tu perfil, posts ni enviarte mensajes. ¿Estás seguro?",
       blockSuccess: "Usuario bloqueado",
       errorBlock: "No se pudo bloquear al usuario.",
       errorGeneric: "Error",
@@ -367,7 +369,8 @@ export default {
       revoke: "Revocar Acceso",
       revokeMsg: "¿Quieres desconectar este dispositivo?",
       confirmRevoke: "Sí, desconectar",
-      revokeError: "No puedes revocar tu sesión actual aquí. Usa cerrar sesión.",
+      revokeError:
+        "No puedes revocar tu sesión actual aquí. Usa cerrar sesión.",
     },
     modal: {
       title: "Cambiar Contraseña",
@@ -403,7 +406,8 @@ export default {
   deleteAccount: {
     title: "Eliminar cuenta",
     warningTitle: "Esta acción es permanente",
-    warningBody: "Eliminar tu cuenta borrará tus posts, comentarios, mensajes y datos asociados. No podrás recuperarlos.",
+    warningBody:
+      "Eliminar tu cuenta borrará tus posts, comentarios, mensajes y datos asociados. No podrás recuperarlos.",
     typeTitle: "Confirmación",
     typeBody: "Escribe ELIMINAR para continuar.",
     confirmWord: "ELIMINAR",
@@ -411,7 +415,8 @@ export default {
     deleting: "Eliminando...",
     note: "Nota: es best-effort por permisos/reglas de seguridad. Si algo falla, cierra sesión e intenta de nuevo.",
     confirmTitle: "Confirmar eliminación",
-    confirmBody: "¿Seguro que deseas eliminar tu cuenta y todos tus datos? Esta acción no se puede deshacer.",
+    confirmBody:
+      "¿Seguro que deseas eliminar tu cuenta y todos tus datos? Esta acción no se puede deshacer.",
     confirmAction: "Sí, eliminar",
     errorGeneric: "No se pudo eliminar la cuenta. Intenta de nuevo.",
     a11yHint: "Abre una confirmación para eliminar tu cuenta.",
@@ -473,7 +478,8 @@ export default {
   },
   plus: {
     title: "PLUS",
-    subtitle: "Desbloquea la experiencia definitiva. Calidad de estudio y libertad total.",
+    subtitle:
+      "Desbloquea la experiencia definitiva. Calidad de estudio y libertad total.",
     features: {
       f1Title: "Audio Lossless (Hi-Fi)",
       f1Desc: "Escucha cada detalle como el artista lo imaginó.",

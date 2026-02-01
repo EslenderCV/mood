@@ -25,7 +25,8 @@ export default {
     welcomeBack: "Bentornato!",
     subtitleSignIn: "Inserisci le tue credenziali per continuare.",
     joinMood: "Unisciti a Mood",
-    subtitleSignUp: "Crea un account per scoprire e condividere musica come mai prima d'ora.",
+    subtitleSignUp:
+      "Crea un account per scoprire e condividere musica come mai prima d'ora.",
     namePlaceholder: "Nome completo",
     usernamePlaceholder: "Nome utente",
     emailPlaceholder: "Email",
@@ -125,6 +126,7 @@ export default {
     emptyTitle: "Non segui ancora nessuno o non ci sono post.",
     emptySubtitle: "Vai alla scheda Esplora per trovare persone.",
     unknownUser: "Utente Sconosciuto",
+    likedThis: "ha messo mi piace",
   },
   tabs: {
     home: "Home",
@@ -204,7 +206,8 @@ export default {
     create: "Crea",
     addTo: "Aggiungi a Playlist",
     songsCount: "canzoni",
-    emptySubtitle: "Salva post con musica per creare la tua collezione personale.",
+    emptySubtitle:
+      "Salva post con musica per creare la tua collezione personale.",
     open: "APRI",
     via: "Via",
     empty: {
@@ -237,7 +240,8 @@ export default {
   onboarding: {
     titleLine1: "Vibra",
     titleLine2: "Insieme.",
-    subtitle: "La musica non è solo da ascoltare, è da sentire e condividere con i tuoi.",
+    subtitle:
+      "La musica non è solo da ascoltare, è da sentire e condividere con i tuoi.",
     startButton: "Inizia Ora",
     footer: "Mood App © 2024",
   },
@@ -303,7 +307,8 @@ export default {
     notFound: "Utente non trovato",
     unavailableTitle: "Profilo non disponibile",
     blockedMsg: "Hai bloccato questo utente.",
-    unavailableMsg: "Impossibile visualizzare le informazioni di questo profilo.",
+    unavailableMsg:
+      "Impossibile visualizzare le informazioni di questo profilo.",
     privateTitle: "Questo account è privato",
     privateMsg: "Segui questo account per vedere i suoi mood e playlist.",
     actions: {
@@ -316,7 +321,8 @@ export default {
     },
     alerts: {
       blockTitle: "Blocca utente",
-      blockMsg: "Non potranno vedere il tuo profilo, post o inviarti messaggi. Sei sicuro?",
+      blockMsg:
+        "Non potranno vedere il tuo profilo, post o inviarti messaggi. Sei sicuro?",
       blockSuccess: "Utente bloccato",
       errorBlock: "Impossibile bloccare l'utente.",
       errorGeneric: "Errore",
@@ -398,7 +404,8 @@ export default {
   deleteAccount: {
     title: "Elimina account",
     warningTitle: "Questa azione è permanente",
-    warningBody: "Eliminando il tuo account verranno rimossi post, commenti, messaggi e dati associati. Non puoi annullare.",
+    warningBody:
+      "Eliminando il tuo account verranno rimossi post, commenti, messaggi e dati associati. Non puoi annullare.",
     typeTitle: "Conferma",
     typeBody: "Digita ELIMINA per continuare.",
     confirmWord: "ELIMINA",
@@ -406,7 +413,8 @@ export default {
     deleting: "Eliminazione…",
     note: "Nota: best-effort per permessi/regole di sicurezza. Se fallisce, disconnettiti e riprova.",
     confirmTitle: "Conferma eliminazione",
-    confirmBody: "Sei sicuro di voler eliminare il tuo account e tutti i dati? È irreversibile.",
+    confirmBody:
+      "Sei sicuro di voler eliminare il tuo account e tutti i dati? È irreversibile.",
     confirmAction: "Sì, elimina",
     errorGeneric: "Impossibile eliminare l’account. Riprova.",
     a11yHint: "Apre una conferma per eliminare il tuo account.",
@@ -468,7 +476,8 @@ export default {
   },
   plus: {
     title: "PLUS",
-    subtitle: "Sblocca l'esperienza definitiva. Qualità studio e libertà totale.",
+    subtitle:
+      "Sblocca l'esperienza definitiva. Qualità studio e libertà totale.",
     features: {
       f1Title: "Audio Lossless (Hi-Fi)",
       f1Desc: "Ascolta ogni dettaglio come l'artista lo ha immaginato.",

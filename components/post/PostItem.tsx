@@ -4,12 +4,14 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { State } from "react-native-gesture-handler";
 import { useColorScheme } from "nativewind";
+import { router } from "expo-router"; // ✅ Para navegación
 
 import {
   toggleLikePost,
   toggleSavePost,
   getDeezerTrackUrl,
 } from "@/lib/appwrite";
+
 import { useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
 import { useAudioContext } from "@/context/AudioContext";
@@ -18,6 +20,8 @@ import { parseSongData } from "@/components/post/postUtils";
 import { PostHeader } from "@/components/post/PostHeader";
 import { PostBody } from "@/components/post/PostBody";
 import { PostActions } from "@/components/post/PostActions";
+// ✅ IMPORTAR NUEVO COMPONENTE
+import { SocialContext } from "@/components/post/SocialContext";
 
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
 
@@ -51,6 +55,8 @@ const PostItem: React.FC<PostItemProps> = ({
   const textColor = isDark ? "#FFFFFF" : "#09090B";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const accentColor = "#5E17EB";
+
+  // ✅ CORRECCIÓN ERROR ICONCOLOR: Definimos la variable que faltaba
   const iconColor = isDark ? "#A1A1AA" : "#52525B";
 
   const musicCardGradient = isDark
@@ -71,7 +77,7 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const heartScaleAnim = useRef(new Animated.Value(0)).current;
 
-  // Badge "NEW" (solo primeras ~1h)
+  // Fecha (usa originalTime si existe)
   const [showNewBadge, setShowNewBadge] = useState(() => {
     if (!post?.$createdAt) return false;
     const created = new Date(post.originalTime || post.$createdAt).getTime();
@@ -111,8 +117,7 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const songData = parseSongData(post.songData);
   const hasMusic = !!(songData && songData.title);
-  const mood = songData?.mood;
-
+  const mood = JSON.parse(post.songData.trim()).mood;
   const isPlayingThis = currentPlayingId === post.$id && isPlaying;
   const isLoadingThis =
     currentPlayingId === post.$id && isLoading && !isPlaying;
@@ -121,7 +126,6 @@ const PostItem: React.FC<PostItemProps> = ({
   const getCreator = () => {
     let userObj = post.postedBy;
     if (Array.isArray(userObj) && userObj.length > 0) userObj = userObj[0];
-
     const defaultName = t("common.user");
     const defaultUsername = t("common.anonymous");
 
@@ -135,7 +139,6 @@ const PostItem: React.FC<PostItemProps> = ({
         streak: userObj.streak || 0,
       };
     }
-
     return {
       id: "unknown",
       username: defaultUsername,
@@ -147,21 +150,16 @@ const PostItem: React.FC<PostItemProps> = ({
   };
 
   const creator = getCreator();
-
-  // TEST MODE (legacy behavior): si soy yo y no tengo streak, fuerza 1
   const displayStreak =
     creator.id === currentUserId && creator.streak === 0 ? 1 : creator.streak;
-
   const isMoodPost =
     creator.id === MOOD_OFFICIAL_ID && !hasMusic && post.comment;
 
   const handlePlayPause = async () => {
     handleInteraction();
     void Haptics.selectionAsync();
-
     const trackId = songData?.id || songData?.spotifyId;
     if (!trackId) return;
-
     let previewUrl = songData?.preview;
     if (
       !previewUrl ||
@@ -174,7 +172,6 @@ const PostItem: React.FC<PostItemProps> = ({
         return;
       }
     }
-
     if (previewUrl) {
       await playTrack(post.$id, previewUrl, {
         title: songData?.title,
@@ -187,12 +184,10 @@ const PostItem: React.FC<PostItemProps> = ({
   const handleLike = async () => {
     handleInteraction();
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
     const prevLiked = isLiked;
     setIsLiked(!isLiked);
     setLikesCount(isLiked ? likesCount - 1 : likesCount + 1);
     if (!prevLiked) onLike?.();
-
     try {
       const currentLikesArray = Array.isArray(post?.likedBy)
         ? post.likedBy
@@ -206,12 +201,9 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const onDoubleTap = (event: any) => {
     if (event.nativeEvent.state !== State.ACTIVE) return;
-
     handleInteraction();
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
     if (!isLiked) void handleLike();
-
     heartScaleAnim.setValue(0);
     Animated.sequence([
       Animated.spring(heartScaleAnim, {
@@ -232,12 +224,10 @@ const PostItem: React.FC<PostItemProps> = ({
   const handleSave = async () => {
     handleInteraction();
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
     const prevSaved = isSaved;
     setIsSaved(!isSaved);
     setSavesCount(isSaved ? savesCount - 1 : savesCount + 1);
     if (!prevSaved) onSave?.();
-
     try {
       await toggleSavePost(post.$id, currentUserId);
     } catch {
@@ -341,6 +331,17 @@ const PostItem: React.FC<PostItemProps> = ({
         }}
         onCommentPress={onCommentPress}
         onInteraction={handleInteraction}
+      />
+
+      {/* ✅ COMPONENTE SOCIAL INTEGRADO */}
+      <SocialContext
+        likedBy={post.likedBy}
+        currentUserId={currentUserId}
+        onPress={() => {
+          // Si no tienes una pantalla de likes, esto solo abrirá el post
+          // Si tienes una, usa: router.push(`/post/${post.$id}/likes`);
+          router.push(`/post/${post.$id}` as any);
+        }}
       />
     </View>
   );

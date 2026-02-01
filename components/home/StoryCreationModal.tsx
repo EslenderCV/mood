@@ -58,7 +58,7 @@ const LATIN_SHUFFLE_TERMS = [
   "Arcangel",
   "Eladio Carrion",
   "Bachata Hits",
-  "Dembow Dominicano"
+  "Dembow Dominicano",
 ];
 
 interface StoryCreationModalProps {
@@ -88,7 +88,7 @@ const StoryCreationModal = ({
   const [caption, setCaption] = useState("");
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
-  
+
   // Audio State (Lógica de PostItem)
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [previewTrackUrl, setPreviewTrackUrl] = useState<string | null>(null);
@@ -120,7 +120,7 @@ const StoryCreationModal = ({
         setStep("preview");
         // Si ya viene con canción, intentamos reproducir su preview
         if (initialSongData.preview) {
-            handlePlayPreview(initialSongData.preview);
+          handlePlayPreview(initialSongData.preview);
         }
       } else {
         resetForm();
@@ -140,7 +140,7 @@ const StoryCreationModal = ({
   }, []);
 
   // --- LÓGICA DE AUDIO (PostItem Style) ---
-  
+
   const stopSound = async () => {
     try {
       if (sound) {
@@ -167,10 +167,10 @@ const StoryCreationModal = ({
           setIsPlaying(false);
           return; // Salimos, ya pausamos
         } else if (status.isLoaded && !status.isPlaying) {
-            // Si estaba pausada, reanudamos
-            await sound.playAsync();
-            setIsPlaying(true);
-            return;
+          // Si estaba pausada, reanudamos
+          await sound.playAsync();
+          setIsPlaying(true);
+          return;
         }
       }
 
@@ -189,7 +189,7 @@ const StoryCreationModal = ({
 
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: url },
-        { shouldPlay: true }
+        { shouldPlay: true },
       );
 
       setSound(newSound);
@@ -200,10 +200,9 @@ const StoryCreationModal = ({
         if (status.isLoaded && status.didJustFinish) {
           setIsPlaying(false);
           // Opcional: loop en preview
-          // newSound.replayAsync(); 
+          // newSound.replayAsync();
         }
       });
-
     } catch (error) {
       console.log("Error playing preview:", error);
     }
@@ -217,25 +216,32 @@ const StoryCreationModal = ({
     const uniqueSongs = [];
     for (const song of songs) {
       if (!song.cover || !song.preview) continue;
-      const artistName = song.artist ? song.artist.trim().toLowerCase() : "unknown";
+      const artistName = song.artist
+        ? song.artist.trim().toLowerCase()
+        : "unknown";
       if (!seenArtists.has(artistName)) {
         seenArtists.add(artistName);
         uniqueSongs.push(song);
       }
     }
-    return uniqueSongs.length >= 5 ? uniqueSongs : songs.filter(s => s.cover && s.preview);
+    return uniqueSongs.length >= 5
+      ? uniqueSongs
+      : songs.filter((s) => s.cover && s.preview);
   };
 
   const loadRandomLatinHits = async () => {
     setLoadingTrending(true);
     try {
       // 🔥 SHUFFLE: Elegimos un término al azar cada vez
-      const randomTerm = LATIN_SHUFFLE_TERMS[Math.floor(Math.random() * LATIN_SHUFFLE_TERMS.length)];
+      const randomTerm =
+        LATIN_SHUFFLE_TERMS[
+          Math.floor(Math.random() * LATIN_SHUFFLE_TERMS.length)
+        ];
       console.log("Searching for:", randomTerm);
-      
+
       const songs = await searchSongsWrapper(randomTerm);
       const premiumList = filterUniqueArtists(songs);
-      
+
       setTrendingSongs(premiumList);
     } catch (e) {
       console.log("Error cargando hits:", e);
@@ -250,9 +256,13 @@ const StoryCreationModal = ({
       if (query.length > 2) {
         setSearching(true);
         try {
-            const songs = await searchSongsWrapper(query);
-            setResults(filterUniqueArtists(songs));
-        } catch (e) { console.log(e); } finally { setSearching(false); }
+          const songs = await searchSongsWrapper(query);
+          setResults(filterUniqueArtists(songs));
+        } catch (e) {
+          console.log(e);
+        } finally {
+          setSearching(false);
+        }
       } else if (query.length === 0) {
         setResults([]);
       }
@@ -275,7 +285,7 @@ const StoryCreationModal = ({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Reproducimos la canción seleccionada al pasar al preview
     if (song.preview) {
-        handlePlayPreview(song.preview);
+      handlePlayPreview(song.preview);
     }
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSelectedSong(song);
@@ -292,7 +302,9 @@ const StoryCreationModal = ({
         setSelectedSong(null);
         setStep("preview");
       }
-    } catch (error) { console.log(error); }
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const handleUpload = async () => {
@@ -313,7 +325,8 @@ const StoryCreationModal = ({
           isMediaStory: true,
         });
       } else if (selectedSong) {
-        const songId = selectedSong.id || selectedSong.spotifyId || selectedSong.trackId;
+        const songId =
+          selectedSong.id || selectedSong.spotifyId || selectedSong.trackId;
         payloadString = JSON.stringify({
           title: selectedSong.title,
           artist: selectedSong.artist,
@@ -325,10 +338,13 @@ const StoryCreationModal = ({
           isMediaStory: false,
         });
       }
-      
+
       await createStory(payloadString, currentUser.$id);
       onClose();
-      setTimeout(() => showToast("success", t("common.posted"), t("story.postedMsg")), 300);
+      setTimeout(
+        () => showToast("success", t("common.posted"), t("story.postedMsg")),
+        300,
+      );
       onSuccess();
     } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -338,18 +354,26 @@ const StoryCreationModal = ({
     }
   };
 
-  const showToast = (type: "success" | "error", title: string, message: string) => {
+  const showToast = (
+    type: "success" | "error",
+    title: string,
+    message: string,
+  ) => {
     setToast({ visible: true, type, title, message });
     Animated.spring(toastAnim, { toValue: 0, useNativeDriver: true }).start();
     setTimeout(() => {
-        Animated.timing(toastAnim, { toValue: -150, duration: 300, useNativeDriver: true }).start(() => setToast((prev) => ({ ...prev, visible: false })));
+      Animated.timing(toastAnim, {
+        toValue: -150,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => setToast((prev) => ({ ...prev, visible: false })));
     }, 3000);
   };
 
   const handleBack = () => {
     if (step === "preview") {
       if (initialSongData) {
-          onClose();
+        onClose();
       } else {
         setStep("search");
         setSelectedSong(null);
@@ -368,7 +392,7 @@ const StoryCreationModal = ({
   const renderSongItem = ({ item, index, isTrending = false }: any) => {
     // Comparamos URL para saber si es el que suena
     const isThisPlaying = isPlaying && previewTrackUrl === item.preview;
-    
+
     return (
       <TouchableOpacity
         onPress={() => handleSelectSong(item)}
@@ -380,7 +404,7 @@ const StoryCreationModal = ({
             {index + 1}
           </Text>
         )}
-        
+
         <View className="relative shadow-sm">
           <Image
             source={{ uri: item.cover }}
@@ -394,7 +418,10 @@ const StoryCreationModal = ({
         </View>
 
         <View className="ml-4 flex-1 justify-center">
-          <Text className="text-white font-bold text-[16px] mb-1 tracking-tight" numberOfLines={1}>
+          <Text
+            className="text-white font-bold text-[16px] mb-1 tracking-tight"
+            numberOfLines={1}
+          >
             {item.title}
           </Text>
           <Text className="text-zinc-400 text-sm font-medium" numberOfLines={1}>
@@ -412,9 +439,9 @@ const StoryCreationModal = ({
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             {isThisPlaying ? (
-                 <Ionicons name="pause-circle" size={36} color={COLORS.primary} />
+              <Ionicons name="pause-circle" size={36} color={COLORS.primary} />
             ) : (
-                 <Ionicons name="play-circle" size={36} color="#3f3f46" />
+              <Ionicons name="play-circle" size={36} color="#3f3f46" />
             )}
           </TouchableOpacity>
         )}
@@ -424,16 +451,16 @@ const StoryCreationModal = ({
 
   const renderSkeleton = () => (
     <View className="px-4 pt-4">
-        {[1, 2, 3, 4, 5].map(i => (
-            <View key={i} className="flex-row items-center mb-6 opacity-20">
-                <View className="w-8 h-4 bg-zinc-700 rounded mr-3" />
-                <View className="w-14 h-14 bg-zinc-700 rounded-[12px]" />
-                <View className="ml-4 flex-1">
-                    <View className="w-2/3 h-4 bg-zinc-700 rounded mb-2" />
-                    <View className="w-1/3 h-3 bg-zinc-700 rounded" />
-                </View>
-            </View>
-        ))}
+      {[1, 2, 3, 4, 5].map((i) => (
+        <View key={i} className="flex-row items-center mb-6 opacity-20">
+          <View className="w-8 h-4 bg-zinc-700 rounded mr-3" />
+          <View className="w-14 h-14 bg-zinc-700 rounded-[12px]" />
+          <View className="ml-4 flex-1">
+            <View className="w-2/3 h-4 bg-zinc-700 rounded mb-2" />
+            <View className="w-1/3 h-3 bg-zinc-700 rounded" />
+          </View>
+        </View>
+      ))}
     </View>
   );
 
@@ -454,7 +481,7 @@ const StoryCreationModal = ({
       >
         <View className="flex-1 bg-[#000000]">
           <StatusBar barStyle="light-content" />
-          
+
           <LinearGradient
             colors={[COLORS.bgGradientStart, COLORS.bgDark]}
             start={{ x: 0, y: 0 }}
@@ -463,20 +490,23 @@ const StoryCreationModal = ({
           />
 
           <View style={{ paddingTop: insets.top }} className="flex-1">
-            
             {/* HEADER */}
             <View className="flex-row items-center justify-between px-4 py-4 z-10">
-                <TouchableOpacity 
-                    onPress={handleBack} 
-                    className="w-10 h-10 items-center justify-center bg-white/5 rounded-full backdrop-blur-md border border-white/5"
-                >
-                    {step === 'preview' ? <Ionicons name="chevron-back" size={24} color="white" /> : <Ionicons name="close" size={24} color="white" />}
-                </TouchableOpacity>
-                
-                <Text className="text-white font-bold text-[17px] tracking-wide">
-                    {step === 'search' ? t('story.newStory') : t('common.share')}
-                </Text>
-                <View style={{ width: 40 }} />
+              <TouchableOpacity
+                onPress={handleBack}
+                className="w-10 h-10 items-center justify-center bg-white/5 rounded-full backdrop-blur-md border border-white/5"
+              >
+                {step === "preview" ? (
+                  <Ionicons name="chevron-back" size={24} color="white" />
+                ) : (
+                  <Ionicons name="close" size={24} color="white" />
+                )}
+              </TouchableOpacity>
+
+              <Text className="text-white font-bold text-[17px] tracking-wide">
+                {step === "search" ? t("story.newStory") : t("common.share")}
+              </Text>
+              <View style={{ width: 40 }} />
             </View>
 
             <KeyboardAvoidingView
@@ -484,139 +514,207 @@ const StoryCreationModal = ({
               style={{ flex: 1 }}
             >
               <View className="flex-1">
-                
                 {/* --- SEARCH --- */}
                 {step === "search" && (
                   <View className="flex-1 pt-2">
-                    
                     <View className="px-4">
-                        <BlurView intensity={20} tint="dark" className="flex-row items-center px-4 py-3.5 rounded-2xl mb-6 border border-white/10 overflow-hidden">
-                            <Ionicons name="search" size={20} color={COLORS.textMuted} />
-                            <TextInput
-                                placeholder={t("story.searchPlaceholder")}
-                                placeholderTextColor={COLORS.textMuted}
-                                className="flex-1 ml-3 text-white text-[16px] font-medium"
-                                value={query}
-                                onChangeText={setQuery}
-                                autoFocus={false}
-                                returnKeyType="search"
-                                selectionColor={COLORS.primary}
+                      <BlurView
+                        intensity={20}
+                        tint="dark"
+                        className="flex-row items-center px-4 py-3.5 rounded-2xl mb-6 border border-white/10 overflow-hidden"
+                      >
+                        <Ionicons
+                          name="search"
+                          size={20}
+                          color={COLORS.textMuted}
+                        />
+                        <TextInput
+                          placeholder={t("story.searchPlaceholder")}
+                          placeholderTextColor={COLORS.textMuted}
+                          className="flex-1 ml-3 text-white text-[16px] font-medium"
+                          value={query}
+                          onChangeText={setQuery}
+                          autoFocus={false}
+                          returnKeyType="search"
+                          selectionColor={COLORS.primary}
+                        />
+                        {query.length > 0 && (
+                          <TouchableOpacity onPress={() => setQuery("")}>
+                            <Ionicons
+                              name="close-circle"
+                              size={18}
+                              color={COLORS.textMuted}
                             />
-                            {query.length > 0 && (
-                                <TouchableOpacity onPress={() => setQuery("")}>
-                                    <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
-                                </TouchableOpacity>
-                            )}
-                        </BlurView>
+                          </TouchableOpacity>
+                        )}
+                      </BlurView>
                     </View>
 
                     <View className="flex-1">
-                        {searching ? (
-                             <ActivityIndicator size="large" color={COLORS.primary} className="mt-20" />
-                        ) : query.length === 0 ? (
-                            loadingTrending ? renderSkeleton() : (
-                            <FlatList
-                                data={trendingSongs}
-                                keyExtractor={(item) => item.id}
-                                renderItem={({ item, index }) => renderSongItem({ item, index, isTrending: true })}
-                                showsVerticalScrollIndicator={false}
-                                contentContainerStyle={{ paddingBottom: 100, paddingTop: 10 }}
-                                ListHeaderComponent={
-                                    <View className="mb-6 px-4">
-                                        <Text className="text-white font-bold text-2xl tracking-tight">
-                                            {t("story.trending")}
-                                        </Text>
-                                        <Text className="text-zinc-500 text-sm mt-1">
-                                            {t("story.topHitsSubtitle") || "Lo más viral del momento"}
-                                        </Text>
-                                    </View>
-                                }
-                            />
-                            )
+                      {searching ? (
+                        <ActivityIndicator
+                          size="large"
+                          color={COLORS.primary}
+                          className="mt-20"
+                        />
+                      ) : query.length === 0 ? (
+                        loadingTrending ? (
+                          renderSkeleton()
                         ) : (
-                             <FlatList
-                                data={results}
-                                keyExtractor={(item) => item.id}
-                                renderItem={({ item }) => renderSongItem({ item })}
-                                showsVerticalScrollIndicator={false}
-                                contentContainerStyle={{ paddingBottom: 100, paddingTop: 10 }}
-                            />
-                        )}
+                          <FlatList
+                            data={trendingSongs}
+                            keyExtractor={(item) => item.id}
+                            renderItem={({ item, index }) =>
+                              renderSongItem({ item, index, isTrending: true })
+                            }
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{
+                              paddingBottom: 100,
+                              paddingTop: 10,
+                            }}
+                            ListHeaderComponent={
+                              <View className="mb-6 px-4">
+                                <Text className="text-white font-bold text-2xl tracking-tight">
+                                  {t("story.trending")}
+                                </Text>
+                                <Text className="text-zinc-500 text-sm mt-1">
+                                  {t("story.topHitsSubtitle") ||
+                                    "Lo más viral del momento"}
+                                </Text>
+                              </View>
+                            }
+                          />
+                        )
+                      ) : (
+                        <FlatList
+                          data={results}
+                          keyExtractor={(item) => item.id}
+                          renderItem={({ item }) => renderSongItem({ item })}
+                          showsVerticalScrollIndicator={false}
+                          contentContainerStyle={{
+                            paddingBottom: 100,
+                            paddingTop: 10,
+                          }}
+                        />
+                      )}
                     </View>
                   </View>
                 )}
 
                 {/* --- PREVIEW --- */}
                 {step === "preview" && (
-                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                        <View className="flex-1 items-center px-6 pt-4">
-                            
-                            <View className="w-full aspect-square rounded-[32px] overflow-hidden shadow-2xl bg-zinc-900 relative mb-8 border border-white/5" 
-                                  style={{ shadowColor: COLORS.primary, shadowOpacity: 0.4, shadowRadius: 30 }}>
-                                {media ? (
-                                    media.type === "video" ? (
-                                        <Video source={{ uri: media.uri }} style={{ width: "100%", height: "100%" }} resizeMode={ResizeMode.COVER} shouldPlay isLooping />
-                                    ) : (
-                                        <Image source={{ uri: media.uri }} className="w-full h-full" resizeMode="cover" />
-                                    )
-                                ) : selectedSong ? (
-                                    <>
-                                        <Image source={{ uri: selectedSong.cover }} className="w-full h-full" resizeMode="cover" />
-                                        <LinearGradient colors={["transparent", "rgba(0,0,0,0.8)"]} className="absolute bottom-0 w-full h-40" />
-                                        
-                                        <View className="absolute top-4 right-4 bg-black/40 px-3 py-1.5 rounded-full flex-row items-center border border-white/10 backdrop-blur-md">
-                                            <Ionicons name="musical-notes" size={10} color={COLORS.primary} />
-                                            <Text className="text-white text-[10px] font-bold ml-1.5 uppercase tracking-widest">MOOD</Text>
-                                        </View>
-                                    </>
-                                ) : null}
+                  <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <View className="flex-1 items-center px-6 pt-4">
+                      <View
+                        className="w-full aspect-square rounded-[32px] overflow-hidden shadow-2xl bg-zinc-900 relative mb-8 border border-white/5"
+                        style={{
+                          shadowColor: COLORS.primary,
+                          shadowOpacity: 0.4,
+                          shadowRadius: 30,
+                        }}
+                      >
+                        {media ? (
+                          media.type === "video" ? (
+                            <Video
+                              source={{ uri: media.uri }}
+                              style={{ width: "100%", height: "100%" }}
+                              resizeMode={ResizeMode.COVER}
+                              shouldPlay
+                              isLooping
+                            />
+                          ) : (
+                            <Image
+                              source={{ uri: media.uri }}
+                              className="w-full h-full"
+                              resizeMode="cover"
+                            />
+                          )
+                        ) : selectedSong ? (
+                          <>
+                            <Image
+                              source={{ uri: selectedSong.cover }}
+                              className="w-full h-full"
+                              resizeMode="cover"
+                            />
+                            <LinearGradient
+                              colors={["transparent", "rgba(0,0,0,0.8)"]}
+                              className="absolute bottom-0 w-full h-40"
+                            />
+
+                            <View className="absolute top-4 right-4 bg-black/40 px-3 py-1.5 rounded-full flex-row items-center border border-white/10 backdrop-blur-md">
+                              <Ionicons
+                                name="musical-notes"
+                                size={10}
+                                color={COLORS.primary}
+                              />
+                              <Text className="text-white text-[10px] font-bold ml-1.5 uppercase tracking-widest">
+                                MOOD
+                              </Text>
                             </View>
+                          </>
+                        ) : null}
+                      </View>
 
-                            {!media && selectedSong && (
-                                <View className="w-full items-center mb-8">
-                                    <Text className="text-white text-2xl font-black text-center mb-2 leading-8 tracking-tight shadow-sm">
-                                        {selectedSong.title}
-                                    </Text>
-                                    <Text className="text-zinc-400 text-lg font-medium text-center">
-                                        {selectedSong.artist}
-                                    </Text>
-                                </View>
-                            )}
-
-                            <View className="w-full mb-6">
-                                <BlurView intensity={15} tint="light" className="rounded-2xl overflow-hidden border border-white/10">
-                                    <TextInput
-                                        placeholder={t("story.captionPlaceholder")}
-                                        placeholderTextColor="rgba(255,255,255,0.5)"
-                                        className="px-5 py-4 text-white text-center text-[16px] font-medium bg-white/5"
-                                        value={caption}
-                                        onChangeText={setCaption}
-                                        maxLength={100}
-                                        multiline
-                                        returnKeyType="done"
-                                        blurOnSubmit
-                                    />
-                                </BlurView>
-                            </View>
-
-                            <TouchableOpacity onPress={handleUpload} disabled={loading} className="w-full mt-auto mb-8">
-                                <LinearGradient
-                                    colors={[COLORS.primary, COLORS.secondary]}
-                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                                    className="py-4 rounded-full flex-row items-center justify-center shadow-lg shadow-purple-900/30"
-                                >
-                                    {loading ? (
-                                        <ActivityIndicator color="white" />
-                                    ) : (
-                                        <>
-                                            <Text className="text-white font-bold text-[16px] mr-2 tracking-wide">{t("story.shareBtn") || t("common.share")}</Text>
-                                            <Ionicons name="arrow-forward" size={20} color="white" />
-                                        </>
-                                    )}
-                                </LinearGradient>
-                            </TouchableOpacity>
+                      {!media && selectedSong && (
+                        <View className="w-full items-center mb-8">
+                          <Text className="text-white text-2xl font-black text-center mb-2 leading-8 tracking-tight shadow-sm">
+                            {selectedSong.title}
+                          </Text>
+                          <Text className="text-zinc-400 text-lg font-medium text-center">
+                            {selectedSong.artist}
+                          </Text>
                         </View>
-                    </TouchableWithoutFeedback>
+                      )}
+
+                      <View className="w-full mb-6">
+                        <BlurView
+                          intensity={15}
+                          tint="light"
+                          className="rounded-2xl overflow-hidden border border-white/10"
+                        >
+                          <TextInput
+                            placeholder={t("story.captionPlaceholder")}
+                            placeholderTextColor="rgba(255,255,255,0.5)"
+                            className="px-5 py-4 text-white text-center text-[16px] font-medium bg-white/5"
+                            value={caption}
+                            onChangeText={setCaption}
+                            maxLength={100}
+                            multiline
+                            returnKeyType="done"
+                            blurOnSubmit
+                          />
+                        </BlurView>
+                      </View>
+
+                      <TouchableOpacity
+                        onPress={handleUpload}
+                        disabled={loading}
+                        className="w-full mt-auto mb-8"
+                      >
+                        <LinearGradient
+                          colors={[COLORS.primary, COLORS.secondary]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          className="py-4 rounded-full flex-row items-center justify-center shadow-lg shadow-purple-900/30"
+                        >
+                          {loading ? (
+                            <ActivityIndicator color="white" />
+                          ) : (
+                            <>
+                              <Text className="text-white font-bold text-[16px] mr-2 tracking-wide">
+                                {t("story.shareBtn") || t("common.share")}
+                              </Text>
+                              <Ionicons
+                                name="arrow-forward"
+                                size={20}
+                                color="white"
+                              />
+                            </>
+                          )}
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableWithoutFeedback>
                 )}
               </View>
             </KeyboardAvoidingView>

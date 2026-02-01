@@ -16,7 +16,6 @@ type AnySignal = AudioSignal | InteractionSignal;
 export class MoodSessionManager {
   private static instance: MoodSessionManager | null = null;
 
-
   // --- Subscribers (UI can observe changes without polling) ---
   private feedListeners = new Set<() => void>();
   private stateListeners = new Set<() => void>();
@@ -95,7 +94,6 @@ export class MoodSessionManager {
   public updateViewableIndex(index: number): void {
     this.currentViewableIndex = index;
   }
-
 
   private computeStateSnapshot(): string {
     return JSON.stringify({
@@ -208,7 +206,10 @@ export class MoodSessionManager {
     const sign = signal.type === AudioEventType.TRACK_SKIP ? -1 : 1;
 
     const current = this.artistAffinity.get(key) || 0;
-    const next = Math.max(-3, Math.min(3, current + sign * magnitude * this.ARTIST_ALPHA));
+    const next = Math.max(
+      -3,
+      Math.min(3, current + sign * magnitude * this.ARTIST_ALPHA),
+    );
     this.artistAffinity.set(key, next);
   }
 
@@ -252,7 +253,9 @@ export class MoodSessionManager {
     this.notifyFeed();
 
     if (__DEV__) {
-      console.log(`[Brain] Tail reorder applied @index=${this.currentViewableIndex}`);
+      console.log(
+        `[Brain] Tail reorder applied @index=${this.currentViewableIndex}`,
+      );
     }
   }
 

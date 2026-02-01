@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { Text } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
 interface MoodTagProps {
@@ -29,20 +29,23 @@ export const MoodTag = ({ mood }: MoodTagProps) => {
         borderColor: "rgba(94, 23, 235, 0.3)",
         marginBottom: 8,
         marginTop: 4,
+        gap: 5,
       }}
     >
-      <Text style={{ fontSize: 14, marginRight: 6 }}>{mood.emoji}</Text>
-      <Text
-        style={{
-          color: "#5E17EB",
-          fontWeight: "700",
-          fontSize: 11,
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-        }}
-      >
-        {mood.text}
-      </Text>
+      <Text style={{ fontSize: 14 }}>{mood.emoji}</Text>
+      {mood.text && (
+        <Text
+          style={{
+            color: "#5E17EB",
+            fontWeight: "700",
+            fontSize: 11,
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
+          {mood.text}
+        </Text>
+      )}
     </LinearGradient>
   );
 };

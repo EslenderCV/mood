@@ -25,7 +25,8 @@ export default {
     welcomeBack: "Bon retour !",
     subtitleSignIn: "Entrez vos identifiants pour continuer.",
     joinMood: "Rejoignez Mood",
-    subtitleSignUp: "Créez un compte pour découvrir et partager de la musique comme jamais auparavant.",
+    subtitleSignUp:
+      "Créez un compte pour découvrir et partager de la musique comme jamais auparavant.",
     namePlaceholder: "Nom complet",
     usernamePlaceholder: "Nom d'utilisateur",
     emailPlaceholder: "E-mail",
@@ -41,7 +42,8 @@ export default {
     signInLink: "Se connecter",
     // 🔥 Nuevos
     logoutTitle: "Se déconnecter",
-    logoutConfirm: "Êtes-vous sûr de vouloir vous déconnecter de tous les appareils ?",
+    logoutConfirm:
+      "Êtes-vous sûr de vouloir vous déconnecter de tous les appareils ?",
     sessionExpiredTitle: "Session expirée",
     sessionExpiredMsg: "Veuillez vous reconnecter.",
     alerts: {
@@ -125,6 +127,7 @@ export default {
     emptyTitle: "Vous ne suivez personne ou il n'y a aucun message.",
     emptySubtitle: "Allez dans l'onglet Explorer pour trouver des gens.",
     unknownUser: "Utilisateur Inconnu",
+    likedThis: "a aimé ça", // ✅ NUEVO
   },
   tabs: {
     home: "Accueil",
@@ -204,12 +207,14 @@ export default {
     create: "Créer",
     addTo: "Ajouter à la Playlist",
     songsCount: "chansons",
-    emptySubtitle: "Enregistrez des publications avec de la musique pour créer votre collection personnelle.",
+    emptySubtitle:
+      "Enregistrez des publications avec de la musique pour créer votre collection personnelle.",
     open: "OUVRIR",
     via: "Via",
     empty: {
       title: "Rien ici pour l'instant",
-      subtitle: "Utilisez le bouton Enregistrer sur le fil pour ajouter du contenu.",
+      subtitle:
+        "Utilisez le bouton Enregistrer sur le fil pour ajouter du contenu.",
     },
   },
   post: {
@@ -237,7 +242,8 @@ export default {
   onboarding: {
     titleLine1: "Vibrez",
     titleLine2: "Ensemble.",
-    subtitle: "La musique n'est pas faite que pour être écoutée, mais pour être ressentie et partagée.",
+    subtitle:
+      "La musique n'est pas faite que pour être écoutée, mais pour être ressentie et partagée.",
     startButton: "Commencer",
     footer: "Mood App © 2024",
   },
@@ -316,7 +322,8 @@ export default {
     },
     alerts: {
       blockTitle: "Bloquer l'utilisateur",
-      blockMsg: "Il ne pourra plus voir votre profil, vos posts ni vous envoyer de messages. Êtes-vous sûr ?",
+      blockMsg:
+        "Il ne pourra plus voir votre profil, vos posts ni vous envoyer de messages. Êtes-vous sûr ?",
       blockSuccess: "Utilisateur bloqué",
       errorBlock: "Impossible de bloquer l'utilisateur.",
       errorGeneric: "Erreur",
@@ -362,7 +369,8 @@ export default {
       revoke: "Révoquer l'accès",
       revokeMsg: "Voulez-vous déconnecter cet appareil ?",
       confirmRevoke: "Oui, déconnecter",
-      revokeError: "Vous ne pouvez pas révoquer votre session actuelle ici. Utilisez la déconnexion.",
+      revokeError:
+        "Vous ne pouvez pas révoquer votre session actuelle ici. Utilisez la déconnexion.",
     },
     modal: {
       title: "Changer le mot de passe",
@@ -398,7 +406,8 @@ export default {
   deleteAccount: {
     title: "Supprimer le compte",
     warningTitle: "Cette action est définitive",
-    warningBody: "Supprimer votre compte effacera vos posts, commentaires, messages et données associées. Impossible de revenir en arrière.",
+    warningBody:
+      "Supprimer votre compte effacera vos posts, commentaires, messages et données associées. Impossible de revenir en arrière.",
     typeTitle: "Confirmation",
     typeBody: "Tapez SUPPRIMER pour continuer.",
     confirmWord: "SUPPRIMER",
@@ -406,7 +415,8 @@ export default {
     deleting: "Suppression…",
     note: "Note : meilleure tentative selon les permissions/règles. En cas d’échec, déconnectez-vous et réessayez.",
     confirmTitle: "Confirmer la suppression",
-    confirmBody: "Voulez-vous vraiment supprimer votre compte et toutes vos données ? Cette action est irréversible.",
+    confirmBody:
+      "Voulez-vous vraiment supprimer votre compte et toutes vos données ? Cette action est irréversible.",
     confirmAction: "Oui, supprimer",
     errorGeneric: "Impossible de supprimer le compte. Réessayez.",
     a11yHint: "Ouvre une confirmation pour supprimer votre compte.",
@@ -468,7 +478,8 @@ export default {
   },
   plus: {
     title: "PLUS",
-    subtitle: "Débloquez l'expérience ultime. Qualité studio et liberté totale.",
+    subtitle:
+      "Débloquez l'expérience ultime. Qualité studio et liberté totale.",
     features: {
       f1Title: "Audio Lossless (Hi-Fi)",
       f1Desc: "Écoutez chaque détail comme l'artiste l'a imaginé.",
@@ -501,7 +512,8 @@ export default {
     saveButton: "ENREGISTRER",
     savingButton: "Enregistrement...",
     alerts: {
-      usernameError: "Le nom d'utilisateur doit comporter au moins 3 caracteres.",
+      usernameError:
+        "Le nom d'utilisateur doit comporter au moins 3 caracteres.",
       emailError: "E-mail invalide.",
       successTitle: "Succès",
       successMsg: "Profil mis à jour avec succès.",

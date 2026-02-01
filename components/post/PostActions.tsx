@@ -58,7 +58,10 @@ export const PostActions = ({
           {likesCount > 0 && (
             <Text
               className="text-[13px] font-semibold"
-              style={{ color: isLiked ? "#EF4444" : subTextColor, marginLeft: 6 }}
+              style={{
+                color: isLiked ? "#EF4444" : subTextColor,
+                marginLeft: 6,
+              }}
             >
               {likesCount}
             </Text>
@@ -71,7 +74,9 @@ export const PostActions = ({
           className="flex-row items-center"
           onPress={() => {
             onInteraction();
-            onCommentPress ? onCommentPress(postId) : router.push(`/post/${postId}` as any);
+            onCommentPress
+              ? onCommentPress(postId)
+              : router.push(`/post/${postId}` as any);
           }}
           hapticKind="selection"
           hitSlop={hit}

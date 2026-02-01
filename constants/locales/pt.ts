@@ -25,7 +25,8 @@ export default {
     welcomeBack: "Bem-vindo de volta!",
     subtitleSignIn: "Insira suas credenciais para continuar.",
     joinMood: "Junte-se ao Mood",
-    subtitleSignUp: "Crie uma conta para descobrir e compartilhar músicas como nunca antes.",
+    subtitleSignUp:
+      "Crie uma conta para descobrir e compartilhar músicas como nunca antes.",
     namePlaceholder: "Nome completo",
     usernamePlaceholder: "Nome de usuário",
     emailPlaceholder: "E-mail",
@@ -125,6 +126,7 @@ export default {
     emptyTitle: "Você ainda não segue ninguém ou não há postagens.",
     emptySubtitle: "Vá para a guia Explorar para encontrar pessoas.",
     unknownUser: "Usuário Desconhecido",
+    likedThis: "curtiu isso",
   },
   tabs: {
     home: "Início",
@@ -237,7 +239,8 @@ export default {
   onboarding: {
     titleLine1: "Vibe",
     titleLine2: "Juntos.",
-    subtitle: "Música não é apenas para ouvir, é para sentir e compartilhar com os tuyos.",
+    subtitle:
+      "Música não é apenas para ouvir, é para sentir e compartilhar com os tuyos.",
     startButton: "Começar Agora",
     footer: "Mood App © 2024",
   },
@@ -316,7 +319,8 @@ export default {
     },
     alerts: {
       blockTitle: "Bloquear usuário",
-      blockMsg: "Eles não poderão ver seu perfil, posts ou enviar mensagens. Tem certeza?",
+      blockMsg:
+        "Eles não poderão ver seu perfil, posts ou enviar mensagens. Tem certeza?",
       blockSuccess: "Usuário bloqueado",
       errorBlock: "Não foi possível bloquear o usuário.",
       errorGeneric: "Erro",
@@ -398,7 +402,8 @@ export default {
   deleteAccount: {
     title: "Excluir conta",
     warningTitle: "Esta ação é permanente",
-    warningBody: "Excluir sua conta removerá seus posts, comentários, mensagens e dados associados. Não é possível desfazer.",
+    warningBody:
+      "Excluir sua conta removerá seus posts, comentários, mensagens e dados associados. Não é possível desfazer.",
     typeTitle: "Confirmação",
     typeBody: "Digite EXCLUIR para continuar.",
     confirmWord: "EXCLUIR",
@@ -406,7 +411,8 @@ export default {
     deleting: "Excluindo…",
     note: "Nota: best-effort por permissões/regras de segurança. Se falhar, saia e tente novamente.",
     confirmTitle: "Confirmar exclusão",
-    confirmBody: "Tem certeza de que deseja excluir sua conta e todos os dados? Isso não pode ser desfeito.",
+    confirmBody:
+      "Tem certeza de que deseja excluir sua conta e todos os dados? Isso não pode ser desfeito.",
     confirmAction: "Sim, excluir",
     errorGeneric: "Não foi possível excluir a conta. Tente novamente.",
     a11yHint: "Abre uma confirmação para excluir sua conta.",
@@ -468,7 +474,8 @@ export default {
   },
   plus: {
     title: "PLUS",
-    subtitle: "Desbloqueie a experiência definitiva. Qualidade de estúdio e liberdade total.",
+    subtitle:
+      "Desbloqueie a experiência definitiva. Qualidade de estúdio e liberdade total.",
     features: {
       f1Title: "Áudio Lossless (Hi-Fi)",
       f1Desc: "Ouça cada detalhe como o artista imaginou.",
