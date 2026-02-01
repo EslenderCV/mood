@@ -60,4 +60,7 @@ const MusicSearchBox = React.memo(
   },
 );
 
+
+MusicSearchBox.displayName = "MusicSearchBox";
+
 export default MusicSearchBox;

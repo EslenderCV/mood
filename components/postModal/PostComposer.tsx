@@ -118,4 +118,7 @@ const PostComposer = React.memo(
   },
 );
 
+
+PostComposer.displayName = "PostComposer";
+
 export default PostComposer;

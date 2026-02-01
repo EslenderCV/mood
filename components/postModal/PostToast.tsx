@@ -79,4 +79,7 @@ const PostToast = React.memo(
   },
 );
 
+
+PostToast.displayName = "PostToast";
+
 export default PostToast;

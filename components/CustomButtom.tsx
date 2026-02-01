@@ -1,5 +1,6 @@
-import { TouchableOpacity, Text } from "react-native";
+import { Text } from "react-native";
 import React from "react";
+import PressableScale from "@/components/shared/PressableScale";
 
 interface Props {
   text: string;
@@ -17,15 +18,18 @@ const CustomButtom = ({
   loading,
 }: Props) => {
   return (
-    <TouchableOpacity
+    <PressableScale
       onPress={handlePress}
-      activeOpacity={0.7}
-      className={`border-solid border border-primaryy rounded min-h-[40px] justify-center items-center ${containerStyles} ${
+      disabled={loading}
+      hapticKind="selection"
+      className={`border-solid border border-accent rounded-xl min-h-[44px] justify-center items-center ${containerStyles} ${
         loading ? "opacity-70" : ""
       }`}
     >
-      <Text className={`text-primaryy text-lg ${textStyles}`}>{text}</Text>
-    </TouchableOpacity>
+      <Text className={`text-accent text-lg font-semibold ${textStyles}`}>
+        {text}
+      </Text>
+    </PressableScale>
   );
 };
 

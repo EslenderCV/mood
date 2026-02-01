@@ -55,4 +55,7 @@ const MoodStyleSelector = React.memo(
   },
 );
 
+
+MoodStyleSelector.displayName = "MoodStyleSelector";
+
 export default MoodStyleSelector;

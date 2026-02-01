@@ -13,11 +13,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAudioContext } from "@/context/AudioContext";
+import LoadingDots from "@/components/shared/LoadingDots";
 
 const { width } = Dimensions.get("window");
 
 const GlobalAudioPlayerBar = () => {
-  const { activeTrackMetadata, isPlaying, pauseTrack, resumeTrack, stopTrack } =
+  const { activeTrackMetadata, isPlaying, isLoading, isBuffering, pauseTrack, resumeTrack, stopTrack } =
     useAudioContext();
 
   const translateY = useRef(new Animated.Value(100)).current;
@@ -124,11 +125,13 @@ const GlobalAudioPlayerBar = () => {
                 : "transparent",
             }}
           >
-            <Ionicons
-              name={isPlaying ? "pause" : "play"}
-              size={24}
-              color={isPlaying ? "#A78BFA" : "white"}
-            />
+            {isPlaying ? (
+              <Ionicons name="pause" size={24} color="#A78BFA" />
+            ) : isLoading || isBuffering ? (
+              <LoadingDots size={3.5} gap={3} />
+            ) : (
+              <Ionicons name="play" size={24} color="white" />
+            )}
           </TouchableOpacity>
 
           {/* Cerrar (X) */}

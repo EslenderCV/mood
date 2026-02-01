@@ -1,9 +1,9 @@
 import { Client, Account, Databases, Storage } from "react-native-appwrite";
 
 export const appwriteConfig = {
-  endpoint: "https://fra.cloud.appwrite.io/v1",
+  endpoint: "https://nyc.cloud.appwrite.io/v1",
   platform: "com.Gammes.Mood",
-  projectId: "6689e59b000acd6caf6f",
+  projectId: "697d0db30009f4ca4dd6",
   databaseId: "6689e7cc002bf2740136",
   usersCollectionId: "6962f488000f10f39b70",
   postsCollectionId: "6689e9a5003e7426666e",

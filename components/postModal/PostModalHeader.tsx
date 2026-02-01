@@ -76,4 +76,7 @@ const PostModalHeader = React.memo(
   },
 );
 
+
+PostModalHeader.displayName = "PostModalHeader";
+
 export default PostModalHeader;

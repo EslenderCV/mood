@@ -210,7 +210,7 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
                       className="text-white text-center font-bold italic leading-8 shadow-sm"
                       style={{ fontSize: post.comment.length > 100 ? 20 : 26 }}
                     >
-                      "{post.comment}"
+                      {`“${post.comment}”`}
                     </Text>
                     <View className="w-12 h-1 bg-[#5E17EB] rounded-full my-6 opacity-80" />
                     <View className="flex-row items-center bg-white/5 p-3 rounded-2xl border border-white/10 w-full max-w-[90%]">

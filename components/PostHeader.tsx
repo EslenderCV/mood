@@ -108,7 +108,8 @@ const PostHeader = ({
               className="text-xs font-medium mt-0.5"
               style={{ color: styles.subTextColor }}
             >
-              @{creator.username} · {formatTimeAgo(post.$createdAt, t)}
+              @{creator.username} ·{" "}
+              {formatTimeAgo(post.originalTime || post.$createdAt, t)}
             </Text>
           </View>
         </TouchableOpacity>

@@ -10,7 +10,8 @@ export default {
     user: "Utilisateur",
     anonymous: "Anonyme",
     follow: "Suivre",
-    loading: "Chargement...", // 🔥 Nuevo
+    loading: "Chargement...",
+    back: "Retour",
   },
   connection: {
     disconnected: "Pas de connexion internet",
@@ -394,6 +395,24 @@ export default {
       success: "Succès",
     },
   },
+  deleteAccount: {
+    title: "Supprimer le compte",
+    warningTitle: "Cette action est définitive",
+    warningBody: "Supprimer votre compte effacera vos posts, commentaires, messages et données associées. Impossible de revenir en arrière.",
+    typeTitle: "Confirmation",
+    typeBody: "Tapez SUPPRIMER pour continuer.",
+    confirmWord: "SUPPRIMER",
+    action: "Supprimer le compte",
+    deleting: "Suppression…",
+    note: "Note : meilleure tentative selon les permissions/règles. En cas d’échec, déconnectez-vous et réessayez.",
+    confirmTitle: "Confirmer la suppression",
+    confirmBody: "Voulez-vous vraiment supprimer votre compte et toutes vos données ? Cette action est irréversible.",
+    confirmAction: "Oui, supprimer",
+    errorGeneric: "Impossible de supprimer le compte. Réessayez.",
+    a11yHint: "Ouvre une confirmation pour supprimer votre compte.",
+    typeInputLabel: "Champ de confirmation de suppression",
+  },
+
   privacy: {
     title: "Confidentialité",
     headers: {

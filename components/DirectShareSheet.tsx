@@ -10,10 +10,10 @@ import {
   FlatList,
   Image,
   ScrollView,
-} from "react-native";
+ Dimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, Feather } from "@expo/vector-icons";
-import { Dimensions } from "react-native";
+
 
 const { height } = Dimensions.get("window");
 

@@ -261,3 +261,28 @@ export async function getUnreadMessagesCount(userId: string): Promise<number> {
     return 0;
   }
 }
+
+// -----------------------------------------------------------------------------
+// COMPAT: legacy chat API used by older screens/components
+// -----------------------------------------------------------------------------
+
+/** @deprecated Use getOrCreateConversation */
+export const getOrCreateChat = getOrCreateConversation;
+
+/** @deprecated Use getUserConversations */
+export const getUserChats = getUserConversations;
+
+/** @deprecated Use getOrCreateConversation */
+export async function createChat(currentUserId: string, otherUserId: string) {
+  return getOrCreateConversation(currentUserId, otherUserId);
+}
+
+/** @deprecated Prefer leaving chat history; deletes the chat doc only (messages remain unless cleaned separately). */
+export async function deleteChat(chatId: string) {
+  try {
+    await databases.deleteDocument(appwriteConfig.databaseId, appwriteConfig.chatsCollectionId, chatId);
+    return true;
+  } catch (error: any) {
+    throw new Error(error?.message ?? "Failed to delete chat");
+  }
+}

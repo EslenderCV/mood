@@ -62,7 +62,9 @@ const Profile = () => {
         let score = 0;
         const likesCount = post.likedBy ? post.likedBy.length : 0;
         score += likesCount * 4;
-        const postDate = new Date(post.$createdAt).getTime();
+        const postDate = new Date(
+          post.originalTime || post.$createdAt,
+        ).getTime();
         const hoursAgo = (now - postDate) / (1000 * 60 * 60);
         score -= hoursAgo * 0.2;
         return { ...post, score };

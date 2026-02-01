@@ -69,7 +69,7 @@ const SignUp = () => {
         setUser(newUser as unknown as User);
         setLoggedIn(true);
 
-        await AccountManager.saveCurrentAccount(session.secret);
+        await AccountManager.saveCurrentAccount();
 
         router.replace("/home");
       }
@@ -101,7 +101,7 @@ const SignUp = () => {
           setLoggedIn(true);
 
           // 🔥 3. Lo guardamos en el manager
-          await AccountManager.saveCurrentAccount(secret);
+          await AccountManager.saveCurrentAccount();
 
           setTimeout(() => {
             router.replace("/home");

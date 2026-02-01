@@ -17,6 +17,9 @@ import { useColorScheme } from "nativewind";
 import { useLanguage } from "@/context/LanguageContext";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
 import { updateProfile } from "@/lib/appwrite";
+import { logger } from "@/src/observability/logger";
+import * as Application from "expo-application";
+import Constants from "expo-constants";
 
 const Settings = () => {
   const { colorScheme, toggleColorScheme } = useColorScheme();
@@ -44,6 +47,16 @@ const Settings = () => {
   const pillTextColor = isDark ? "#FFFFFF" : "#000000";
 
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+
+  const configVersion = Constants.expoConfig?.version ?? "";
+  const isExpoGo = Constants.appOwnership === "expo";
+  const appVersion = (isExpoGo ? configVersion : Application.nativeApplicationVersion) ?? configVersion;
+  const buildVersion = isExpoGo ? "" : Application.nativeBuildVersion ?? "";
+  const versionLabel = appVersion
+    ? buildVersion
+      ? `v${appVersion} (${buildVersion})`
+      : `v${appVersion}`
+    : "";
 
   const currentLangObj =
     availableLanguages.find((l) => l.code === language) ||
@@ -81,8 +94,7 @@ const Settings = () => {
       setNotificationsEnabled(!value);
 
       // 🔥 AGREGA ESTO PARA VER EL ERROR REAL EN LA CONSOLA
-      console.log("ERROR REAL APPWRITE:", error);
-      console.log("MENSAJE:", error.message);
+      logger.warn("update notifications failed", { message: error?.message });
 
       Alert.alert("Error", `No se pudo actualizar: ${error.message}`);
     }
@@ -296,6 +308,16 @@ const Settings = () => {
           </SettingRow>
         </TouchableOpacity>
 
+        <SectionTitle title={t("deleteAccount.section")} />
+        <TouchableOpacity onPress={() => router.push("/delete-account")}>
+          <SettingRow
+            icon="person-remove-outline"
+            title={t("deleteAccount.action")}
+            subtitle={t("deleteAccount.subtitle")}
+            color="#EF4444"
+          />
+        </TouchableOpacity>
+
         <SectionTitle title="LEGAL" />
         <TouchableOpacity
           onPress={() =>
@@ -333,13 +355,32 @@ const Settings = () => {
           >
             MOOD
           </Text>
-          <Text
-            className="text-xs"
-            style={{ color: isDark ? "#52525B" : "#9CA3AF" }}
-          >
-            v1.0.3 (Beta)
-          </Text>
+          {versionLabel ? (
+            <Text
+              className="text-xs"
+              style={{ color: isDark ? "#52525B" : "#9CA3AF" }}
+            >
+              {versionLabel}
+            </Text>
+          ) : null}
         </View>
+      
+        {typeof __DEV__ !== "undefined" && __DEV__ && (
+          <>
+            <SectionTitle title="DESARROLLO" />
+            <TouchableOpacity onPress={() => router.push("/feature-flags" as any)}>
+              <SettingRow
+                icon="flask-outline"
+                title="Experimentos"
+                subtitle="Feature flags / kill switches"
+                color="#8B5CF6"
+              >
+                <Ionicons name="chevron-forward" size={20} color={subTextColor} />
+              </SettingRow>
+            </TouchableOpacity>
+          </>
+        )}
+
       </ScrollView>
 
       <Modal

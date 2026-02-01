@@ -25,7 +25,7 @@ export const MusicMessageBubble = ({
   }
 
   const isThisPlaying = currentPlayingId === song.id && isPlaying;
-  const isThisLoading = currentPlayingId === song.id && isLoading;
+  const isThisLoading = currentPlayingId === song.id && isLoading && !isThisPlaying;
 
   const handlePlay = async () => {
     if (song.preview) {

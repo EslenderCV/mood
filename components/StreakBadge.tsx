@@ -13,7 +13,7 @@ const StreakBadge = ({ days, size = "small" }: StreakBadgeProps) => {
 
   // Lógica de Evolución del Fuego
   let iconName: keyof typeof Ionicons.glyphMap = "flame-outline";
-  let colors = ["#A78BFA", "#5E17EB"]; // Morado suave
+  let colors: [string, string, ...string[]] = ["#A78BFA", "#5E17EB"];
 
   if (days >= 3 && days < 10) {
     iconName = "flame"; // Fuego lleno

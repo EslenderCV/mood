@@ -306,4 +306,7 @@ const FullScreenPostItem = React.memo(
   },
 );
 
+
+FullScreenPostItem.displayName = "FullScreenPostItem";
+
 export default FullScreenPostItem;

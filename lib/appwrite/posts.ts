@@ -3,54 +3,161 @@ import { databases, appwriteConfig } from "./config";
 import { getUser } from "./users";
 import { createNotification } from "./notifications";
 
-// ... (getFeedCandidates se mantiene igual) ...
-export async function getFeedCandidates() {
+import { getUsersByIds } from "./userUtils";
+import { appwriteCall } from "./request";
+
+export type FeedPageArgs = {
+  limit?: number;
+  cursorAfter?: string;
+};
+
+const COMMENTS_COUNT_TTL_MS = 2 * 60 * 1000; // 2 minutes
+type CommentsCountEntry = { count: number; expiresAt: number };
+const commentsCountCache = new Map<string, CommentsCountEntry>();
+
+const nowMs = () => Date.now();
+
+const getCachedCommentsCount = (postId: string) => {
+  const entry = commentsCountCache.get(postId);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= nowMs()) {
+    commentsCountCache.delete(postId);
+    return undefined;
+  }
+  return entry.count;
+};
+
+const setCachedCommentsCount = (postId: string, count: number) => {
+  commentsCountCache.set(postId, {
+    count,
+    expiresAt: nowMs() + COMMENTS_COUNT_TTL_MS,
+  });
+};
+
+async function populatePostsWithUsersAndCounts(posts: any[]) {
+  const safePosts = Array.isArray(posts) ? posts : [];
+  if (safePosts.length === 0) return [];
+
+  // 1) Batch fetch creators (avoid N+1 getUser calls)
+  const creatorIds: string[] = [];
+  for (const post of safePosts) {
+    let postedBy = post?.postedBy;
+    if (Array.isArray(postedBy) && postedBy.length > 0) postedBy = postedBy[0];
+    if (typeof postedBy === "string" && postedBy) creatorIds.push(postedBy);
+  }
+
+  const usersMap = await getUsersByIds(creatorIds);
+
+  // 2) Batch fetch comments for these posts to compute per-post counts (avoid N+1)
+  const postIds = safePosts.map((p) => p?.$id).filter(Boolean);
+
+  const commentsCountMap = new Map<string, number>();
+
+  const missingPostIds: string[] = [];
+  for (const pid of postIds) {
+    const cached = getCachedCommentsCount(pid);
+    if (typeof cached === "number") commentsCountMap.set(pid, cached);
+    else missingPostIds.push(pid);
+  }
+
+  if (missingPostIds.length > 0) {
+    try {
+      // NOTE: We can't get per-post totals in Appwrite without either:
+      // - denormalized counts on the post document (backend migration), OR
+      // - fetching the comment docs and counting client-side.
+      // This is still 1 request per page (not per post), and is a huge win vs N+1.
+      const commentsRes = await appwriteCall({ name: `comments.listForPage:${missingPostIds.length}`, retries: 1 }, () => databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.commentsCollectionId,
+        [Query.equal("postId", missingPostIds), Query.limit(5000)],
+      ));
+
+      for (const c of commentsRes.documents) {
+        const pid = (c as any)?.postId;
+        if (!pid) continue;
+        commentsCountMap.set(pid, (commentsCountMap.get(pid) || 0) + 1);
+      }
+    } catch (e) {
+      // If comments are not readable (permissions), keep counts at 0.
+    }
+
+    // Cache computed counts (including zeros) to avoid repeated work across screens.
+    for (const pid of missingPostIds) {
+      setCachedCommentsCount(pid, commentsCountMap.get(pid) ?? 0);
+    }
+  }
+
+  // 3) Attach populated creator + commentsCount
+  const populated = safePosts
+    .map((post) => {
+      let userData: any = post?.postedBy;
+
+      if (Array.isArray(userData) && userData.length > 0) userData = userData[0];
+
+      if (typeof userData === "string") {
+        userData = usersMap[userData] ?? null;
+      }
+
+      if (userData && typeof userData === "object" && userData.isBanned) {
+        userData = null;
+      }
+
+      if (!userData) return null;
+
+      const commentsCount = commentsCountMap.get(post.$id) ?? 0;
+
+      return {
+        ...post,
+        postedBy: userData,
+        commentsCount,
+      };
+    })
+    .filter((p) => p !== null);
+
+  return populated;
+}
+
+/**
+ * Paginated feed: 1 request for posts + 1 batched users fetch + 1 batched comments fetch
+ * (still a massive reduction vs N+1).
+ */
+export async function getFeedPage(args: FeedPageArgs = {}) {
+  const limit = Math.max(1, Math.min(args.limit ?? 60, 100));
+
   try {
-    const posts = await databases.listDocuments(
+    const queries: any[] = [Query.orderDesc("$createdAt"), Query.limit(limit)];
+    if (args.cursorAfter) {
+      const cursorAfterFn = (Query as any)?.cursorAfter;
+      if (typeof cursorAfterFn === "function") {
+        queries.push(cursorAfterFn(args.cursorAfter));
+      }
+    }
+
+    const res = await appwriteCall({ name: `posts.listFeed:${limit}`, retries: 2 }, () => databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
-      [Query.orderDesc("$createdAt"), Query.limit(100)],
-    );
+      queries,
+    ));
 
-    const populatedPosts = await Promise.all(
-      posts.documents.map(async (post) => {
-        let userData = post.postedBy;
+    const populated = await populatePostsWithUsersAndCounts(res.documents);
 
-        if (post.postedBy && typeof post.postedBy === "string") {
-          try {
-            userData = await getUser(post.postedBy);
-          } catch (e) {
-            userData = null;
-          }
-        }
-
-        if (userData && typeof userData === "object" && userData.isBanned) {
-          userData = null;
-        }
-
-        if (!userData) return null;
-
-        const commentsData = await databases.listDocuments(
-          appwriteConfig.databaseId,
-          appwriteConfig.commentsCollectionId,
-          [Query.equal("postId", post.$id), Query.limit(1)],
-        );
-
-        return {
-          ...post,
-          postedBy: userData,
-          commentsCount: commentsData.total,
-        };
-      }),
-    );
-
-    return populatedPosts.filter((p) => p !== null);
+    const nextCursor =
+      res.documents.length === limit
+        ? res.documents[res.documents.length - 1].$id
+        : null;
+    return { posts: populated, nextCursor };
   } catch (error: any) {
     if (error.code === 401 || error.message?.includes("authorized")) {
-      return [];
+      return { posts: [], nextCursor: null };
     }
     throw new Error(error.message || String(error));
   }
+}
+
+// Backwards-compatible API used across the app
+export async function getFeedCandidates(args: FeedPageArgs = {}) {
+  const { posts } = await getFeedPage(args);
+  return posts;
 }
 
 // 🔥 LÓGICA DE STREAKS REALES (CALENDARIO)
@@ -73,11 +180,11 @@ export const createPost = async (
     }
 
     // 1. Obtener datos actuales del usuario para calcular Racha
-    const user = await databases.getDocument(
+    const user = await appwriteCall({ name: "users.getForStreak", retries: 2 }, () => databases.getDocument(
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
       userId,
-    );
+    ));
 
     const now = new Date();
     // Appwrite devuelve fechas en UTC, new Date() lo maneja correctamente
@@ -119,7 +226,7 @@ export const createPost = async (
 
     // 2. Actualizar Usuario si la racha cambió
     if (hasStreakChanged) {
-      await databases.updateDocument(
+      await appwriteCall({ name: "users.updateStreak", retries: 2 }, () => databases.updateDocument(
         appwriteConfig.databaseId,
         appwriteConfig.usersCollectionId,
         userId,
@@ -127,11 +234,11 @@ export const createPost = async (
           streak: newStreak,
           lastStreakDate: now.toISOString(),
         },
-      );
+      ));
     }
 
     // 3. Crear el Post
-    const newPost = await databases.createDocument(
+    const newPost = await appwriteCall({ name: "posts.create", retries: 2 }, () => databases.createDocument(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
       ID.unique(),
@@ -144,7 +251,7 @@ export const createPost = async (
         savedBy: [],
         isPrivate: isPrivate,
       },
-    );
+    ));
 
     // 🔥 Devolvemos la nueva racha y bandera de cambio para que la UI la use
     return { ...newPost, currentStreak: newStreak, hasStreakChanged };
@@ -190,38 +297,16 @@ export async function getAllPosts(currentUserId?: string) {
     const posts = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.postsCollectionId,
-      [Query.orderDesc("$createdAt")],
+      [Query.orderDesc("$createdAt"), Query.limit(100)],
     );
 
-    const postsWithData = await Promise.all(
-      posts.documents.map(async (post) => {
-        let creator: any = post.postedBy;
-        if (typeof creator === "string") {
-          creator = await getUser(creator);
-        }
-
-        if (!creator || creator.isBanned) return null;
-
-        const comments = await databases.listDocuments(
-          appwriteConfig.databaseId,
-          appwriteConfig.commentsCollectionId,
-          [Query.equal("postId", post.$id), Query.limit(1)],
-        );
-
-        return {
-          ...post,
-          postedBy: creator,
-          commentsCount: comments.total,
-        };
-      }),
-    );
-
-    return postsWithData.filter((p) => p !== null);
+    const populated = await populatePostsWithUsersAndCounts(posts.documents);
+    return populated;
   } catch (error: any) {
     if (error.code === 401 || error.message?.includes("authorized")) {
       return [];
     }
-    throw new Error(error);
+    throw new Error(error.message || String(error));
   }
 }
 
@@ -343,27 +428,8 @@ export async function getSavedPosts(userId: string) {
       [Query.search("savedBy", userId), Query.orderDesc("$createdAt")],
     );
 
-    const populatedPosts = await Promise.all(
-      posts.documents.map(async (post) => {
-        if (post.postedBy) {
-          let userData = null;
-          if (typeof post.postedBy === "string") {
-            try {
-              userData = await getUser(post.postedBy);
-            } catch (e) {}
-          } else {
-            userData = post.postedBy;
-          }
-
-          if (!userData || userData.isBanned) return null;
-
-          return { ...post, postedBy: userData };
-        }
-        return post;
-      }),
-    );
-
-    return populatedPosts.filter((p) => p !== null);
+    const populated = await populatePostsWithUsersAndCounts(posts.documents);
+    return populated;
   } catch (error: any) {
     return [];
   }

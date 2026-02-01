@@ -17,6 +17,15 @@ export interface AudioSignalPayload {
     valence: number;
     bpm: number;
   };
+
+  /**
+   * Optional lightweight track metadata.
+   * Kept intentionally small to avoid bloating the signal payload.
+   */
+  trackMeta?: {
+    title?: string;
+    artist?: string;
+  };
 }
 
 export interface AudioSignal {

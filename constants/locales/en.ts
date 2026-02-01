@@ -10,7 +10,8 @@ export default {
     user: "User",
     anonymous: "Anonymous",
     follow: "Follow",
-    loading: "Loading...", // 🔥 Nuevo
+    loading: "Loading...",
+    back: "Back",
   },
   connection: {
     disconnected: "No internet connection",
@@ -394,6 +395,24 @@ export default {
       success: "Success",
     },
   },
+  deleteAccount: {
+    title: "Delete account",
+    warningTitle: "This action is permanent",
+    warningBody: "Deleting your account will remove your posts, comments, messages, and associated data. You can’t undo this.",
+    typeTitle: "Confirmation",
+    typeBody: "Type DELETE to continue.",
+    confirmWord: "DELETE",
+    action: "Delete account",
+    deleting: "Deleting…",
+    note: "Note: Best-effort due to permissions/security rules. If something fails, log out and try again.",
+    confirmTitle: "Confirm deletion",
+    confirmBody: "Are you sure you want to delete your account and all your data? This cannot be undone.",
+    confirmAction: "Yes, delete",
+    errorGeneric: "Could not delete the account. Please try again.",
+    a11yHint: "Opens a confirmation to delete your account.",
+    typeInputLabel: "Delete confirmation input",
+  },
+
   privacy: {
     title: "Privacy",
     headers: {

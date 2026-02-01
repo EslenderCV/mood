@@ -1,4 +1,9 @@
-import { ID, OAuthProvider, AppwriteException, Query } from "react-native-appwrite";
+import {
+  ID,
+  OAuthProvider,
+  AppwriteException,
+  Query,
+} from "react-native-appwrite";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { account, databases, appwriteConfig } from "./config";
@@ -15,19 +20,19 @@ export const signInWithOAuth = async (provider: "google" | "apple") => {
     const providerEnum =
       provider === "google" ? OAuthProvider.Google : OAuthProvider.Apple;
 
-    const redirectUri = "appwrite-callback-6689e59b000acd6caf6f://";
+    const redirectUri = "appwrite-callback-697d0db30009f4ca4dd6://";
 
     const authUrl = await account.createOAuth2Token(
       providerEnum,
       redirectUri,
-      redirectUri
+      redirectUri,
     );
 
     if (!authUrl) throw new Error("Error al generar token OAuth2");
 
     const result = await WebBrowser.openAuthSessionAsync(
       authUrl.toString(),
-      redirectUri
+      redirectUri,
     );
 
     if (result.type === "success" && result.url) {
@@ -97,7 +102,7 @@ export const signInn = async (email: string, password: string) => {
         await account.deleteSession("current");
         const newSession = await account.createEmailPasswordSession(
           email,
-          password
+          password,
         );
         if (newSession.secret) authStore.secret = newSession.secret;
         return newSession;
@@ -113,7 +118,7 @@ export const createUser = async (
   email: string,
   password: string,
   name: string,
-  username: string
+  username: string,
 ) => {
   try {
     const newAccount = await account.create(ID.unique(), email, password, name);
@@ -158,7 +163,7 @@ export const getCurrentUser = async () => {
     const currentUser = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.usersCollectionId,
-      [Query.equal("accId", currentAccount.$id)]
+      [Query.equal("accId", currentAccount.$id)],
     );
 
     if (!currentUser || currentUser.documents.length === 0) return null;
@@ -202,7 +207,7 @@ export async function deleteAllSessions() {
   try {
     const sessions = await account.listSessions();
     await Promise.all(
-      sessions.sessions.map((s) => account.deleteSession(s.$id))
+      sessions.sessions.map((s) => account.deleteSession(s.$id)),
     );
     return true;
   } catch (error: any) {

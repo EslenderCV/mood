@@ -145,7 +145,7 @@ const TabsLayout = () => {
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? "compass" : "compass-outline"}
-                size={30}
+                size={26}
                 color={color}
               />
             ),

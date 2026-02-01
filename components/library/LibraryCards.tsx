@@ -178,6 +178,8 @@ export const SongCard = memo(
   },
 );
 
+SongCard.displayName = "SongCard";
+
 // --- TARJETA DE PLAYLIST (MEMOIZED) ---
 export const PlaylistCard = memo(
   ({ item, onPress, t, textColor, subTextColor, borderColor, isDark }: any) => {
@@ -269,6 +271,8 @@ export const PlaylistCard = memo(
     );
   },
 );
+
+PlaylistCard.displayName = "PlaylistCard";
 
 export const EmptyState = ({
   t,

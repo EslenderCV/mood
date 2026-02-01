@@ -11,11 +11,15 @@ import { AudioProvider } from "@/context/AudioContext";
 import GlobalProvider, { useGlobalContext } from "@/context/GlobalProvider";
 import { ModalProvider } from "@/context/ModalContext";
 import { LanguageProvider } from "@/context/LanguageContext";
+import { FlagsProvider, useFlag } from "@/src/config/flags";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { ChatProvider } from "@/context/ChatContext";
 import { ConnectionProvider } from "@/context/ConnectionProvider";
 import { FeedProvider } from "@/context/FeedProvider";
 import { CommentsModalProvider } from "@/context/CommentsModalContext";
+import { installGlobalHandlers } from "@/src/observability/install";
+import { markHealthyBoot } from "@/src/observability/crashLoop";
+import NetworkBanner from "@/components/shared/NetworkBanner";
 
 // Componentes
 import CustomSplashScreen from "@/components/CustomSplashScreen";
@@ -27,6 +31,7 @@ import GlobalAudioPlayerBar from "@/components/GlobalAudioPlayerBar";
 SplashScreen.preventAutoHideAsync();
 
 const StackLayout = () => {
+  const enableFade = useFlag("fadeTransitions");
   const { loggedIn, loading } = useGlobalContext();
   const segments = useSegments();
   const router = useRouter();
@@ -84,6 +89,11 @@ const StackLayout = () => {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: "#000" },
+          // Premium feel: avoid hard cuts between screens.
+          // If a platform doesn't support a given option, it will be ignored.
+          animation: enableFade ? "fade" : "default",
+          animationDuration: 180,
+          gestureEnabled: true,
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -107,9 +117,20 @@ const StackLayout = () => {
 };
 
 export default function RootLayout() {
+  useEffect(() => {
+    installGlobalHandlers();
+    // If we manage to stay alive for a bit, clear crash-loop state.
+    const t = setTimeout(() => {
+      void markHealthyBoot();
+    }, 15000);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+            <NetworkBanner />
       <LanguageProvider>
+          <FlagsProvider>
         <BottomSheetModalProvider>
           <GlobalProvider>
             <NotificationProvider>
@@ -134,7 +155,8 @@ export default function RootLayout() {
             </NotificationProvider>
           </GlobalProvider>
         </BottomSheetModalProvider>
-      </LanguageProvider>
+                </FlagsProvider>
+        </LanguageProvider>
     </GestureHandlerRootView>
   );
 }

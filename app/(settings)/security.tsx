@@ -29,7 +29,6 @@ import {
   getUserSessions,
   deleteSession,
   deleteAllSessions,
-  deleteUserAccount,
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useLanguage } from "@/context/LanguageContext";
@@ -62,13 +61,10 @@ const Security = () => {
 
   // Modals
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false); // Nuevo modal seguro
 
   // Forms
   const [passForm, setPassForm] = useState({ old: "", new: "", confirm: "" });
-  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const [isUpdatingPass, setIsUpdatingPass] = useState(false);
-  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // Nuevas Funciones
   const [privacyMode, setPrivacyMode] = useState(false); // Anti-Screenshots
@@ -211,24 +207,8 @@ const Security = () => {
       ],
     );
   };
-
-  const confirmDeleteAccount = async () => {
-    if (deleteConfirmationText !== "ELIMINAR") return;
-
-    setIsDeletingAccount(true);
-    try {
-      if (!user?.$id) return;
-      await deleteUserAccount(user.$id);
-      setUser(null);
-      setIsLogged(false);
-      router.replace("/signIn");
-    } catch (error: any) {
-      Alert.alert(
-        "Error",
-        "No se pudo eliminar. Cierra sesión e intenta de nuevo.",
-      );
-      setIsDeletingAccount(false);
-    }
+  const goToDeleteAccount = () => {
+    router.push("/(settings)/delete-account");
   };
 
   // --- CALCULAR SCORE DE SEGURIDAD (Gamification) ---
@@ -537,7 +517,7 @@ const Security = () => {
           title={t("security.actions.deleteAccount")}
           subtitle={t("security.actions.deleteAccountSub")}
           isDanger
-          onPress={() => setShowDeleteModal(true)} // Abre el nuevo modal seguro
+          onPress={goToDeleteAccount}
         />
 
         <View className="h-20" />
@@ -629,87 +609,6 @@ const Security = () => {
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* --- NUEVO: MODAL ELIMINAR CUENTA SEGURO --- */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={showDeleteModal}
-        onRequestClose={() => setShowDeleteModal(false)}
-      >
-        <View className="flex-1 justify-center items-center bg-black/80 px-4">
-          <View
-            className="w-full rounded-3xl p-6"
-            style={{
-              backgroundColor: modalBg,
-              borderColor: borderColor,
-              borderWidth: 1,
-            }}
-          >
-            <View className="items-center mb-4">
-              <View className="w-14 h-14 rounded-full bg-red-100 items-center justify-center mb-3">
-                <Ionicons name="warning" size={30} color="#EF4444" />
-              </View>
-              <Text
-                className="text-xl font-bold text-center"
-                style={{ color: textColor }}
-              >
-                ¿Eliminar Cuenta Permanentemente?
-              </Text>
-              <Text
-                className="text-center mt-2 text-sm"
-                style={{ color: subTextColor }}
-              >
-                Esta acción no se puede deshacer. Escribe{" "}
-                <Text className="font-bold text-red-500">ELIMINAR</Text> abajo
-                para confirmar.
-              </Text>
-            </View>
-
-            <TextInput
-              className="border p-4 rounded-xl text-center font-bold tracking-widest mb-6"
-              style={{
-                backgroundColor: inputBg,
-                borderColor:
-                  deleteConfirmationText === "ELIMINAR"
-                    ? "#EF4444"
-                    : borderColor,
-                color: textColor,
-              }}
-              placeholder="ELIMINAR"
-              placeholderTextColor={subTextColor}
-              autoCapitalize="characters"
-              value={deleteConfirmationText}
-              onChangeText={setDeleteConfirmationText}
-            />
-
-            <TouchableOpacity
-              onPress={confirmDeleteAccount}
-              disabled={
-                deleteConfirmationText !== "ELIMINAR" || isDeletingAccount
-              }
-              className={`h-[56px] rounded-xl items-center justify-center mb-3 ${deleteConfirmationText === "ELIMINAR" ? "bg-red-500" : "bg-zinc-700 opacity-50"}`}
-            >
-              {isDeletingAccount ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className="text-white font-bold text-lg">
-                  Confirmar Eliminación
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setShowDeleteModal(false)}
-              className="h-[46px] items-center justify-center"
-            >
-              <Text className="font-medium" style={{ color: subTextColor }}>
-                Cancelar
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>

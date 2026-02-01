@@ -12,7 +12,8 @@ export default {
     user: "Usuario",
     anonymous: "Anónimo",
     follow: "Seguir",
-    loading: "Cargando...", // 🔥 Nuevo
+    loading: "Cargando...",
+    back: "Volver",
   },
   connection: {
     disconnected: "Sin conexión a internet",
@@ -399,6 +400,24 @@ export default {
       success: "Éxito",
     },
   },
+  deleteAccount: {
+    title: "Eliminar cuenta",
+    warningTitle: "Esta acción es permanente",
+    warningBody: "Eliminar tu cuenta borrará tus posts, comentarios, mensajes y datos asociados. No podrás recuperarlos.",
+    typeTitle: "Confirmación",
+    typeBody: "Escribe ELIMINAR para continuar.",
+    confirmWord: "ELIMINAR",
+    action: "Eliminar cuenta",
+    deleting: "Eliminando...",
+    note: "Nota: es best-effort por permisos/reglas de seguridad. Si algo falla, cierra sesión e intenta de nuevo.",
+    confirmTitle: "Confirmar eliminación",
+    confirmBody: "¿Seguro que deseas eliminar tu cuenta y todos tus datos? Esta acción no se puede deshacer.",
+    confirmAction: "Sí, eliminar",
+    errorGeneric: "No se pudo eliminar la cuenta. Intenta de nuevo.",
+    a11yHint: "Abre una confirmación para eliminar tu cuenta.",
+    typeInputLabel: "Campo de confirmación de eliminación",
+  },
+
   privacy: {
     title: "Privacidad",
     headers: {

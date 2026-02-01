@@ -1,5 +1,6 @@
 import React from "react";
-import { TouchableOpacity, Text } from "react-native";
+import { Text } from "react-native";
+import PressableScale from "@/components/shared/PressableScale";
 
 interface FollowButtonProps {
   isFollowing: boolean;
@@ -19,12 +20,13 @@ export const FollowButton = ({
   };
 
   return (
-    <TouchableOpacity
+    <PressableScale
       onPress={onPress}
-      className={`h-9 px-5 rounded-full flex-row items-center justify-center ${
+      hapticKind="light"
+      className={`h-10 px-5 rounded-full flex-row items-center justify-center ${
         isFollowing
-          ? "bg-transparent border border-zinc-300 dark:border-zinc-700"
-          : "bg-[#5E17EB]"
+          ? "bg-transparent border border-border"
+          : "bg-accent"
       }`}
     >
       <Text
@@ -34,6 +36,6 @@ export const FollowButton = ({
       >
         {getLabel()}
       </Text>
-    </TouchableOpacity>
+    </PressableScale>
   );
 };

@@ -8,17 +8,17 @@ import React, {
 import {
   View,
   Text,
-  Animated,
+  FlatList,
   ActivityIndicator,
   Platform,
-  LayoutAnimation,
-  UIManager,
+  RefreshControl,
   ViewToken,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { router, useNavigation } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { AudioActions } from "@/context/AudioContext";
 
 // --- HOOK ---
 import { useHomeLogic } from "@/hooks/useHomeLogic";
@@ -50,16 +50,6 @@ import StreakSuccessModal from "@/components/StreakSuccessModal";
 import { injectAdsInFeed } from "@/lib/mockAds";
 import { createStory, deletePost } from "@/lib/appwrite";
 
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-const SPINNER_HEIGHT = 60;
-const PULL_THRESHOLD = -80;
-const VISIBLE_THRESHOLD = -40;
 
 const searchSongsWrapper = async (query: string) => {
   try {
@@ -90,11 +80,9 @@ const RANDOM_SEARCH_TERMS = [
 const Home = () => {
   const isDark = true;
   const logic = useHomeLogic();
+  const logicRef = useRef(logic);
+  useEffect(() => { logicRef.current = logic; }, [logic]);
   const navigation = useNavigation<any>();
-
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const scrollRef = useRef(0);
-  const [showSpinner, setShowSpinner] = useState(false);
 
   // 🔥 ESTADOS PARA RACHAS
   const [showStreakModal, setShowStreakModal] = useState(false);
@@ -104,50 +92,22 @@ const Home = () => {
     return injectAdsInFeed(logic.sortedFeed);
   }, [logic.sortedFeed]);
 
+  // ✅ Para callbacks (viewability) sin capturar closures pesadas:
+  const feedWithAdsRef = useRef<any[]>([]);
   useEffect(() => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-  }, [showSpinner, logic.isRefreshing]);
+    feedWithAdsRef.current = feedWithAds;
+  }, [feedWithAds]);
 
-  useEffect(() => {
-    if (!logic.isRefreshing) setShowSpinner(false);
-  }, [logic.isRefreshing]);
 
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    {
-      useNativeDriver: false,
-      listener: (event: any) => {
-        const offsetY = event.nativeEvent.contentOffset.y;
-        scrollRef.current = offsetY;
-        if (offsetY < VISIBLE_THRESHOLD) {
-          if (!showSpinner) setShowSpinner(true);
-        } else if (!logic.isRefreshing) {
-          if (showSpinner) setShowSpinner(false);
-        }
-      },
-    },
-  );
 
-  const handleScrollEndDrag = () => {
-    const offsetY = scrollRef.current;
-    if (offsetY < PULL_THRESHOLD && !logic.isRefreshing) {
-      setShowSpinner(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      logic.onRefresh();
-    }
-  };
+  const onPullToRefresh = useCallback(() => {
+    if (logic.isRefreshing) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    logic.onRefresh();
+  }, [logic.isRefreshing, logic.onRefresh]);
 
-  const spinnerScale = scrollY.interpolate({
-    inputRange: [PULL_THRESHOLD * 1.5, PULL_THRESHOLD, 0],
-    outputRange: [1.3, 1, 0],
-    extrapolate: "clamp",
-  });
 
-  const spinnerRotate = scrollY.interpolate({
-    inputRange: [PULL_THRESHOLD * 2, 0],
-    outputRange: ["360deg", "0deg"],
-    extrapolate: "clamp",
-  });
+  const keyExtractor = useCallback((item: any) => item.id, []);
 
   const renderFeedItem = useCallback(
     ({ item }: { item: any }) => {
@@ -167,25 +127,25 @@ const Home = () => {
               )}
               <PostItem
                 post={item.data}
-                currentUserId={logic.user?.$id || ""}
+                currentUserId={logicRef.current.user?.$id || ""}
                 onProfilePress={(userId) => {
-                  logic.trackOpenProfile(item.data.$id, item.id, userId);
+                  logicRef.current.trackOpenProfile(item.data.$id, item.id, userId);
                   router.push(`/user/${userId}` as any);
                 }}
                 onCommentPress={(postId) => {
-                  logic.trackOpenComments(postId, item.id);
+                  logicRef.current.trackOpenComments(postId, item.id);
                   router.push(`/post/${postId}` as any);
                 }}
                 onOptionsPress={() => {
-                  logic.setSelectedPost(item.data);
-                  logic.toggleModal("isOptions", true);
+                  logicRef.current.setSelectedPost(item.data);
+                  logicRef.current.toggleModal("isOptions", true);
                 }}
                 onSharePress={() => {
-                  logic.openShareSelector(item.data);
-                  logic.setSharePostId(item.data.$id);
+                  logicRef.current.openShareSelector(item.data);
+                  logicRef.current.setSharePostId(item.data.$id);
                 }}
-                onLike={() => logic.trackLike(item.data.$id, item.id)}
-                onSave={() => logic.trackSave(item.data.$id, item.id)}
+                onLike={() => logicRef.current.trackLike(item.data.$id, item.id)}
+                onSave={() => logicRef.current.trackSave(item.data.$id, item.id)}
               />
             </View>
           );
@@ -195,7 +155,7 @@ const Home = () => {
           return (
             <SuggestedUsersCarousel
               users={item.data}
-              currentUserId={logic.user?.$id || ""}
+              currentUserId={logicRef.current.user?.$id || ""}
             />
           );
         case "trending_song":
@@ -204,7 +164,7 @@ const Home = () => {
           return null;
       }
     },
-    [logic, isDark],
+    [isDark],
   );
 
   const viewabilityConfig = useRef({
@@ -219,6 +179,27 @@ const Home = () => {
       if (validItems.length === 0) return;
       const minIndex = Math.min(...validItems.map((v) => v.index as number));
       logic.updateViewableIndex(minIndex);
+
+      // 🎧 Prefetch del próximo preview (UX: play instantáneo)
+      try {
+        const items = feedWithAdsRef.current || [];
+        const uris: string[] = [];
+        for (let i = minIndex; i < items.length && uris.length < 2; i++) {
+          const it = items[i];
+          if (!it || it.type !== "post") continue;
+          const raw = it.data?.songData;
+          let sd: any = raw;
+          if (typeof raw === "string") {
+            try { sd = JSON.parse(raw); } catch {}
+          }
+          const preview = sd?.preview;
+          if (typeof preview === "string" && preview.startsWith("http")) {
+            uris.push(preview);
+          }
+        }
+        uris.forEach((u) => AudioActions.prefetchTrack(u));
+      } catch {}
+
     },
   ).current;
 
@@ -294,14 +275,20 @@ const Home = () => {
         {logic.isFeedLoading ? (
           <FeedSkeleton isDark={isDark} />
         ) : (
-          <Animated.FlatList
+          <FlatList
             ref={logic.flatListRef}
             data={feedWithAds}
-            keyExtractor={(item) => item.id}
+            keyExtractor={keyExtractor}
             renderItem={renderFeedItem}
-            onScroll={handleScroll}
-            onScrollEndDrag={handleScrollEndDrag}
-            scrollEventThrottle={16}
+            refreshControl={
+              <RefreshControl
+                refreshing={logic.isRefreshing}
+                onRefresh={onPullToRefresh}
+                tintColor="#5E17EB"
+                colors={["#5E17EB"]}
+                progressBackgroundColor={isDark ? "#0B0B0F" : "#FFFFFF"}
+              />
+            }
             style={{ backgroundColor: "transparent", zIndex: 1 }}
             showsVerticalScrollIndicator={false}
             viewabilityConfig={viewabilityConfig}
@@ -313,22 +300,6 @@ const Home = () => {
             updateCellsBatchingPeriod={50}
             ListHeaderComponent={
               <View>
-                <Animated.View
-                  style={{
-                    height:
-                      showSpinner || logic.isRefreshing ? SPINNER_HEIGHT : 0,
-                    opacity: showSpinner || logic.isRefreshing ? 1 : 0,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    overflow: "hidden",
-                    transform: [
-                      { scale: logic.isRefreshing ? 1 : spinnerScale },
-                      { rotate: logic.isRefreshing ? "0deg" : spinnerRotate },
-                    ],
-                  }}
-                >
-                  <ActivityIndicator size="small" color="#5E17EB" />
-                </Animated.View>
 
                 <StoriesRail
                   currentUser={logic.user}

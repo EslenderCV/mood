@@ -10,7 +10,8 @@ export default {
     user: "Usuário",
     anonymous: "Anônimo",
     follow: "Seguir",
-    loading: "Carregando...", // 🔥 Nuevo
+    loading: "Carregando...",
+    back: "Voltar",
   },
   connection: {
     disconnected: "Sem conexão com a internet",
@@ -394,6 +395,24 @@ export default {
       success: "Sucesso",
     },
   },
+  deleteAccount: {
+    title: "Excluir conta",
+    warningTitle: "Esta ação é permanente",
+    warningBody: "Excluir sua conta removerá seus posts, comentários, mensagens e dados associados. Não é possível desfazer.",
+    typeTitle: "Confirmação",
+    typeBody: "Digite EXCLUIR para continuar.",
+    confirmWord: "EXCLUIR",
+    action: "Excluir conta",
+    deleting: "Excluindo…",
+    note: "Nota: best-effort por permissões/regras de segurança. Se falhar, saia e tente novamente.",
+    confirmTitle: "Confirmar exclusão",
+    confirmBody: "Tem certeza de que deseja excluir sua conta e todos os dados? Isso não pode ser desfeito.",
+    confirmAction: "Sim, excluir",
+    errorGeneric: "Não foi possível excluir a conta. Tente novamente.",
+    a11yHint: "Abre uma confirmação para excluir sua conta.",
+    typeInputLabel: "Campo de confirmação de exclusão",
+  },
+
   privacy: {
     title: "Privacidade",
     headers: {

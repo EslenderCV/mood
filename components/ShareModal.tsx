@@ -73,7 +73,9 @@ const ShareModal = ({ isVisible, onClose, postId }: any) => {
     setSendingMap((prev) => ({ ...prev, [targetUser.$id]: true }));
 
     try {
-      const chat = await getOrCreateChat(user.$id, targetUser.$id);
+	    const chat = await getOrCreateChat(user.$id, targetUser.$id);
+	    const chatId = (chat as any)?.$id ?? (chat as any)?.id;
+	    if (!chatId) throw new Error("chatId_missing");
 
       let finalPostId = null;
       let finalPlaylistId = null;
@@ -88,14 +90,24 @@ const ShareModal = ({ isVisible, onClose, postId }: any) => {
         finalPostId = postId;
       }
 
-      await sendMessage(
-        chat.$id,
-        user.$id,
-        targetUser.$id,
-        "",
-        finalPostId,
-        finalPlaylistId
-      );
+      const attachments: string[] = [];
+      if (finalPostId) attachments.push(`post:${finalPostId}`);
+      if (finalPlaylistId) attachments.push(`playlist:${finalPlaylistId}`);
+
+	    const body = finalPostId
+	      ? "📌 Te compartió un post"
+	      : finalPlaylistId
+	        ? "📌 Te compartió una playlist"
+	        : "";
+
+	    await sendMessage({
+	      chatId,
+        senderId: user.$id,
+        receiverId: targetUser.$id,
+	      body,
+        type: attachments.length ? "post" : "text",
+        attachments,
+      });
 
       Alert.alert("Enviado", `Compartido con ${targetUser.username}`);
     } catch (error) {

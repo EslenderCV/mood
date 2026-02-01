@@ -1,9 +1,10 @@
-import { View, Text, TouchableOpacity, Image } from "react-native";
+import { View, Text, Image } from "react-native";
 import React from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
+import PressableScale from "@/components/shared/PressableScale";
 
 interface TopBarProps {
   notificationCount: number;
@@ -16,10 +17,13 @@ const TopBar = ({
   messageCount,
   onChatPress,
 }: TopBarProps) => {
-  const { user } = useGlobalContext();
+  // Keep GlobalProvider import to preserve future extensibility;
+  // TopBar currently doesn't need the user object.
+  useGlobalContext();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-  const iconColor = isDark ? "#5E17EB" : "#000000";
+  // Instagram-like: icons should be neutral (not accent) so the accent can be reserved for highlights.
+  const iconColor = isDark ? "#E4E4E7" : "#111827";
 
   return (
     <View className="flex-row justify-between items-center px-5 py-2">
@@ -32,11 +36,14 @@ const TopBar = ({
         />
       </View>
 
-      <View className="flex-row gap-4">
-        <TouchableOpacity
+      <View className="flex-row">
+        <PressableScale
+          hapticKind="selection"
+          hitSlop={10}
           onPress={() => {
             router.push("/notifications");
           }}
+          style={{ marginRight: 16 }}
         >
           <View className="relative">
             <Ionicons
@@ -45,27 +52,31 @@ const TopBar = ({
               color={iconColor}
             />
             {notificationCount > 0 && (
-              <View className="absolute -top-1 -right-1 bg-red-500 w-4 h-4 rounded-full items-center justify-center">
+              <View className="absolute -top-1 -right-1 bg-danger w-4 h-4 rounded-full items-center justify-center">
                 <Text className="text-white text-[10px] font-bold">
                   {notificationCount}
                 </Text>
               </View>
             )}
           </View>
-        </TouchableOpacity>
+        </PressableScale>
 
-        <TouchableOpacity onPress={onChatPress}>
+        <PressableScale
+          hapticKind="selection"
+          hitSlop={10}
+          onPress={onChatPress}
+        >
           <View className="relative">
             <Ionicons name="chatbubble-outline" size={26} color={iconColor} />
             {messageCount > 0 && (
-              <View className="absolute -top-1 -right-1 bg-[#5E17EB] w-4 h-4 rounded-full items-center justify-center">
+              <View className="absolute -top-1 -right-1 bg-accent w-4 h-4 rounded-full items-center justify-center">
                 <Text className="text-white text-[10px] font-bold">
                   {messageCount}
                 </Text>
               </View>
             )}
           </View>
-        </TouchableOpacity>
+        </PressableScale>
       </View>
     </View>
   );

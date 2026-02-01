@@ -10,14 +10,11 @@ import {
   Text,
   TouchableOpacity,
   FlatList,
-  // RefreshControl, // 🗑 Eliminado
+  RefreshControl,
   Dimensions,
   Alert,
-  Animated, // ✨ Nuevo
-  Platform, // ✨ Nuevo
-  LayoutAnimation, // ✨ Nuevo
-  UIManager, // ✨ Nuevo
-  ActivityIndicator, // ✨ Nuevo
+  Platform,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -47,24 +44,19 @@ import {
 const { width } = Dimensions.get("window");
 const PADDING_HORIZONTAL = 20;
 
-// Habilitar animaciones de Layout en Android
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
-// --- CONSTANTES DE UX ---
-const PULL_THRESHOLD = -80;
-const VISIBLE_THRESHOLD = -40;
-const SPINNER_HEIGHT = 60;
 
 const Library = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
   const logic = useLibraryLogic();
+  const onPullToRefresh = useCallback(() => {
+    if (logic.refreshing) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void logic.onRefresh();
+  }, [logic.refreshing, logic.onRefresh]);
+
 
   // Theme Constants
   const bgColor = isDark ? "#000000" : "#FFFFFF";
@@ -79,63 +71,10 @@ const Library = () => {
   const skeletonData = useMemo(() => Array.from({ length: 6 }), []);
 
   // 🔥 CUSTOM REFRESH STATE
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const scrollRef = useRef(0);
-  const [showSpinner, setShowSpinner] = useState(false);
 
   // --- ANIMACIONES & SCROLL ---
-  useEffect(() => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    if (!logic.refreshing) {
-      setShowSpinner(false);
-    }
-  }, [logic.refreshing]);
 
   // Resetear scroll y spinner al cambiar de tab para evitar glitches visuales
-  useEffect(() => {
-    scrollY.setValue(0);
-    scrollRef.current = 0;
-    setShowSpinner(false);
-  }, [logic.activeTab]);
-
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    {
-      useNativeDriver: false,
-      listener: (event: any) => {
-        const offsetY = event.nativeEvent.contentOffset.y;
-        scrollRef.current = offsetY;
-
-        // Lógica reactiva de visibilidad
-        if (offsetY < VISIBLE_THRESHOLD) {
-          if (!showSpinner) setShowSpinner(true);
-        } else if (!logic.refreshing) {
-          if (showSpinner) setShowSpinner(false);
-        }
-      },
-    },
-  );
-
-  const handleScrollEndDrag = () => {
-    const offsetY = scrollRef.current;
-    if (offsetY < PULL_THRESHOLD && !logic.refreshing) {
-      setShowSpinner(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      logic.onRefresh();
-    }
-  };
-
-  const spinnerScale = scrollY.interpolate({
-    inputRange: [PULL_THRESHOLD * 1.5, PULL_THRESHOLD, 0],
-    outputRange: [1.3, 1, 0],
-    extrapolate: "clamp",
-  });
-
-  const spinnerRotate = scrollY.interpolate({
-    inputRange: [PULL_THRESHOLD * 2, 0],
-    outputRange: ["360deg", "0deg"],
-    extrapolate: "clamp",
-  });
 
   // Solo se carga al montar el componente.
   useEffect(() => {
@@ -191,25 +130,6 @@ const Library = () => {
     </View>
   );
 
-  // Componente Spinner Reutilizable
-  const CustomSpinner = () => (
-    <Animated.View
-      style={{
-        height: showSpinner || logic.refreshing ? SPINNER_HEIGHT : 0,
-        opacity: showSpinner || logic.refreshing ? 1 : 0,
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-        transform: [
-          { scale: logic.refreshing ? 1 : spinnerScale },
-          { rotate: logic.refreshing ? "0deg" : spinnerRotate },
-        ],
-      }}
-    >
-      <ActivityIndicator size="small" color="#5E17EB" />
-    </Animated.View>
-  );
-
   return (
     <View style={{ flex: 1, backgroundColor: bgColor }}>
       <SafeAreaView
@@ -222,9 +142,18 @@ const Library = () => {
         {renderHeader()}
 
         {logic.activeTab === "songs" ? (
-          <Animated.FlatList
+          <FlatList
             data={logic.isLoading ? skeletonData : logic.musicCollection}
             keyExtractor={(item: any, index) => item?.id || `sk-${index}`}
+            refreshControl={
+              <RefreshControl
+                refreshing={logic.refreshing}
+                onRefresh={onPullToRefresh}
+                tintColor="#5E17EB"
+                colors={["#5E17EB"]}
+                progressBackgroundColor={bgColor}
+              />
+            }
             renderItem={({ item }) => {
               if (logic.isLoading) return <SongSkeleton isDark={isDark} />;
               return (
@@ -256,12 +185,7 @@ const Library = () => {
               paddingHorizontal: PADDING_HORIZONTAL,
               paddingBottom: 20,
             }}
-            // 🔥 SCROLL HANDLERS
-            onScroll={handleScroll}
-            onScrollEndDrag={handleScrollEndDrag}
-            scrollEventThrottle={16}
             // 🔥 SPINNER EN EL HEADER
-            ListHeaderComponent={<CustomSpinner />}
             ListEmptyComponent={
               !logic.isLoading ? (
                 <EmptyState
@@ -279,9 +203,18 @@ const Library = () => {
               Movimos el botón "Crear Playlist" dentro del ListHeaderComponent 
               de la FlatList para que el spinner lo empuje hacia abajo al refrescar.
             */}
-            <Animated.FlatList
+            <FlatList
               data={logic.isLoading ? skeletonData : logic.playlists}
               keyExtractor={(item: any, index) => item?.$id || `pl-sk-${index}`}
+              refreshControl={
+                <RefreshControl
+                  refreshing={logic.refreshing}
+                  onRefresh={onPullToRefresh}
+                  tintColor="#5E17EB"
+                  colors={["#5E17EB"]}
+                  progressBackgroundColor={bgColor}
+                />
+              }
               renderItem={({ item }) => {
                 if (logic.isLoading)
                   return <PlaylistSkeleton isDark={isDark} />;
@@ -303,13 +236,8 @@ const Library = () => {
               columnWrapperStyle={{ justifyContent: "space-between" }}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 120 }}
-              // 🔥 SCROLL HANDLERS
-              onScroll={handleScroll}
-              onScrollEndDrag={handleScrollEndDrag}
-              scrollEventThrottle={16}
               ListHeaderComponent={
                 <View>
-                  <CustomSpinner />
                   <TouchableOpacity
                     onPress={() => logic.setCreateModalVisible(true)}
                     className="flex-row items-center mb-8 p-5 rounded-[24px] border border-dashed"

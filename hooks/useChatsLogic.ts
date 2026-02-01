@@ -23,7 +23,7 @@ export const useChatsLogic = () => {
   const [isNewChatVisible, setIsNewChatVisible] = useState(false);
 
   // Refs para manejo de UI
-  const rowRefs = useRef<Array<Swipeable | null>>([]);
+  const rowRefs = useRef<(Swipeable | null)[]>([]);
   const prevOpenedRow = useRef<Swipeable | null>(null);
 
   // Skeletons dinámicos

@@ -8,7 +8,7 @@ import {
   Modal,
   StyleSheet,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons , Fontisto } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import Animated, {
   FadeIn,
@@ -20,7 +20,6 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { BlurView } from "expo-blur";
-import { Fontisto } from "@expo/vector-icons";
 // Subcomponentes
 import LinkedSongCard from "./LinkedSongCard";
 import SongResultRow from "./SongResultRow";
@@ -362,7 +361,7 @@ export default function MusicSection({
 
             {/* Texto */}
             <Text className="text-white font-bold text-xl mt-8 tracking-wide">
-              Hold up, I'm listening...
+              {`Hold up, I'm listening...`}
             </Text>
           </View>
         </View>

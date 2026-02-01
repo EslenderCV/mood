@@ -2,8 +2,8 @@ import { Client, Databases, Query, Models } from "node-appwrite";
 
 // --- CONFIGURACIÓN ---
 const CONFIG = {
-  ENDPOINT: "https://fra.cloud.appwrite.io/v1",
-  PROJECT_ID: "6689e59b000acd6caf6f",
+  ENDPOINT: "https://nyc.cloud.appwrite.io/v1",
+  PROJECT_ID: "697d0db30009f4ca4dd6",
   DATABASE_ID: "6689e7cc002bf2740136",
   USERS_COLLECTION_ID: "6962f488000f10f39b70",
   FOLLOWS_COLLECTION_ID: "6949a7500026f2cf2850",
@@ -69,7 +69,7 @@ export default async ({ req, res, log, error }: Context) => {
     // Ahora validamos que exista 'postedBy' en lugar de 'creator'
     if (!post || !post.$id || !post.postedBy) {
       log(
-        "⚠️ El evento no contiene datos válidos o falta el campo 'postedBy'."
+        "⚠️ El evento no contiene datos válidos o falta el campo 'postedBy'.",
       );
       return res.json({ success: false, error: "Missing post data" }, 400);
     }
@@ -97,7 +97,7 @@ export default async ({ req, res, log, error }: Context) => {
     const followsList = await databases.listDocuments<FollowDocument>(
       CONFIG.DATABASE_ID,
       CONFIG.FOLLOWS_COLLECTION_ID,
-      [Query.equal("followedId", authorId)]
+      [Query.equal("followedId", authorId)],
     );
 
     if (followsList.total === 0) {
@@ -118,7 +118,7 @@ export default async ({ req, res, log, error }: Context) => {
             await databases.getDocument<UserProfileDocument>(
               CONFIG.DATABASE_ID,
               CONFIG.USERS_COLLECTION_ID,
-              followDoc.followerId
+              followDoc.followerId,
             );
 
           if (followerProfile && followerProfile.expoPushToken) {
@@ -136,10 +136,10 @@ export default async ({ req, res, log, error }: Context) => {
           }
         } catch (err: any) {
           log(
-            `⚠️ Error perfil seguidor ${followDoc.followerId}: ${err.message}`
+            `⚠️ Error perfil seguidor ${followDoc.followerId}: ${err.message}`,
           );
         }
-      })
+      }),
     );
 
     if (messages.length === 0) {

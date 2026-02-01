@@ -22,7 +22,7 @@ export const syncOrCreateUserDocument = async () => {
 
     if (userContext.documents.length > 0) return userContext.documents[0];
 
-    const avatarUrl = `https://fra.cloud.appwrite.io/v1/avatars/initials?name=${encodeURIComponent(currentAccount.name)}&project=${appwriteConfig.projectId}`;
+    const avatarUrl = `https://nyc.cloud.appwrite.io/v1/avatars/initials?name=${encodeURIComponent(currentAccount.name)}&project=${appwriteConfig.projectId}`;
 
     return await databases.createDocument(
       appwriteConfig.databaseId,
@@ -63,6 +63,192 @@ export async function deleteUserAccount(userId: string) {
     return true;
   } catch (error: any) {
     throw new Error(error.message);
+  }
+}
+// --- Account deletion (Apple / Play compliance) ------------------------------
+
+const _DELETE_LIMIT = 100;
+
+// Paginación segura: cursorAfter existe en Appwrite, pero lo dejamos defensivo.
+const _cursorAfter = (Query as any).cursorAfter as
+  | ((docId: string) => string)
+  | undefined;
+
+async function _listAllDocuments(
+  collectionId: string,
+  baseQueries: string[],
+): Promise<any[]> {
+  const out: any[] = [];
+  let cursor: string | undefined;
+
+  while (true) {
+    const queries = [...baseQueries, Query.limit(_DELETE_LIMIT)];
+
+    if (cursor && _cursorAfter) {
+      queries.push(_cursorAfter(cursor));
+    }
+
+    const res = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      collectionId,
+      queries,
+    );
+
+    const docs = res?.documents || [];
+    if (docs.length === 0) break;
+
+    out.push(...docs);
+
+    if (!_cursorAfter || docs.length < _DELETE_LIMIT) break;
+    cursor = docs[docs.length - 1].$id;
+  }
+
+  return out;
+}
+
+async function _deleteDocuments(
+  collectionId: string,
+  docIds: string[],
+): Promise<void> {
+  for (const id of docIds) {
+    try {
+      await databases.deleteDocument(
+        appwriteConfig.databaseId,
+        collectionId,
+        id,
+      );
+    } catch (e) {
+      // best-effort: seguimos para no dejar al usuario “atrapado”
+    }
+  }
+}
+
+async function _deleteByQuery(
+  collectionId: string,
+  baseQueries: string[],
+): Promise<void> {
+  try {
+    const docs = await _listAllDocuments(collectionId, baseQueries);
+    if (docs.length === 0) return;
+    await _deleteDocuments(
+      collectionId,
+      docs.map((d: any) => d.$id),
+    );
+  } catch {
+    // best-effort
+  }
+}
+
+/**
+ * Eliminación premium / compliance:
+ * - Borra datos del usuario en nuestras colecciones (posts, comments, stories, follows, chats, playlists, notifications, user doc).
+ * - Luego intenta borrar la cuenta auth (si el SDK lo soporta), si no, cierra la sesión.
+ *
+ * Nota: es best-effort por permisos/reglas de seguridad. Siempre intenta dejar al usuario deslogueado.
+ */
+export async function deleteUserAccountAndData(userId: string) {
+  try {
+    // 1) Playlists
+    await _deleteByQuery(appwriteConfig.playlistsCollectionId, [
+      Query.equal("ownerId", userId),
+    ]);
+
+    // 2) Stories
+    await _deleteByQuery(appwriteConfig.storiesCollectionId, [
+      Query.equal("user", userId),
+    ]);
+
+    // 3) Chats + Messages
+    try {
+      const chats = await _listAllDocuments(appwriteConfig.chatsCollectionId, [
+        Query.equal("participants", userId),
+      ]);
+
+      for (const chat of chats) {
+        // Messages del chat
+        await _deleteByQuery(appwriteConfig.messagesCollectionId, [
+          Query.equal("chatId", chat.$id),
+        ]);
+
+        // Chat doc
+        try {
+          await databases.deleteDocument(
+            appwriteConfig.databaseId,
+            appwriteConfig.chatsCollectionId,
+            chat.$id,
+          );
+        } catch {}
+      }
+    } catch {}
+
+    // 4) Posts del usuario + comentarios de esos posts (de cualquier usuario)
+    try {
+      const posts = await _listAllDocuments(appwriteConfig.postsCollectionId, [
+        Query.equal("postedBy", userId),
+      ]);
+
+      const postIds = posts.map((p: any) => p.$id);
+
+      // Borrar comentarios por postId (en batches, porque Query.equal acepta array)
+      const batchSize = 50;
+      for (let i = 0; i < postIds.length; i += batchSize) {
+        const batch = postIds.slice(i, i + batchSize);
+        await _deleteByQuery(appwriteConfig.commentsCollectionId, [
+          Query.equal("postId", batch),
+        ]);
+      }
+
+      // Borrar posts
+      await _deleteDocuments(appwriteConfig.postsCollectionId, postIds);
+    } catch {}
+
+    // 5) Comentarios del usuario en posts de otros
+    await _deleteByQuery(appwriteConfig.commentsCollectionId, [
+      Query.equal("userId", userId),
+    ]);
+
+    // 6) Follow relations
+    await _deleteByQuery(appwriteConfig.followsCollectionId, [
+      Query.equal("followerId", userId),
+    ]);
+    await _deleteByQuery(appwriteConfig.followsCollectionId, [
+      Query.equal("followedId", userId),
+    ]);
+
+    // 7) Notifications (como receptor o emisor)
+    await _deleteByQuery(appwriteConfig.notificationsCollectionId, [
+      Query.equal("userId", userId),
+    ]);
+    await _deleteByQuery(appwriteConfig.notificationsCollectionId, [
+      Query.equal("senderId", userId),
+    ]);
+
+    // 8) User document (nuestro perfil en DB)
+    try {
+      await databases.deleteDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.usersCollectionId,
+        userId,
+      );
+    } catch {}
+
+    // 9) Auth account (si existe en el SDK), si no, cerrar sesión
+    try {
+      const accAny: any = account as any;
+      if (typeof accAny.delete === "function") {
+        await accAny.delete();
+      } else {
+        await account.deleteSession("current");
+      }
+    } catch {
+      try {
+        await account.deleteSession("current");
+      } catch {}
+    }
+
+    return true;
+  } catch (error: any) {
+    throw new Error(error?.message || "delete account failed");
   }
 }
 

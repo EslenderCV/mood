@@ -304,6 +304,7 @@ export const useExploreLogic = () => {
     if (posts.length === 0) setIsLoading(true);
     fetchDailyTrendingVibes();
     try {
+      const blocked = new Set<string>(user?.blockedUsers || []);
       const [rawPosts, usersResponse, fetchedFollowedIds] = await Promise.all([
         getFeedCandidates(),
         databases.listDocuments(
@@ -319,7 +320,12 @@ export const useExploreLogic = () => {
       const latestUsers = usersResponse.documents;
       const songMap = new Map();
       const artistMap = new Map();
-      rawPosts.forEach((post: any) => {
+      const visiblePosts = rawPosts.filter((p: any) => {
+        const creatorId = p.postedBy?.$id || p.creator?.$id || p.userId;
+        return !creatorId || !blocked.has(creatorId);
+      });
+
+      visiblePosts.forEach((post: any) => {
         const song = parseSongData(post.songData);
         if (!song) return;
         const key = `${normalize(song.title)}-${normalize(song.artist)}`;
@@ -354,11 +360,12 @@ export const useExploreLogic = () => {
         (u: any) =>
           u.$id !== user?.$id &&
           !localFollowedIds.includes(u.$id) &&
-          u.$id !== MOOD_OFFICIAL_ID,
+          u.$id !== MOOD_OFFICIAL_ID &&
+          !blocked.has(u.$id),
       );
       setTopSongs(charts.slice(0, 10));
       setArtists(topArtists);
-      setPosts(shuffleArray(rawPosts));
+      setPosts(shuffleArray(visiblePosts));
       setTrendingPeople(shuffleArray([...usersNotFollowed]).slice(0, 20));
       setUsers(usersNotFollowed);
     } catch (e) {
@@ -371,7 +378,7 @@ export const useExploreLogic = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [user?.$id, (user?.blockedUsers || []).join(",")]);
   const onRefresh = () => {
     setIsRefreshing(true);
     fetchData();
@@ -398,6 +405,7 @@ export const useExploreLogic = () => {
       }
       setSearchResults((prev) => ({ ...prev, isLoading: true }));
       try {
+        const blocked = new Set<string>(user?.blockedUsers || []);
         // 1. Buscar Usuarios (Siempre útil)
         const usersRes = await databases.listDocuments(
           appwriteConfig.databaseId,
@@ -410,7 +418,7 @@ export const useExploreLogic = () => {
             Query.limit(20),
           ],
         );
-        const foundUsers = usersRes.documents;
+        const foundUsers = usersRes.documents.filter((u: any) => !blocked.has(u.$id));
 
         // 2. DETECTOR DE INTENCIÓN: ¿Es un Mood?
         const isMoodSearch = MOOD_KEYWORDS.some((k) =>
@@ -418,7 +426,11 @@ export const useExploreLogic = () => {
         );
 
         // 3. Buscar Posts usando la función centralizada
-        const foundPosts = await searchPosts(searchText, isMoodSearch);
+        const foundPostsRaw = await searchPosts(searchText, isMoodSearch);
+        const foundPosts = foundPostsRaw.filter((p: any) => {
+          const creatorId = p.postedBy?.$id || p.creator?.$id || p.userId;
+          return !creatorId || !blocked.has(creatorId);
+        });
 
         setSearchResults({
           users: foundUsers.map((d) => ({
@@ -434,7 +446,7 @@ export const useExploreLogic = () => {
       }
     }, 600);
     return () => clearTimeout(delay);
-  }, [searchText]);
+  }, [searchText, user?.$id, (user?.blockedUsers || []).join(",")]);
 
   // Helpers UI
   const handleOpenOptions = (post: any) => {

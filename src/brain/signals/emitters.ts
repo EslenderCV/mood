@@ -11,7 +11,8 @@ export const BrainEmitter = {
     trackId: string,
     durationMs: number,
     playedMs: number,
-    features?: { energy: number; valence: number; bpm: number }
+    features?: { energy: number; valence: number; bpm: number },
+    meta?: { title?: string; artist?: string }
   ) => {
     const signal: AudioSignal = {
       type,
@@ -21,6 +22,7 @@ export const BrainEmitter = {
         totalDurationMs: durationMs,
         durationPlayedMs: playedMs,
         trackFeatures: features || getDefaultFeatures(),
+        trackMeta: meta,
       },
     };
     MoodSessionManager.getInstance().registerSignal(signal);
