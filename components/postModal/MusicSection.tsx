@@ -68,7 +68,7 @@ const PulsingCircle = ({ delay, size }: { delay: number; size: number }) => {
       -1,
       false,
     );
-  }, []);
+  }, [scale, opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],

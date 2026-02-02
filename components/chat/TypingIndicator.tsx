@@ -25,7 +25,7 @@ const Dot = ({ delay }: { delay: number }) => {
         true, // Reverse (no necesario aquí por sequence, pero por si acaso)
       ),
     );
-  }, []);
+  }, [delay, translateY]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],

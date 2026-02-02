@@ -8,7 +8,7 @@ import {
   Share as SystemShare,
   Keyboard,
 } from "react-native";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Databases, Query, ID } from "react-native-appwrite";
@@ -157,22 +157,8 @@ const PostDetails = () => {
   const inputRef = useRef<any>(null);
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // --- EFECTOS ---
-  useEffect(() => {
-    fetchData();
-  }, [postId]);
-
-  useEffect(() => {
-    if (allComments.length > 0) {
-      const roots = allComments.filter((c) => !c.parentId);
-      setRootComments(roots);
-    } else {
-      setRootComments([]);
-    }
-  }, [allComments]);
-
   // --- LOGICA DE DATOS ---
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [postData, commentsData] = await Promise.all([
         getPostById(postId),
@@ -186,7 +172,21 @@ const PostDetails = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [postId]);
+
+  // --- EFECTOS ---
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (allComments.length > 0) {
+      const roots = allComments.filter((c) => !c.parentId);
+      setRootComments(roots);
+    } else {
+      setRootComments([]);
+    }
+  }, [allComments]);
 
   const songData = post ? parseSongData(post.songData) : null;
   const mood = songData?.mood;

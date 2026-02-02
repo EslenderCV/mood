@@ -12,6 +12,8 @@ export default {
     follow: "Follow",
     loading: "Loading...",
     back: "Back",
+    and: "and",
+    others: "more",
   },
   connection: {
     disconnected: "No internet connection",

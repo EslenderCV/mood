@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -43,36 +43,56 @@ export const VoiceVibeRecorder = ({
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
+  // Mantener referencias a los recursos de audio para un cleanup estable
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const backgroundSoundRef = useRef<Audio.Sound | null>(null);
+  const previewSoundRef = useRef<Audio.Sound | null>(null);
+
+  useEffect(() => {
+    recordingRef.current = recording;
+  }, [recording]);
+
+  useEffect(() => {
+    backgroundSoundRef.current = backgroundSound;
+  }, [backgroundSound]);
+
+  useEffect(() => {
+    previewSoundRef.current = previewSound;
+  }, [previewSound]);
+
+  const cleanup = useCallback(async () => {
+    try {
+      const rec = recordingRef.current;
+      if (rec) await rec.stopAndUnloadAsync();
+    } catch {}
+    try {
+      const bg = backgroundSoundRef.current;
+      if (bg) {
+        await bg.stopAsync();
+        await bg.unloadAsync();
+      }
+    } catch {}
+    try {
+      const prev = previewSoundRef.current;
+      if (prev) {
+        await prev.stopAsync();
+        await prev.unloadAsync();
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     const init = async () => {
       if (!permissionResponse?.granted) {
         await requestPermission();
       }
     };
-    init();
+    void init();
 
     return () => {
-      cleanup().catch(() => {});
+      void cleanup();
     };
-  }, []);
-
-  const cleanup = async () => {
-    try {
-      if (recording) await recording.stopAndUnloadAsync();
-    } catch {}
-    try {
-      if (backgroundSound) {
-        await backgroundSound.stopAsync();
-        await backgroundSound.unloadAsync();
-      }
-    } catch {}
-    try {
-      if (previewSound) {
-        await previewSound.stopAsync();
-        await previewSound.unloadAsync();
-      }
-    } catch {}
-  };
+  }, [cleanup, permissionResponse?.granted, requestPermission]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -98,7 +118,7 @@ export const VoiceVibeRecorder = ({
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [isRecording]);
+  }, [isRecording, pulseAnim]);
 
   const startRecording = async () => {
     try {

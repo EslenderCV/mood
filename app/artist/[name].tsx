@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -38,11 +38,7 @@ const ArtistPosts = () => {
   const textColor = isDark ? "#FFFFFF" : "#000000";
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
 
-  useEffect(() => {
-    fetchArtistPosts();
-  }, [artistName]);
-
-  const fetchArtistPosts = async () => {
+  const fetchArtistPosts = useCallback(async () => {
     setIsLoading(true);
     try {
       // Obtenemos todos los candidatos del feed (igual que en Explore)
@@ -63,7 +59,11 @@ const ArtistPosts = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [artistName]);
+
+  useEffect(() => {
+    fetchArtistPosts();
+  }, [fetchArtistPosts]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: bgColor }}>

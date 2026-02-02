@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -49,6 +49,10 @@ export default function SuggestedUsersCarousel({
   const [isFollowingMap, setIsFollowingMap] = useState<Record<string, boolean>>(
     {},
   );
+  const isFollowingMapRef = useRef(isFollowingMap);
+  useEffect(() => {
+    isFollowingMapRef.current = isFollowingMap;
+  }, [isFollowingMap]);
 
   useEffect(() => {
     if (Array.isArray(users)) {
@@ -66,7 +70,7 @@ export default function SuggestedUsersCarousel({
       const run = async () => {
         if (!currentUserId || visibleUsers.length === 0) return;
         const usersToCheck = visibleUsers
-          .filter((u) => isFollowingMap[getUserId(u)] === undefined)
+          .filter((u) => isFollowingMapRef.current[getUserId(u)] === undefined)
           .slice(0, 3);
 
         if (usersToCheck.length === 0) return;
@@ -111,20 +115,19 @@ export default function SuggestedUsersCarousel({
     });
   }, []);
 
-  const handleProfilePress = (targetId: string) => {
+  const handleProfilePress = useCallback((targetId: string) => {
     BrainEmitter.interaction(InteractionType.OPEN_PROFILE, {
       postId: `profile_${targetId}`,
       creatorId: targetId,
       emotionalTag: "discovery_click",
     });
     router.push(`/user/${targetId}` as any);
-  };
+  }, []);
 
-  const toggleFollow = useCallback(
-    async (targetId: string) => {
+  const toggleFollow = useCallback(async (targetId: string) => {
       if (!currentUserId) return;
       Haptics.selectionAsync();
-      const currentlyFollowing = !!isFollowingMap[targetId];
+      const currentlyFollowing = !!isFollowingMapRef.current[targetId];
 
       setIsFollowingMap((p) => ({ ...p, [targetId]: !currentlyFollowing }));
       setLoadingMap((p) => ({ ...p, [targetId]: true }));
@@ -145,9 +148,7 @@ export default function SuggestedUsersCarousel({
       } finally {
         setLoadingMap((p) => ({ ...p, [targetId]: false }));
       }
-    },
-    [currentUserId, isFollowingMap],
-  );
+  }, [currentUserId]);
 
   const renderItem = useCallback(
     ({ item }: { item: SuggestedUser }) => {
@@ -287,6 +288,9 @@ export default function SuggestedUsersCarousel({
       );
     },
     [
+      handleDismiss,
+      handleProfilePress,
+      toggleFollow,
       isFollowingMap,
       loadingMap,
       isDark,

@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import {
@@ -36,11 +36,7 @@ const ShareModal = ({ isVisible, onClose, postId }: any) => {
   const subTextColor = isDark ? "#A1A1AA" : "#71717A";
   const inputBg = isDark ? "#27272A" : "#F4F4F5";
 
-  useEffect(() => {
-    if (isVisible) loadInitialUsers();
-  }, [isVisible]);
-
-  const loadInitialUsers = async () => {
+  const loadInitialUsers = useCallback(async () => {
     setLoading(true);
     try {
       if (user) {
@@ -55,7 +51,11 @@ const ShareModal = ({ isVisible, onClose, postId }: any) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (isVisible) loadInitialUsers();
+  }, [isVisible, loadInitialUsers]);
 
   const handleSearch = async (text: string) => {
     setSearchQuery(text);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, {useEffect, useState, useCallback} from "react";
 import {
   View,
   Text,
@@ -32,15 +32,8 @@ const AccountSelectorModal = ({
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const router = useRouter();
   const { t } = useLanguage();
-
-  useEffect(() => {
-    if (visible) {
-      loadAccounts();
-    }
-  }, [visible]);
-
-  // --- LÓGICA DE NEGOCIO ---
-  const smartFetchUser = async (id: string) => {
+// --- LÓGICA DE NEGOCIO ---
+  const smartFetchUser = useCallback(async (id: string) => {
     try {
       const doc = await getUser(id);
       if (doc) return doc;
@@ -56,9 +49,9 @@ const AccountSelectorModal = ({
     } catch {}
 
     return null;
-  };
+  }, []);
 
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     try {
       const stored = await AccountManager.getStoredAccounts();
       setAccounts(stored);
@@ -91,7 +84,13 @@ const AccountSelectorModal = ({
     } catch (error) {
       console.error("Error al cargar cuentas:", error);
     }
-  };
+  }, [smartFetchUser]);
+
+  useEffect(() => {
+    if (visible) {
+      void loadAccounts();
+    }
+  }, [visible, loadAccounts]);
 
   const handleSwitchAccount = async (targetAccount: StoredAccount) => {
     // 🔥 CORRECCIÓN TS: Usamos (user as any).accId para evitar el error de tipos

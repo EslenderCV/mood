@@ -8,7 +8,7 @@ import {
   RefreshControl,
   Alert,
 } from "react-native";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { useColorScheme } from "nativewind";
@@ -40,11 +40,7 @@ const UserList = () => {
   const [myFollowingIds, setMyFollowingIds] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, [userId, type]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const me = await getCurrentUser();
@@ -69,7 +65,11 @@ const UserList = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [type, userId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleAction = async (targetUser: any) => {
     if (!currentUser) return;

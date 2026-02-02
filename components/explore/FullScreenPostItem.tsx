@@ -34,6 +34,9 @@ const FullScreenPostItem = React.memo(
   ({ item, isActive, currentUser, onOption, onClose }: any) => {
     const insets = useSafeAreaInsets();
     const song = parseSongData(item.songData);
+    const songId = song?.id;
+    const songSpotifyId = song?.spotifyId;
+    const songPreview = song?.preview;
     const creator = getCreatorFromPost(item);
 
     // 🔥 2. OBTENER LA FUNCIÓN PARA DETENER EL AUDIO GLOBAL
@@ -78,11 +81,11 @@ const FullScreenPostItem = React.memo(
           if (isActive) {
             // 🔥 3. SI EL POST ES ACTIVO, DETENER MÚSICA GLOBAL
             // Esto cierra la barra global y evita cacofonía, pero NO reemplaza los datos de la barra.
-            stopTrack();
+            void stopTrack();
 
-            let previewUrl = song?.preview;
-            if (!previewUrl && (song?.id || song?.spotifyId)) {
-              previewUrl = await getDeezerTrackUrl(song.id || song.spotifyId);
+            let previewUrl = songPreview;
+            if (!previewUrl && (songId || songSpotifyId)) {
+              previewUrl = await getDeezerTrackUrl(songId || songSpotifyId);
             }
             if (previewUrl && isMounted) {
               const { sound } = await Audio.Sound.createAsync(
@@ -108,7 +111,7 @@ const FullScreenPostItem = React.memo(
         isMounted = false;
         if (soundRef.current) soundRef.current.unloadAsync();
       };
-    }, [isActive, item]);
+    }, [isActive, songId, songPreview, songSpotifyId, stopTrack]);
 
     const togglePlayback = async () => {
       if (soundRef.current) {

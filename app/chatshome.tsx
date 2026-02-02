@@ -48,7 +48,7 @@ const ChatsHome = () => {
       },
     );
     return () => unsubscribe();
-  }, [user?.$id]);
+  }, [refreshConversations, user?.$id]);
 
   const filteredChats = conversations.filter((c) => {
     const name = c.otherUser?.name || c.otherUser?.username || "";

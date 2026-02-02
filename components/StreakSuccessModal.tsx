@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,26 @@ const StreakSuccessModal = ({
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const textTranslateY = useRef(new Animated.Value(20)).current;
+
+  const handleClose = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.5,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+      // Resetear valores para la próxima
+      scaleAnim.setValue(0);
+      textTranslateY.setValue(20);
+    });
+  }, [onClose, opacityAnim, scaleAnim, textTranslateY]);
 
   useEffect(() => {
     if (visible) {
@@ -64,27 +84,7 @@ const StreakSuccessModal = ({
 
       return () => clearTimeout(timer);
     }
-  }, [visible]);
-
-  const handleClose = () => {
-    Animated.parallel([
-      Animated.timing(opacityAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 0.5,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onClose();
-      // Resetear valores para la próxima
-      scaleAnim.setValue(0);
-      textTranslateY.setValue(20);
-    });
-  };
+  }, [handleClose, opacityAnim, scaleAnim, textTranslateY, visible]);
 
   if (!visible) return null;
 

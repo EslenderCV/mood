@@ -101,10 +101,10 @@ const Home = () => {
 
 
   const onPullToRefresh = useCallback(() => {
-    if (logic.isRefreshing) return;
+    if (logicRef.current.isRefreshing) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    logic.onRefresh();
-  }, [logic.isRefreshing, logic.onRefresh]);
+    logicRef.current.onRefresh();
+  }, []);
 
 
   const keyExtractor = useCallback((item: any) => item.id, []);
@@ -178,7 +178,7 @@ const Home = () => {
       );
       if (validItems.length === 0) return;
       const minIndex = Math.min(...validItems.map((v) => v.index as number));
-      logic.updateViewableIndex(minIndex);
+      logicRef.current.updateViewableIndex(minIndex);
 
       // 🎧 Prefetch del próximo preview (UX: play instantáneo)
       try {
@@ -206,25 +206,26 @@ const Home = () => {
   useEffect(() => {
     // @ts-ignore
     const unsubscribe = navigation.addListener("tabPress", (e: any) => {
-      if (logic.isFeedLoading || logic.isRefreshing) {
+      const l = logicRef.current;
+      if (l.isFeedLoading || l.isRefreshing) {
         e.preventDefault();
         return;
       }
       if (navigation.isFocused()) {
         e.preventDefault();
-        if (logic.flatListRef.current) {
-          logic.flatListRef.current.scrollToOffset({
+        if (l.flatListRef.current) {
+          l.flatListRef.current.scrollToOffset({
             offset: 0,
             animated: true,
           });
         }
         setTimeout(() => {
-          logic.onRefresh();
+          l.onRefresh();
         }, 250);
       }
     });
     return unsubscribe;
-  }, [navigation, logic.onRefresh, logic.isFeedLoading, logic.isRefreshing]);
+  }, [navigation]);
 
   const handleAddStoryPress = () => {
     if (logic.user?.$id === logic.MOOD_OFFICIAL_ID) {

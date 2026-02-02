@@ -140,7 +140,7 @@ const CommentItem = ({
     return () => {
       isMounted = false;
     };
-  }, [item.userId]);
+  }, [item.userId, userData]);
 
   // Limpieza al desmontar: detener audio local y liberar memoria
   useEffect(() => {

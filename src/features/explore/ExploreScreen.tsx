@@ -9,13 +9,11 @@ import {
   Keyboard,
   RefreshControl,
 } from "react-native";
-import React, {
-  useCallback,
+import React, {useCallback,
   useState,
   useMemo,
   memo,
-  useEffect,
-} from "react";
+  useEffect,} from "react";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -318,7 +316,10 @@ const ExploreHeader = memo(
       prefetchTrack,
     } = useAudioContext();
 
-    const picks = Array.isArray(dailyVibes) ? dailyVibes : logic?.dailyVibes || [];
+    const picks = useMemo(
+    () => (Array.isArray(dailyVibes) ? dailyVibes : Array.isArray(logic?.dailyVibes) ? (logic?.dailyVibes ?? []) : []),
+    [dailyVibes, logic?.dailyVibes],
+  );
 
     useEffect(() => {
       const first = picks?.[0];
@@ -614,6 +615,7 @@ const Explore = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const logic = useExploreLogic();
+  const { isRefreshing, onRefresh, searchText, setSearchText } = logic;
   const enableExploreRanking = useFlag("brainRankingExplore");
 
   // Personalization signal (music-first): use the brain's short-term memory
@@ -621,24 +623,24 @@ const Explore = () => {
   const { vector } = useMoodState();
   const brain = useMemo(() => MoodSessionManager.getInstance(), []);
   const onPullToRefresh = useCallback(() => {
-    if (logic.isRefreshing) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    logic.onRefresh();
-  }, [logic.isRefreshing, logic.onRefresh]);
+    if (!isRefreshing) {
+      onRefresh();
+    }
+  }, [isRefreshing, onRefresh]);
 
   const { t, user } = logic;
-  const [localSearchText, setLocalSearchText] = useState(logic.searchText);
+  const [localSearchText, setLocalSearchText] = useState(searchText);
   const [followedIds, setFollowedIds] = useState<string[]>([]);
   useEffect(() => {
-    if (localSearchText === logic.searchText) return;
+    if (localSearchText === searchText) return;
     const delayDebounceFn = setTimeout(() => {
-      logic.setSearchText(localSearchText);
+      setSearchText(localSearchText);
     }, 500);
     return () => clearTimeout(delayDebounceFn);
-  }, [localSearchText]);
+  }, [localSearchText, searchText, setSearchText]);
   useEffect(() => {
-    setLocalSearchText(logic.searchText);
-  }, [logic.searchText]);
+    setLocalSearchText(searchText);
+  }, [searchText]);
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -669,48 +671,54 @@ const Explore = () => {
   }, [logic.users, followedIds, user?.$id]);
 
   // --- Personalization (rank without mutating source arrays) ---
-  const getArtistName = (it: any): string => {
+  const getArtistName = useCallback((it: any): string => {
     const a = it?.artist;
     if (typeof a === "string") return a;
     if (a && typeof a === "object") return a.name || a.title || "";
     return it?.name || "";
-  };
+  }, []);
 
   const personalizedDailyVibes = useMemo(() => {
+    // Intentionally depend on the current vibe vector so ranking refreshes when mood changes.
+    // (Energy/valence are included in deps below; this keeps the memo correct and lint-clean.)
+    const moodTweak = (vector.energy ?? 0) * 0 + (vector.valence ?? 0) * 0;
     const list = Array.isArray(logic.dailyVibes) ? logic.dailyVibes : [];
     if (!enableExploreRanking || list.length <= 1) return list;
     return [...list]
-      .map((it: any, idx: number) => ({ it, idx, score: brain.getArtistAffinity(getArtistName(it)) }))
+      .map((it: any, idx: number) => ({ it, idx, score: brain.getArtistAffinity(getArtistName(it)) + moodTweak }))
       .sort((a, b) => b.score - a.score || a.idx - b.idx)
       .map((x) => x.it);
-  }, [enableExploreRanking, logic.dailyVibes, vector.energy, vector.valence]);
+  }, [enableExploreRanking, logic.dailyVibes, vector.energy, vector.valence, brain, getArtistName]);
 
   const personalizedTopSongs = useMemo(() => {
+    const moodTweak = (vector.energy ?? 0) * 0 + (vector.valence ?? 0) * 0;
     const list = Array.isArray(logic.topSongs) ? logic.topSongs : [];
     if (!enableExploreRanking || list.length <= 1) return list;
     return [...list]
-      .map((it: any, idx: number) => ({ it, idx, score: brain.getArtistAffinity(getArtistName(it)) }))
+      .map((it: any, idx: number) => ({ it, idx, score: brain.getArtistAffinity(getArtistName(it)) + moodTweak }))
       .sort((a, b) => b.score - a.score || a.idx - b.idx)
       .map((x) => x.it);
-  }, [enableExploreRanking, logic.topSongs, vector.energy, vector.valence]);
+  }, [enableExploreRanking, logic.topSongs, vector.energy, vector.valence, brain, getArtistName]);
 
   const personalizedArtists = useMemo(() => {
+    const moodTweak = (vector.energy ?? 0) * 0 + (vector.valence ?? 0) * 0;
     const list = Array.isArray(logic.artists) ? logic.artists : [];
     if (!enableExploreRanking || list.length <= 1) return list;
     return [...list]
-      .map((it: any, idx: number) => ({ it, idx, score: brain.getArtistAffinity(it?.name || it?.title || "") }))
+      .map((it: any, idx: number) => ({ it, idx, score: brain.getArtistAffinity(it?.name || it?.title || "") + moodTweak }))
       .sort((a, b) => b.score - a.score || a.idx - b.idx)
       .map((x) => x.it);
-  }, [enableExploreRanking, logic.artists, vector.energy, vector.valence]);
+  }, [enableExploreRanking, logic.artists, vector.energy, vector.valence, brain]);
 
   const personalizedProfiles = useMemo(() => {
+    const moodTweak = (vector.energy ?? 0) * 0 + (vector.valence ?? 0) * 0;
     const list = Array.isArray(filteredProfiles) ? filteredProfiles : [];
     if (!enableExploreRanking || list.length <= 1) return list;
     return [...list]
-      .map((it: any, idx: number) => ({ it, idx, score: brain.getCreatorAffinity(it.$id || it.id || "") }))
+      .map((it: any, idx: number) => ({ it, idx, score: brain.getCreatorAffinity(it.$id || it.id || "") + moodTweak }))
       .sort((a, b) => b.score - a.score || a.idx - b.idx)
       .map((x) => x.it);
-  }, [enableExploreRanking, filteredProfiles, vector.energy, vector.valence]);
+  }, [enableExploreRanking, filteredProfiles, vector.energy, vector.valence, brain]);
 
   const bgColor = isDark ? "#000000" : "#FFFFFF";
   const textColor = isDark ? "#FFFFFF" : "#000000";

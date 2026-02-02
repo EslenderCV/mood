@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -91,6 +91,18 @@ const StoryCreationModal = ({
   const [previewTrackUrl, setPreviewTrackUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  // Mantener refs para callbacks estables
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const previewTrackUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    soundRef.current = sound;
+  }, [sound]);
+
+  useEffect(() => {
+    previewTrackUrlRef.current = previewTrackUrl;
+  }, [previewTrackUrl]);
+
   const [media, setMedia] = useState<any>(null);
 
   const { t } = useLanguage();
@@ -108,72 +120,50 @@ const StoryCreationModal = ({
 
   const isOfficialAccount = currentUser?.$id === MOOD_OFFICIAL_ID;
 
-  // --- EFECTOS DE CICLO DE VIDA ---
-
-  useEffect(() => {
-    if (visible) {
-      if (initialSongData) {
-        setSelectedSong(initialSongData);
-        setStep("preview");
-        // Si ya viene con canción, intentamos reproducir su preview
-        if (initialSongData.preview) {
-          handlePlayPreview(initialSongData.preview);
-        }
-      } else {
-        resetForm();
-        loadRandomLatinHits(); // 🔥 Carga aleatoria
-      }
-    } else {
-      // Al cerrar modal, detener audio
-      stopSound();
-    }
-  }, [visible, initialSongData]);
-
-  // Limpieza al desmontar
-  useEffect(() => {
-    return () => {
-      stopSound();
-    };
-  }, []);
-
   // --- LÓGICA DE AUDIO (PostItem Style) ---
 
-  const stopSound = async () => {
+  const stopSound = useCallback(async () => {
     try {
-      if (sound) {
-        await sound.unloadAsync();
-        setSound(null);
+      const currentSound = soundRef.current;
+      if (currentSound) {
+        await currentSound.unloadAsync();
       }
+      soundRef.current = null;
+      previewTrackUrlRef.current = null;
+      setSound(null);
       setIsPlaying(false);
       setPreviewTrackUrl(null);
     } catch (error) {
       console.log("Error stopping sound", error);
     }
-  };
+  }, []);
 
-  const handlePlayPreview = async (url: string | null) => {
+  const handlePlayPreview = useCallback(async (url: string | null) => {
     if (!url) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      // Si tocamos la misma canción que suena -> Pausa/Stop
-      if (previewTrackUrl === url && sound) {
-        const status = await sound.getStatusAsync();
+      const currentUrl = previewTrackUrlRef.current;
+      const currentSound = soundRef.current;
+
+      // Si tocamos la misma canción que suena -> Pausa/Resume
+      if (currentUrl === url && currentSound) {
+        const status = await currentSound.getStatusAsync();
         if (status.isLoaded && status.isPlaying) {
-          await sound.pauseAsync();
+          await currentSound.pauseAsync();
           setIsPlaying(false);
-          return; // Salimos, ya pausamos
-        } else if (status.isLoaded && !status.isPlaying) {
-          // Si estaba pausada, reanudamos
-          await sound.playAsync();
+          return;
+        }
+        if (status.isLoaded && !status.isPlaying) {
+          await currentSound.playAsync();
           setIsPlaying(true);
           return;
         }
       }
 
       // Si es una nueva canción, detenemos la anterior
-      if (sound) {
-        await sound.unloadAsync();
+      if (currentSound) {
+        await currentSound.unloadAsync();
       }
 
       // 🔥 CONFIGURACIÓN DE AUDIO DE POSTITEM (SILENT MODE FIX)
@@ -189,6 +179,8 @@ const StoryCreationModal = ({
         { shouldPlay: true },
       );
 
+      soundRef.current = newSound;
+      previewTrackUrlRef.current = url;
       setSound(newSound);
       setPreviewTrackUrl(url);
       setIsPlaying(true);
@@ -196,18 +188,16 @@ const StoryCreationModal = ({
       newSound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {
           setIsPlaying(false);
-          // Opcional: loop en preview
-          // newSound.replayAsync();
         }
       });
     } catch (error) {
       console.log("Error playing preview:", error);
     }
-  };
+  }, []);
 
   // --- LÓGICA DE DATOS ---
 
-  const filterUniqueArtists = (songs: any[]) => {
+  const filterUniqueArtists = useCallback((songs: any[]) => {
     if (!songs || songs.length === 0) return [];
     const seenArtists = new Set();
     const uniqueSongs = [];
@@ -224,9 +214,9 @@ const StoryCreationModal = ({
     return uniqueSongs.length >= 5
       ? uniqueSongs
       : songs.filter((s) => s.cover && s.preview);
-  };
+  }, []);
 
-  const loadRandomLatinHits = async () => {
+  const loadRandomLatinHits = useCallback(async () => {
     setLoadingTrending(true);
     try {
       // 🔥 SHUFFLE: Elegimos un término al azar cada vez
@@ -245,7 +235,50 @@ const StoryCreationModal = ({
     } finally {
       setLoadingTrending(false);
     }
-  };
+  }, [filterUniqueArtists, searchSongsWrapper]);
+
+  const resetForm = useCallback(() => {
+    setStep("search");
+    setQuery("");
+    setResults([]);
+    setSelectedSong(null);
+    setMedia(null);
+    setCaption("");
+    setPreviewTrackUrl(null);
+    void stopSound();
+  }, [stopSound]);
+
+  // --- EFECTOS DE CICLO DE VIDA ---
+  useEffect(() => {
+    if (visible) {
+      if (initialSongData) {
+        setSelectedSong(initialSongData);
+        setStep("preview");
+        if (initialSongData.preview) {
+          void handlePlayPreview(initialSongData.preview);
+        }
+      } else {
+        resetForm();
+        void loadRandomLatinHits();
+      }
+    } else {
+      void stopSound();
+    }
+  }, [
+    handlePlayPreview,
+    initialSongData,
+    loadRandomLatinHits,
+    resetForm,
+    stopSound,
+    visible,
+  ]);
+
+  // Limpieza al desmontar
+  useEffect(() => {
+    return () => {
+      void stopSound();
+    };
+  }, [stopSound]);
 
   // --- BÚSQUEDA ---
   useEffect(() => {
@@ -265,24 +298,13 @@ const StoryCreationModal = ({
       }
     }, 500);
     return () => clearTimeout(delayDebounceFn);
-  }, [query]);
-
-  const resetForm = () => {
-    setStep("search");
-    setQuery("");
-    setResults([]);
-    setSelectedSong(null);
-    setMedia(null);
-    setCaption("");
-    setPreviewTrackUrl(null);
-    stopSound();
-  };
+  }, [filterUniqueArtists, query, searchSongsWrapper]);
 
   const handleSelectSong = (song: any) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Reproducimos la canción seleccionada al pasar al preview
     if (song.preview) {
-      handlePlayPreview(song.preview);
+      void handlePlayPreview(song.preview);
     }
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSelectedSong(song);
@@ -293,8 +315,8 @@ const StoryCreationModal = ({
   const handleUpload = async () => {
     if ((!selectedSong && !media) || !currentUser) return;
     setLoading(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    stopSound(); // Parar audio al subir
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    void stopSound(); // Parar audio al subir
 
     try {
       let payloadString = "";
@@ -329,8 +351,8 @@ const StoryCreationModal = ({
         300,
       );
       onSuccess();
-    } catch (error) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } catch {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       showToast("error", t("common.error"), t("story.errorPosting"));
     } finally {
       setLoading(false);

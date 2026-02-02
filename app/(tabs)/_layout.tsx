@@ -98,7 +98,7 @@ const TabsLayout = () => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [menuOpen]);
+  }, [menuOpen, fadeAnim, slideAnim, scaleAnim]);
 
   const triggerHaptic = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

@@ -69,9 +69,8 @@ export const SocialContext: React.FC<SocialContextProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [targetIds]);
-
-  // Si no hay likes (o solo estoy yo), no mostramos nada aquí
+  }, [targetIds, likedBy]);
+// Si no hay likes (o solo estoy yo), no mostramos nada aquí
   const countExcludingMe = Math.max(
     0,
     likedBy.length - (likedBy.includes(currentUserId) ? 1 : 0),

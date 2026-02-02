@@ -7,7 +7,7 @@ import {
   Alert,
   RefreshControl,
 } from "react-native";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -26,11 +26,7 @@ const BlockedUsers = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetchBlockedUsers();
-  }, [user]);
-
-  const fetchBlockedUsers = async () => {
+  const fetchBlockedUsers = useCallback(async () => {
     if (!user?.$id) return;
     try {
       const users = await getBlockedUsersList(user.$id);
@@ -41,7 +37,11 @@ const BlockedUsers = () => {
       setIsLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [user?.$id]);
+
+  useEffect(() => {
+    fetchBlockedUsers();
+  }, [fetchBlockedUsers]);
 
   const handleUnblock = async (blockedUser: any) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); // 🔥 Haptic feedback

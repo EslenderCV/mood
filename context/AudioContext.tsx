@@ -5,6 +5,8 @@ import React, {
   useEffect,
   useRef,
   useSyncExternalStore,
+  useCallback,
+  useMemo,
 } from "react";
 import { Audio, AVPlaybackStatus } from "expo-av";
 import { useFlag } from "@/src/config/flags";
@@ -151,6 +153,17 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
 
+  const enablePrefetchRef = useRef<boolean>(enablePrefetch);
+  useEffect(() => {
+    enablePrefetchRef.current = enablePrefetch;
+  }, [enablePrefetch]);
+
+  // Mantener metadatos actuales en un ref para callbacks estables (evita loops con exhaustive-deps).
+  const activeTrackMetadataRef = useRef<TrackMetadata | null>(null);
+  useEffect(() => {
+    activeTrackMetadataRef.current = activeTrackMetadata;
+  }, [activeTrackMetadata]);
+
   // IMPORTANT: el callback de expo-av queda "capturado" cuando se asigna.
   // Para evitar estados stale (ej. loading que nunca se apaga), usamos un ref.
   const isLoadingRef = useRef<boolean>(false);
@@ -165,16 +178,16 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
   const lockRef = useRef<Promise<void>>(Promise.resolve());
   const mountedRef = useRef<boolean>(true);
 
-  const withLock = async <T,>(fn: () => Promise<T>): Promise<T> => {
+  const withLock = useCallback(async (fn: () => Promise<any>) => {
     const run = lockRef.current.then(fn, fn);
     lockRef.current = run.then(
       () => undefined,
       () => undefined,
     );
     return run;
-  };
+  }, []);
 
-  const safeStopAndUnload = async (s: Audio.Sound | null) => {
+  const safeStopAndUnload = useCallback(async (s: Audio.Sound | null) => {
     if (!s) return;
     try {
       const st: any = await s.getStatusAsync();
@@ -187,7 +200,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await s.unloadAsync();
     } catch {}
-  };
+  }, []);
 
   // Prefetch de 1 track (suficiente para UX tipo Instagram sin saturar RAM/red)
   const preloadedRef = useRef<{ uri: string; sound: Audio.Sound } | null>(null);
@@ -230,7 +243,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
-  const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
+  const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
     if (!status.isLoaded) {
       if ((status as any).error) {
         console.error(`Audio Error: ${(status as any).error}`);
@@ -291,10 +304,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
 
     if ((status as any).didJustFinish && currentTrackIdRef.current) {
       if (BrainEmitter) {
-        const metaForBrain = activeTrackMetadata
+        const activeMeta = activeTrackMetadataRef.current;
+        const metaForBrain = activeMeta
           ? {
-              title: activeTrackMetadata.title,
-              artist: activeTrackMetadata.artist,
+              title: activeMeta.title,
+              artist: activeMeta.artist,
             }
           : undefined;
         BrainEmitter.audio(
@@ -302,7 +316,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
           currentTrackIdRef.current,
           duration,
           (status as any).positionMillis,
-          activeTrackMetadata?.features,
+          activeMeta?.features,
           metaForBrain,
         );
       }
@@ -311,9 +325,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsBuffering(false);
       audioProgressStore.reset();
     }
-  };
+  }, []);
 
-  const stopTrack = async () => {
+  const stopTrack = useCallback(async () => {
     const myOp = ++opIdRef.current;
 
     await withLock(async () => {
@@ -336,15 +350,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsPlaying(false);
       audioProgressStore.reset();
     });
-  };
+  }, [safeStopAndUnload, withLock]);
 
-  const ensurePlaybackMode = async () => {
+  const ensurePlaybackMode = useCallback(async () => {
     try {
       await Audio.setAudioModeAsync(PLAYBACK_AUDIO_MODE);
     } catch {}
-  };
+  }, []);
 
-  const prefetchTrackImpl = async (uri: string) => {
+  const prefetchTrackImpl = useCallback(async (uri: string) => {
     if (!uri || typeof uri !== "string") return;
     if (!uri.startsWith("http")) return;
 
@@ -392,12 +406,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       prefetchInFlightRef.current = null;
     }
-  };
+  }, [safeStopAndUnload]);
 
-  const prefetchTrack = (uri: string) => {
-    if (!enablePrefetch) return;
-    void prefetchTrackImpl(uri);
-  };
+  const prefetchTrack = useCallback(
+    (uri: string) => {
+      if (!enablePrefetchRef.current) return;
+      void prefetchTrackImpl(uri);
+    },
+    [prefetchTrackImpl],
+  );
 
   // Bind: permite prefetch desde cualquier lugar sin hook (ej. viewability callbacks)
   useEffect(() => {
@@ -405,9 +422,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => {
       AudioActions.prefetchTrack = (_uri: string) => {};
     };
-  }, []);
+  }, [prefetchTrack]);
 
-  const playTrack = async (id: string, uri: string, meta?: TrackMetadata) => {
+  const playTrack = useCallback(async (id: string, uri: string, meta?: TrackMetadata) => {
     const myOp = ++opIdRef.current;
 
     await withLock(async () => {
@@ -458,10 +475,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
             playedMs > 1000 &&
             playedMs < durMs * 0.3
           ) {
-            const prevMetaForBrain = activeTrackMetadata
+            const activeMeta = activeTrackMetadataRef.current;
+            const prevMetaForBrain = activeMeta
               ? {
-                  title: activeTrackMetadata.title,
-                  artist: activeTrackMetadata.artist,
+                  title: activeMeta.title,
+                  artist: activeMeta.artist,
                 }
               : undefined;
             BrainEmitter.audio(
@@ -469,7 +487,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
               prevId,
               durMs,
               playedMs,
-              activeTrackMetadata?.features,
+              activeMeta?.features,
               prevMetaForBrain,
             );
           }
@@ -591,9 +609,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
         currentUriRef.current = null;
       }
     });
-  };
+  }, [ensurePlaybackMode, onPlaybackStatusUpdate, safeStopAndUnload, withLock]);
 
-  const pauseTrack = async () => {
+  const pauseTrack = useCallback(async () => {
     await withLock(async () => {
       const s = soundRef.current;
       if (!s) return;
@@ -607,9 +625,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
         // Nunca propagamos error (evita Uncaught Promise)
       }
     });
-  };
+  }, [withLock]);
 
-  const resumeTrack = async () => {
+  const resumeTrack = useCallback(async () => {
+    await ensurePlaybackMode();
     await withLock(async () => {
       const s = soundRef.current;
       if (!s) return;
@@ -628,29 +647,47 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
         // Nunca propagamos error
       }
     });
-  };
+  }, [ensurePlaybackMode, withLock]);
 
-  const setPlayingId = (id: string | null) => {
-    if (id === null) void stopTrack();
-    else setCurrentPlayingId(id);
-  };
+  const setPlayingId = useCallback(
+    (id: string | null) => {
+      if (id === null) void stopTrack();
+      else setCurrentPlayingId(id);
+    },
+    [stopTrack],
+  );
+
+  const contextValue = useMemo(
+    () => ({
+      currentPlayingId,
+      activeTrackMetadata,
+      isPlaying,
+      isLoading,
+      isBuffering,
+      playTrack,
+      pauseTrack,
+      resumeTrack,
+      stopTrack,
+      setPlayingId,
+      prefetchTrack,
+    }),
+    [
+      currentPlayingId,
+      activeTrackMetadata,
+      isPlaying,
+      isLoading,
+      isBuffering,
+      playTrack,
+      pauseTrack,
+      resumeTrack,
+      stopTrack,
+      setPlayingId,
+      prefetchTrack,
+    ],
+  );
 
   return (
-    <AudioContext.Provider
-      value={{
-        currentPlayingId,
-        activeTrackMetadata,
-        isPlaying,
-        isLoading,
-        isBuffering,
-        playTrack,
-        pauseTrack,
-        resumeTrack,
-        stopTrack,
-        setPlayingId,
-        prefetchTrack,
-      }}
-    >
+    <AudioContext.Provider value={contextValue}>
       {children}
     </AudioContext.Provider>
   );

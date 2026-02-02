@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, {useEffect, useState, useRef, useCallback} from "react";
 import {
   View,
   Text,
@@ -54,51 +54,8 @@ const WeeklyVibeModal = ({
   const bar2 = useRef(new Animated.Value(15)).current;
   const bar3 = useRef(new Animated.Value(8)).current;
 
-  // --- EFECTOS ---
-  useEffect(() => {
-    if (visible && vibeData?.topArtist) {
-      setIsLoading(true);
-      setArtistImage(null);
-
-      // Reset anims
-      pulseAnim.setValue(1);
-      bgScaleAnim.setValue(1);
-      contentOpacity.setValue(0);
-      contentTranslateY.setValue(50);
-
-      // Zoom lento fondo
-      Animated.timing(bgScaleAnim, {
-        toValue: 1.4,
-        duration: 25000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }).start();
-
-      fetchDeezerData(vibeData.topArtist);
-    } else {
-      stopSound();
-      setIsLoading(true);
-    }
-
-    return () => {
-      stopSound();
-    };
-  }, [visible, vibeData]);
-
-  useEffect(() => {
-    if (!isLoading && visible) {
-      startEntranceAnimations();
-    }
-  }, [isLoading, visible]);
-
-  useEffect(() => {
-    if (trackPreview && visible) {
-      playSound(trackPreview);
-    }
-  }, [trackPreview, visible]);
-
   // --- ANIMACIONES ---
-  const startEntranceAnimations = () => {
+  const startEntranceAnimations = useCallback(() => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -147,10 +104,10 @@ const WeeklyVibeModal = ({
     animateBar(bar1);
     animateBar(bar2);
     animateBar(bar3);
-  };
+  }, [bar1, bar2, bar3, contentOpacity, contentTranslateY, pulseAnim]);
 
   // --- DATA & AUDIO ---
-  const fetchDeezerData = async (artistName: string) => {
+  const fetchDeezerData = useCallback(async (artistName: string) => {
     try {
       const response = await fetch(
         `https://api.deezer.com/search?q=artist:"${encodeURIComponent(artistName)}"&limit=1`,
@@ -167,9 +124,9 @@ const WeeklyVibeModal = ({
     } finally {
       setTimeout(() => setIsLoading(false), 500);
     }
-  };
+  }, []);
 
-  const playSound = async (uri: string) => {
+  const playSound = useCallback(async (uri: string) => {
     try {
       if (soundRef.current) await soundRef.current.unloadAsync();
       await Audio.setAudioModeAsync({
@@ -184,9 +141,9 @@ const WeeklyVibeModal = ({
     } catch (e) {
       console.log("Audio Error:", e);
     }
-  };
+  }, []);
 
-  const stopSound = async () => {
+  const stopSound = useCallback(async () => {
     if (soundRef.current) {
       try {
         await soundRef.current.stopAsync();
@@ -194,7 +151,65 @@ const WeeklyVibeModal = ({
       } catch {}
       soundRef.current = null;
     }
-  };
+  }, []);
+
+  // --- EFECTOS ---
+  useEffect(() => {
+    if (visible && vibeData?.topArtist) {
+      setIsLoading(true);
+      setArtistImage(null);
+
+      // Reset anims
+      pulseAnim.setValue(1);
+      bgScaleAnim.setValue(1);
+      contentOpacity.setValue(0);
+      contentTranslateY.setValue(50);
+
+      // Zoom lento fondo
+      const bgAnim = Animated.timing(bgScaleAnim, {
+        toValue: 1.4,
+        duration: 25000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      });
+      bgAnim.start();
+
+      void fetchDeezerData(vibeData.topArtist);
+
+      return () => {
+        bgAnim.stop();
+        void stopSound();
+      };
+    }
+
+    void stopSound();
+    setIsLoading(true);
+
+    return () => {
+      void stopSound();
+    };
+  }, [
+    bgScaleAnim,
+    contentOpacity,
+    contentTranslateY,
+    fetchDeezerData,
+    pulseAnim,
+    stopSound,
+    vibeData?.topArtist,
+    visible,
+  ]);
+
+  useEffect(() => {
+    if (!isLoading && visible) {
+      startEntranceAnimations();
+    }
+  }, [isLoading, startEntranceAnimations, visible]);
+
+  useEffect(() => {
+    if (trackPreview && visible) {
+      void playSound(trackPreview);
+    }
+  }, [playSound, trackPreview, visible]);
 
   // --- 📸 SHARE LOGIC ---
   const handleShareStory = async () => {
@@ -522,7 +537,7 @@ const WeeklyVibeModal = ({
 // --- HELPERS & SUBCOMPONENTES ---
 
 // Helper para aclarar el color del gradiente
-const adjustColorBrightness = (hex: string, percent: number) => {
+const adjustColorBrightness = (_hex: string, _percent: number) => {
   // Versión simplificada que devuelve un color fijo si falla el hex
   // En producción usarías una librería como 'tinycolor2' o una función real de hex
   // Por simplicidad, retornamos un color hardcodeado brillante si es morado, o blanco.
@@ -535,7 +550,7 @@ const MovingParticle = ({ color, delay }: { color: string; delay: number }) => {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const animation = Animated.loop(
       Animated.sequence([
         Animated.parallel([
           Animated.timing(translateY, {
@@ -575,8 +590,17 @@ const MovingParticle = ({ color, delay }: { color: string; delay: number }) => {
           ]),
         ]),
       ]),
-    ).start();
-  }, []);
+    );
+
+    const t = setTimeout(() => {
+      animation.start();
+    }, delay);
+
+    return () => {
+      clearTimeout(t);
+      animation.stop();
+    };
+  }, [delay, opacity, translateY]);
 
   return (
     <Animated.View

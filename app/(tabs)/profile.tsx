@@ -55,7 +55,7 @@ const Profile = () => {
   const mainScrollRef = useRef<ScrollView>(null);
 
   // Lógica de Ranking
-  const rankPosts = (postsToSort: any[]) => {
+  const rankPosts = useCallback((postsToSort: any[]) => {
     const now = new Date().getTime();
     return postsToSort
       .map((post) => {
@@ -70,9 +70,9 @@ const Profile = () => {
         return { ...post, score };
       })
       .sort((a, b) => b.score - a.score);
-  };
+  }, []);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!user) return;
     try {
       const myId = user.$id;
@@ -119,12 +119,12 @@ const Profile = () => {
       console.log("Error cargando perfil:", error);
       setData((prev) => ({ ...prev, isLoading: false, refreshing: false }));
     }
-  };
+  }, [rankPosts, user]);
 
   useFocusEffect(
     useCallback(() => {
       fetchData();
-    }, [user]),
+    }, [fetchData]),
   );
 
   const onRefresh = async () => {

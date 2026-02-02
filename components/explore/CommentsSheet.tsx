@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -22,13 +22,7 @@ const CommentsSheet = ({ visible, onClose, postId, currentUser }: any) => {
   const [newComment, setNewComment] = useState("");
   const [sending, setSending] = useState(false);
 
-  useEffect(() => {
-    if (visible) {
-      loadComments();
-    }
-  }, [visible, postId]);
-
-  const loadComments = async () => {
+  const loadComments = useCallback(async () => {
     setLoading(true);
     try {
       const res = await getPostComments(postId);
@@ -38,7 +32,13 @@ const CommentsSheet = ({ visible, onClose, postId, currentUser }: any) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [postId]);
+
+  useEffect(() => {
+    if (visible) {
+      loadComments();
+    }
+  }, [visible, loadComments]);
 
   const handleSend = async () => {
     if (!newComment.trim()) return;

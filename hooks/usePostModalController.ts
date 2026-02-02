@@ -8,6 +8,12 @@ import { useGlobalContext } from "@/context/GlobalProvider";
 import { useFeed } from "@/context/FeedProvider";
 import { createPost, searchUsers } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
+import {
+  buildFallbackSongFromShazamMatch,
+  buildShazamQuery,
+  pickBestDeezerMatch,
+  toShazamDetected,
+} from "@/lib/shazam";
 
 const { height } = Dimensions.get("window");
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
@@ -537,13 +543,8 @@ const shazamTimerRef = useRef<any>(null);
       const match = result[0] ?? {};
       const title = String(match.title ?? "").trim();
       const artist = String(match.artist ?? "").trim();
-      const artworkURL = String(match.artworkURL ?? "").trim();
-      const query = `${title} ${artist}`.trim();
-      setShazamDetected({
-        title: title || "Canción detectada",
-        artist: artist || "Artista",
-        artworkURL: artworkURL || undefined,
-      });
+      const query = buildShazamQuery(title, artist);
+      setShazamDetected(toShazamDetected(match));
       setShazamUiState("matching");
 
       if (!query) {
@@ -558,7 +559,8 @@ const shazamTimerRef = useRef<any>(null);
       // Intentamos mapear a Deezer para obtener preview/cover consistentes con la app.
       const deezerResults = await searchDeezerTracks(query);
       if (deezerResults.length > 0) {
-        const best = deezerResults[0];
+        const best =
+          pickBestDeezerMatch(deezerResults, { title, artist }) ?? deezerResults[0];
         setLinkedSong(best);
         setIsSearchingMusic(false);
         setSearchQuery("");
@@ -568,14 +570,7 @@ const shazamTimerRef = useRef<any>(null);
       }
 
       // Fallback: usamos lo que devuelve ShazamKit (sin preview).
-      setLinkedSong({
-        id: `shazam:${match.appleMusicID ?? match.shazamID ?? Date.now()}`,
-        title: title || "Canción detectada",
-        artist: artist || "Artista",
-        cover: artworkURL || "",
-        preview: null,
-        isExplicit: false,
-      });
+      setLinkedSong(buildFallbackSongFromShazamMatch(match));
 
       // Abrimos el buscador para que el usuario elija una alternativa con preview si quiere.
       setIsSearchingMusic(true);

@@ -35,7 +35,7 @@ const PostModalHeader = React.memo(
           useNativeDriver: true,
         }),
       ]).start();
-    }, [canPublish]);
+    }, [canPublish, scaleAnim, opacityAnim]);
 
     return (
       <View className="flex-row justify-between items-center mb-6 mt-2">

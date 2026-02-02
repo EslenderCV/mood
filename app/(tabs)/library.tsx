@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -40,11 +40,15 @@ const Library = () => {
   const isDark = colorScheme === "dark";
   const { t } = useLanguage();
   const logic = useLibraryLogic();
+  const logicRef = useRef(logic);
+  useEffect(() => {
+    logicRef.current = logic;
+  }, [logic]);
   const onPullToRefresh = useCallback(() => {
-    if (logic.refreshing) return;
+    if (logicRef.current.refreshing) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    void logic.onRefresh();
-  }, [logic.refreshing, logic.onRefresh]);
+    void logicRef.current.onRefresh();
+  }, []);
 
 
   // Theme Constants
@@ -66,9 +70,10 @@ const Library = () => {
   // Resetear scroll y spinner al cambiar de tab para evitar glitches visuales
 
   // Solo se carga al montar el componente.
+  const userId = logic.user?.$id;
   useEffect(() => {
-    logic.fetchData();
-  }, [logic.user]);
+    logicRef.current.fetchData();
+  }, [userId]);
 
   const openAddToPlaylist = () => {
     logic.setOptionsModalVisible(false);

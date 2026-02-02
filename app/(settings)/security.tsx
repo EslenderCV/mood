@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -64,11 +64,29 @@ const Security = () => {
   // Nuevas Funciones
   const [privacyMode, setPrivacyMode] = useState(false); // Anti-Screenshots
 
+  const getDeviceName = useCallback(() => {
+    const name =
+      Device.modelName || Device.osName || t("security.sessions.device");
+    setDeviceName(name);
+  }, [t]);
+
+  const checkBiometrics = useCallback(async () => {
+    const compatible = await LocalAuthentication.hasHardwareAsync();
+    setIsBiometricSupported(compatible);
+  }, []);
+
+  const fetchSessions = useCallback(async () => {
+    setIsLoadingSessions(true);
+    const activeSessions = await getUserSessions();
+    setSessions(activeSessions);
+    setIsLoadingSessions(false);
+  }, []);
+
   useEffect(() => {
     checkBiometrics();
     fetchSessions();
     getDeviceName();
-  }, []);
+  }, [checkBiometrics, fetchSessions, getDeviceName]);
 
   // Efecto para el Modo Privacidad
   useEffect(() => {
@@ -79,23 +97,7 @@ const Security = () => {
     }
   }, [privacyMode]);
 
-  const getDeviceName = () => {
-    const name =
-      Device.modelName || Device.osName || t("security.sessions.device");
-    setDeviceName(name);
-  };
-
-  const checkBiometrics = async () => {
-    const compatible = await LocalAuthentication.hasHardwareAsync();
-    setIsBiometricSupported(compatible);
-  };
-
-  const fetchSessions = async () => {
-    setIsLoadingSessions(true);
-    const activeSessions = await getUserSessions();
-    setSessions(activeSessions);
-    setIsLoadingSessions(false);
-  };
+  
 
   // --- ACTIONS ---
 

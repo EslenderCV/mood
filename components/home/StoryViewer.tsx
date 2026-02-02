@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -36,6 +36,19 @@ import ViewersModal from "./ViewersModal";
 
 const { width } = Dimensions.get("window");
 
+const parseSongDataSafe = (songDataString: string) => {
+  try {
+    if (!songDataString) return null;
+    const song = JSON.parse(songDataString);
+    if (song?.cover?.includes("100x100bb")) {
+      song.cover = song.cover.replace("100x100bb", "600x600bb");
+    }
+    return song;
+  } catch {
+    return null;
+  }
+};
+
 const formatTimeAgo = (dateString: string) => {
   if (!dateString) return "";
   const now = new Date();
@@ -66,16 +79,7 @@ const StoryViewer = ({
   onRefreshFeed,
   moodOfficialId,
 }: StoryViewerProps) => {
-  // Fix: Forzar inicio en 0 al abrir
   const [currentIndex, setCurrentIndex] = useState(0);
-
-  useEffect(() => {
-    if (visible) {
-      setCurrentIndex(0);
-      lastProgressValue.current = 0;
-      progressAnim.setValue(0);
-    }
-  }, [visible, group?.$id]);
 
   const {
     playTrack,
@@ -99,21 +103,28 @@ const StoryViewer = ({
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
 
+  const groupId = group?.$id;
+  const storyCount = group?.stories?.length ?? 0;
+
+  // Reset de estado/animaciones al abrir o cambiar de grupo
+  useEffect(() => {
+    if (!visible) return;
+    setCurrentIndex(0);
+    setImageLoaded(false);
+    setReplyText("");
+    setIsPaused(false);
+    lastProgressValue.current = 0;
+    progressAnim.setValue(0);
+  }, [visible, groupId, progressAnim]);
+
   const currentStory = group?.stories ? group.stories[currentIndex] : null;
-
-  const parseSongData = (songDataString: string) => {
-    try {
-      if (!songDataString) return null;
-      const song = JSON.parse(songDataString);
-      if (song.cover?.includes("100x100bb"))
-        song.cover = song.cover.replace("100x100bb", "600x600bb");
-      return song;
-    } catch {
-      return null;
-    }
-  };
-
-  const songData = currentStory ? parseSongData(currentStory.songData) : null;
+  const storyId: string | undefined = currentStory?.$id;
+  // Use a stable scalar input for memoization to avoid deps warnings.
+  const songDataRaw = currentStory?.songData;
+  const songData = useMemo(
+    () => (songDataRaw ? parseSongDataSafe(songDataRaw) : null),
+    [songDataRaw],
+  );
   const ownerId =
     typeof group?.user === "string" ? group.user : group?.user?.$id;
   const isOwner = currentUserId && ownerId === currentUserId;
@@ -145,7 +156,7 @@ const StoryViewer = ({
         player.pause();
       }
     }
-  }, [visible, isPaused, viewersModalVisible, isVideo, player]);
+  }, [visible, isPaused, viewersModalVisible, isVideo, player, stopTrack]);
 
   const handleDelete = () => {
     setIsPaused(true);
@@ -168,7 +179,7 @@ const StoryViewer = ({
                 onClose();
                 setTimeout(() => onRefreshFeed(), 500);
               }
-            } catch (error) {
+            } catch {
               Alert.alert("Error", "No se pudo eliminar.");
               setIsPaused(false);
             }
@@ -178,30 +189,95 @@ const StoryViewer = ({
     );
   };
 
-  // Fix: Animación fluida y duración correcta
-  const startAnimation = (fromValue = 0) => {
-    progressAnim.setValue(fromValue);
+  const handleNext = useCallback(async () => {
+    if (isPaused) return;
 
-    // Calcular duración basada en tipo de contenido
-    let duration = 5000;
-    if (isVideo) {
-      duration = 15000;
-    } else if (songData && !isMediaStory) {
-      // Usar duración real si existe, sino 30s estándar
-      duration = songData.duration ? songData.duration * 1000 : 30000;
+    lastProgressValue.current = 0;
+    progressAnim.setValue(0);
+
+    if (player) player.pause();
+
+    if (currentIndex < storyCount - 1) {
+      setImageLoaded(false);
+      setCurrentIndex((prev) => prev + 1);
+      return;
     }
 
-    const remainingDuration = duration * (1 - fromValue);
+    void stopTrack();
+    onClose();
+  }, [currentIndex, isPaused, onClose, player, progressAnim, stopTrack, storyCount]);
 
-    Animated.timing(progressAnim, {
-      toValue: 1,
-      duration: remainingDuration,
-      easing: Easing.linear,
-      useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (finished) handleNext();
-    });
-  };
+  // Animación fluida y duración correcta
+  const startAnimation = useCallback(
+    (fromValue = 0) => {
+      progressAnim.setValue(fromValue);
+
+      // Calcular duración basada en tipo de contenido
+      let duration = 5000;
+      if (isVideo) {
+        duration = 15000;
+      } else if (songData && !isMediaStory) {
+        // Usar duración real si existe, sino 30s estándar
+        duration = songData.duration ? songData.duration * 1000 : 30000;
+      }
+
+      const remainingDuration = duration * (1 - fromValue);
+
+      Animated.timing(progressAnim, {
+        toValue: 1,
+        duration: remainingDuration,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }).start(({ finished }) => {
+        if (finished) void handleNext();
+      });
+    },
+    [handleNext, isMediaStory, isVideo, progressAnim, songData],
+  );
+
+  const loadStoryAudio = useCallback(async () => {
+    if (!visible || isMediaStory || !songData) return;
+
+    try {
+      let url =
+        songData.id || songData.spotifyId
+          ? await getDeezerTrackUrl(songData.id || songData.spotifyId)
+          : null;
+      if (!url && songData.preview?.startsWith("http")) url = songData.preview;
+
+      if (url && visible) {
+        const trackId = songData.id || `story_${storyId ?? ""}`;
+        await playTrack(trackId, url, {
+          title: songData.title,
+          artist: songData.artist,
+          cover: songData.cover,
+        });
+      }
+    } catch (e) {
+      console.log("Audio Error", e);
+    }
+  }, [isMediaStory, playTrack, songData, storyId, visible]);
+
+  const handlePrev = useCallback(async () => {
+    if (isPaused) return;
+
+    lastProgressValue.current = 0;
+    progressAnim.setValue(0);
+
+    if (currentIndex === 0) {
+      if (player) player.replay();
+      if (!isMediaStory) {
+        await stopTrack();
+        await loadStoryAudio();
+      }
+      startAnimation(0);
+      return;
+    }
+
+    if (player) player.pause();
+    setImageLoaded(false);
+    setCurrentIndex((prev) => prev - 1);
+  }, [currentIndex, isMediaStory, isPaused, loadStoryAudio, player, progressAnim, startAnimation, stopTrack]);
 
   useEffect(() => {
     const audioLoading = !isMediaStory && isContextLoading;
@@ -224,71 +300,16 @@ const StoryViewer = ({
     return () => progressAnim.stopAnimation();
   }, [
     currentIndex,
-    visible,
-    isPaused,
-    isContextLoading,
-    viewersModalVisible,
     imageLoaded,
+    isContextLoading,
+    isMediaStory,
+    isPaused,
+    isVideo,
+    progressAnim,
+    startAnimation,
+    viewersModalVisible,
+    visible,
   ]);
-
-  const loadStoryAudio = async () => {
-    if (!visible || isMediaStory || !songData) return;
-
-    try {
-      let url =
-        songData.id || songData.spotifyId
-          ? await getDeezerTrackUrl(songData.id || songData.spotifyId)
-          : null;
-      if (!url && songData.preview?.startsWith("http")) url = songData.preview;
-
-      if (url && visible) {
-        const trackId = songData.id || `story_${currentStory?.$id}`;
-        await playTrack(trackId, url, {
-          title: songData.title,
-          artist: songData.artist,
-          cover: songData.cover,
-        });
-      }
-    } catch (e) {
-      console.log("Audio Error", e);
-    }
-  };
-
-  const handleNext = async () => {
-    if (isPaused) return;
-
-    lastProgressValue.current = 0;
-    progressAnim.setValue(0);
-
-    if (player) player.pause();
-
-    if (currentIndex < (group?.stories.length || 0) - 1) {
-      setImageLoaded(false);
-      setCurrentIndex((prev) => prev + 1);
-    } else {
-      void stopTrack();
-      onClose();
-    }
-  };
-
-  const handlePrev = async () => {
-    if (isPaused) return;
-    lastProgressValue.current = 0;
-    progressAnim.setValue(0);
-
-    if (currentIndex === 0) {
-      if (player) player.replay();
-      if (!isMediaStory) {
-        await stopTrack();
-        loadStoryAudio(); // Fix: Recargar audio al reiniciar
-      }
-      startAnimation(0);
-    } else {
-      if (player) player.pause();
-      setImageLoaded(false);
-      setCurrentIndex((prev) => prev - 1);
-    }
-  };
 
   const togglePause = (pause: boolean) => {
     if (pause) {
@@ -320,29 +341,31 @@ const StoryViewer = ({
   };
 
   useEffect(() => {
+    if (!visible) return;
+
     let isMounted = true;
-    const run = async () => {
-      await new Promise((r) => setTimeout(r, 100));
-      if (isMounted) await loadStoryAudio();
-    };
-    run();
+    const timer = setTimeout(() => {
+      if (isMounted) void loadStoryAudio();
+    }, 100);
+
     return () => {
       isMounted = false;
+      clearTimeout(timer);
     };
-  }, [currentIndex, visible, group?.$id]);
+  }, [currentIndex, groupId, loadStoryAudio, visible]);
 
   useEffect(() => {
-    if (visible && currentStory && currentUserId && !isOwner) {
-      viewStory(currentStory.$id, currentUserId);
+    if (visible && storyId && currentUserId && !isOwner) {
+      viewStory(storyId, currentUserId);
     }
-  }, [currentIndex, visible]);
+  }, [currentUserId, isOwner, storyId, visible]);
 
   useEffect(() => {
     if (!visible) {
       void stopTrack();
       setReplyText("");
     }
-  }, [visible]);
+  }, [stopTrack, visible]);
 
   if (!visible || !currentStory || !songData) return null;
 

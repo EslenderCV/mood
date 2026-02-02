@@ -56,7 +56,7 @@ const DirectShareSheet = ({
       if (onSearch) onSearch(searchQuery);
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [onSearch, searchQuery]);
 
   const toggleUserSelection = (userId: string) => {
     setSelectedUsers((prev) =>

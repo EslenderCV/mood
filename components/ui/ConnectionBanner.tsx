@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, {useEffect, useRef, useState, useCallback} from "react";
 import {
   View,
   Text,
@@ -25,19 +25,7 @@ const ConnectionBanner = ({ status }: ConnectionBannerProps) => {
   const opacity = useRef(new Animated.Value(0)).current;
   const [visible, setVisible] = useState(false);
 
-  useEffect(() => {
-    if (status === "connected") {
-      // Mostrar éxito brevemente y luego salir
-      animateIn();
-      const timer = setTimeout(() => animateOut(), 2500);
-      return () => clearTimeout(timer);
-    } else if (status === "disconnected" || status === "connecting") {
-      // Mantener visible si hay problemas o cargando
-      animateIn();
-    }
-  }, [status]);
-
-  const animateIn = () => {
+  const animateIn = useCallback(() => {
     setVisible(true);
     Animated.parallel([
       Animated.spring(translateY, {
@@ -52,9 +40,9 @@ const ConnectionBanner = ({ status }: ConnectionBannerProps) => {
         useNativeDriver: true,
       }),
     ]).start();
-  };
+  }, [opacity, translateY]);
 
-  const animateOut = () => {
+  const animateOut = useCallback(() => {
     Animated.parallel([
       Animated.timing(translateY, {
         toValue: -50,
@@ -67,7 +55,22 @@ const ConnectionBanner = ({ status }: ConnectionBannerProps) => {
         useNativeDriver: true,
       }),
     ]).start(() => setVisible(false));
-  };
+  }, [opacity, translateY]);
+
+
+
+  useEffect(() => {
+    if (status === "connected") {
+      // Mostrar éxito brevemente y luego salir
+      animateIn();
+      const timer = setTimeout(() => animateOut(), 2500);
+      return () => clearTimeout(timer);
+    } else if (status === "disconnected" || status === "connecting") {
+      // Mantener visible si hay problemas o cargando
+      animateIn();
+    }
+  }, [status, animateIn, animateOut]);
+
 
   if (!visible) return null;
 

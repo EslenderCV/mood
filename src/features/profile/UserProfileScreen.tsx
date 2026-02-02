@@ -11,7 +11,7 @@ import {
   FlatList,
   Modal,
 } from "react-native";
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, {useState, useRef, useEffect, useCallback} from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -107,7 +107,7 @@ const UserProfile = () => {
     };
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!userId) return;
     try {
       const [myUser, targetUser] = await Promise.all([
@@ -201,12 +201,12 @@ const UserProfile = () => {
       setIsLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
       fetchData();
-    }, [userId]),
+    }, [fetchData]),
   );
 
   const onRefresh = async () => {
@@ -363,7 +363,7 @@ const UserProfile = () => {
         </View>
       </TouchableOpacity>
     ),
-    [cardBg, borderColor, isDark, textColor, subTextColor, t],
+    [cardBg, borderColor, textColor, subTextColor, t],
   );
 
   if (isLoading) {

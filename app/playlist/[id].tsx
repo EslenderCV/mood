@@ -10,7 +10,7 @@ import {
   Animated,
   ActivityIndicator,
 } from "react-native";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
@@ -115,11 +115,7 @@ export default function PlaylistDetail() {
     }
   }, [currentSongUrl, player]);
 
-  useEffect(() => {
-    fetchPlaylist();
-  }, [id]);
-
-  const fetchPlaylist = async () => {
+  const fetchPlaylist = useCallback(async () => {
     try {
       const doc = await databases.getDocument(
         appwriteConfig.databaseId,
@@ -144,7 +140,11 @@ export default function PlaylistDetail() {
       Alert.alert("Error", "No se pudo cargar la playlist");
       router.back();
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    fetchPlaylist();
+  }, [fetchPlaylist]);
 
   const fetchSavedSongs = async () => {
     if (!user) return;

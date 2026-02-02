@@ -48,7 +48,7 @@ const InAppNotification = () => {
         useNativeDriver: true,
       }).start();
     }
-  }, [currentNotification]);
+  }, [currentNotification, translateY]);
 
   if (!currentNotification) return null;
 

@@ -38,7 +38,7 @@ const GlobalAudioPlayerBar = () => {
         useNativeDriver: true,
       }).start();
     }
-  }, [hasActiveTrack]);
+  }, [hasActiveTrack, translateY]);
 
   const togglePlayPause = () => {
     if (isPlaying) pauseTrack();

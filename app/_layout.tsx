@@ -66,7 +66,7 @@ const StackLayout = () => {
     } else {
       if (root === "(tabs)" || root === "chat") router.replace("/");
     }
-  }, [loading, loggedIn, segments]);
+  }, [loading, loggedIn, segments, router]);
 
   useEffect(() => {
     if (!loading) setIsAppReady(true);
@@ -81,7 +81,7 @@ const StackLayout = () => {
         useNativeDriver: true,
       }).start(() => setIsSplashAnimationComplete(true));
     }
-  }, [isAppReady]);
+  }, [isAppReady, fadeAnim]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#000000" }}>

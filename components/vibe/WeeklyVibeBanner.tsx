@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, {useState, useEffect, useRef, useCallback} from "react";
 import { View, Text, TouchableOpacity, Animated, Easing } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +19,27 @@ const WeeklyVibeBanner = ({ userId, onCreatePost }: WeeklyVibeBannerProps) => {
 
   // Animación para el badge "NEW" (más suave)
   const bounceAnim = useRef(new Animated.Value(0)).current;
+
+
+  const startBounceAnimation = useCallback(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounceAnim, {
+          toValue: -10,
+          duration: 1200,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(bounceAnim, {
+          toValue: 0,
+          duration: 1200,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [bounceAnim]);
+
 
   useEffect(() => {
     const checkVibe = async () => {
@@ -43,26 +64,7 @@ const WeeklyVibeBanner = ({ userId, onCreatePost }: WeeklyVibeBannerProps) => {
       }
     };
     checkVibe();
-  }, [userId]);
-
-  const startBounceAnimation = () => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(bounceAnim, {
-          toValue: -10,
-          duration: 1200,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(bounceAnim, {
-          toValue: 0,
-          duration: 1200,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
-  };
+  }, [userId, startBounceAnimation]);
 
   const handleOpenVibe = async () => {
     setShowVibeModal(true);
