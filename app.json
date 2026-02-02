@@ -53,8 +53,7 @@
       "expo-web-browser",
       "expo-apple-authentication",
       "expo-secure-store",
-      "expo-video",
-      "expo-shazamkit"
+      "expo-video"
     ],
     "runtimeVersion": {
       "policy": "appVersion"
