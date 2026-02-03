@@ -1,50 +1,156 @@
-# Welcome to your Expo app 👋
+# Mood — Social Music Network (Expo / React Native)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Mood is a mobile social network focused on sharing music: posts with track previews, comments, follows, stories, chat, and discovery.
 
-## Get started
+> This repo uses **Expo SDK 54**, **TypeScript**, and **expo-router** with a feature-first architecture.
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## Quick start
 
-2. Start the app
-
-   ```bash
-    npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### 1) Install dependencies
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2) Run (Expo Go)
 
-## Learn more
+```bash
+npm start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+### 3) If Expo Go gets stuck “loading” (recommended first fix)
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npm run start:clear
+```
 
-## Join the community
+Then fully close Expo Go (kill the app) and open the project again.
 
-Join our community of developers creating universal apps.
+---
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Scripts
+
+| Command               | What it does                                   |
+| --------------------- | ---------------------------------------------- |
+| `npm start`           | Start Metro bundler                            |
+| `npm run start:clear` | Start Metro with clean cache (`expo start -c`) |
+| `npm run android`     | Run on Android (dev client / native)           |
+| `npm run ios`         | Run on iOS (dev client / native)               |
+| `npm run web`         | Run on web                                     |
+| `npm run test`        | Jest watch mode                                |
+| `npm run test:ci`     | Jest single run                                |
+| `npm run lint`        | Lint                                           |
+| `npm run typecheck`   | TypeScript check                               |
+| `npm run qa:smoke`    | Lint + typecheck + tests (CI gate)             |
+
+---
+
+## Architecture (important)
+
+### Routing-only `app/` (expo-router)
+
+The `app/` folder must stay **routing-only**: each route file should be a thin wrapper that re-exports the real screen.
+
+- See: `docs/ARCHITECTURE.md`
+
+### Feature-first modules
+
+All UI + logic lives in `src/`:
+
+- `src/app/` — layout implementations and global providers used by `app/*/_layout.tsx`
+- `src/features/` — screens + feature logic (home, explore, post, chat, profile, settings…)
+- `src/ui/` — Design System v1 primitives (Text, Button, Card, Divider, Screen…)
+- `src/design/` — semantic tokens (colors/spacing/typography), motion/haptics helpers (evolves over phases)
+- `lib/appwrite/` — Appwrite client wrappers (auth, posts, users, chats, storage…)
+
+**Hard rules (non-negotiable):**
+
+1. **No business logic** in `app/`.
+2. Prefer `src/ui/primitives/*` + `src/design/tokens.ts` for new UI (no new hardcoded spacing/colors).
+3. Audio will be centralized under a single engine (see `context/AudioContext.tsx` — enforced in a later phase).
+
+---
+
+## Theme (System / Light / Dark)
+
+Mood supports:
+
+- **System**
+- **Light**
+- **Dark**
+
+### Where it lives
+
+- Provider: `src/ui/theme/ThemeProvider.tsx`
+- Tokens: `src/design/tokens.ts`
+- Preference storage key: `mood.theme.preference` (AsyncStorage)
+
+### How to use in code
+
+```ts
+import { useTheme } from "@/src/ui/theme/ThemeProvider";
+
+const { scheme, colors } = useTheme();
+```
+
+In the app, go to:
+**Settings → Appearance**
+
+---
+
+## Backend (Appwrite)
+
+Mood uses **Appwrite** via `react-native-appwrite`.
+
+### Config location
+
+`lib/appwrite/config.ts`
+
+It contains:
+
+- endpoint
+- projectId
+- databaseId
+- collection ids (users, posts, comments, chats, messages, etc.)
+
+> If you fork this project and use your own Appwrite project, update these IDs accordingly.
+
+---
+
+## Troubleshooting
+
+### Expo Go loads but UI never starts
+
+1. Clear Metro cache:
+
+```bash
+npm run start:clear
+```
+
+2. Kill Expo Go completely and reopen.
+3. Ensure you have internet access (auth boot depends on the backend).
+
+### Type errors / weird RN API mismatch
+
+Make sure dependencies are installed from the lockfile:
+
+```bash
+npm ci
+```
+
+---
+
+## Contributing guidelines (internal discipline)
+
+- New screens belong in `src/features/<feature>/`.
+- Shared UI belongs in `src/ui/` (primitives) or feature-local components.
+- Avoid “god screens” (800+ line components). Prefer small focused modules.
+- Keep animations on the UI thread (Reanimated) when performance matters.
+
+---
+
+## License
+
+Private project (set your license if/when you open-source).
