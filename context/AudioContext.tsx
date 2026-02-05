@@ -65,7 +65,19 @@ export const useAudioProgress = () =>
 
 // Exponemos acciones globales sin suscribirse al Context (evita re-renders en pantallas pesadas).
 export const AudioActions = {
+  playTrack: async (_id: string, _uri: string, _meta?: TrackMetadata) => {},
+  pauseTrack: async () => {},
+  resumeTrack: async () => {},
+  stopTrack: async () => {},
   prefetchTrack: (_uri: string) => {},
+  /** Snapshot ultra-ligero (sin subscribirse al Context). */
+  getState: () => ({
+    currentPlayingId: null as string | null,
+    activeTrackMetadata: null as TrackMetadata | null,
+    isPlaying: false,
+    isLoading: false,
+    isBuffering: false,
+  }),
 };
 
 /**
@@ -358,55 +370,58 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {}
   }, []);
 
-  const prefetchTrackImpl = useCallback(async (uri: string) => {
-    if (!uri || typeof uri !== "string") return;
-    if (!uri.startsWith("http")) return;
+  const prefetchTrackImpl = useCallback(
+    async (uri: string) => {
+      if (!uri || typeof uri !== "string") return;
+      if (!uri.startsWith("http")) return;
 
-    // Evitar prefetch del mismo uri actual
-    if (currentUriRef.current === uri) return;
+      // Evitar prefetch del mismo uri actual
+      if (currentUriRef.current === uri) return;
 
-    // TTL: si ya lo prefetché hace poco, no repito
-    const now = Date.now();
-    const lastAt = prefetchedAtRef.current.get(uri);
-    if (lastAt && now - lastAt < 2 * 60 * 1000) return;
+      // TTL: si ya lo prefetché hace poco, no repito
+      const now = Date.now();
+      const lastAt = prefetchedAtRef.current.get(uri);
+      if (lastAt && now - lastAt < 2 * 60 * 1000) return;
 
-    // Si ya está preloaded ese mismo, listo
-    if (preloadedRef.current?.uri === uri) return;
+      // Si ya está preloaded ese mismo, listo
+      if (preloadedRef.current?.uri === uri) return;
 
-    // Evitar duplicados en vuelo
-    if (prefetchInFlightRef.current === uri) return;
-    prefetchInFlightRef.current = uri;
+      // Evitar duplicados en vuelo
+      if (prefetchInFlightRef.current === uri) return;
+      prefetchInFlightRef.current = uri;
 
-    try {
-      // Limpia preloaded anterior
-      if (preloadedRef.current?.sound) {
-        try {
-          await safeStopAndUnload(preloadedRef.current.sound);
-        } catch {}
+      try {
+        // Limpia preloaded anterior
+        if (preloadedRef.current?.sound) {
+          try {
+            await safeStopAndUnload(preloadedRef.current.sound);
+          } catch {}
+        }
+        preloadedRef.current = null;
+
+        // downloadFirst=true => mejor "tap-to-play"
+        const { sound } = await Audio.Sound.createAsync(
+          { uri },
+          { shouldPlay: false, volume: 1.0 },
+          undefined,
+          true,
+        );
+
+        preloadedRef.current = { uri, sound };
+        prefetchedAtRef.current.set(uri, now);
+
+        if (__DEV__) {
+          console.log("[Audio] prefetched:", uri);
+        }
+      } catch (e) {
+        // Silencioso: prefetch es best-effort
+        if (__DEV__) console.log("[Audio] prefetch failed", e);
+      } finally {
+        prefetchInFlightRef.current = null;
       }
-      preloadedRef.current = null;
-
-      // downloadFirst=true => mejor "tap-to-play"
-      const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: false, volume: 1.0 },
-        undefined,
-        true,
-      );
-
-      preloadedRef.current = { uri, sound };
-      prefetchedAtRef.current.set(uri, now);
-
-      if (__DEV__) {
-        console.log("[Audio] prefetched:", uri);
-      }
-    } catch (e) {
-      // Silencioso: prefetch es best-effort
-      if (__DEV__) console.log("[Audio] prefetch failed", e);
-    } finally {
-      prefetchInFlightRef.current = null;
-    }
-  }, [safeStopAndUnload]);
+    },
+    [safeStopAndUnload],
+  );
 
   const prefetchTrack = useCallback(
     (uri: string) => {
@@ -424,192 +439,195 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, [prefetchTrack]);
 
-  const playTrack = useCallback(async (id: string, uri: string, meta?: TrackMetadata) => {
-    const myOp = ++opIdRef.current;
+  const playTrack = useCallback(
+    async (id: string, uri: string, meta?: TrackMetadata) => {
+      const myOp = ++opIdRef.current;
 
-    await withLock(async () => {
-      try {
-        if (!mountedRef.current) return;
-        if (myOp !== opIdRef.current) return;
+      await withLock(async () => {
+        try {
+          if (!mountedRef.current) return;
+          if (myOp !== opIdRef.current) return;
 
-        // 🔥 Forzar modo Playback siempre que empiece una canción (por si venías del grabador)
-        await ensurePlaybackMode();
+          // 🔥 Forzar modo Playback siempre que empiece una canción (por si venías del grabador)
+          await ensurePlaybackMode();
 
-        // Si es la misma canción, toggle play/pause (solo si está loaded)
-        if (currentTrackIdRef.current === id && soundRef.current) {
-          try {
-            const st: any = await soundRef.current.getStatusAsync();
-            if (st?.isLoaded) {
-              if (st.isPlaying) {
-                await soundRef.current.pauseAsync();
-              } else {
-                const dur = st.durationMillis || 0;
-                if (dur > 0 && st.positionMillis >= dur) {
-                  await soundRef.current.replayAsync();
+          // Si es la misma canción, toggle play/pause (solo si está loaded)
+          if (currentTrackIdRef.current === id && soundRef.current) {
+            try {
+              const st: any = await soundRef.current.getStatusAsync();
+              if (st?.isLoaded) {
+                if (st.isPlaying) {
+                  await soundRef.current.pauseAsync();
                 } else {
-                  await soundRef.current.playAsync();
+                  const dur = st.durationMillis || 0;
+                  if (dur > 0 && st.positionMillis >= dur) {
+                    await soundRef.current.replayAsync();
+                  } else {
+                    await soundRef.current.playAsync();
+                  }
                 }
               }
-            }
-          } catch {}
-          return;
-        }
-
-        // Emit "skip" del track anterior si aplica
-        const prevId = currentTrackIdRef.current;
-        if (prevId && prevId !== id && soundRef.current) {
-          let playedMs = lastKnownPositionRef.current;
-          let durMs = lastKnownDurationRef.current;
-
-          try {
-            const st: any = await soundRef.current.getStatusAsync();
-            if (st?.isLoaded) {
-              playedMs = st.positionMillis;
-              durMs = st.durationMillis || durMs;
-            }
-          } catch {}
-
-          if (
-            BrainEmitter &&
-            durMs > 0 &&
-            playedMs > 1000 &&
-            playedMs < durMs * 0.3
-          ) {
-            const activeMeta = activeTrackMetadataRef.current;
-            const prevMetaForBrain = activeMeta
-              ? {
-                  title: activeMeta.title,
-                  artist: activeMeta.artist,
-                }
-              : undefined;
-            BrainEmitter.audio(
-              AudioEventType.TRACK_SKIP,
-              prevId,
-              durMs,
-              playedMs,
-              activeMeta?.features,
-              prevMetaForBrain,
-            );
-          }
-        }
-
-        // Detener/unload sound actual
-        const current = soundRef.current;
-        soundRef.current = null;
-        await safeStopAndUnload(current);
-
-        // Si quedó stale, sal
-        if (!mountedRef.current || myOp !== opIdRef.current) return;
-
-        setIsLoading(true);
-        isLoadingRef.current = true;
-        setIsBuffering(false);
-        setCurrentPlayingId(id);
-        setActiveTrackMetadata(meta || null);
-        currentTrackIdRef.current = id;
-        currentUriRef.current = uri;
-        lastProgressEmitMsRef.current = 0;
-        audioProgressStore.reset();
-
-        // ✅ Camino rápido: si ya está preloaded, lo usamos
-        if (preloadedRef.current?.uri === uri && preloadedRef.current.sound) {
-          const pre = preloadedRef.current.sound;
-          preloadedRef.current = null;
-
-          pre.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
-
-          // Si quedó stale, no lo uses
-          if (!mountedRef.current || myOp !== opIdRef.current) {
-            await safeStopAndUnload(pre);
+            } catch {}
             return;
           }
 
-          soundRef.current = pre;
+          // Emit "skip" del track anterior si aplica
+          const prevId = currentTrackIdRef.current;
+          if (prevId && prevId !== id && soundRef.current) {
+            let playedMs = lastKnownPositionRef.current;
+            let durMs = lastKnownDurationRef.current;
 
-          try {
-            const st: any = await pre.getStatusAsync();
-            if (st?.isLoaded) {
-              await pre.playAsync();
+            try {
+              const st: any = await soundRef.current.getStatusAsync();
+              if (st?.isLoaded) {
+                playedMs = st.positionMillis;
+                durMs = st.durationMillis || durMs;
+              }
+            } catch {}
+
+            if (
+              BrainEmitter &&
+              durMs > 0 &&
+              playedMs > 1000 &&
+              playedMs < durMs * 0.3
+            ) {
+              const activeMeta = activeTrackMetadataRef.current;
+              const prevMetaForBrain = activeMeta
+                ? {
+                    title: activeMeta.title,
+                    artist: activeMeta.artist,
+                  }
+                : undefined;
+              BrainEmitter.audio(
+                AudioEventType.TRACK_SKIP,
+                prevId,
+                durMs,
+                playedMs,
+                activeMeta?.features,
+                prevMetaForBrain,
+              );
+            }
+          }
+
+          // Detener/unload sound actual
+          const current = soundRef.current;
+          soundRef.current = null;
+          await safeStopAndUnload(current);
+
+          // Si quedó stale, sal
+          if (!mountedRef.current || myOp !== opIdRef.current) return;
+
+          setIsLoading(true);
+          isLoadingRef.current = true;
+          setIsBuffering(false);
+          setCurrentPlayingId(id);
+          setActiveTrackMetadata(meta || null);
+          currentTrackIdRef.current = id;
+          currentUriRef.current = uri;
+          lastProgressEmitMsRef.current = 0;
+          audioProgressStore.reset();
+
+          // ✅ Camino rápido: si ya está preloaded, lo usamos
+          if (preloadedRef.current?.uri === uri && preloadedRef.current.sound) {
+            const pre = preloadedRef.current.sound;
+            preloadedRef.current = null;
+
+            pre.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
+
+            // Si quedó stale, no lo uses
+            if (!mountedRef.current || myOp !== opIdRef.current) {
+              await safeStopAndUnload(pre);
+              return;
+            }
+
+            soundRef.current = pre;
+
+            try {
+              const st: any = await pre.getStatusAsync();
+              if (st?.isLoaded) {
+                await pre.playAsync();
+                setIsLoading(false);
+                isLoadingRef.current = false;
+                setIsBuffering(!!st?.isBuffering);
+
+                if (BrainEmitter) {
+                  const metaForBrain = meta
+                    ? { title: meta.title, artist: meta.artist }
+                    : undefined;
+                  BrainEmitter.audio(
+                    AudioEventType.TRACK_START,
+                    id,
+                    st.durationMillis || 0,
+                    0,
+                    meta?.features,
+                    metaForBrain,
+                  );
+                }
+              }
+            } catch {
+              await safeStopAndUnload(pre);
+              if (soundRef.current === pre) soundRef.current = null;
               setIsLoading(false);
               isLoadingRef.current = false;
-              setIsBuffering(!!st?.isBuffering);
-
-              if (BrainEmitter) {
-                const metaForBrain = meta
-                  ? { title: meta.title, artist: meta.artist }
-                  : undefined;
-                BrainEmitter.audio(
-                  AudioEventType.TRACK_START,
-                  id,
-                  st.durationMillis || 0,
-                  0,
-                  meta?.features,
-                  metaForBrain,
-                );
-              }
+              setIsBuffering(false);
+              setCurrentPlayingId(null);
+              currentTrackIdRef.current = null;
+              currentUriRef.current = null;
             }
-          } catch {
-            await safeStopAndUnload(pre);
-            if (soundRef.current === pre) soundRef.current = null;
-            setIsLoading(false);
-            isLoadingRef.current = false;
-            setIsBuffering(false);
-            setCurrentPlayingId(null);
-            currentTrackIdRef.current = null;
-            currentUriRef.current = null;
+            return;
           }
-          return;
-        }
 
-        // createAsync puede tardar: si el user navega, opId cambia => no aplicamos el resultado
-        const { sound: newSound, status } = await Audio.Sound.createAsync(
-          { uri },
-          { shouldPlay: true, volume: 1.0 },
-          onPlaybackStatusUpdate,
-        );
-
-        // Si quedó stale, unload y sal
-        if (!mountedRef.current || myOp !== opIdRef.current) {
-          await safeStopAndUnload(newSound);
-          return;
-        }
-
-        soundRef.current = newSound;
-
-        const loaded = (status as any)?.isLoaded === true;
-        setIsLoading(!loaded);
-        isLoadingRef.current = !loaded;
-        setIsBuffering(!!(status as any)?.isBuffering);
-
-        if ((status as any)?.isLoaded && BrainEmitter) {
-          const metaForBrain = meta
-            ? { title: meta.title, artist: meta.artist }
-            : undefined;
-          BrainEmitter.audio(
-            AudioEventType.TRACK_START,
-            id,
-            (status as any).durationMillis || 0,
-            0,
-            meta?.features,
-            metaForBrain,
+          // createAsync puede tardar: si el user navega, opId cambia => no aplicamos el resultado
+          const { sound: newSound, status } = await Audio.Sound.createAsync(
+            { uri },
+            { shouldPlay: true, volume: 1.0 },
+            onPlaybackStatusUpdate,
           );
+
+          // Si quedó stale, unload y sal
+          if (!mountedRef.current || myOp !== opIdRef.current) {
+            await safeStopAndUnload(newSound);
+            return;
+          }
+
+          soundRef.current = newSound;
+
+          const loaded = (status as any)?.isLoaded === true;
+          setIsLoading(!loaded);
+          isLoadingRef.current = !loaded;
+          setIsBuffering(!!(status as any)?.isBuffering);
+
+          if ((status as any)?.isLoaded && BrainEmitter) {
+            const metaForBrain = meta
+              ? { title: meta.title, artist: meta.artist }
+              : undefined;
+            BrainEmitter.audio(
+              AudioEventType.TRACK_START,
+              id,
+              (status as any).durationMillis || 0,
+              0,
+              meta?.features,
+              metaForBrain,
+            );
+          }
+        } catch (error) {
+          if (__DEV__) console.log("AudioContext Error:", error);
+
+          const current = soundRef.current;
+          soundRef.current = null;
+          await safeStopAndUnload(current);
+
+          setIsLoading(false);
+          isLoadingRef.current = false;
+          setIsBuffering(false);
+          setCurrentPlayingId(null);
+          currentTrackIdRef.current = null;
+          currentUriRef.current = null;
         }
-      } catch (error) {
-        if (__DEV__) console.log("AudioContext Error:", error);
-
-        const current = soundRef.current;
-        soundRef.current = null;
-        await safeStopAndUnload(current);
-
-        setIsLoading(false);
-        isLoadingRef.current = false;
-        setIsBuffering(false);
-        setCurrentPlayingId(null);
-        currentTrackIdRef.current = null;
-        currentUriRef.current = null;
-      }
-    });
-  }, [ensurePlaybackMode, onPlaybackStatusUpdate, safeStopAndUnload, withLock]);
+      });
+    },
+    [ensurePlaybackMode, onPlaybackStatusUpdate, safeStopAndUnload, withLock],
+  );
 
   const pauseTrack = useCallback(async () => {
     await withLock(async () => {
@@ -656,6 +674,39 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
     },
     [stopTrack],
   );
+
+  // 🔥 Cableamos AudioActions para uso "global" sin hook (evita overlap por multi-sources).
+  useEffect(() => {
+    AudioActions.playTrack = playTrack;
+    AudioActions.pauseTrack = pauseTrack;
+    AudioActions.resumeTrack = resumeTrack;
+    AudioActions.stopTrack = stopTrack;
+    AudioActions.prefetchTrack = prefetchTrack;
+
+    AudioActions.getState = () => ({
+      currentPlayingId: currentTrackIdRef.current,
+      activeTrackMetadata: activeTrackMetadataRef.current,
+      isPlaying: lastIsPlayingRef.current,
+      isLoading: isLoadingRef.current,
+      isBuffering: lastIsBufferingRef.current,
+    });
+
+    return () => {
+      // Reset a no-op en unmount (hot-reload safe)
+      AudioActions.playTrack = async () => {};
+      AudioActions.pauseTrack = async () => {};
+      AudioActions.resumeTrack = async () => {};
+      AudioActions.stopTrack = async () => {};
+      AudioActions.prefetchTrack = () => {};
+      AudioActions.getState = () => ({
+        currentPlayingId: null,
+        activeTrackMetadata: null,
+        isPlaying: false,
+        isLoading: false,
+        isBuffering: false,
+      });
+    };
+  }, [playTrack, pauseTrack, resumeTrack, stopTrack, prefetchTrack]);
 
   const contextValue = useMemo(
     () => ({

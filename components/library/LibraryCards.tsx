@@ -87,11 +87,11 @@ export const SongCard = memo(
         <TouchableOpacity
           activeOpacity={0.7}
           onLongPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             onOpenOptions(item);
           }}
           onPress={() => {
-            Haptics.selectionAsync();
+            void Haptics.selectionAsync();
             onPressCard(item);
           }}
           className="flex-col"
@@ -114,8 +114,10 @@ export const SongCard = memo(
             <TouchableOpacity
               onPress={(e) => {
                 e.stopPropagation();
-                Haptics.selectionAsync();
-                onPlay(item);
+                void Haptics.selectionAsync();
+                // ✅ Orquestador (useLibraryLogic) delega TODO al AudioContext
+                // => NO overlap + aparece GlobalAudioPlayerBar
+                void onPlay(item);
               }}
               className="absolute bottom-3 left-3 items-center justify-center shadow-lg shadow-black/30 z-10"
               style={{
@@ -140,7 +142,7 @@ export const SongCard = memo(
             <TouchableOpacity
               onPress={(e) => {
                 e.stopPropagation();
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 onOpenOptions(item);
               }}
               className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/30 backdrop-blur-md items-center justify-center"

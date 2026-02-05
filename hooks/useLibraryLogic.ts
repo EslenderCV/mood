@@ -1,7 +1,5 @@
-import { useState, useEffect } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Alert, Keyboard } from "react-native";
-// 🔥 CAMBIO: Usamos expo-av en lugar de expo-audio
-import { Audio } from "expo-av";
 import { Databases, Query } from "react-native-appwrite";
 import {
   getSavedPosts,
@@ -14,6 +12,7 @@ import {
   appwriteConfig,
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
+import { useAudioContext } from "@/context/AudioContext";
 
 const databases = new Databases(client);
 
@@ -39,63 +38,33 @@ export const useLibraryLogic = () => {
   const [isOptionsModalVisible, setOptionsModalVisible] = useState(false);
   const [selectedSong, setSelectedSong] = useState<any>(null);
 
-  // Audio Player State (expo-av)
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [playingId, setPlayingId] = useState<string | null>(null);
-  const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  // ✅ Audio (fuente única): AudioContext + GlobalAudioPlayerBar
+  const {
+    currentPlayingId,
+    isPlaying: ctxIsPlaying,
+    isLoading: ctxIsLoading,
+    isBuffering: ctxIsBuffering,
+    playTrack,
+    pauseTrack,
+    resumeTrack,
+  } = useAudioContext();
 
-  // --- AUDIO LOGIC: Limpieza al desmontar ---
-  useEffect(() => {
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
-  }, [sound]);
-
-  // --- DATA FETCHING ---
-  const fetchData = async () => {
-    if (!user) return;
-    setIsLoading(true);
-    try {
-      const [savedPosts, savedStoriesRes] = await Promise.all([
-        getSavedPosts(user.$id),
-        databases.listDocuments(
-          appwriteConfig.databaseId,
-          appwriteConfig.storiesCollectionId,
-          [Query.equal("savedBy", user.$id)],
-        ),
-      ]);
-
-      const musicFromPosts = savedPosts
-        .map((post) => parseMusicItem(post, false))
-        .filter(Boolean);
-      const musicFromStories = savedStoriesRes.documents
-        .map((story) => parseMusicItem(story, true))
-        .filter(Boolean);
-
-      setMusicCollection(
-        [...musicFromPosts, ...musicFromStories].sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        ),
-      );
-      setPlaylists(await getUserPlaylists(user.$id));
-    } catch (error) {
-      console.log("Error cargando librería:", error);
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  };
+  // 🔥 loadingAudioId local SOLO para el paso "resolver URL" (antes de playTrack)
+  const [loadingAudioIdLocal, setLoadingAudioIdLocal] = useState<string | null>(
+    null,
+  );
+  const playReqRef = useRef(0);
 
   const parseMusicItem = (doc: any, isStory: boolean) => {
     try {
       if (!doc.songData) return null;
       const song = JSON.parse(doc.songData);
-      if (song.cover?.includes("100x100bb"))
+
+      // upgrade cover (iTunes 100x100 => 600x600)
+      if (song.cover?.includes("100x100bb")) {
         song.cover = song.cover.replace("100x100bb", "600x600bb");
+      }
+
       return {
         ...song,
         id: doc.$id,
@@ -110,80 +79,94 @@ export const useLibraryLogic = () => {
     }
   };
 
+  // --- DATA FETCHING ---
+  const fetchData = async () => {
+    if (!user) return;
+    setIsLoading(true);
+
+    try {
+      const [savedPosts, savedStoriesRes] = await Promise.all([
+        getSavedPosts(user.$id),
+        databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.storiesCollectionId,
+          [Query.equal("savedBy", user.$id)],
+        ),
+      ]);
+
+      const musicFromPosts = (savedPosts || [])
+        .map((post: any) => parseMusicItem(post, false))
+        .filter(Boolean);
+
+      const musicFromStories = (savedStoriesRes?.documents || [])
+        .map((story: any) => parseMusicItem(story, true))
+        .filter(Boolean);
+
+      setMusicCollection(
+        [...musicFromPosts, ...musicFromStories].sort(
+          (a: any, b: any) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        ),
+      );
+
+      const pls = await getUserPlaylists(user.$id);
+      setPlaylists(pls || []);
+    } catch (error) {
+      console.log("Error cargando librería:", error);
+      Alert.alert("Error", "No se pudo cargar tu biblioteca.");
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchData();
     setRefreshing(false);
   };
 
-  // --- HANDLERS ---
+  // --- AUDIO (NO OVERLAP) ---
   const handlePlaySong = async (item: any) => {
-    // 1. Lógica de Pausa/Play si es la misma canción
-    if (playingId === item.id) {
-      if (sound) {
-        if (isPlaying) {
-          await sound.pauseAsync();
-          setIsPlaying(false);
-        } else {
-          await sound.playAsync();
-          setIsPlaying(true);
-        }
-      }
+    // 0) Toggle rápido si es el mismo track
+    if (currentPlayingId === item?.id) {
+      if (ctxIsPlaying) await pauseTrack();
+      else await resumeTrack();
       return;
     }
 
-    // 2. Detener canción anterior si existe
+    const myReq = ++playReqRef.current;
+    setLoadingAudioIdLocal(item?.id ?? null);
+
     try {
-      if (sound) {
-        await sound.unloadAsync();
-        setSound(null);
-        setIsPlaying(false);
+      // 1) Resolver URL final (Deezer o preview directo)
+      let finalUrl: string | null = null;
+
+      if (item?.trackId) {
+        finalUrl = await getDeezerTrackUrl(String(item.trackId));
+      } else {
+        finalUrl = item?.preview || null;
       }
 
-      setLoadingAudioId(item.id);
+      // Si el usuario tocó otra canción en medio, ignoramos el resultado
+      if (myReq !== playReqRef.current) return;
 
-      // Obtener URL
-      let finalUrl = item.trackId
-        ? await getDeezerTrackUrl(String(item.trackId))
-        : item.preview;
       if (!finalUrl) {
         Alert.alert("Lo sentimos", "Audio no disponible.");
-        setLoadingAudioId(null);
         return;
       }
 
-      // 🔥 CONFIGURACIÓN CRÍTICA: PERMITIR AUDIO EN SILENCIO (IPHONE SWITCH)
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        allowsRecordingIOS: false,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
+      // 2) Reproducir vía AudioContext (setea metadata => aparece GlobalAudioPlayerBar)
+      await playTrack(item.id, finalUrl, {
+        title: item?.title,
+        artist: item?.artist,
+        cover: item?.cover,
       });
-
-      // Cargar y Reproducir
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: finalUrl },
-        { shouldPlay: true },
-      );
-
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded) {
-          if (status.didJustFinish) {
-            setIsPlaying(false);
-            setPlayingId(null);
-            // newSound.unloadAsync(); // Opcional: descargar para ahorrar memoria
-          }
-        }
-      });
-
-      setSound(newSound);
-      setPlayingId(item.id);
-      setIsPlaying(true);
     } catch (e) {
       console.log(e);
       Alert.alert("Error", "Error al reproducir.");
     } finally {
-      setLoadingAudioId(null);
+      if (myReq === playReqRef.current) setLoadingAudioIdLocal(null);
     }
   };
 
@@ -194,31 +177,29 @@ export const useLibraryLogic = () => {
       await createPlaylist(newPlaylistName, user.$id, importPlatform);
       setNewPlaylistName("");
       setCreateModalVisible(false);
-      fetchData();
+      await fetchData();
     } catch {
-      setCreateModalVisible(false);
-      Alert.alert("Error", "No se pudo crear.");
+      Alert.alert("Error", "No se pudo crear la playlist.");
     }
   };
 
-  const confirmAddToPlaylist = async (playlistId: string) => {
-    if (!songToAdd) return;
+  const confirmAddToPlaylist = async (playlist: any) => {
+    if (!songToAdd || !playlist) return;
     try {
-      await addSongToPlaylist(playlistId, songToAdd);
+      await await addSongToPlaylist(playlist.$id, songToAdd);
       setAddToPlaylistModalVisible(false);
       setSongToAdd(null);
-      Alert.alert("¡Listo!", "Canción agregada.");
+      Alert.alert("Listo", "Canción agregada.");
     } catch {
-      Alert.alert("Error", "No se pudo agregar.");
+      Alert.alert("Error", "No se pudo agregar la canción.");
     }
   };
 
-  const handleUnsave = async () => {
-    setOptionsModalVisible(false);
-    if (!selectedSong || !user) return;
-    const item = selectedSong;
-    const previousList = [...musicCollection];
-    setMusicCollection((prev) => prev.filter((i) => i.id !== item.id));
+  const handleUnsave = async (item: any) => {
+    if (!user) return;
+
+    const previousList = musicCollection;
+    setMusicCollection((prev) => prev.filter((p) => p.postId !== item.postId));
 
     try {
       if (item.isStory) {
@@ -239,6 +220,18 @@ export const useLibraryLogic = () => {
       Alert.alert("Error", "Fallo al eliminar.");
     }
   };
+
+  // Estados expuestos para UI (compat con Library actual)
+  const playingId = currentPlayingId;
+  const isPlaying = ctxIsPlaying;
+
+  // Spinner: primero "resolviendo URL", luego "cargando/buffer"
+  const loadingAudioId = useMemo(() => {
+    if (loadingAudioIdLocal) return loadingAudioIdLocal;
+    if ((ctxIsLoading || ctxIsBuffering) && currentPlayingId)
+      return currentPlayingId;
+    return null;
+  }, [loadingAudioIdLocal, ctxIsLoading, ctxIsBuffering, currentPlayingId]);
 
   return {
     user,

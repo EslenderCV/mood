@@ -21,16 +21,15 @@ import {
   removeSongFromPlaylist,
   getSavedPosts,
   addSongToPlaylist,
-  getDeezerTrackUrl,
 } from "@/lib/appwrite";
 import { useColorScheme } from "nativewind";
-import { useAudioPlayer } from "expo-audio";
 import ShareModal from "@/components/ShareModal";
 import {
   Swipeable,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
 import { useGlobalContext } from "@/context/GlobalProvider";
+import { useLibraryLogic } from "@/hooks/useLibraryLogic";
 
 // --- COMPONENTE VISUALIZADOR DE AUDIO ---
 const AudioVisualizer = ({
@@ -78,49 +77,21 @@ export default function PlaylistDetail() {
   const [isAddSongModalVisible, setAddSongModalVisible] = useState(false);
   const [savedSongs, setSavedSongs] = useState<any[]>([]);
 
-  // --- AUDIO STATES ---
-  const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
-  const [playingId, setPlayingId] = useState<string | null>(null);
-  const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  const player = useAudioPlayer(currentSongUrl);
-
-  useEffect(() => {
-    if (currentSongUrl && player) {
-      if (!player.playing) {
-        player.play();
-        setIsPlaying(true);
-      }
-
-      const statusListener = (status: any) => {
-        if (status.didJustFinish) {
-          setIsPlaying(false);
-          player.seekTo(0);
-          player.pause();
-        }
-      };
-
-      if (player.addListener) {
-        player.addListener("playbackStatusUpdate", statusListener);
-      } else if ((player as any).setOnPlaybackStatusUpdate) {
-        (player as any).setOnPlaybackStatusUpdate(statusListener);
-      }
-
-      return () => {
-        if (player.removeListener) {
-          player.removeListener("playbackStatusUpdate", statusListener);
-        }
-      };
-    }
-  }, [currentSongUrl, player]);
+  // ✅ AUDIO GLOBAL (sin overlap): SOLO cambiamos reproductor. UI intacta.
+  // Mantengo los mismos nombres (playingId/loadingAudioId/isPlaying) para NO tocar tu diseño.
+  const {
+    handlePlaySong: playSongGlobal,
+    playingId,
+    loadingAudioId,
+    isPlaying,
+  } = useLibraryLogic();
 
   const fetchPlaylist = useCallback(async () => {
     try {
       const doc = await databases.getDocument(
         appwriteConfig.databaseId,
         appwriteConfig.playlistsCollectionId,
-        id as string
+        id as string,
       );
       setPlaylist(doc);
       setNewName(doc.name);
@@ -166,59 +137,16 @@ export default function PlaylistDetail() {
     }
   };
 
+  // ✅ SOLO CAMBIO: este handler ahora delega al reproductor global (GlobalAudioPlayerBar)
   const handlePlaySong = async (song: any) => {
-    const songIdKey = song.id || song.title;
+    const rawId = song.trackId || song.spotifyId || song.id || song.title;
+    const audioId = `playlist:${id}:${String(rawId)}`;
 
-    if (playingId === songIdKey) {
-      if (isPlaying) {
-        player.pause();
-        setIsPlaying(false);
-      } else {
-        player.play();
-        setIsPlaying(true);
-      }
-      return;
-    }
-
-    if (isPlaying) {
-      player.pause();
-      setIsPlaying(false);
-    }
-
-    try {
-      setLoadingAudioId(songIdKey);
-
-      const rawId = song.trackId || song.spotifyId || song.id;
-      const trackId = rawId ? String(rawId) : null;
-
-      let finalUrl = null;
-
-      if (trackId) {
-        try {
-          finalUrl = await getDeezerTrackUrl(trackId);
-        } catch {}
-      }
-
-      if (!finalUrl && song.preview) {
-        finalUrl = song.preview;
-      }
-
-      if (!finalUrl) {
-        setLoadingAudioId(null);
-        Alert.alert(
-          "No disponible",
-          "No se encontró un audio válido para esta canción."
-        );
-        return;
-      }
-
-      setPlayingId(songIdKey);
-      setCurrentSongUrl(finalUrl);
-    } catch {
-      Alert.alert("Error", "Ocurrió un error inesperado al reproducir.");
-    } finally {
-      setLoadingAudioId(null);
-    }
+    await playSongGlobal({
+      ...song,
+      id: audioId, // id estable por playlist (evita colisiones con Library/Feed)
+      trackId: rawId, // para que el orquestador resuelva Deezer si aplica
+    });
   };
 
   const handleAddSongFromModal = async (song: any) => {
@@ -270,10 +198,10 @@ export default function PlaylistDetail() {
           onPress: () =>
             Alert.alert(
               "Sincronizando...",
-              "Estamos procesando tu solicitud en segundo plano."
+              "Estamos procesando tu solicitud en segundo plano.",
             ),
         },
-      ]
+      ],
     );
   };
 
@@ -326,7 +254,10 @@ export default function PlaylistDetail() {
   };
 
   const renderSong = ({ item, index }: { item: any; index: number }) => {
-    const songKey = item.id || item.title;
+    // ✅ Mantiene UI igual, pero el "key de reproducción" debe coincidir con el globalBar
+    const rawId = item.trackId || item.spotifyId || item.id || item.title;
+    const songKey = `playlist:${id}:${String(rawId)}`;
+
     const isThisPlaying = playingId === songKey;
     const isLoadingThis = loadingAudioId === songKey;
     const showPause = isThisPlaying && isPlaying;
@@ -384,7 +315,7 @@ export default function PlaylistDetail() {
               e.stopPropagation();
               handlePlaySong(item);
             }}
-            // BOTÓN DE PLAY CORREGIDO (Color Acento)
+            // BOTÓN DE PLAY CORREGIDO (Color Acento) — UI igual
             className="w-10 h-10 rounded-full items-center justify-center shadow-sm"
             style={{ backgroundColor: accentColor }}
           >

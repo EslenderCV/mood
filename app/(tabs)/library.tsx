@@ -16,8 +16,6 @@ import * as Haptics from "expo-haptics";
 
 import { useLanguage } from "@/context/LanguageContext";
 import { useLibraryLogic } from "@/hooks/useLibraryLogic";
-
-// Importamos componentes divididos
 import {
   SongCard,
   PlaylistCard,
@@ -33,8 +31,6 @@ import {
 
 const PADDING_HORIZONTAL = 20;
 
-
-
 const Library = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -49,7 +45,6 @@ const Library = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     void logicRef.current.onRefresh();
   }, []);
-
 
   // Theme Constants
   const bgColor = isDark ? "#000000" : "#FFFFFF";
