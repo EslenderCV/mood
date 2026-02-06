@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FeedItem } from "@/context/FeedProvider";
-import { getFeedPage, getServerHomeFeedPage, isServerHomeFeedEnabled } from "@/lib/appwrite";
+import {
+  getFeedPage,
+  getServerHomeFeedPage,
+  hydratePostsWithUsers,
+  isServerHomeFeedEnabled,
+  ServerFeedResponse,
+} from "@/lib/appwrite";
 import { MoodSessionManager } from "@/src/brain/session/MoodSessionManager";
 
 import { SeenStateStore } from "@/src/feed/seen/SeenStateStore";
@@ -15,9 +21,17 @@ import {
 } from "./homeTypes";
 
 const getCreatorId = (post: any): string => {
+  const pb = post?.postedBy;
+  // Relationship attributes may be: string id | user object | [user] | [id]
+  if (typeof pb === "string" && pb) return pb;
+  if (Array.isArray(pb) && pb.length > 0) {
+    const first = pb[0];
+    if (typeof first === "string" && first) return first;
+    if (first && typeof first === "object" && first.$id) return first.$id;
+  }
   return (
     post?.creator?.$id ||
-    post?.postedBy?.$id ||
+    pb?.$id ||
     post?.users?.[0]?.$id ||
     post?.userId ||
     "unknown"
@@ -35,8 +49,6 @@ export const useHomeFeedConstruction = ({
   userId,
   myFollowedIds,
   blockedUserIds,
-    serverMode,
-    getServerHomeFeedPage,
   smartSuggestions,
   setSortedFeed,
   sortedFeedRef,
@@ -79,7 +91,10 @@ export const useHomeFeedConstruction = ({
   const hasMoreRef = useRef<boolean>(true);
   const isLoadingMoreRef = useRef<boolean>(false);
 
-  const serverMode = isServerHomeFeedEnabled();
+  // Server feed is the preferred path, but we auto-degrade to local mode if
+  // the server function fails (so Expo Go / dev builds never hard-crash).
+  const [serverDegraded, setServerDegraded] = useState<boolean>(false);
+  const serverMode = isServerHomeFeedEnabled() && !serverDegraded;
   const [serverLoading, setServerLoading] = useState<boolean>(false);
   const [serverRefreshing, setServerRefreshing] = useState<boolean>(false);
   const serverNextCursorRef = useRef<string | null>(null);
@@ -87,6 +102,28 @@ export const useHomeFeedConstruction = ({
   const serverIsLoadingMoreRef = useRef<boolean>(false);
   const serverSnapshotIdRef = useRef<string | null>(null);
   const serverCursorIdRef = useRef<string | null>(null);
+  const serverPrefetchRef = useRef<{ cursor: string | null; resp: ServerFeedResponse | null } | null>(null);
+  const serverPrefetchInFlightRef = useRef<boolean>(false);
+
+  const prefetchServerNextPage = useCallback(async () => {
+    if (!serverMode) return;
+    const nextCursor = serverNextCursorRef.current;
+    if (!nextCursor) return;
+
+    if (serverPrefetchInFlightRef.current) return;
+    if (serverPrefetchRef.current?.cursor === nextCursor && serverPrefetchRef.current?.resp?.ok) return;
+
+    serverPrefetchInFlightRef.current = true;
+    try {
+      const sessionId = MoodSessionManager.getInstance().getSessionId();
+      const resp = await getServerHomeFeedPage({ limit: 20, cursor: nextCursor, sessionId });
+      if (resp?.ok) serverPrefetchRef.current = { cursor: nextCursor, resp };
+    } catch {
+      // best-effort
+    } finally {
+      serverPrefetchInFlightRef.current = false;
+    }
+  }, [serverMode]);
 
 
   const seenStore = SeenStateStore.getInstance();
@@ -240,6 +277,7 @@ export const useHomeFeedConstruction = ({
       // --- Server mode: backend source of truth for Home feed ---
       if (serverMode) {
         setServerLoading(true);
+        let serverOk = false;
         try {
           const sessionId = MoodSessionManager.getInstance().getSessionId();
 
@@ -248,54 +286,76 @@ export const useHomeFeedConstruction = ({
           serverHasMoreRef.current = true;
           serverSnapshotIdRef.current = null;
           serverCursorIdRef.current = null;
+          serverPrefetchRef.current = null;
 
           // Reset local pools / dedupe for a clean top-of-feed
           servedPostIdsRef.current = new Set();
           itemsMapRef.current.clear();
 
-          const resp = await getServerHomeFeedPage({
-            limit: 20,
-            cursor: null,
-            sessionId,
-          });
+          const resp = await getServerHomeFeedPage({ limit: 20, cursor: null, sessionId });
 
-          serverNextCursorRef.current = resp?.next_cursor ?? null;
-          serverHasMoreRef.current = !!serverNextCursorRef.current;
-          serverSnapshotIdRef.current = (resp as any)?.snapshot_id ?? null;
-          serverCursorIdRef.current = (resp as any)?.cursor_id ?? null;
+          if (!resp?.ok) {
+            console.warn("[Mood] server feed init failed; degrading to local feed", resp);
+            setServerDegraded(true);
+            serverOk = false;
+          } else {
+            serverNextCursorRef.current = resp?.next_cursor ?? null;
+            void prefetchServerNextPage();
+            serverHasMoreRef.current = !!serverNextCursorRef.current;
+            serverSnapshotIdRef.current = (resp as any)?.snapshot_id ?? null;
+            serverCursorIdRef.current = (resp as any)?.cursor_id ?? null;
 
-          const metaByPostId = new Map<string, any>();
-          const serverPosts: FeedItem[] = [];
-          for (const it of resp?.items || []) {
-            const post = (it as any)?.post;
-            const postId = post?.$id;
-            if (!postId) continue;
+            const metaByPostId = new Map<string, any>();
+            const rawPostsById = new Map<string, any>();
+            const orderedPostIds: string[] = [];
 
-            const creatorId = getCreatorId(post);
-            if (creatorId && blocked.has(creatorId)) continue;
+            for (const it of resp?.items || []) {
+              const post = (it as any)?.post;
+              const postId = post?.$id;
+              if (!postId) continue;
 
-            if (servedPostIdsRef.current.has(postId)) continue;
-            servedPostIdsRef.current.add(postId);
+              const creatorId = getCreatorId(post);
+              if (creatorId && blocked.has(creatorId)) continue;
 
-            metaByPostId.set(postId, {
-              feedItemId: (it as any)?.feed_item_id,
-              source: (it as any)?.source,
-              rankPosition: (it as any)?.rank_position,
-              score: (it as any)?.score,
-              reasonCodes: (it as any)?.reason_codes,
-            });
+              if (servedPostIdsRef.current.has(postId)) continue;
+              servedPostIdsRef.current.add(postId);
 
-            serverPosts.push({
-              _id: postId,
-              type: "post",
-              data: post,
-            } as any);
-          }
+              metaByPostId.set(postId, {
+                feedItemId: (it as any)?.feed_item_id,
+                source: (it as any)?.source,
+                rankPosition: (it as any)?.rank_position,
+                score: (it as any)?.score,
+                reasonCodes: (it as any)?.reason_codes,
+              });
 
-          // Inject specials with the same cadence as before
-          const pageMixed = injectSpecials(serverPosts, specialPoolRef.current);
+              rawPostsById.set(postId, post);
+              orderedPostIds.push(postId);
+            }
 
-          const enrichedFeed = pageMixed.map((item, index) => {
+            // Hydrate creators so PostItem can render usernames/avatars.
+            const hydratedPosts = await hydratePostsWithUsers(
+              Array.from(rawPostsById.values()),
+            );
+            const hydratedById = new Map(
+              hydratedPosts.map((p: any) => [p?.$id, p]),
+            );
+
+            const serverPosts: FeedItem[] = orderedPostIds
+              .map((postId) => {
+                const post = hydratedById.get(postId) || rawPostsById.get(postId);
+                if (!post) return null;
+                return {
+                  _id: postId,
+                  type: "post",
+                  data: post,
+                } as any;
+              })
+              .filter(Boolean) as any;
+
+            // Inject specials with the same cadence as before
+            const pageMixed = injectSpecials(serverPosts, specialPoolRef.current);
+
+            const enrichedFeed = pageMixed.map((item, index) => {
             const e = toRankableFeedItem(item, index, "srv_init") as any;
             if (item.type === "post") {
               const postId = item.data?.$id;
@@ -312,17 +372,23 @@ export const useHomeFeedConstruction = ({
             return e as EnrichedFeedItem;
           });
 
-          // Keep Brain updated for session learning (but do NOT reorder Home in server mode).
-          const brainPostsOnly = enrichedFeed.filter((it) => it.type === "post");
-          MoodSessionManager.getInstance().initializeFeed(brainPostsOnly as any);
+            // Keep Brain updated for session learning (but do NOT reorder Home in server mode).
+            const brainPostsOnly = enrichedFeed.filter((it) => it.type === "post");
+            MoodSessionManager.getInstance().initializeFeed(brainPostsOnly as any);
 
-          if (isMounted.current) {
-            setSortedFeed(enrichedFeed);
+            if (isMounted.current) {
+              setSortedFeed(enrichedFeed);
+            }
+
+            serverOk = true;
           }
+        } catch (e) {
+          console.warn("[Mood] server feed init crashed; degrading to local feed", e);
+          setServerDegraded(true);
         } finally {
           if (isMounted.current) setServerLoading(false);
         }
-        return;
+        if (serverOk) return;
       }
 
       // 3) Build candidate pool (posts only)
@@ -453,6 +519,7 @@ export const useHomeFeedConstruction = ({
       const blocked = new Set(blockedUserIds || []);
       servedPostIdsRef.current = new Set();
       itemsMapRef.current.clear();
+      serverPrefetchRef.current = null;
 
       const resp = await getServerHomeFeedPage({
         limit: 20,
@@ -460,13 +527,22 @@ export const useHomeFeedConstruction = ({
         sessionId,
       });
 
+      if (!resp?.ok) {
+        console.warn("[Mood] server feed refresh failed; degrading to local feed", resp);
+        setServerDegraded(true);
+        return;
+      }
+
       serverNextCursorRef.current = resp?.next_cursor ?? null;
+      void prefetchServerNextPage();
       serverHasMoreRef.current = !!serverNextCursorRef.current;
       serverSnapshotIdRef.current = (resp as any)?.snapshot_id ?? null;
       serverCursorIdRef.current = (resp as any)?.cursor_id ?? null;
 
       const metaByPostId = new Map<string, any>();
-      const serverPosts: FeedItem[] = [];
+      const rawPostsById = new Map<string, any>();
+      const orderedPostIds: string[] = [];
+
       for (const it of resp?.items || []) {
         const post = (it as any)?.post;
         const postId = post?.$id;
@@ -486,12 +562,24 @@ export const useHomeFeedConstruction = ({
           reasonCodes: (it as any)?.reason_codes,
         });
 
-        serverPosts.push({
-          _id: postId,
-          type: "post",
-          data: post,
-        } as any);
+        rawPostsById.set(postId, post);
+        orderedPostIds.push(postId);
       }
+
+      const hydratedPosts = await hydratePostsWithUsers(Array.from(rawPostsById.values()));
+      const hydratedById = new Map(hydratedPosts.map((p: any) => [p?.$id, p]));
+
+      const serverPosts: FeedItem[] = orderedPostIds
+        .map((postId) => {
+          const post = hydratedById.get(postId) || rawPostsById.get(postId);
+          if (!post) return null;
+          return {
+            _id: postId,
+            type: "post",
+            data: post,
+          } as any;
+        })
+        .filter(Boolean) as any;
 
       const pageMixed = injectSpecials(serverPosts, specialPoolRef.current);
 
@@ -532,18 +620,37 @@ export const useHomeFeedConstruction = ({
       serverIsLoadingMoreRef.current = true;
       try {
         const sessionId = MoodSessionManager.getInstance().getSessionId();
-        const resp = await getServerHomeFeedPage({
-          limit: 20,
-          cursor: serverNextCursorRef.current,
-          sessionId,
-        });
+        const cursor = serverNextCursorRef.current;
+
+        let resp: any = null;
+        const pref = serverPrefetchRef.current;
+        if (pref && pref.cursor === cursor && pref.resp?.ok) {
+          resp = pref.resp;
+          serverPrefetchRef.current = null;
+        } else {
+          resp = await getServerHomeFeedPage({
+            limit: 20,
+            cursor,
+            sessionId,
+          });
+        }
+
+        if (!resp?.ok) {
+          console.warn("[Mood] server feed loadMore failed; degrading to local feed", resp);
+          setServerDegraded(true);
+          serverHasMoreRef.current = false;
+          serverNextCursorRef.current = null;
+          return;
+        }
 
         serverNextCursorRef.current = resp?.next_cursor ?? null;
+        void prefetchServerNextPage();
         serverHasMoreRef.current = !!serverNextCursorRef.current;
 
         const blocked = new Set(blockedUserIds || []);
         const metaByPostId = new Map<string, any>();
-        const newPosts: FeedItem[] = [];
+        const rawPostsById = new Map<string, any>();
+        const orderedPostIds: string[] = [];
 
         for (const it of resp?.items || []) {
           const post = (it as any)?.post;
@@ -564,12 +671,24 @@ export const useHomeFeedConstruction = ({
             reasonCodes: (it as any)?.reason_codes,
           });
 
-          newPosts.push({
-            _id: postId,
-            type: "post",
-            data: post,
-          } as any);
+          rawPostsById.set(postId, post);
+          orderedPostIds.push(postId);
         }
+
+        const hydratedPosts = await hydratePostsWithUsers(Array.from(rawPostsById.values()));
+        const hydratedById = new Map(hydratedPosts.map((p: any) => [p?.$id, p]));
+
+        const newPosts: FeedItem[] = orderedPostIds
+          .map((postId) => {
+            const post = hydratedById.get(postId) || rawPostsById.get(postId);
+            if (!post) return null;
+            return {
+              _id: postId,
+              type: "post",
+              data: post,
+            } as any;
+          })
+          .filter(Boolean) as any;
 
         if (newPosts.length === 0) return;
 

@@ -118,6 +118,47 @@ async function populatePostsWithUsersAndCounts(posts: any[]) {
 }
 
 /**
+ * Server-feed helper: hydrate only creator user objects.
+ *
+ * Why:
+ * - Appwrite relationship attributes often return only the related document ID.
+ * - UI components (e.g. PostItem) expect post.postedBy to be a user object.
+ *
+ * This keeps parity with the local feed behavior without adding extra work
+ * (like comments counting) to server-driven Home.
+ */
+export async function hydratePostsWithUsers(posts: any[]) {
+  const safePosts = Array.isArray(posts) ? posts : [];
+  if (safePosts.length === 0) return [];
+
+  const creatorIds: string[] = [];
+  for (const post of safePosts) {
+    let postedBy: any = post?.postedBy;
+    if (Array.isArray(postedBy) && postedBy.length > 0) postedBy = postedBy[0];
+    if (typeof postedBy === "string" && postedBy) creatorIds.push(postedBy);
+  }
+
+  const usersMap = await getUsersByIds(creatorIds);
+
+  return safePosts.map((post) => {
+    let userData: any = post?.postedBy;
+    if (Array.isArray(userData) && userData.length > 0) userData = userData[0];
+
+    if (typeof userData === "string") {
+      userData = usersMap[userData] ?? null;
+    }
+
+    // If we can't hydrate (missing/banned user), keep original value so UI falls back safely.
+    if (!userData) return post;
+
+    return {
+      ...post,
+      postedBy: userData,
+    };
+  });
+}
+
+/**
  * Paginated feed: 1 request for posts + 1 batched users fetch + 1 batched comments fetch
  * (still a massive reduction vs N+1).
  */

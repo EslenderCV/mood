@@ -109,8 +109,10 @@ export class SeenStateStore {
     e.lastSeenAt = ts;
 
     // Heuristic thresholds (Phase-2)
-    if (safeDwell < 1200) e.skipFastCount += 1;
-    else e.skipCount += 1;
+    // - <700ms: fast skip (strong negative)
+    // - 700..1200ms: skip
+    if (safeDwell < 700) e.skipFastCount += 1;
+    else if (safeDwell < 1200) e.skipCount += 1;
 
     this.posts.set(postId, e);
     this.schedulePersist();

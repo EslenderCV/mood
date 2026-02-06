@@ -31,7 +31,15 @@ export class MoodSessionManager {
   /** Subscribe to feed reorders (tail reshuffles). */
   public subscribeFeed(listener: () => void): () => void {
     this.feedListeners.add(listener);
-    return () => this.feedListeners.delete(listener);
+    return () => {
+      this.feedListeners.delete(listener);
+
+      // If nobody is listening for feed reorders, stop doing work.
+      if (this.feedListeners.size === 0 && this.reorderTimeout) {
+        clearTimeout(this.reorderTimeout);
+        this.reorderTimeout = null;
+      }
+    };
   }
 
   /** Subscribe to session state changes (vector/latent updates). */
@@ -221,6 +229,10 @@ export class MoodSessionManager {
   // --- RANKING ---
 
   private scheduleReorder(): void {
+    // No UI consumer => do not waste CPU doing tail reorders in the background.
+    // This is especially important when server feed is the source of truth.
+    if (this.feedListeners.size === 0) return;
+
     if (this.reorderTimeout) clearTimeout(this.reorderTimeout);
     this.reorderTimeout = setTimeout(() => {
       this.performReorder();

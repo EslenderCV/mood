@@ -16,6 +16,7 @@ export type ServerFeedResponse = {
   next_cursor: string | null;
   cursor_id?: string;
   snapshot_id?: string;
+  snapshot_expires_at?: string; // ISO
 };
 
 const parseExecutionJson = (exec: any): any => {
@@ -78,12 +79,21 @@ export const getServerHomeFeedPage = async ({
   );
 
   const json = parseExecutionJson(exec);
-  if (!json) {
-    logger.warn("server feed: execution returned non-json", { exec });
-    throw new Error("Server feed execution returned non-json");
+  if (json) {
+    return json as ServerFeedResponse;
   }
 
-  return json as ServerFeedResponse;
+  // Never crash the client if the server function fails or returns empty output.
+  // Return an "ok:false" response and let the feed layer fallback to local mode.
+  const status = exec?.responseStatusCode ?? exec?.statusCode ?? null;
+  const err = exec?.errors || exec?.stderr || exec?.logs || null;
+  logger.warn("server feed: execution returned non-json", { status, err });
+
+  return {
+    ok: false,
+    items: [],
+    next_cursor: null,
+  };
 };
 
 export type FeedEventInput = {
@@ -95,6 +105,7 @@ export type FeedEventInput = {
     | "view_start"
     | "view_end"
     | "dwell"
+    | "skip_fast"
     | "skip"
     | "like"
     | "save"

@@ -32,7 +32,8 @@ const rewardFor = (event: FeedEventType, durationMs?: number): number => {
 
   // view-based reward
   const d = Math.max(0, durationMs || 0);
-  if (event === "skip") return d < 800 ? -0.35 : -0.20;
+  if (event === "skip_fast") return -0.45;
+  if (event === "skip") return -0.25;
   if (event === "dwell") {
     // 1.2s => ~0.10, 8s => ~0.35
     return Math.min(0.35, 0.06 + d / 22000);
@@ -199,7 +200,8 @@ export const useFeedTelemetry = ({
 
       enqueueEvent("view_end", prev.postId, prev.feedItemId, duration, prev.anchorIndex, prev.creatorId);
 
-      const eventType: FeedEventType = duration < 1200 ? "skip" : "dwell";
+      const eventType: FeedEventType =
+        duration < 700 ? "skip_fast" : duration < 1200 ? "skip" : "dwell";
       enqueueEvent(eventType, prev.postId, prev.feedItemId, duration, prev.anchorIndex, prev.creatorId);
 
       // Seen-state (Phase-2: impressions + dwell/skip)

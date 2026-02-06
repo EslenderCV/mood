@@ -23,6 +23,7 @@ export type FeedEventType =
   | "view_start"
   | "view_end"
   | "dwell"
+  | "skip_fast"
   | "skip"
   | "like"
   | "save"
