@@ -128,6 +128,7 @@ export const useHomeLogic = () => {
     trackOpenProfile,
     trackFollow,
     updateViewableIndex,
+    updateViewableItem,
     flushQueue,
   } = useFeedTelemetry({ userId, sortedFeedRef, lastAnchorRef, currentAnchorRef });
 
@@ -144,17 +145,24 @@ export const useHomeLogic = () => {
     isMounted,
   });
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     realtimePostsCacheRef.current = [];
+
+    if (serverMode) {
+      await refreshServerFeed();
+      void fetchAuxiliaryData(true);
+      return;
+    }
+
     refreshFeed();
     void fetchAuxiliaryData(true);
-  }, [refreshFeed, fetchAuxiliaryData]);
+  }, [serverMode, refreshServerFeed, refreshFeed, fetchAuxiliaryData]);
 
   // --- Realtime (counts + my new posts) ---
   useHomeRealtime({ userId, user, fetchCounts, setSortedFeed, realtimePostsCacheRef });
 
   // --- Feed construction & pagination (extracted) ---
-  const { handleLoadMore } = useHomeFeedConstruction({
+  const { handleLoadMore, refreshServerFeed, serverLoading, serverRefreshing, serverMode } = useHomeFeedConstruction({
     feed,
     userId,
     myFollowedIds,
@@ -377,8 +385,8 @@ export const useHomeLogic = () => {
 
   return {
     user,
-    isFeedLoading,
-    isRefreshing,
+    isFeedLoading: serverMode ? serverLoading : isFeedLoading,
+    isRefreshing: serverMode ? serverRefreshing : isRefreshing,
     onRefresh,
     sortedFeed,
     setSortedFeed,
@@ -415,6 +423,7 @@ export const useHomeLogic = () => {
     openShareSelector,
     openShare,
     updateViewableIndex,
+    updateViewableItem,
     trackLike,
     trackSave,
     trackShare,

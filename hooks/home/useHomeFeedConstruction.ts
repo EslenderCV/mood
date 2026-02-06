@@ -1,18 +1,42 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { MoodSessionManager } from "@/src/brain/session/MoodSessionManager";
 import { FeedItem } from "@/context/FeedProvider";
+import { getFeedPage, getServerHomeFeedPage, isServerHomeFeedEnabled } from "@/lib/appwrite";
+import { MoodSessionManager } from "@/src/brain/session/MoodSessionManager";
+
+import { SeenStateStore } from "@/src/feed/seen/SeenStateStore";
+import { MixBandit } from "@/src/feed/brain/MixBandit";
+import { HomeFeedBrain } from "@/src/feed/brain/HomeFeedBrain";
+
 import {
   EnrichedFeedItem,
-  shuffleArray,
   toRankableFeedItem,
+  shuffleArray,
 } from "./homeTypes";
+
+const getCreatorId = (post: any): string => {
+  return (
+    post?.creator?.$id ||
+    post?.postedBy?.$id ||
+    post?.users?.[0]?.$id ||
+    post?.userId ||
+    "unknown"
+  );
+};
+
+const getPostDateMs = (post: any): number => {
+  const t = post?.originalTime || post?.$createdAt || 0;
+  const d = new Date(t).getTime();
+  return Number.isFinite(d) ? d : 0;
+};
 
 export const useHomeFeedConstruction = ({
   feed,
   userId,
   myFollowedIds,
   blockedUserIds,
+    serverMode,
+    getServerHomeFeedPage,
   smartSuggestions,
   setSortedFeed,
   sortedFeedRef,
@@ -37,6 +61,7 @@ export const useHomeFeedConstruction = ({
   sortedFeedRef: React.MutableRefObject<EnrichedFeedItem[]>;
   realtimePostsCacheRef: React.MutableRefObject<EnrichedFeedItem[]>;
   itemsMapRef: React.MutableRefObject<Map<string, EnrichedFeedItem>>;
+  // legacy refs (kept for minimal surface change)
   postsPoolRef: React.MutableRefObject<FeedItem[]>;
   specialPoolRef: React.MutableRefObject<FeedItem[]>;
   postCursorRef: React.MutableRefObject<number>;
@@ -47,181 +72,671 @@ export const useHomeFeedConstruction = ({
   currentAnchorRef: React.MutableRefObject<any>;
   isMounted: React.MutableRefObject<boolean>;
 }) => {
-  useEffect(() => {
-    if (!feed || feed.length === 0 || !userId) {
-      if (
-        isMounted.current &&
-        sortedFeedRef.current.length > 0 &&
-        (!feed || feed.length === 0)
-      ) {
-        setSortedFeed([]);
+  const servedPostIdsRef = useRef<Set<string>>(new Set());
+  const poolIdsRef = useRef<Set<string>>(new Set());
+  const candidatePoolRef = useRef<FeedItem[]>([]);
+  const nextCursorRef = useRef<string | null>(null);
+  const hasMoreRef = useRef<boolean>(true);
+  const isLoadingMoreRef = useRef<boolean>(false);
+
+  const serverMode = isServerHomeFeedEnabled();
+  const [serverLoading, setServerLoading] = useState<boolean>(false);
+  const [serverRefreshing, setServerRefreshing] = useState<boolean>(false);
+  const serverNextCursorRef = useRef<string | null>(null);
+  const serverHasMoreRef = useRef<boolean>(true);
+  const serverIsLoadingMoreRef = useRef<boolean>(false);
+  const serverSnapshotIdRef = useRef<string | null>(null);
+  const serverCursorIdRef = useRef<string | null>(null);
+
+
+  const seenStore = SeenStateStore.getInstance();
+  const bandit = MixBandit.getInstance();
+
+  const addCandidatesToPool = useCallback(
+    (posts: any[]) => {
+      if (!posts || posts.length === 0) return;
+      const blocked = new Set(blockedUserIds || []);
+
+      const toAdd: FeedItem[] = [];
+      for (const post of posts) {
+        if (!post?.$id) continue;
+        const creatorId = getCreatorId(post);
+        if (creatorId && blocked.has(creatorId)) continue;
+        if (servedPostIdsRef.current.has(post.$id)) continue;
+        if (poolIdsRef.current.has(post.$id)) continue;
+
+        const item: FeedItem = {
+          _id: post.$id,
+          type: "post",
+          data: post,
+          status: "published",
+        };
+        toAdd.push(item);
+        poolIdsRef.current.add(post.$id);
       }
-      return;
-    }
 
-    // Reset session state for a brand-new feed build
-    lastAnchorRef.current = -1;
-    lastOrderHashRef.current = "";
-    currentAnchorRef.current = null;
-    batchCounterRef.current = 0;
+      // Keep pool roughly in recency order for stability (brain still scores)
+      toAdd.sort((a, b) => getPostDateMs(b.data) - getPostDateMs(a.data));
 
-    const specials: FeedItem[] = [];
-    const priorityPosts: FeedItem[] = [];
-    const discoveryPosts: FeedItem[] = [];
-    const generalPool: FeedItem[] = [];
+      candidatePoolRef.current = [...candidatePoolRef.current, ...toAdd];
+      postsPoolRef.current = candidatePoolRef.current; // legacy alias
+    },
+    [blockedUserIds, postsPoolRef],
+  );
 
-    const FRESHNESS_THRESHOLD = 48 * 60 * 60 * 1000;
-    const now = Date.now();
+  const buildEnrichedPage = useCallback(
+    (pageItems: FeedItem[], metaByPostId: Map<string, any>, batchSuffix: string) => {
+      const startIndex = sortedFeedRef.current.length;
+      const enriched = pageItems.map((it, idx) => {
+        const e = toRankableFeedItem(it, startIndex + idx, batchSuffix) as any;
 
-    const blocked = new Set(blockedUserIds || []);
-
-    feed.forEach((item) => {
-      if (item.type === "suggested_users") return;
-      if (item.type !== "post") {
-        specials.push(item);
-        return;
-      }
-
-      const post = item.data;
-      const creatorId =
-        post.creator?.$id ||
-        post.postedBy?.$id ||
-        post.users?.[0]?.$id ||
-        post.userId;
-
-      const isMyPost = creatorId === userId;
-
-      // ✅ Trust & safety baseline: if I blocked this user, I should never see their content.
-      if (creatorId && blocked.has(creatorId)) return;
-      const postDate = new Date(
-        post.originalTime || post.$createdAt || 0,
-      ).getTime();
-      const isRecent = now - postDate < FRESHNESS_THRESHOLD;
-      const likedBy = post.likedBy || [];
-      const savedBy = post.savedBy || [];
-      const hasInteracted =
-        likedBy.includes(userId) || savedBy.includes(userId);
-
-      if (isRecent && !hasInteracted) {
-        if (myFollowedIds.includes(creatorId) || isMyPost)
-          priorityPosts.push(item);
-        else discoveryPosts.push(item);
-      } else {
-        generalPool.push(item);
-      }
-    });
-
-    // Inject smart suggestions as separate modules
-    if (smartSuggestions.length >= 3) {
-      const USERS_PER_CHUNK = 5;
-      for (let i = 0; i < smartSuggestions.length; i += USERS_PER_CHUNK) {
-        const chunk = smartSuggestions.slice(i, i + USERS_PER_CHUNK);
-        if (chunk.length >= 3) {
-          specials.push({
-            _id: `smart_sugg_${i}`,
-            type: "suggested_users",
-            data: chunk,
-          });
+        if (it.type === "post") {
+          const postId = it.data?.$id;
+          const meta = postId ? metaByPostId.get(postId) : undefined;
+          if (meta) {
+            e.feedSource = meta.source;
+            e.reasonCodes = meta.reasonCodes;
+            e.rankScore = meta.score;
+          }
         }
-      }
-    }
 
-    priorityPosts.sort(
-      (a, b) =>
-        new Date(b.data.$createdAt).getTime() -
-        new Date(a.data.$createdAt).getTime(),
-    );
-    discoveryPosts.sort(
-      (a, b) =>
-        new Date(b.data.$createdAt).getTime() -
-        new Date(a.data.$createdAt).getTime(),
-    );
+        return e as EnrichedFeedItem;
+      });
 
-    const sortedPosts = [
-      ...priorityPosts,
-      ...discoveryPosts,
-      ...shuffleArray(generalPool),
-    ];
-    const shuffledSpecials = shuffleArray(specials);
+      enriched.forEach((it) => itemsMapRef.current.set(it.id, it));
+      return enriched;
+    },
+    [itemsMapRef, sortedFeedRef],
+  );
 
-    postsPoolRef.current = sortedPosts;
-    specialPoolRef.current = shuffledSpecials;
-    postCursorRef.current = 0;
-    specialCursorRef.current = 0;
+  const injectSpecials = useCallback((posts: FeedItem[], specials: FeedItem[]) => {
+    if (!specials || specials.length === 0) return posts;
 
-    const initialBatchSize = 20;
-    const initialPosts = postsPoolRef.current.slice(0, initialBatchSize);
-    postCursorRef.current = initialPosts.length % postsPoolRef.current.length;
-
+    // stable-ish insertion cadence; no cycling wrap-around
+    const out = [...posts];
     let insertIndex = 4;
     const GAP = 5;
 
-    while (
-      insertIndex < initialPosts.length &&
-      specialPoolRef.current.length > 0
-    ) {
-      const special = specialPoolRef.current[specialCursorRef.current];
-      initialPosts.splice(insertIndex, 0, special);
-      specialCursorRef.current =
-        (specialCursorRef.current + 1) % specialPoolRef.current.length;
+    while (insertIndex < out.length && specials.length > 0) {
+      const special = specials[specialCursorRef.current % specials.length];
+      out.splice(insertIndex, 0, special);
+      specialCursorRef.current += 1;
       insertIndex += GAP + 1;
     }
 
-    const enrichedFeed = initialPosts.map((item, index) =>
-      toRankableFeedItem(item, index, "init"),
-    );
+    return out;
+  }, [specialCursorRef]);
 
-    itemsMapRef.current.clear();
-    enrichedFeed.forEach((item) => itemsMapRef.current.set(item.id, item));
-    MoodSessionManager.getInstance().initializeFeed(enrichedFeed as any);
+  useEffect(() => {
+    void (async () => {
+      if (!feed || feed.length === 0 || !userId) {
+        if (
+          isMounted.current &&
+          sortedFeedRef.current.length > 0 &&
+          (!feed || feed.length === 0)
+        ) {
+          setSortedFeed([]);
+        }
+        return;
+      }
 
-    if (isMounted.current) {
-      const realtimePosts = realtimePostsCacheRef.current;
-      const feedIds = new Set(enrichedFeed.map((i) => (i as any).data?.$id));
-      const uniqueRealtime = realtimePosts.filter(
-        (rp) => !feedIds.has((rp as any).data?.$id),
+      // Reset session state for a brand-new feed build
+      lastAnchorRef.current = -1;
+      lastOrderHashRef.current = "";
+      currentAnchorRef.current = null;
+      batchCounterRef.current = 0;
+
+      // Reset pools
+      servedPostIdsRef.current = new Set();
+      poolIdsRef.current = new Set();
+      candidatePoolRef.current = [];
+      nextCursorRef.current = null;
+      hasMoreRef.current = true;
+      isLoadingMoreRef.current = false;
+
+      await Promise.all([seenStore.ensureLoaded(userId), bandit.ensureLoaded(userId)]);
+
+      const blocked = new Set(blockedUserIds || []);
+
+      // 1) Separate specials and raw posts from provided feed (provider may have injected modules)
+      const specials: FeedItem[] = [];
+      const rawPosts: any[] = [];
+
+      for (const item of feed) {
+        if (!item) continue;
+        if (item.type !== "post") {
+          // Keep discovery modules, but don't let them influence ranking.
+          specials.push(item);
+          continue;
+        }
+
+        const post = item.data;
+        const creatorId = getCreatorId(post);
+
+        if (creatorId && blocked.has(creatorId)) continue;
+        rawPosts.push(post);
+      }
+
+      // 2) Inject smart suggestions as separate modules (existing behavior)
+      if (smartSuggestions.length >= 3) {
+        const USERS_PER_CHUNK = 5;
+        for (let i = 0; i < smartSuggestions.length; i += USERS_PER_CHUNK) {
+          const chunk = smartSuggestions.slice(i, i + USERS_PER_CHUNK);
+          if (chunk.length >= 3) {
+            specials.push({
+              _id: `smart_sugg_${i}`,
+              type: "suggested_users",
+              data: chunk,
+            });
+          }
+        }
+      }
+
+      // Shuffle specials lightly (same as before)
+      const shuffledSpecials = shuffleArray(specials);
+      specialPoolRef.current = shuffledSpecials;
+      specialCursorRef.current = 0;
+
+      // --- Server mode: backend source of truth for Home feed ---
+      if (serverMode) {
+        setServerLoading(true);
+        try {
+          const sessionId = MoodSessionManager.getInstance().getSessionId();
+
+          // Reset server paging
+          serverNextCursorRef.current = null;
+          serverHasMoreRef.current = true;
+          serverSnapshotIdRef.current = null;
+          serverCursorIdRef.current = null;
+
+          // Reset local pools / dedupe for a clean top-of-feed
+          servedPostIdsRef.current = new Set();
+          itemsMapRef.current.clear();
+
+          const resp = await getServerHomeFeedPage({
+            limit: 20,
+            cursor: null,
+            sessionId,
+          });
+
+          serverNextCursorRef.current = resp?.next_cursor ?? null;
+          serverHasMoreRef.current = !!serverNextCursorRef.current;
+          serverSnapshotIdRef.current = (resp as any)?.snapshot_id ?? null;
+          serverCursorIdRef.current = (resp as any)?.cursor_id ?? null;
+
+          const metaByPostId = new Map<string, any>();
+          const serverPosts: FeedItem[] = [];
+          for (const it of resp?.items || []) {
+            const post = (it as any)?.post;
+            const postId = post?.$id;
+            if (!postId) continue;
+
+            const creatorId = getCreatorId(post);
+            if (creatorId && blocked.has(creatorId)) continue;
+
+            if (servedPostIdsRef.current.has(postId)) continue;
+            servedPostIdsRef.current.add(postId);
+
+            metaByPostId.set(postId, {
+              feedItemId: (it as any)?.feed_item_id,
+              source: (it as any)?.source,
+              rankPosition: (it as any)?.rank_position,
+              score: (it as any)?.score,
+              reasonCodes: (it as any)?.reason_codes,
+            });
+
+            serverPosts.push({
+              _id: postId,
+              type: "post",
+              data: post,
+            } as any);
+          }
+
+          // Inject specials with the same cadence as before
+          const pageMixed = injectSpecials(serverPosts, specialPoolRef.current);
+
+          const enrichedFeed = pageMixed.map((item, index) => {
+            const e = toRankableFeedItem(item, index, "srv_init") as any;
+            if (item.type === "post") {
+              const postId = item.data?.$id;
+              const meta = postId ? metaByPostId.get(postId) : undefined;
+              if (meta) {
+                e.feedItemId = meta.feedItemId;
+                e.feedSource = meta.source;
+                e.rankPosition = meta.rankPosition;
+                e.reasonCodes = meta.reasonCodes;
+                e.score = meta.score;
+              }
+            }
+            itemsMapRef.current.set(e.id, e);
+            return e as EnrichedFeedItem;
+          });
+
+          // Keep Brain updated for session learning (but do NOT reorder Home in server mode).
+          const brainPostsOnly = enrichedFeed.filter((it) => it.type === "post");
+          MoodSessionManager.getInstance().initializeFeed(brainPostsOnly as any);
+
+          if (isMounted.current) {
+            setSortedFeed(enrichedFeed);
+          }
+        } finally {
+          if (isMounted.current) setServerLoading(false);
+        }
+        return;
+      }
+
+      // 3) Build candidate pool (posts only)
+      addCandidatesToPool(rawPosts);
+
+      // Compute nextCursor from the oldest post in this initial candidate set
+      const sortedByCreated = [...rawPosts].sort(
+        (a, b) => getPostDateMs(b) - getPostDateMs(a),
       );
-      const finalFeed = [...uniqueRealtime, ...enrichedFeed];
-      setSortedFeed(finalFeed);
+      nextCursorRef.current =
+        sortedByCreated.length >= 60 ? sortedByCreated[sortedByCreated.length - 1]?.$id : null;
+
+      // 4) Rank top-of-feed (Phase-2 IG-like behavior)
+      const ranked = HomeFeedBrain.buildPage({
+        candidates: candidatePoolRef.current,
+        userId,
+        myFollowedIds,
+        servedPostIds: servedPostIdsRef.current,
+        pageSize: 20,
+        isTopOfFeed: true,
+        seen: seenStore,
+        bandit,
+        session: MoodSessionManager.getInstance(),
+      });
+
+      const metaByPostId = new Map<string, any>();
+      const selectedPosts: FeedItem[] = [];
+      for (const r of ranked) {
+        metaByPostId.set(r.postId, r);
+        selectedPosts.push(r.item);
+        servedPostIdsRef.current.add(r.postId);
+      }
+
+      // Remove selected from pool for future paging
+      const selectedSet = new Set(ranked.map((r) => r.postId));
+      candidatePoolRef.current = candidatePoolRef.current.filter((it) => {
+        if (it.type !== "post") return false;
+        const pid = it.data?.$id;
+        return pid && !selectedSet.has(pid);
+      });
+      postsPoolRef.current = candidatePoolRef.current;
+
+      // 5) Inject specials into the page (modules locked later by Brain sync)
+      const pageMixed = injectSpecials(selectedPosts, specialPoolRef.current);
+
+      // 6) Enrich + initialize Brain with POSTS only
+      itemsMapRef.current.clear();
+      const enrichedFeed = pageMixed.map((item, index) => {
+        const e = toRankableFeedItem(item, index, "init") as any;
+        if (item.type === "post") {
+          const postId = item.data?.$id;
+          const meta = postId ? metaByPostId.get(postId) : undefined;
+          if (meta) {
+            e.feedSource = meta.source;
+            e.reasonCodes = meta.reasonCodes;
+            e.rankScore = meta.score;
+          }
+        }
+        itemsMapRef.current.set(e.id, e);
+        return e as EnrichedFeedItem;
+      });
+
+      const brainPostsOnly = enrichedFeed.filter((it) => it.type === "post");
+      MoodSessionManager.getInstance().initializeFeed(brainPostsOnly as any);
+
+      // 7) Merge realtime posts at top (dedupe by postId)
+      if (isMounted.current) {
+        const realtimePosts = realtimePostsCacheRef.current || [];
+        const feedPostIds = new Set(
+          enrichedFeed.filter((i) => i.type === "post").map((i: any) => i.data?.$id),
+        );
+
+        const uniqueRealtime = realtimePosts.filter((rp: any) => {
+          const pid = rp?.data?.$id;
+          return pid && !feedPostIds.has(pid);
+        });
+
+        const finalFeed = [...uniqueRealtime, ...enrichedFeed];
+        setSortedFeed(finalFeed);
+      }
+    })();
+  }, [
+    feed,
+    myFollowedIds,
+    userId,
+    smartSuggestions,
+    blockedUserIds,
+    addCandidatesToPool,
+    injectSpecials,
+    setSortedFeed,
+    sortedFeedRef,
+    realtimePostsCacheRef,
+    itemsMapRef,
+    specialPoolRef,
+    specialCursorRef,
+    batchCounterRef,
+    lastAnchorRef,
+    lastOrderHashRef,
+    currentAnchorRef,
+    isMounted,
+    seenStore,
+    bandit,
+  ]);
+
+  const fetchMoreIfNeeded = useCallback(async () => {
+    if (!userId) return;
+    if (!hasMoreRef.current) return;
+    if (!nextCursorRef.current) {
+      hasMoreRef.current = false;
+      return;
     }
-  }, [feed, myFollowedIds, userId, smartSuggestions, blockedUserIds]);
 
-  const handleLoadMore = useCallback(() => {
-    if (postsPoolRef.current.length === 0) return;
+    const res = await getFeedPage({ limit: 60, cursorAfter: nextCursorRef.current });
+    const posts = res?.posts || [];
+    addCandidatesToPool(posts);
 
-    batchCounterRef.current += 1;
-    const batchSuffix = `batch_${batchCounterRef.current}`;
+    nextCursorRef.current = res?.nextCursor || null;
+    if (!nextCursorRef.current) hasMoreRef.current = false;
+  }, [addCandidatesToPool, userId]);
 
-    const newBatch: FeedItem[] = [];
-    for (let i = 0; i < 10; i++) {
-      const item = postsPoolRef.current[postCursorRef.current];
-      newBatch.push(item);
-      postCursorRef.current =
-        (postCursorRef.current + 1) % postsPoolRef.current.length;
+  const refreshServerFeed = useCallback(async () => {
+    if (!serverMode || !userId) return;
+
+    setServerRefreshing(true);
+    try {
+      const sessionId = MoodSessionManager.getInstance().getSessionId();
+
+      const blocked = new Set(blockedUserIds || []);
+      servedPostIdsRef.current = new Set();
+      itemsMapRef.current.clear();
+
+      const resp = await getServerHomeFeedPage({
+        limit: 20,
+        cursor: null,
+        sessionId,
+      });
+
+      serverNextCursorRef.current = resp?.next_cursor ?? null;
+      serverHasMoreRef.current = !!serverNextCursorRef.current;
+      serverSnapshotIdRef.current = (resp as any)?.snapshot_id ?? null;
+      serverCursorIdRef.current = (resp as any)?.cursor_id ?? null;
+
+      const metaByPostId = new Map<string, any>();
+      const serverPosts: FeedItem[] = [];
+      for (const it of resp?.items || []) {
+        const post = (it as any)?.post;
+        const postId = post?.$id;
+        if (!postId) continue;
+
+        const creatorId = getCreatorId(post);
+        if (creatorId && blocked.has(creatorId)) continue;
+
+        if (servedPostIdsRef.current.has(postId)) continue;
+        servedPostIdsRef.current.add(postId);
+
+        metaByPostId.set(postId, {
+          feedItemId: (it as any)?.feed_item_id,
+          source: (it as any)?.source,
+          rankPosition: (it as any)?.rank_position,
+          score: (it as any)?.score,
+          reasonCodes: (it as any)?.reason_codes,
+        });
+
+        serverPosts.push({
+          _id: postId,
+          type: "post",
+          data: post,
+        } as any);
+      }
+
+      const pageMixed = injectSpecials(serverPosts, specialPoolRef.current);
+
+      const enrichedFeed = pageMixed.map((item, index) => {
+        const e = toRankableFeedItem(item, index, "srv_init") as any;
+        if (item.type === "post") {
+          const postId = item.data?.$id;
+          const meta = postId ? metaByPostId.get(postId) : undefined;
+          if (meta) {
+            e.feedItemId = meta.feedItemId;
+            e.feedSource = meta.source;
+            e.rankPosition = meta.rankPosition;
+            e.reasonCodes = meta.reasonCodes;
+            e.score = meta.score;
+          }
+        }
+        itemsMapRef.current.set(e.id, e);
+        return e as EnrichedFeedItem;
+      });
+
+      const brainPostsOnly = enrichedFeed.filter((it) => it.type === "post");
+      MoodSessionManager.getInstance().initializeFeed(brainPostsOnly as any);
+
+      setSortedFeed(enrichedFeed);
+    } finally {
+      setServerRefreshing(false);
     }
+  }, [serverMode, userId, blockedUserIds, setSortedFeed]);
 
-    if (specialPoolRef.current.length > 0) {
-      const special = specialPoolRef.current[specialCursorRef.current];
-      if (newBatch.length >= 5) newBatch.splice(4, 0, special);
-      else newBatch.push(special);
+  const handleLoadMore = useCallback(async () => {
+    if (!userId) return;
 
-      specialCursorRef.current =
-        (specialCursorRef.current + 1) % specialPoolRef.current.length;
+    // Server mode pagination (backend ranked pages)
+    if (serverMode) {
+      if (serverIsLoadingMoreRef.current) return;
+      if (!serverHasMoreRef.current) return;
+
+      serverIsLoadingMoreRef.current = true;
+      try {
+        const sessionId = MoodSessionManager.getInstance().getSessionId();
+        const resp = await getServerHomeFeedPage({
+          limit: 20,
+          cursor: serverNextCursorRef.current,
+          sessionId,
+        });
+
+        serverNextCursorRef.current = resp?.next_cursor ?? null;
+        serverHasMoreRef.current = !!serverNextCursorRef.current;
+
+        const blocked = new Set(blockedUserIds || []);
+        const metaByPostId = new Map<string, any>();
+        const newPosts: FeedItem[] = [];
+
+        for (const it of resp?.items || []) {
+          const post = (it as any)?.post;
+          const postId = post?.$id;
+          if (!postId) continue;
+
+          const creatorId = getCreatorId(post);
+          if (creatorId && blocked.has(creatorId)) continue;
+
+          if (servedPostIdsRef.current.has(postId)) continue;
+          servedPostIdsRef.current.add(postId);
+
+          metaByPostId.set(postId, {
+            feedItemId: (it as any)?.feed_item_id,
+            source: (it as any)?.source,
+            rankPosition: (it as any)?.rank_position,
+            score: (it as any)?.score,
+            reasonCodes: (it as any)?.reason_codes,
+          });
+
+          newPosts.push({
+            _id: postId,
+            type: "post",
+            data: post,
+          } as any);
+        }
+
+        if (newPosts.length === 0) return;
+
+        batchCounterRef.current += 1;
+        const batchSuffix = `srv_batch_${batchCounterRef.current}`;
+
+        // Keep same cadence: optionally insert 1 special at position 4 of this batch
+        const batchMixed: FeedItem[] = [...newPosts];
+        if (specialPoolRef.current.length > 0) {
+          const special =
+            specialPoolRef.current[specialCursorRef.current % specialPoolRef.current.length];
+          if (batchMixed.length >= 5) batchMixed.splice(4, 0, special);
+          else batchMixed.push(special);
+          specialCursorRef.current += 1;
+        }
+
+        const currentLen = sortedFeedRef.current.length;
+        const enrichedBatch: EnrichedFeedItem[] = [];
+        for (let idx = 0; idx < batchMixed.length; idx++) {
+          const it = batchMixed[idx];
+          const e = toRankableFeedItem(it, currentLen + idx, batchSuffix) as any;
+          if (it.type === "post") {
+            const postId = it.data?.$id;
+            const meta = postId ? metaByPostId.get(postId) : undefined;
+            if (meta) {
+              e.feedItemId = meta.feedItemId;
+              e.feedSource = meta.source;
+              e.rankPosition = meta.rankPosition;
+              e.reasonCodes = meta.reasonCodes;
+              e.score = meta.score;
+            }
+          }
+          itemsMapRef.current.set(e.id, e);
+          enrichedBatch.push(e as EnrichedFeedItem);
+        }
+
+        // Keep Brain updated for learning (posts only)
+        const mgr = MoodSessionManager.getInstance();
+        const currentBrain = mgr.getFeed() || [];
+        const newBrainPosts = enrichedBatch.filter((it) => it.type === "post");
+        mgr.initializeFeed([...currentBrain, ...newBrainPosts] as any);
+
+        setSortedFeed((prev) => [...prev, ...enrichedBatch]);
+      } finally {
+        serverIsLoadingMoreRef.current = false;
+      }
+      return;
     }
+    if (isLoadingMoreRef.current) return;
+    isLoadingMoreRef.current = true;
 
-    const startIndex = sortedFeedRef.current.length;
-    const enrichedBatch = newBatch.map((item, idx) =>
-      toRankableFeedItem(item, startIndex + idx, batchSuffix),
-    );
+    try {
+      await Promise.all([seenStore.ensureLoaded(userId), bandit.ensureLoaded(userId)]);
 
-    enrichedBatch.forEach((item) => itemsMapRef.current.set(item.id, item));
+      // Ensure enough candidates
+      if (candidatePoolRef.current.length < 18 && hasMoreRef.current) {
+        await fetchMoreIfNeeded();
+      }
 
-    const currentBrainFeed = MoodSessionManager.getInstance().getFeed();
-    const fullList = [...currentBrainFeed, ...enrichedBatch];
-    MoodSessionManager.getInstance().initializeFeed(fullList as any);
+      if (candidatePoolRef.current.length === 0) return;
 
-    setSortedFeed((prev) => [...prev, ...enrichedBatch]);
-  }, []);
+      batchCounterRef.current += 1;
+      const batchSuffix = `batch_${batchCounterRef.current}`;
 
-  return { handleLoadMore };
+      const ranked = HomeFeedBrain.buildPage({
+        candidates: candidatePoolRef.current,
+        userId,
+        myFollowedIds,
+        servedPostIds: servedPostIdsRef.current,
+        pageSize: 10,
+        isTopOfFeed: false,
+        seen: seenStore,
+        bandit,
+        session: MoodSessionManager.getInstance(),
+      });
+
+      if (ranked.length === 0) {
+        // If everything was suppressed, try fetching more once
+        if (hasMoreRef.current) {
+          await fetchMoreIfNeeded();
+          const retry = HomeFeedBrain.buildPage({
+            candidates: candidatePoolRef.current,
+            userId,
+            myFollowedIds,
+            servedPostIds: servedPostIdsRef.current,
+            pageSize: 10,
+            isTopOfFeed: false,
+            seen: seenStore,
+            bandit,
+            session: MoodSessionManager.getInstance(),
+          });
+          if (retry.length === 0) return;
+          ranked.splice(0, ranked.length, ...retry);
+        } else {
+          return;
+        }
+      }
+
+      const metaByPostId = new Map<string, any>();
+      const newPosts: FeedItem[] = [];
+      for (const r of ranked) {
+        metaByPostId.set(r.postId, r);
+        newPosts.push(r.item);
+        servedPostIdsRef.current.add(r.postId);
+      }
+
+      const selectedSet = new Set(ranked.map((r) => r.postId));
+      candidatePoolRef.current = candidatePoolRef.current.filter((it) => {
+        const pid = it.data?.$id;
+        return pid && !selectedSet.has(pid);
+      });
+      postsPoolRef.current = candidatePoolRef.current;
+
+      // Insert 1 special around position 4 (same cadence as before)
+      const batchMixed: FeedItem[] = [...newPosts];
+      if (specialPoolRef.current.length > 0) {
+        const special = specialPoolRef.current[specialCursorRef.current % specialPoolRef.current.length];
+        if (batchMixed.length >= 5) batchMixed.splice(4, 0, special);
+        else batchMixed.push(special);
+        specialCursorRef.current += 1;
+      }
+
+      // Enrich
+      const enrichedBatch: EnrichedFeedItem[] = [];
+      const currentLen = sortedFeedRef.current.length;
+      for (let idx = 0; idx < batchMixed.length; idx++) {
+        const it = batchMixed[idx];
+        const e = toRankableFeedItem(it, currentLen + idx, batchSuffix) as any;
+        if (it.type === "post") {
+          const postId = it.data?.$id;
+          const meta = postId ? metaByPostId.get(postId) : undefined;
+          if (meta) {
+            e.feedSource = meta.source;
+            e.reasonCodes = meta.reasonCodes;
+            e.rankScore = meta.score;
+          }
+        }
+        itemsMapRef.current.set(e.id, e);
+        enrichedBatch.push(e as EnrichedFeedItem);
+      }
+
+      // Update Brain with POSTS only
+      const mgr = MoodSessionManager.getInstance();
+      const currentBrain = mgr.getFeed() || [];
+      const newBrainPosts = enrichedBatch.filter((it) => it.type === "post");
+      mgr.initializeFeed([...currentBrain, ...newBrainPosts] as any);
+
+      setSortedFeed((prev) => [...prev, ...enrichedBatch]);
+    } finally {
+      isLoadingMoreRef.current = false;
+    }
+  }, [
+    serverMode,
+    blockedUserIds,
+    userId,
+    myFollowedIds,
+    seenStore,
+    bandit,
+    fetchMoreIfNeeded,
+    batchCounterRef,
+    sortedFeedRef,
+    itemsMapRef,
+    specialPoolRef,
+    specialCursorRef,
+    postsPoolRef,
+    setSortedFeed,
+  ]);
+
+  return { handleLoadMore, refreshServerFeed, serverLoading, serverRefreshing, serverMode };
 };

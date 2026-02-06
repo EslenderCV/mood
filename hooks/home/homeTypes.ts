@@ -1,7 +1,23 @@
 import { FeedItem } from "@/context/FeedProvider";
 import { RankableItem } from "@/src/brain/ranking/ResonanceEngine";
 
-export type EnrichedFeedItem = FeedItem & RankableItem;
+export type FeedSource = "following" | "reco" | "trending" | "explore";
+
+export type EnrichedFeedItem = (FeedItem & RankableItem) & {
+  /**
+   * Server-side feed item id used for telemetry / debugging.
+   * UI keys remain stable via `id` (post_<postId>).
+   */
+  feedItemId?: string;
+  /** Source bucket chosen by mixture (server or local brain). */
+  feedSource?: FeedSource;
+  /** 0-based position in the ranked list produced by the server. */
+  rankPosition?: number;
+  /** Optional reason codes for debugging / analysis. */
+  reasonCodes?: string[];
+  /** Optional ranking score. */
+  score?: number;
+};
 
 export type FeedEventType =
   | "view_start"
@@ -16,6 +32,8 @@ export type FeedEventType =
   | "follow";
 
 export interface FeedEvent {
+  /** Stable id for dedupe (used by feed_events server function). */
+  eventId?: string;
   userId: string;
   postId: string;
   feedItemId: string;
@@ -47,18 +65,28 @@ export const toRankableFeedItem = (
   if (item.type === "post") {
     baseId = `post_${item.data?.$id || "unknown"}`;
   } else if (item.type === "trending_song") {
-    const safeId = item.data?.id || item.data?.title?.replace(/\s+/g, "") || "unknown";
+    const safeId =
+      item.data?.id ||
+      item.data?.title?.replace(/\s+/g, "") ||
+      item._id ||
+      "unknown";
     baseId = `trending_${safeId}`;
   } else if (item.type === "suggested_users") {
     const idsHash = Array.isArray(item.data)
       ? item.data.map((u: any) => u.$id).join("").substring(0, 15)
-      : "generic";
+      : item._id || "generic";
     baseId = `suggested_${idsHash}`;
   } else {
-    baseId = `sys_${item.type}`;
+    baseId = `sys_${item.type}_${item._id || "unknown"}`;
   }
 
-  const stableId = `${baseId}__${batchSuffix}__${absoluteIndex}`;
+  // ✅ Key stability rule:
+  // - Posts: stable across rebuilds (critical for perf + brain continuity).
+  // - Modules/ads: can repeat; keep uniqueness per insertion.
+  const stableId =
+    item.type === "post"
+      ? baseId
+      : `${baseId}__${batchSuffix}__${absoluteIndex}`;
 
   let creatorId = "system";
   if (item.type === "post" && item.data) {

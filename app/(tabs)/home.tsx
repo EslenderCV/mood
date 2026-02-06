@@ -173,18 +173,31 @@ const Home = () => {
   }).current;
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      const validItems = viewableItems.filter(
-        (v) => v.isViewable && v.index !== null,
-      );
-      if (validItems.length === 0) return;
-      const minIndex = Math.min(...validItems.map((v) => v.index as number));
-      logicRef.current.updateViewableIndex(minIndex);
+      const validItems = viewableItems
+        .filter((v) => v.isViewable && v.index !== null)
+        .sort((a, b) => (a.index as number) - (b.index as number));
 
-      // 🎧 Prefetch del próximo preview (UX: play instantáneo)
+      if (validItems.length === 0) return;
+
+      const firstPostToken = validItems.find((v) => {
+        const it: any = v.item as any;
+        return it && it.type === "post" && typeof it.id === "string";
+      });
+
+      const anchorIndex = ((firstPostToken?.index ?? validItems[0].index) as number);
+
+      // ✅ Anchor by FEED ITEM ID (stable even with injected ads/modules)
+      if (firstPostToken?.item && typeof (firstPostToken.item as any).id === "string" && (logicRef.current as any).updateViewableItem) {
+        (logicRef.current as any).updateViewableItem((firstPostToken.item as any).id);
+      } else {
+        logicRef.current.updateViewableIndex(anchorIndex);
+      }
+
+// 🎧 Prefetch del próximo preview (UX: play instantáneo)
       try {
         const items = feedWithAdsRef.current || [];
         const uris: string[] = [];
-        for (let i = minIndex; i < items.length && uris.length < 2; i++) {
+        for (let i = anchorIndex; i < items.length && uris.length < 2; i++) {
           const it = items[i];
           if (!it || it.type !== "post") continue;
           const raw = it.data?.songData;

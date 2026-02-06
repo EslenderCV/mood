@@ -21,6 +21,18 @@ export const appwriteConfig = {
   playlistsCollectionId: "6959a8460009615dfbcb",
   storiesCollectionId: "69631b240013f47f559f",
   feedEventsCollectionId: "69728245001c3be9cfe9",
+
+  // ---- Server feed functions (Phase-3: backend source of truth) ----
+  // These default IDs are your deployed Appwrite Functions.
+  // You can override at build time using Expo public env vars:
+  // - EXPO_PUBLIC_SERVER_HOME_FEED=1
+  // - EXPO_PUBLIC_APPWRITE_FEED_FUNCTION_ID=...
+  // - EXPO_PUBLIC_APPWRITE_FEED_EVENTS_FUNCTION_ID=...
+  serverHomeFeed: {
+    enabled: true,
+    feedFunctionId: "69851d10000d231b66b3",
+    feedEventsFunctionId: "6985241c000f43efd797",
+  },
 };
 
 export const client = new Client();

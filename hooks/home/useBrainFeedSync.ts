@@ -11,12 +11,18 @@ type Args = {
 };
 
 /**
- * Sync Brain reorders (tail-only) into the Home FlatList state.
- * This is what makes personalization visible to the user without jumpiness.
+ * Sync Brain reorders into the Home FlatList state.
  *
- * Important: We keep *extras* (items unknown to the Brain, eg. realtime uploads) locked at the top.
+ * Phase-2 rule:
+ * - Brain only owns POSTS order.
+ * - Modules (suggested_users / trending_song / ads) must stay locked in their slots
+ *   to avoid jumping UX and to keep insertion cadence stable.
  */
-export const useBrainFeedSync = ({ setSortedFeed, sortedFeedRef, isMounted }: Args) => {
+export const useBrainFeedSync = ({
+  setSortedFeed,
+  sortedFeedRef,
+  isMounted,
+}: Args) => {
   const enableBrainRanking = useFlag("brainRankingHome");
   const lastAppliedHashRef = useRef<string>("");
 
@@ -39,18 +45,26 @@ export const useBrainFeedSync = ({ setSortedFeed, sortedFeedRef, isMounted }: Ar
       const map = new Map(current.map((it) => [it.id, it]));
       const brainSet = new Set(brainIds);
 
-      // Items not known to the Brain stay pinned at the top (stable UX).
-      const extras = current.filter((it) => !brainSet.has(it.id));
-
-      const reordered = brainIds
+      // Reordered POSTS list from brain
+      const reorderedPosts = brainIds
         .map((id) => map.get(id))
-        .filter(Boolean) as EnrichedFeedItem[];
+        .filter((it) => it && it.type === "post") as EnrichedFeedItem[];
 
-      // If something wasn't found (should be rare), keep it at the end.
-      const accounted = new Set([...extras.map((x) => x.id), ...reordered.map((x) => x.id)]);
-      const leftovers = current.filter((it) => !accounted.has(it.id));
+      // Any post not present in brain (eg. optimistic/realtime) keeps relative position at the end of posts
+      const remainingPosts = current.filter(
+        (it) => it.type === "post" && !brainSet.has(it.id),
+      );
 
-      const next = [...extras, ...reordered, ...leftovers];
+      const nextPosts = [...reorderedPosts, ...remainingPosts];
+
+      // Reconstruct full list with modules locked at their original indices
+      let postIdx = 0;
+      const next: EnrichedFeedItem[] = current.map((it) => {
+        if (it.type !== "post") return it;
+        const repl = nextPosts[postIdx];
+        postIdx += 1;
+        return repl || it;
+      });
 
       // Avoid state updates when order is identical.
       const same =

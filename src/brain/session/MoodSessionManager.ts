@@ -84,7 +84,12 @@ export class MoodSessionManager {
     return MoodSessionManager.instance;
   }
 
-  // --- INIT ---
+    /** Stable session id for tying feed + telemetry together. */
+  public getSessionId(): string {
+    return this.sessionId;
+  }
+
+// --- INIT ---
 
   public initializeFeed(items: RankableItem[]): void {
     this.buffer.setItems(items);

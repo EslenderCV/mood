@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { setDevPerfLogsEnabled } from "@/src/observability/runtime";
 import { getSafeModeUntilMs, isSafeModeActive } from "@/src/observability/crashLoop";
+import { isServerHomeFeedEnabled } from "@/lib/appwrite";
 import React, {
   createContext,
   useCallback,
@@ -181,5 +182,10 @@ export const useFlags = (): FlagsContextValue => {
 
 export const useFlag = (key: FlagKey): boolean => {
   const { flags } = useFlags();
+
+  // If Home feed is backend-ranked (server source of truth), never let the local Brain reorder
+  // the FlatList order. We still keep Brain for feature extraction / learning via telemetry.
+  if (key === "brainRankingHome" && isServerHomeFeedEnabled()) return false;
+
   return flags[key];
 };
