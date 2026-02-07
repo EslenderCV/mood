@@ -8,6 +8,7 @@ import PressableScale from "@/components/shared/PressableScale";
 import { MoodTag } from "@/components/posts/MoodTag";
 import StreakBadge from "@/components/StreakBadge";
 
+import { tStatic } from "@/context/LanguageContext";
 type Creator = {
   id: string;
   username: string;
@@ -71,7 +72,7 @@ export const PostHeader = ({
           hapticKind="selection"
           hitSlop={10}
           accessibilityLabel={`Abrir perfil de @${creator.username}`}
-          accessibilityHint="Ver el perfil del creador"
+          accessibilityHint={tStatic("ui.s_e61b48ef")}
         >
           <View
             className={`p-[2px] rounded-full border ${isDark ? "border-zinc-800" : "border-zinc-200"}`}
@@ -145,8 +146,8 @@ export const PostHeader = ({
         hapticKind="selection"
         hitSlop={10}
         className="p-2 -mr-2 opacity-60"
-        accessibilityLabel="Opciones del post"
-        accessibilityHint="Abre el menú de opciones"
+        accessibilityLabel={tStatic("ui.s_2dfa76c3")}
+        accessibilityHint={tStatic("ui.s_5315e19d")}
       >
         <Ionicons name="ellipsis-horizontal" size={20} color={subTextColor} />
       </PressableScale>

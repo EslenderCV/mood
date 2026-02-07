@@ -9,6 +9,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 
+import { tStatic } from "@/context/LanguageContext";
 interface TrackOptionsModalProps {
   visible: boolean;
   onClose: () => void;
@@ -58,9 +59,7 @@ export const TrackOptionsModal = ({
               </View>
 
               {/* Opciones */}
-              <Text className="text-zinc-500 font-bold mb-4 uppercase text-xs tracking-widest">
-                Crear contenido con esta música
-              </Text>
+              <Text className="text-zinc-500 font-bold mb-4 uppercase text-xs tracking-widest">{tStatic("ui.s_f1e99752")}</Text>
 
               <TouchableOpacity
                 onPress={onCreateStory}
@@ -70,12 +69,8 @@ export const TrackOptionsModal = ({
                   <Ionicons name="aperture" size={24} color="#A855F7" />
                 </View>
                 <View>
-                  <Text className="text-white font-bold text-base">
-                    Crear Historia
-                  </Text>
-                  <Text className="text-zinc-400 text-xs">
-                    Visible por 24 horas
-                  </Text>
+                  <Text className="text-white font-bold text-base">{tStatic("ui.s_ce308b4c")}</Text>
+                  <Text className="text-zinc-400 text-xs">{tStatic("ui.s_4059cd09")}</Text>
                 </View>
               </TouchableOpacity>
 
@@ -87,12 +82,8 @@ export const TrackOptionsModal = ({
                   <Ionicons name="images" size={24} color="#3B82F6" />
                 </View>
                 <View>
-                  <Text className="text-white font-bold text-base">
-                    Crear Publicación
-                  </Text>
-                  <Text className="text-zinc-400 text-xs">
-                    Para tu perfil y el feed
-                  </Text>
+                  <Text className="text-white font-bold text-base">{tStatic("ui.s_271870a7")}</Text>
+                  <Text className="text-zinc-400 text-xs">{tStatic("ui.s_b04b4c33")}</Text>
                 </View>
               </TouchableOpacity>
             </View>

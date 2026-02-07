@@ -2,6 +2,7 @@ import React from "react";
 import { View, TouchableOpacity, Text } from "react-native";
 import { useColorScheme } from "nativewind";
 
+import { tStatic } from "@/context/LanguageContext";
 interface MoodStyleSelectorProps {
   moodStyle: "standard" | "card";
   setMoodStyle: (style: "standard" | "card") => void;
@@ -28,9 +29,7 @@ const MoodStyleSelector = React.memo(
               color: moodStyle === "standard" ? "white" : subTextColor,
               fontWeight: "bold",
             }}
-          >
-            Casual 💬
-          </Text>
+          >{tStatic("ui.s_69d611f2")}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -46,9 +45,7 @@ const MoodStyleSelector = React.memo(
               color: moodStyle === "card" ? "white" : subTextColor,
               fontWeight: "bold",
             }}
-          >
-            Card ✨
-          </Text>
+          >{tStatic("ui.s_263746fa")}</Text>
         </TouchableOpacity>
       </View>
     );

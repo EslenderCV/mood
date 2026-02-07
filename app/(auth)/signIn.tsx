@@ -23,7 +23,7 @@ import {
 } from "@/lib/appwrite";
 import { sendWelcomeEmail } from "@/lib/email";
 import { AppwriteException } from "react-native-appwrite";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 
 // 🔥 IMPORTAMOS EL ACCOUNT MANAGER
 import { AccountManager } from "@/lib/accountManager";
@@ -108,7 +108,7 @@ const SignIn = () => {
             router.replace("/home");
           }, 500);
         } else {
-          Alert.alert("Error", "No se pudo crear el perfil de usuario.");
+          Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_77c0ff57"));
         }
       }
     } catch (error: any) {

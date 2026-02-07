@@ -3,6 +3,41 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Localization from "expo-localization";
 import { translations } from "../constants/translations";
 
+// Global language cache so non-hook code can translate safely (used by tStatic).
+let currentLanguage: string = "es";
+
+const translatePath = (path: string, language: string) => {
+  const keys = path.split(".");
+  let current = (translations as any)[language];
+
+  if (!current) {
+    console.warn(`Idioma ${language} no encontrado, usando fallback 'es'`);
+    current = (translations as any)["es"];
+  }
+
+  for (const key of keys) {
+    if (current && current[key] !== undefined) {
+      current = current[key];
+    } else {
+      let fallback = (translations as any)["es"];
+      for (const fbKey of keys) {
+        if (fallback) fallback = fallback[fbKey];
+      }
+      if (!fallback) {
+        return path;
+      }
+      return fallback;
+    }
+  }
+  return current;
+};
+
+// Use this when you need translations outside React hooks/components.
+export const tStatic = (path: string, language: string = currentLanguage) => {
+  return translatePath(path, language);
+};
+
+
 type LanguageCode = "es" | "en" | "fr" | "pt" | "it";
 
 interface LanguageContextType {
@@ -64,29 +99,7 @@ export const LanguageProvider = ({
   };
 
   const t = (path: string) => {
-    const keys = path.split(".");
-    let current = (translations as any)[language];
-
-    if (!current) {
-      console.warn(`Idioma ${language} no encontrado, usando fallback 'es'`);
-      current = (translations as any)["es"];
-    }
-
-    for (const key of keys) {
-      if (current && current[key] !== undefined) {
-        current = current[key];
-      } else {
-        let fallback = (translations as any)["es"];
-        for (const fbKey of keys) {
-          if (fallback) fallback = fallback[fbKey];
-        }
-        if (!fallback) {
-          return path;
-        }
-        return fallback;
-      }
-    }
-    return current;
+    return translatePath(path, language);
   };
 
   return (

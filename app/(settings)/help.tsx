@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 
 const HelpCenter = () => {
   const { colorScheme } = useColorScheme();
@@ -35,7 +35,7 @@ const HelpCenter = () => {
 
   const openWhatsApp = async (phoneNumber: string) => {
     setModalVisible(false);
-    const message = "Hola, necesito asistencia con la aplicación Mood.";
+    const message = tStatic("ui.s_40fa5b6e");
     const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(
       message
     )}`;
@@ -43,7 +43,7 @@ const HelpCenter = () => {
       await Linking.openURL(url);
     } catch (err) {
       console.error("Error al abrir enlace", err);
-      Alert.alert("Error", "No se pudo abrir WhatsApp");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_0e9a90c8"));
     }
   };
 

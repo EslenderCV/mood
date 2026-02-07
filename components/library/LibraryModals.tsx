@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image"; // 🔥 Premium Image
 import * as Haptics from "expo-haptics"; // 🔥 Haptics
 
+import { tStatic } from "@/context/LanguageContext";
 // --- MODAL: OPCIONES DE CANCIÓN ---
 export const SongOptionsModal = ({
   visible,
@@ -89,7 +90,7 @@ export const SongOptionsModal = ({
                   className="font-semibold text-lg"
                   style={{ color: textColor }}
                 >
-                  {t("library.addTo")} Playlist
+                  {t("library.addTo")} {tStatic("ui.s_bfb68000")}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -197,7 +198,7 @@ export const CreatePlaylistModal = ({
             color={importPlatform === myPlatform ? brandColor : subTextColor}
           />
           <Text className="font-bold mt-2" style={{ color: textColor }}>
-            {label} Sync
+            {label} {tStatic("ui.s_d8e87c09")}
           </Text>
         </TouchableOpacity>
       </View>

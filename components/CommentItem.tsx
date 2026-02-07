@@ -12,7 +12,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { toggleCommentLike, searchUsers, getUser } from "@/lib/appwrite";
 import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 import { formatTimeAgo } from "@/lib/postUtils";
 import * as Haptics from "expo-haptics";
 import { Audio } from "expo-av";
@@ -172,9 +172,7 @@ const CommentItem = ({
   };
 
   const handleDeletePress = () => {
-    Alert.alert(
-      "Eliminar comentario",
-      "¿Estás seguro de que quieres eliminar este comentario?",
+    Alert.alert(tStatic("ui.s_47d8c19f"), tStatic("ui.s_83227328"),
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -201,7 +199,7 @@ const CommentItem = ({
         },
       );
     } else {
-      Alert.alert("Opciones", "Selecciona una acción", [
+      Alert.alert(tStatic("ui.s_8877f3a2"), tStatic("ui.s_581696c1"), [
         { text: "Cancelar", style: "cancel" },
         { text: "Eliminar", onPress: handleDeletePress },
       ]);
@@ -211,7 +209,7 @@ const CommentItem = ({
   // 🔥 LÓGICA DE REPRODUCCIÓN: INTERRUPCIÓN INTELIGENTE
   const handlePlayVoice = async () => {
     if (!isUrlValid) {
-      Alert.alert("Audio no disponible", "El audio no se pudo cargar.");
+      Alert.alert(tStatic("ui.s_8734dcc8"), tStatic("ui.s_6dba6580"));
       return;
     }
 
@@ -283,7 +281,7 @@ const CommentItem = ({
       });
     } catch (e) {
       console.log("Error playing voice:", e);
-      Alert.alert("Error", "No se pudo reproducir el audio.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_2e4228cd"));
     }
   };
 
@@ -293,9 +291,7 @@ const CommentItem = ({
       const targetUser = users.find((u) => u.username === username);
       if (targetUser) router.push(`/user/${targetUser.$id}` as any);
       else
-        Alert.alert(
-          "Usuario no encontrado",
-          "Es posible que haya cambiado su nombre.",
+        Alert.alert(tStatic("ui.s_cf21e637"), tStatic("ui.s_aa293eb1"),
         );
     } catch (error) {
       console.log("Error perfil:", error);
@@ -386,12 +382,10 @@ const CommentItem = ({
                 <View>
                   <Text
                     className={`font-bold text-xs ${isDark ? "text-white" : "text-black"}`}
-                  >
-                    Voice Vibe
-                  </Text>
+                  >{tStatic("ui.s_3da61fd2")}</Text>
                   <Text className="text-[10px] text-zinc-500 font-medium">
                     {isUrlValid
-                      ? `${voiceData?.duration || 0}s • ${voiceData?.songContext ? "Con música" : "Voz"}`
+                      ? `${voiceData?.duration || 0}s • ${voiceData?.songContext ? tStatic("ui.s_7ca59d57") : tStatic("ui.s_15fa29e2")}`
                       : "Audio no disponible"}
                   </Text>
                 </View>
@@ -424,9 +418,7 @@ const CommentItem = ({
               <Text
                 className="text-xs font-semibold"
                 style={{ color: subTextColor }}
-              >
-                Responder
-              </Text>
+              >{tStatic("ui.s_df7e8969")}</Text>
             </TouchableOpacity>
 
             {isOwner && (
@@ -475,8 +467,8 @@ const CommentItem = ({
                 className="text-xs font-semibold"
                 style={{ color: subTextColor }}
               >
-                Ver {replies.length}{" "}
-                {replies.length === 1 ? "respuesta" : "respuestas"}
+                {tStatic("ui.s_862fa4ae")} {replies.length}{" "}
+                {replies.length === 1 ? tStatic("ui.s_dfba171a") : tStatic("ui.s_f1498459")}
               </Text>
             </TouchableOpacity>
           )}
@@ -497,9 +489,7 @@ const CommentItem = ({
                 onPress={() => setShowReplies(false)}
                 className="mt-2 mb-2"
               >
-                <Text className="text-xs ml-1" style={{ color: subTextColor }}>
-                  Ocultar
-                </Text>
+                <Text className="text-xs ml-1" style={{ color: subTextColor }}>{tStatic("ui.s_dc52ced9")}</Text>
               </TouchableOpacity>
             </View>
           )}

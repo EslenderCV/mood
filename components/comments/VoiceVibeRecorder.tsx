@@ -11,6 +11,7 @@ import { Audio } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { tStatic } from "@/context/LanguageContext";
 // 🔥 1. Importamos el contexto
 import { useAudioContext } from "@/context/AudioContext";
 
@@ -261,9 +262,7 @@ export const VoiceVibeRecorder = ({
         <View style={styles.mainContent}>
           {isRecording ? (
             <>
-              <Text style={[styles.statusText, { color: "#EF4444" }]}>
-                Grabando...
-              </Text>
+              <Text style={[styles.statusText, { color: "#EF4444" }]}>{tStatic("ui.s_e43c403f")}</Text>
               <Text style={styles.timer}>{formatTime(duration)}</Text>
             </>
           ) : reviewUri ? (
@@ -293,7 +292,7 @@ export const VoiceVibeRecorder = ({
                 { color: isDark ? "#A1A1AA" : "#52525B" },
               ]}
             >
-              {songPreviewUrl ? "🎙️ Grabar con música" : "🎙️ Grabar voz"}
+              {songPreviewUrl ? tStatic("ui.s_d1489c0f") : tStatic("ui.s_25416c71")}
             </Text>
           )}
         </View>

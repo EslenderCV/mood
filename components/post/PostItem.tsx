@@ -12,7 +12,7 @@ import {
   getDeezerTrackUrl,
 } from "@/lib/appwrite";
 
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 import { getRelativeTime } from "@/lib/dateUtils";
 import { useAudioContext } from "@/context/AudioContext";
 
@@ -277,9 +277,7 @@ const PostItem: React.FC<PostItemProps> = ({
                 fontSize: 9,
                 letterSpacing: 0.5,
               }}
-            >
-              NEW ✨
-            </Text>
+            >{tStatic("ui.s_60829e2a")}</Text>
           </LinearGradient>
         </Animated.View>
       )}

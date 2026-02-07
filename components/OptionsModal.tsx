@@ -9,6 +9,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 
+import { tStatic } from "@/context/LanguageContext";
 interface OptionsModalProps {
   isVisible: boolean;
   onClose: () => void;
@@ -56,7 +57,7 @@ export default function OptionsModal({
                 className="text-center font-bold text-lg mb-6"
                 style={{ color: textColor }}
               >
-                {isOwner ? "Gestionar tu publicación" : "Acciones"}
+                {isOwner ? tStatic("ui.s_13baa745") : tStatic("ui.s_a6f0cb2b")}
               </Text>
 
               {isOwner && (
@@ -75,12 +76,8 @@ export default function OptionsModal({
                     <Text
                       className="font-bold text-base"
                       style={{ color: dangerColor }}
-                    >
-                      Eliminar publicación
-                    </Text>
-                    <Text className="text-xs text-red-400/70">
-                      Esta acción es irreversible
-                    </Text>
+                    >{tStatic("ui.s_1451e1c4")}</Text>
+                    <Text className="text-xs text-red-400/70">{tStatic("ui.s_114de65f")}</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -104,12 +101,8 @@ export default function OptionsModal({
                       <Text
                         className="font-bold text-base"
                         style={{ color: textColor }}
-                      >
-                        Reportar publicación
-                      </Text>
-                      <Text className="text-xs" style={{ color: subTextColor }}>
-                        Contenido inapropiado, spam...
-                      </Text>
+                      >{tStatic("ui.s_86d6df01")}</Text>
+                      <Text className="text-xs" style={{ color: subTextColor }}>{tStatic("ui.s_36ff3924")}</Text>
                     </View>
                     <Ionicons
                       name="chevron-forward"
@@ -135,12 +128,8 @@ export default function OptionsModal({
                       <Text
                         className="font-bold text-base"
                         style={{ color: dangerColor }}
-                      >
-                        Bloquear usuario
-                      </Text>
-                      <Text className="text-xs" style={{ color: subTextColor }}>
-                        No verás más contenido de este usuario
-                      </Text>
+                      >{tStatic("ui.s_90fe8a93")}</Text>
+                      <Text className="text-xs" style={{ color: subTextColor }}>{tStatic("ui.s_29fa9760")}</Text>
                     </View>
                   </TouchableOpacity>
                 </>
@@ -153,9 +142,7 @@ export default function OptionsModal({
                 <Text
                   className="font-bold text-base"
                   style={{ color: subTextColor }}
-                >
-                  Cancelar
-                </Text>
+                >{tStatic("ui.s_847607d7")}</Text>
               </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>

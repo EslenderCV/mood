@@ -21,6 +21,7 @@ import {
 } from "@/lib/appwrite";
 import { useColorScheme } from "nativewind";
 
+import { tStatic } from "@/context/LanguageContext";
 const ShareModal = ({ isVisible, onClose, postId }: any) => {
   const { user } = useGlobalContext();
   const { colorScheme } = useColorScheme();
@@ -111,7 +112,7 @@ const ShareModal = ({ isVisible, onClose, postId }: any) => {
 
       Alert.alert("Enviado", `Compartido con ${targetUser.username}`);
     } catch {
-      Alert.alert("Error", "No se pudo enviar el mensaje.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_2eac473a"));
     } finally {
       setSendingMap((prev) => ({ ...prev, [targetUser.$id]: false }));
     }
@@ -135,9 +136,7 @@ const ShareModal = ({ isVisible, onClose, postId }: any) => {
           style={{ backgroundColor: bgColor }}
         >
           <View className="flex-row justify-between items-center mb-6">
-            <Text className="text-xl font-bold" style={{ color: textColor }}>
-              Enviar a...
-            </Text>
+            <Text className="text-xl font-bold" style={{ color: textColor }}>{tStatic("ui.s_6a951304")}</Text>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color={subTextColor} />
             </TouchableOpacity>
@@ -146,7 +145,7 @@ const ShareModal = ({ isVisible, onClose, postId }: any) => {
           <TextInput
             className="p-4 rounded-xl mb-4"
             style={{ backgroundColor: inputBg, color: textColor }}
-            placeholder="Buscar usuarios..."
+            placeholder={tStatic("ui.s_3bd5180d")}
             placeholderTextColor={subTextColor}
             value={searchQuery}
             onChangeText={handleSearch}
@@ -188,7 +187,7 @@ const ShareModal = ({ isVisible, onClose, postId }: any) => {
                     }`}
                   >
                     <Text className="text-white font-bold text-sm">
-                      {sendingMap[item.$id] ? "..." : "Enviar"}
+                      {sendingMap[item.$id] ? "..." : tStatic("ui.s_30cc00ae")}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -197,9 +196,7 @@ const ShareModal = ({ isVisible, onClose, postId }: any) => {
                 <Text
                   className="text-center mt-10"
                   style={{ color: subTextColor }}
-                >
-                  No se encontraron usuarios.
-                </Text>
+                >{tStatic("ui.s_fecf6798")}</Text>
               }
             />
           )}

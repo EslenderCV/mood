@@ -13,6 +13,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { searchUsers, getLatestUsers } from "@/lib/appwrite";
 
+import { tStatic } from "@/context/LanguageContext";
 export const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -70,9 +71,7 @@ export const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
             <Text
               className="text-xl font-bold tracking-tight"
               style={{ color: textColor }}
-            >
-              Nuevo Mensaje
-            </Text>
+            >{tStatic("ui.s_7e962398")}</Text>
             <TouchableOpacity
               onPress={onClose}
               className="p-2 rounded-full"
@@ -89,7 +88,7 @@ export const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
             >
               <Ionicons name="search" size={20} color={subTextColor} />
               <TextInput
-                placeholder="Buscar por nombre o usuario..."
+                placeholder={tStatic("ui.s_64409c8c")}
                 placeholderTextColor={subTextColor}
                 className="flex-1 ml-3 text-base"
                 style={{ color: textColor }}
@@ -114,9 +113,7 @@ export const NewChatModal = ({ visible, onClose, onUserSelect }: any) => {
               }}
               ListEmptyComponent={
                 <View className="mt-10 items-center">
-                  <Text style={{ color: subTextColor }}>
-                    No se encontraron usuarios
-                  </Text>
+                  <Text style={{ color: subTextColor }}>{tStatic("ui.s_7baa000e")}</Text>
                 </View>
               }
               renderItem={({ item }) => (

@@ -16,7 +16,7 @@ import {
   sendPushNotification,
   setTypingStatus,
 } from "@/lib/appwrite";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 
 export const useChatLogic = () => {
   const { t } = useLanguage();
@@ -234,7 +234,7 @@ export const useChatLogic = () => {
         );
       }
     } catch (e) {
-      Alert.alert("Error", "No se pudo enviar la canción");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_862cea3f"));
     }
   };
 
@@ -301,7 +301,7 @@ export const useChatLogic = () => {
       }
     } catch (e) {
       setNewMessage(tempBody);
-      Alert.alert("Error", "No se pudo enviar");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_35859cd3"));
     }
   };
 

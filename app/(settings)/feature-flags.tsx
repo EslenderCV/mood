@@ -9,6 +9,7 @@ import * as Haptics from "expo-haptics";
 
 import { useFlags, FlagKey, FLAG_DEFAULTS } from "@/src/config/flags";
 
+import { tStatic } from "@/context/LanguageContext";
 const FeatureFlagsScreen = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -103,12 +104,8 @@ const FeatureFlagsScreen = () => {
           <Ionicons name="arrow-back" size={22} color={textColor} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: textColor, fontSize: 22, fontWeight: "800" }}>
-            Experimentos
-          </Text>
-          <Text style={{ color: subTextColor, fontSize: 12, marginTop: 2 }}>
-            Cambios inmediatos (se guardan localmente)
-          </Text>
+          <Text style={{ color: textColor, fontSize: 22, fontWeight: "800" }}>{tStatic("ui.s_603d05a8")}</Text>
+          <Text style={{ color: subTextColor, fontSize: 12, marginTop: 2 }}>{tStatic("ui.s_e0b1f1b4")}</Text>
         </View>
         <TouchableOpacity
           onPress={copyJson}
@@ -135,24 +132,17 @@ const FeatureFlagsScreen = () => {
                 borderColor: borderColor,
               }}
             >
-              <Text style={{ color: textColor, fontWeight: "900" }}>
-                Safe Mode activo
-              </Text>
-              <Text style={{ color: subTextColor, fontSize: 12, marginTop: 4 }}>
-                Detectamos un posible crash-loop. Desactivamos temporalmente algunos experimentos para que la app
-                pueda iniciar.
-              </Text>
+              <Text style={{ color: textColor, fontWeight: "900" }}>{tStatic("ui.s_ed330643")}</Text>
+              <Text style={{ color: subTextColor, fontSize: 12, marginTop: 4 }}>{tStatic("ui.s_a465034c")}</Text>
               {typeof safeModeUntilMs === "number" && (
                 <Text style={{ color: subTextColor, fontSize: 11, marginTop: 6 }}>
-                  Expira: {new Date(safeModeUntilMs).toLocaleString()}
+                  {tStatic("ui.s_f5b11f41")} {new Date(safeModeUntilMs).toLocaleString()}
                 </Text>
               )}
             </View>
           )}
           {!loaded && (
-            <Text style={{ color: subTextColor, paddingHorizontal: 8, paddingVertical: 8 }}>
-              Cargando flags...
-            </Text>
+            <Text style={{ color: subTextColor, paddingHorizontal: 8, paddingVertical: 8 }}>{tStatic("ui.s_d310cee9")}</Text>
           )}
 
           {meta.map((m) => (
@@ -176,7 +166,7 @@ const FeatureFlagsScreen = () => {
                   {m.desc}
                 </Text>
                 <Text style={{ color: subTextColor, fontSize: 11, marginTop: 6 }}>
-                  Default: {FLAG_DEFAULTS[m.key] ? "ON" : "OFF"}
+                  {tStatic("ui.s_e5f7f63d")} {FLAG_DEFAULTS[m.key] ? tStatic("ui.s_90651ebe") : tStatic("ui.s_88559a0c")}
                 </Text>
               </View>
 
@@ -205,9 +195,7 @@ const FeatureFlagsScreen = () => {
                 borderColor: borderColor,
               }}
             >
-              <Text style={{ color: textColor, fontWeight: "800" }}>
-                Reset a defaults
-              </Text>
+              <Text style={{ color: textColor, fontWeight: "800" }}>{tStatic("ui.s_1c373962")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -220,7 +208,7 @@ const FeatureFlagsScreen = () => {
                 alignItems: "center",
               }}
             >
-              <Text style={{ color: "#fff", fontWeight: "900" }}>Volver a Ajustes</Text>
+              <Text style={{ color: "#fff", fontWeight: "900" }}>{tStatic("ui.s_d8f00338")}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -20,6 +20,7 @@ import { CommentsModalProvider } from "@/context/CommentsModalContext";
 import { installGlobalHandlers } from "@/src/observability/install";
 import { markHealthyBoot } from "@/src/observability/crashLoop";
 import NetworkBanner from "@/components/shared/NetworkBanner";
+import { BootProvider, useBoot } from "@/src/boot/BootContext";
 
 // Componentes
 import CustomSplashScreen from "@/components/CustomSplashScreen";
@@ -33,6 +34,7 @@ SplashScreen.preventAutoHideAsync();
 const StackLayout = () => {
   const enableFade = useFlag("fadeTransitions");
   const { loggedIn, loading } = useGlobalContext();
+  const { setBootComplete } = useBoot();
   const segments = useSegments();
   const router = useRouter();
 
@@ -64,7 +66,8 @@ const StackLayout = () => {
     if (loggedIn) {
       if (!root || root === "(auth)") router.replace("/home");
     } else {
-      if (root === "(tabs)" || root === "chat") router.replace("/");
+      // Send unauthenticated users to the auth flow.
+      if (root === "(tabs)" || root === "chat") router.replace("/signIn");
     }
   }, [loading, loggedIn, segments, router]);
 
@@ -82,6 +85,13 @@ const StackLayout = () => {
       }).start(() => setIsSplashAnimationComplete(true));
     }
   }, [isAppReady, fadeAnim]);
+
+  useEffect(() => {
+    if (isSplashAnimationComplete) {
+      // Allow banners/toasts AFTER the splash is gone.
+      setBootComplete(true);
+    }
+  }, [isSplashAnimationComplete, setBootComplete]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#000000" }}>
@@ -128,8 +138,9 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-            <NetworkBanner />
-      <LanguageProvider>
+      <BootProvider>
+        <NetworkBanner />
+        <LanguageProvider>
           <FlagsProvider>
         <BottomSheetModalProvider>
           <GlobalProvider>
@@ -157,6 +168,7 @@ export default function RootLayout() {
         </BottomSheetModalProvider>
                 </FlagsProvider>
         </LanguageProvider>
+      </BootProvider>
     </GestureHandlerRootView>
   );
 }

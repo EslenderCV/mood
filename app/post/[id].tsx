@@ -34,7 +34,7 @@ import {
 } from "@/lib/appwrite";
 import { parseSongData, sendReplyNotification } from "@/lib/postUtils";
 import { useColorScheme } from "nativewind";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 
 // Componentes UI Básicos
 import CommentItem from "@/components/CommentItem";
@@ -167,7 +167,7 @@ const PostDetails = () => {
       setPost(postData);
       setAllComments(commentsData);
     } catch {
-      Alert.alert("Error", "No se pudo cargar el post");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_adea0441"));
       router.back();
     } finally {
       setLoading(false);
@@ -231,7 +231,7 @@ const PostDetails = () => {
         try {
           previewUrl = await getDeezerTrackUrl(trackId);
         } catch {
-          Alert.alert("Error", "URL no disponible");
+          Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_1abf56f2"));
           return;
         }
       }
@@ -244,7 +244,7 @@ const PostDetails = () => {
         });
       }
     } catch {
-      Alert.alert("Error", "No se pudo reproducir el audio.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_2e4228cd"));
     }
   };
 
@@ -303,7 +303,7 @@ const PostDetails = () => {
     try {
       await deleteComment(commentId);
     } catch {
-      Alert.alert("Error", "No se pudo eliminar el comentario.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_eee2c16a"));
       setAllComments(previousComments);
     }
   };
@@ -364,7 +364,7 @@ const PostDetails = () => {
       );
       setAllComments((prev) => [newComment, ...prev]);
     } catch {
-      Alert.alert("Error", "No se pudo subir el audio.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_a7bc973f"));
     } finally {
       setSending(false);
     }
@@ -373,7 +373,7 @@ const PostDetails = () => {
   // --- ACTIONS Y MODALES ---
   const handleDeleteAction = () => {
     toggleModal("isOptions", false);
-    Alert.alert("¿Eliminar?", "Esta acción es irreversible.", [
+    Alert.alert(tStatic("ui.s_1feb1fbf"), tStatic("ui.s_b47d0019"), [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Eliminar",
@@ -383,7 +383,7 @@ const PostDetails = () => {
             await deletePost(post.$id);
             router.back();
           } catch {
-            Alert.alert("Error", "No se pudo eliminar");
+            Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_a14c1ba0"));
           }
         },
       },
@@ -391,7 +391,7 @@ const PostDetails = () => {
   };
   const handleReportAction = () => {
     toggleModal("isOptions", false);
-    Alert.alert("Reportar", "Selecciona una razón:", [
+    Alert.alert(tStatic("ui.s_72ce2533"), tStatic("ui.s_a6b30ef4"), [
       { text: "Cancelar", style: "cancel" },
       { text: "Spam/Inapropiado", onPress: () => submitReport("spam") },
       { text: "Otro", onPress: () => submitReport("other") },
@@ -401,9 +401,9 @@ const PostDetails = () => {
     if (!user) return;
     try {
       await reportPost(post.$id, user.$id, reason);
-      Alert.alert("Reporte enviado", "Gracias.");
+      Alert.alert(tStatic("ui.s_58795825"), tStatic("ui.s_890f8c45"));
     } catch {
-      Alert.alert("Error", "Error al reportar.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_4ae91cce"));
     }
   };
   const handleLike = async () => {
@@ -500,9 +500,9 @@ const PostDetails = () => {
         ),
       );
       await Promise.all(promises);
-      Alert.alert("Enviado", "Compartido correctamente.");
+      Alert.alert(tStatic("ui.s_823a8f1e"), tStatic("ui.s_54fa29f1"));
     } catch {
-      Alert.alert("Error", "No se pudo compartir.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_acc0fa69"));
     }
   };
   const handleAddToStoryFromPost = async () => {
@@ -537,7 +537,7 @@ const PostDetails = () => {
     if (!post) return;
     const link = `https://moodapp.com/post/${post.$id}`;
     Clipboard.setString(link);
-    Alert.alert("Copiado", "Enlace en portapapeles.");
+    Alert.alert(tStatic("ui.s_928bc7ca"), tStatic("ui.s_be6e5d4d"));
     toggleModal("isShareSelector", false);
   };
 

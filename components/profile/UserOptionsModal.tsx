@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { tStatic } from "@/context/LanguageContext";
 interface UserOptionsModalProps {
   visible: boolean;
   onClose: () => void;
@@ -63,14 +64,12 @@ const UserOptionsModal = ({
               <Text
                 className="text-xl font-bold text-center mb-2"
                 style={{ color: textColor }}
-              >
-                Seguridad
-              </Text>
+              >{tStatic("ui.s_c1d6a671")}</Text>
               <Text
                 className="text-center text-sm px-2"
                 style={{ color: subTextColor }}
               >
-                ¿Deseas bloquear a{" "}
+                {tStatic("ui.s_85d853bf")}{" "}
                 <Text className="font-bold">@{username}</Text>? No verán tu
                 contenido ni podrán interactuar contigo.
               </Text>
@@ -86,9 +85,7 @@ const UserOptionsModal = ({
                 color="white"
                 style={{ marginRight: 8 }}
               />
-              <Text className="text-white font-bold text-base">
-                Bloquear usuario
-              </Text>
+              <Text className="text-white font-bold text-base">{tStatic("ui.s_90fe8a93")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -99,9 +96,7 @@ const UserOptionsModal = ({
               <Text
                 className="font-bold text-base"
                 style={{ color: textColor }}
-              >
-                Cancelar
-              </Text>
+              >{tStatic("ui.s_847607d7")}</Text>
             </TouchableOpacity>
           </View>
         </TouchableWithoutFeedback>

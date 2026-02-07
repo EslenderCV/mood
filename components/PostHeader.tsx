@@ -11,6 +11,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics"; // 🔥 IMPORTAMOS HAPTICS
 import { parseSongData, formatTimeAgo } from "@/lib/postUtils";
 
+import { tStatic } from "@/context/LanguageContext";
 const AudioVisualizer = ({
   isPlaying,
   color,
@@ -170,9 +171,7 @@ const PostHeader = ({
                 size={12}
                 color={styles.accentColor}
               />
-              <Text className="text-[10px] ml-1 font-bold text-[#5E17EB]">
-                MOOD PREVIEW
-              </Text>
+              <Text className="text-[10px] ml-1 font-bold text-[#5E17EB]">{tStatic("ui.s_57f15268")}</Text>
               {isPlaying && (
                 <AudioVisualizer
                   isPlaying={isPlaying}

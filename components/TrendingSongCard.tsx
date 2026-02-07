@@ -13,6 +13,7 @@ import { Audio } from "expo-av";
 import { useAudioContext } from "@/context/AudioContext";
 import { getDeezerTrackUrl } from "@/lib/appwrite";
 
+import { tStatic } from "@/context/LanguageContext";
 // 🔥 IMPORTS PARA LA ACCIÓN
 import { useFeed } from "@/context/FeedProvider";
 import { useModal } from "@/context/ModalContext";
@@ -142,9 +143,7 @@ const TrendingSongCard = ({ song }: { song: any }) => {
           className={`text-base font-bold ${
             isDark ? "text-white" : "text-black"
           }`}
-        >
-          You Might Like
-        </Text>
+        >{tStatic("ui.s_18b9d3db")}</Text>
       </View>
 
       <TouchableOpacity
@@ -198,9 +197,7 @@ const TrendingSongCard = ({ song }: { song: any }) => {
             className="mt-6 flex-row items-center bg-white/10 self-start px-4 py-3 rounded-full backdrop-blur-md border border-white/10 active:bg-white/20"
           >
             <Ionicons name="musical-notes" size={16} color="#fff" />
-            <Text className="text-white font-bold text-sm ml-2">
-              Usar este sonido
-            </Text>
+            <Text className="text-white font-bold text-sm ml-2">{tStatic("ui.s_22051e50")}</Text>
           </TouchableOpacity>
         </LinearGradient>
       </TouchableOpacity>

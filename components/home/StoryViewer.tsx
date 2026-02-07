@@ -30,7 +30,7 @@ import { useAudioContext } from "@/context/AudioContext";
 import { BrainEmitter } from "@/src/brain/signals/emitters";
 import { InteractionType } from "@/src/brain/signals/InteractionSignals";
 
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 import { getDeezerTrackUrl, viewStory, deleteStory } from "@/lib/appwrite";
 import ViewersModal from "./ViewersModal";
 
@@ -160,9 +160,7 @@ const StoryViewer = ({
 
   const handleDelete = () => {
     setIsPaused(true);
-    Alert.alert(
-      "Eliminar historia",
-      "¿Seguro que quieres eliminar esta historia?",
+    Alert.alert(tStatic("ui.s_f5c87d64"), tStatic("ui.s_9202d8b5"),
       [
         {
           text: "Cancelar",
@@ -180,7 +178,7 @@ const StoryViewer = ({
                 setTimeout(() => onRefreshFeed(), 500);
               }
             } catch {
-              Alert.alert("Error", "No se pudo eliminar.");
+              Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_25380339"));
               setIsPaused(false);
             }
           },

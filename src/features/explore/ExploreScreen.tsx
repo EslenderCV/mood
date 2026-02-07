@@ -50,6 +50,7 @@ import PressableScale from "@/components/shared/PressableScale";
 import { MoodSessionManager } from "@/src/brain/session/MoodSessionManager";
 import { useMoodState } from "@/src/brain/session/useMoodState";
 import { useFlag } from "@/src/config/flags";
+import { tStatic } from "@/context/LanguageContext";
 
 const PostModalAny = PostModal as any;
 
@@ -124,7 +125,7 @@ const renderArtistRow = ({
         {item.name}
       </Text>
       <Text className="text-sm" style={{ color: subTextColor }}>
-        {item.count} canciones en Mood
+        {item.count} {tStatic("ui.s_9c56a723")}
       </Text>
     </View>
     <Ionicons name="chevron-forward" size={20} color={subTextColor} />
@@ -190,7 +191,7 @@ const MusicListRow = ({
           {item.artist}
         </Text>
         <Text className="text-xs mt-1" style={{ color: accentColor }}>
-          {item.score} likes
+          {item.score} {tStatic("ui.s_cc71d8f3")}
         </Text>
       </View>
       <PressableScale
@@ -606,7 +607,7 @@ const renderProfileRow = ({
       className="bg-[#5E17EB] px-5 py-2.5 rounded-full shadow-sm"
       style={{ minWidth: 80, alignItems: "center" }}
     >
-      <Text className="text-white font-bold text-xs">Seguir</Text>
+      <Text className="text-white font-bold text-xs">{tStatic("ui.s_bd23eb60")}</Text>
     </TouchableOpacity>
   </TouchableOpacity>
 );

@@ -21,7 +21,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Audio, Video, ResizeMode } from "expo-av"; // 🔥 Usamos expo-av como en PostItem
 import { uploadFile } from "@/lib/appwrite";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 import CustomToast from "../shared/CustomToast";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
@@ -652,9 +652,7 @@ const StoryCreationModal = ({
                                 size={10}
                                 color={COLORS.primary}
                               />
-                              <Text className="text-white text-[10px] font-bold ml-1.5 uppercase tracking-widest">
-                                MOOD
-                              </Text>
+                              <Text className="text-white text-[10px] font-bold ml-1.5 uppercase tracking-widest">{tStatic("ui.s_891d33e4")}</Text>
                             </View>
                           </>
                         ) : null}

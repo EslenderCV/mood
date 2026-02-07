@@ -16,6 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { getPostComments, createComment } from "@/lib/appwrite";
 
+import { tStatic } from "@/context/LanguageContext";
 const CommentsSheet = ({ visible, onClose, postId, currentUser }: any) => {
   const [comments, setComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +56,7 @@ const CommentsSheet = ({ visible, onClose, postId, currentUser }: any) => {
       setNewComment("");
       Keyboard.dismiss();
     } catch {
-      Alert.alert("Error", "No se pudo enviar el comentario");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_7aeddfb8"));
     } finally {
       setSending(false);
     }
@@ -92,7 +93,7 @@ const CommentsSheet = ({ visible, onClose, postId, currentUser }: any) => {
           <View className="items-center pt-3 pb-2 border-b border-zinc-800">
             <View className="w-10 h-1 bg-zinc-600 rounded-full mb-2" />
             <Text className="text-white font-bold">
-              Comentarios ({comments.length})
+              {tStatic("ui.s_74dc3bac")}{comments.length})
             </Text>
           </View>
 
@@ -126,9 +127,7 @@ const CommentsSheet = ({ visible, onClose, postId, currentUser }: any) => {
                 </View>
               )}
               ListEmptyComponent={
-                <Text className="text-zinc-500 text-center mt-10">
-                  Sé el primero en comentar.
-                </Text>
+                <Text className="text-zinc-500 text-center mt-10">{tStatic("ui.s_007a41ed")}</Text>
               }
             />
           )}
@@ -139,7 +138,7 @@ const CommentsSheet = ({ visible, onClose, postId, currentUser }: any) => {
           >
             <View className="px-4 pt-3 pb-8 bg-zinc-900 border-t border-zinc-800 flex-row items-center">
               <TextInput
-                placeholder="Añadir comentario..."
+                placeholder={tStatic("ui.s_a816ff98")}
                 placeholderTextColor="#71717A"
                 className="flex-1 bg-black text-white px-4 py-3 rounded-full mr-3"
                 value={newComment}

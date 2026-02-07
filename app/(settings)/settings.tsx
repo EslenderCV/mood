@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 import { useGlobalContext, User } from "@/context/GlobalProvider";
 import { updateProfile } from "@/lib/appwrite";
 import { logger } from "@/src/observability/logger";
@@ -113,7 +113,7 @@ const Settings = () => {
         setUser({ ...user, preferredPlatform: platform } as User);
       }
     } catch {
-      Alert.alert("Error", "No se pudo actualizar la preferencia de música.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_7d43f01d"));
     } finally {
       setUpdatingPlatform(false);
     }
@@ -124,7 +124,7 @@ const Settings = () => {
     if (supported) {
       await Linking.openURL(url);
     } else {
-      Alert.alert("Error", "No se pudo abrir el enlace.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_c1e5b5f4"));
     }
   };
 
@@ -224,8 +224,8 @@ const Settings = () => {
 
         <SettingRow
           icon="notifications"
-          title="Notificaciones"
-          subtitle="Alertas push y actividades"
+          title={tStatic("ui.s_ad56bdfe")}
+          subtitle={tStatic("ui.s_6ec22507")}
           color="#F59E0B"
         >
           <Switch
@@ -250,7 +250,7 @@ const Settings = () => {
           />
         </SettingRow>
 
-        <SectionTitle title="PLATAFORMA DE MÚSICA" />
+        <SectionTitle title={tStatic("ui.s_d0edd9a7")} />
         <TouchableOpacity
           onPress={() => handlePlatformChange("spotify")}
           disabled={updatingPlatform}
@@ -258,8 +258,8 @@ const Settings = () => {
           <SettingRow
             isCustomIcon={true}
             icon={<FontAwesome5 name="spotify" size={20} color="#1DB954" />}
-            title="Spotify"
-            subtitle="Reproducir en Spotify"
+            title={tStatic("ui.s_fd539ca1")}
+            subtitle={tStatic("ui.s_6550dcdb")}
           >
             {user?.preferredPlatform === "spotify" && (
               <Ionicons name="checkmark-circle" size={22} color="#1DB954" />
@@ -276,8 +276,8 @@ const Settings = () => {
           <SettingRow
             isCustomIcon={true}
             icon={<FontAwesome5 name="apple" size={22} color={textColor} />}
-            title="Apple Music"
-            subtitle="Reproducir en Apple Music"
+            title={tStatic("ui.s_187a2495")}
+            subtitle={tStatic("ui.s_78f9355b")}
           >
             {user?.preferredPlatform === "apple" && (
               <Ionicons name="checkmark-circle" size={22} color="#FA243C" />
@@ -291,7 +291,7 @@ const Settings = () => {
           <SettingRow
             icon="trash-bin"
             title={t("settings.clearCache")}
-            subtitle="Liberar espacio"
+            subtitle={tStatic("ui.s_e2dde4d5")}
             color="#EF4444"
           >
             <View
@@ -301,9 +301,7 @@ const Settings = () => {
               <Text
                 className="text-xs font-bold"
                 style={{ color: subTextColor }}
-              >
-                Limpiar
-              </Text>
+              >{tStatic("ui.s_476e7d19")}</Text>
             </View>
           </SettingRow>
         </TouchableOpacity>
@@ -318,7 +316,7 @@ const Settings = () => {
           />
         </TouchableOpacity>
 
-        <SectionTitle title="LEGAL" />
+        <SectionTitle title={tStatic("ui.s_c53151ff")} />
         <TouchableOpacity
           onPress={() =>
             openLink(
@@ -328,8 +326,8 @@ const Settings = () => {
         >
           <SettingRow
             icon="document-text-outline"
-            title="Términos y Condiciones (EULA)"
-            subtitle="Reglas de convivencia"
+            title={tStatic("ui.s_b27e11d7")}
+            subtitle={tStatic("ui.s_eeafb3fb")}
             color={textColor}
           />
         </TouchableOpacity>
@@ -342,8 +340,8 @@ const Settings = () => {
         >
           <SettingRow
             icon="shield-checkmark-outline"
-            title="Política de Privacidad"
-            subtitle="Cómo cuidamos tus datos"
+            title={tStatic("ui.s_584ec4e9")}
+            subtitle={tStatic("ui.s_cceb0f88")}
             color={textColor}
           />
         </TouchableOpacity>
@@ -352,9 +350,7 @@ const Settings = () => {
           <Text
             className="font-bold text-lg"
             style={{ color: isDark ? "#52525B" : "#9CA3AF" }}
-          >
-            MOOD
-          </Text>
+          >{tStatic("ui.s_891d33e4")}</Text>
           {versionLabel ? (
             <Text
               className="text-xs"
@@ -367,12 +363,12 @@ const Settings = () => {
       
         {typeof __DEV__ !== "undefined" && __DEV__ && (
           <>
-            <SectionTitle title="DESARROLLO" />
+            <SectionTitle title={tStatic("ui.s_9173f50f")} />
             <TouchableOpacity onPress={() => router.push("/feature-flags" as any)}>
               <SettingRow
                 icon="flask-outline"
-                title="Experimentos"
-                subtitle="Feature flags / kill switches"
+                title={tStatic("ui.s_603d05a8")}
+                subtitle={tStatic("ui.s_1eeb507d")}
                 color="#8B5CF6"
               >
                 <Ionicons name="chevron-forward" size={20} color={subTextColor} />

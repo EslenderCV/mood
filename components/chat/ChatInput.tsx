@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { ChatMusicModal } from "./ChatMusicModal"; // 🔥 Importamos el Modal
 
+import { tStatic } from "@/context/LanguageContext";
 interface ChatInputProps {
   text: string;
   setText: (t: string) => void;
@@ -130,7 +131,7 @@ export const ChatInput = ({
             ref={inputRef}
             value={text}
             onChangeText={setText}
-            placeholder="Mensaje..."
+            placeholder={tStatic("ui.s_a0ba125b")}
             placeholderTextColor="#9ca3af"
             multiline
             style={{

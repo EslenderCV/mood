@@ -8,6 +8,7 @@ import {
 } from "@/lib/appwrite";
 import { ID } from "react-native-appwrite";
 
+import { tStatic } from "@/context/LanguageContext";
 export type FeedItemType = "post" | "suggested_users" | "trending_song";
 0;
 export interface FeedItem {
@@ -275,7 +276,7 @@ export const FeedProvider = ({ children }: { children: React.ReactNode }) => {
             item._id === tempId ? { ...item, status: "error" } : item,
           ),
         );
-        Alert.alert("Error", "No se pudo publicar.");
+        Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_7ad91252"));
       }
     }, 100);
   };

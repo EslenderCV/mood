@@ -5,6 +5,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 
+import { tStatic } from "@/context/LanguageContext";
 interface ChatListItemProps {
   chat: any;
   currentUserId: string;
@@ -39,7 +40,7 @@ export const ChatListItem = ({
         className="bg-red-500 justify-center items-center w-[80px]"
       >
         <Ionicons name="trash-outline" size={24} color="white" />
-        <Text className="text-white text-xs font-bold mt-1">Borrar</Text>
+        <Text className="text-white text-xs font-bold mt-1">{tStatic("ui.s_a96f30f0")}</Text>
       </TouchableOpacity>
     );
   };

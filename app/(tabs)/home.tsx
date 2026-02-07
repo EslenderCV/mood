@@ -16,10 +16,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { router, useNavigation } from "expo-router";
+import { router, useNavigation, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { AudioActions } from "@/context/AudioContext";
 
+import { tStatic } from "@/context/LanguageContext";
 // --- HOOK ---
 import { useHomeLogic } from "@/hooks/useHomeLogic";
 
@@ -32,6 +33,7 @@ import AdItem from "@/components/AdItem";
 import SuggestedUsersCarousel from "@/components/SuggestedUsersCarousel";
 import TrendingSongCard from "@/components/TrendingSongCard";
 import WeeklyVibeBanner from "@/components/vibe/WeeklyVibeBanner";
+import MoodGenreRecommendations from "@/components/home/MoodGenreRecommendations";
 
 // 🔥 MODALES IMPORTS
 import CreatorModal from "@/components/home/CreatorModal";
@@ -81,6 +83,18 @@ const Home = () => {
   const isDark = true;
   const logic = useHomeLogic();
   const logicRef = useRef(logic);
+  const params = useLocalSearchParams();
+  const wantsWeeklyVibeOpen = params?.weeklyVibe === "1";
+  const [weeklyVibeAutoOpen, setWeeklyVibeAutoOpen] = useState<boolean>(!!wantsWeeklyVibeOpen);
+
+  useEffect(() => {
+    if (wantsWeeklyVibeOpen) {
+      setWeeklyVibeAutoOpen(true);
+      const t = setTimeout(() => setWeeklyVibeAutoOpen(false), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [wantsWeeklyVibeOpen]);
+
   useEffect(() => { logicRef.current = logic; }, [logic]);
   const navigation = useNavigation<any>();
 
@@ -120,9 +134,7 @@ const Home = () => {
               {item.status === "uploading" && (
                 <View className="px-5 mb-2 flex-row items-center">
                   <ActivityIndicator size="small" color="#5E17EB" />
-                  <Text className="ml-2 text-xs text-zinc-400">
-                    Publicando...
-                  </Text>
+                  <Text className="ml-2 text-xs text-zinc-400">{tStatic("ui.s_db931740")}</Text>
                 </View>
               )}
               <PostItem
@@ -336,7 +348,11 @@ const Home = () => {
                 <WeeklyVibeBanner
                   userId={logic.user?.$id}
                   onCreatePost={handleAddStoryPress}
+                  autoOpen={weeklyVibeAutoOpen}
                 />
+
+                {/* 🎶 Recomendaciones rápidas por ánimo / género (MVP) */}
+                <MoodGenreRecommendations />
               </View>
             }
             onEndReached={() => logic.handleLoadMore()}

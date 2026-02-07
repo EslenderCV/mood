@@ -22,7 +22,7 @@ import { useCommentsModal } from "@/context/CommentsModalContext";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { databases, appwriteConfig, uploadVoiceNote } from "@/lib/appwrite";
 import { Query, ID } from "react-native-appwrite";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 // 🔥 CORRECCIÓN: Importamos desde la misma carpeta (./) no desde explore
 import { VoiceVibeRecorder } from "./VoiceVibeRecorder";
 
@@ -91,12 +91,9 @@ const CommentItem = ({
             <View>
               <Text
                 className={`text-xs font-bold ${isDark ? "text-white" : "text-black"}`}
-              >
-                Voice Vibe
-              </Text>
+              >{tStatic("ui.s_3da61fd2")}</Text>
               <Text className="text-[10px] text-zinc-500">
-                {voiceData.duration ? `${voiceData.duration}s` : "Audio"} • Con
-                música
+                {voiceData.duration ? `${voiceData.duration}s` : "Audio"} {tStatic("ui.s_a7f94442")}
               </Text>
             </View>
           </View>
@@ -239,7 +236,7 @@ const CommentsSheet = () => {
         ...prev,
       ]);
     } catch (e) {
-      Alert.alert("Error", "No se pudo subir la nota de voz.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_48c990a1"));
       console.log(e);
     } finally {
       setSending(false);

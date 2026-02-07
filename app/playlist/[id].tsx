@@ -31,6 +31,7 @@ import {
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useLibraryLogic } from "@/hooks/useLibraryLogic";
 
+import { tStatic } from "@/context/LanguageContext";
 // --- COMPONENTE VISUALIZADOR DE AUDIO ---
 const AudioVisualizer = ({
   isPlaying,
@@ -108,7 +109,7 @@ export default function PlaylistDetail() {
 
       setSongs(parsedSongs);
     } catch {
-      Alert.alert("Error", "No se pudo cargar la playlist");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_622526e3"));
       router.back();
     }
   }, [id]);
@@ -156,7 +157,7 @@ export default function PlaylistDetail() {
       setAddSongModalVisible(false);
       Alert.alert("Añadida", `${song.title} agregada a la playlist.`);
     } catch {
-      Alert.alert("Error", "No se pudo agregar.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_b5387d43"));
     }
   };
 
@@ -167,7 +168,7 @@ export default function PlaylistDetail() {
       setPlaylist({ ...playlist, name: newName });
       setEditModalVisible(false);
     } catch {
-      Alert.alert("Error", "No se pudo renombrar.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_a3a48447"));
     }
   };
 
@@ -180,7 +181,7 @@ export default function PlaylistDetail() {
       await removeSongFromPlaylist(id as string, songString);
     } catch {
       setSongs(previousSongs);
-      Alert.alert("Error", "No se pudo eliminar la canción.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_4e1ac340"));
     }
   };
 
@@ -196,9 +197,7 @@ export default function PlaylistDetail() {
         {
           text: "Sincronizar",
           onPress: () =>
-            Alert.alert(
-              "Sincronizando...",
-              "Estamos procesando tu solicitud en segundo plano.",
+            Alert.alert(tStatic("ui.s_5981dfcb"), tStatic("ui.s_5e93b855"),
             ),
         },
       ],
@@ -416,9 +415,9 @@ export default function PlaylistDetail() {
                   style={{ color: subTextColor }}
                 >
                   {playlist.platform === "mood"
-                    ? "Local Playlist"
-                    : "Sincronizada"}{" "}
-                  • {songs.length} tracks
+                    ? tStatic("ui.s_488a4d16")
+                    : tStatic("ui.s_7a0c462b")}{" "}
+                  • {songs.length} {tStatic("ui.s_f1e904ac")}
                 </Text>
               </View>
 
@@ -431,9 +430,7 @@ export default function PlaylistDetail() {
                 style={{ backgroundColor: accentColor }}
               >
                 <Ionicons name="add" size={24} color="white" />
-                <Text className="font-bold ml-2 text-base text-white">
-                  Agregar Canciones
-                </Text>
+                <Text className="font-bold ml-2 text-base text-white">{tStatic("ui.s_4925f6ff")}</Text>
               </TouchableOpacity>
             </View>
           }
@@ -447,9 +444,7 @@ export default function PlaylistDetail() {
               <Text
                 className="text-center mt-4 font-medium"
                 style={{ color: subTextColor }}
-              >
-                Esta playlist está vacía.
-              </Text>
+              >{tStatic("ui.s_3f112ff0")}</Text>
             </View>
           }
         />
@@ -469,9 +464,7 @@ export default function PlaylistDetail() {
               <Text
                 className="font-bold text-xl mb-4"
                 style={{ color: textColor }}
-              >
-                Renombrar Playlist
-              </Text>
+              >{tStatic("ui.s_2b01b9c3")}</Text>
               <TextInput
                 value={newName}
                 onChangeText={setNewName}
@@ -481,7 +474,7 @@ export default function PlaylistDetail() {
                   color: textColor,
                   borderColor: borderColor,
                 }}
-                placeholder="Nuevo nombre..."
+                placeholder={tStatic("ui.s_d39c3d31")}
                 placeholderTextColor={subTextColor}
                 autoFocus
               />
@@ -490,17 +483,13 @@ export default function PlaylistDetail() {
                   <Text
                     className="font-bold text-lg"
                     style={{ color: subTextColor }}
-                  >
-                    Cancelar
-                  </Text>
+                  >{tStatic("ui.s_847607d7")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleRename}>
                   <Text
                     className="font-bold text-lg"
                     style={{ color: accentColor }}
-                  >
-                    Guardar
-                  </Text>
+                  >{tStatic("ui.s_d3270bdb")}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -527,9 +516,7 @@ export default function PlaylistDetail() {
                 <Text
                   className="text-xl font-bold mb-2"
                   style={{ color: textColor }}
-                >
-                  Tus Canciones Guardadas
-                </Text>
+                >{tStatic("ui.s_ca536490")}</Text>
               </View>
 
               <FlatList
@@ -583,9 +570,7 @@ export default function PlaylistDetail() {
                         textAlign: "center",
                         marginTop: 10,
                       }}
-                    >
-                      No tienes canciones guardadas.
-                    </Text>
+                    >{tStatic("ui.s_91429eb8")}</Text>
                   </View>
                 }
               />

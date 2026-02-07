@@ -19,18 +19,21 @@ import { captureRef } from "react-native-view-shot";
 
 import { WeeklyVibe } from "@/lib/appwrite";
 
+import { tStatic } from "@/context/LanguageContext";
 const { width, height } = Dimensions.get("window");
 
 interface WeeklyVibeModalProps {
   visible: boolean;
   onClose: () => void;
   vibeData: WeeklyVibe | null;
+  onConsume?: (action: "posted" | "discarded") => void | Promise<void>;
 }
 
 const WeeklyVibeModal = ({
   visible,
   onClose,
   vibeData,
+  onConsume,
 }: WeeklyVibeModalProps) => {
   // --- ESTADOS ---
   const [artistImage, setArtistImage] = useState<string | null>(null);
@@ -212,8 +215,8 @@ const WeeklyVibeModal = ({
   }, [playSound, trackPreview, visible]);
 
   // --- 📸 SHARE LOGIC ---
-  const handleShareStory = async () => {
-    if (isSharing || !viewShotRef.current) return;
+  const handleShareStory = async (): Promise<boolean> => {
+    if (isSharing || !viewShotRef.current) return false;
     setIsSharing(true);
     try {
       const uri = await captureRef(viewShotRef, {
@@ -229,8 +232,10 @@ const WeeklyVibeModal = ({
           UTI: "image/png",
         });
       }
+      return true;
     } catch (error) {
       console.log("Error sharing:", error);
+      return false;
     } finally {
       setIsSharing(false);
     }
@@ -292,9 +297,7 @@ const WeeklyVibeModal = ({
                   fontSize: 12,
                   letterSpacing: 2,
                 }}
-              >
-                ANALIZANDO VIBES...
-              </Text>
+              >{tStatic("ui.s_f5e652a3")}</Text>
             </View>
           ) : (
             <Animated.View
@@ -308,9 +311,9 @@ const WeeklyVibeModal = ({
               {/* Header */}
               <View style={styles.header}>
                 <View style={styles.badgeContainer}>
-                  <Text style={styles.weekText}>RESUMEN SEMANAL</Text>
+                  <Text style={styles.weekText}>{tStatic("ui.s_3536ef2d")}</Text>
                 </View>
-                <Text style={styles.vibeTitle}>VIBE CHECK</Text>
+                <Text style={styles.vibeTitle}>{tStatic("ui.s_8b8040eb")}</Text>
               </View>
 
               {/* Center */}
@@ -326,7 +329,7 @@ const WeeklyVibeModal = ({
                   </View>
                 </Animated.View>
                 <Text style={styles.moodDescription}>
-                  Modo {vibeData.topMood}
+                  {tStatic("ui.s_ac5711d8")} {vibeData.topMood}
                 </Text>
               </View>
 
@@ -353,7 +356,7 @@ const WeeklyVibeModal = ({
                       ]}
                     />
                   </View>
-                  <Text style={styles.nowPlayingText}>TOP ARTIST</Text>
+                  <Text style={styles.nowPlayingText}>{tStatic("ui.s_6becacaf")}</Text>
                 </View>
                 <Text style={styles.artistName} numberOfLines={1}>
                   {vibeData.topArtist}
@@ -366,7 +369,7 @@ const WeeklyVibeModal = ({
                 <View style={styles.divider} />
                 <View style={styles.statsRow}>
                   <StatItem
-                    label="Posts"
+                    label={tStatic("ui.s_5dc52ca9")}
                     value={vibeData.totalPosts.toString()}
                     icon="layers-outline"
                   />
@@ -377,40 +380,73 @@ const WeeklyVibeModal = ({
                       backgroundColor: "rgba(255,255,255,0.2)",
                     }}
                   />
-                  <StatItem label="Vibe" value="100%" icon="flash-outline" />
+                  <StatItem label={tStatic("ui.s_6e16406e")} value="100%" icon="flash-outline" />
                 </View>
               </View>
 
-              {/* 🔥 BOTÓN COMPARTIR MEJORADO (GRADIENTE + GLOW) */}
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={handleShareStory}
-                disabled={isSharing}
-                style={{
-                  shadowColor: accentColor,
-                  shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: 0.8,
-                  shadowRadius: 20,
-                  elevation: 10,
-                }}
-              >
-                <LinearGradient
-                  // Gradiente dinámico: del color del mood a un tono más blanco/brillante
-                  colors={[accentColor, adjustColorBrightness(accentColor, 40)]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.shareButtonGradient}
+              {/* ✅ ACCIONES (Postear / Descartar) */}
+              <View style={{ gap: 12 }}>
+                {/* POSTEAR (usa el share actual como "post") */}
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={async () => {
+                    const ok = await handleShareStory();
+                    if (ok) {
+                      await onConsume?.("posted");
+                      onClose();
+                    }
+                  }}
+                  disabled={isSharing}
+                  style={{
+                    shadowColor: accentColor,
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.8,
+                    shadowRadius: 20,
+                    elevation: 10,
+                  }}
                 >
-                  {isSharing ? (
-                    <ActivityIndicator color="white" size="small" />
-                  ) : (
-                    <>
-                      <Text style={styles.shareText}>Compartir Historia</Text>
-                      <Ionicons name="share-social" size={20} color="white" />
-                    </>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
+                  <LinearGradient
+                    // Gradiente dinámico: del color del mood a un tono más blanco/brillante
+                    colors={[accentColor, adjustColorBrightness(accentColor, 40)]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.shareButtonGradient}
+                  >
+                    {isSharing ? (
+                      <ActivityIndicator color="white" size="small" />
+                    ) : (
+                      <>
+                        <Text style={styles.shareText}>{tStatic("ui.s_e73a3987")}</Text>
+                        <Ionicons name="paper-plane" size={20} color="white" />
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {/* DESCARTAR */}
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={async () => {
+                    await onConsume?.("discarded");
+                    onClose();
+                  }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "rgba(255,255,255,0.18)",
+                    borderRadius: 18,
+                    paddingVertical: 14,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexDirection: "row",
+                    gap: 10,
+                    backgroundColor: "rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={18} color="rgba(255,255,255,0.9)" />
+                  <Text style={{ color: "rgba(255,255,255,0.9)", fontWeight: "800" }}>{tStatic("ui.s_a218d22c")}</Text>
+                </TouchableOpacity>
+              </View>
+
             </Animated.View>
           )}
         </View>
@@ -460,9 +496,7 @@ const WeeklyVibeModal = ({
                     fontSize: 16,
                     letterSpacing: 4,
                   }}
-                >
-                  MY WEEKLY
-                </Text>
+                >{tStatic("ui.s_c43399f2")}</Text>
                 <Text
                   style={{
                     color: "white",
@@ -470,9 +504,7 @@ const WeeklyVibeModal = ({
                     fontSize: 40,
                     fontStyle: "italic",
                   }}
-                >
-                  VIBE CHECK
-                </Text>
+                >{tStatic("ui.s_8b8040eb")}</Text>
               </View>
 
               <View style={{ alignItems: "center" }}>
@@ -516,9 +548,7 @@ const WeeklyVibeModal = ({
                     letterSpacing: 1,
                     marginBottom: 4,
                   }}
-                >
-                  TOP ARTIST
-                </Text>
+                >{tStatic("ui.s_6becacaf")}</Text>
                 <Text
                   style={{ color: "white", fontWeight: "900", fontSize: 36 }}
                   numberOfLines={1}

@@ -10,6 +10,7 @@ import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { getPlaylistById } from "@/lib/appwrite";
 
+import { tStatic } from "@/context/LanguageContext";
 interface ChatPlaylistCardProps {
   playlistId: string;
   isMyMessage: boolean;
@@ -40,7 +41,7 @@ const ChatPlaylistCard = ({
       />
     );
   if (!playlist)
-    return <Text className="text-xs text-red-400">Playlist no disponible</Text>;
+    return <Text className="text-xs text-red-400">{tStatic("ui.s_361fee5a")}</Text>;
 
   return (
     <TouchableOpacity
@@ -90,7 +91,7 @@ const ChatPlaylistCard = ({
               isMyMessage ? "text-zinc-200" : "text-zinc-500"
             }`}
           >
-            Playlist • {playlist.songs?.length || 0} canciones
+            {tStatic("ui.s_20568f6e")} {playlist.songs?.length || 0} {tStatic("ui.s_aff4803f")}
           </Text>
         </View>
       </View>

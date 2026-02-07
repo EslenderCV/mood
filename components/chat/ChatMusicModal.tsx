@@ -18,6 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { Audio } from "expo-av";
 
+import { tStatic } from "@/context/LanguageContext";
 const { height } = Dimensions.get("window");
 
 interface ChatMusicModalProps {
@@ -150,7 +151,7 @@ export const ChatMusicModal = ({
           {/* Handle Bar */}
           <View style={styles.header}>
             <View style={styles.handle} />
-            <Text style={styles.title}>Compartir Música</Text>
+            <Text style={styles.title}>{tStatic("ui.s_2164de00")}</Text>
           </View>
 
           {/* Search Bar */}
@@ -158,7 +159,7 @@ export const ChatMusicModal = ({
             <Ionicons name="search" size={20} color="#A1A1AA" />
             <TextInput
               style={styles.input}
-              placeholder="Busca canciones..."
+              placeholder={tStatic("ui.s_b4c8ef1d")}
               placeholderTextColor="#71717A"
               value={query}
               onChangeText={setQuery}
@@ -244,7 +245,7 @@ export const ChatMusicModal = ({
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                       >
-                        <Text style={styles.sendText}>Enviar</Text>
+                        <Text style={styles.sendText}>{tStatic("ui.s_30cc00ae")}</Text>
                         <Ionicons
                           name="arrow-forward"
                           size={14}
@@ -257,7 +258,7 @@ export const ChatMusicModal = ({
               }}
               ListEmptyComponent={
                 !loading && query.length > 2 ? (
-                  <Text style={styles.emptyText}>No encontramos canciones</Text>
+                  <Text style={styles.emptyText}>{tStatic("ui.s_f4299922")}</Text>
                 ) : null
               }
             />

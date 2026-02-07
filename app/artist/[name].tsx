@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { StatusBar } from "expo-status-bar";
 
+import { tStatic } from "@/context/LanguageContext";
 // Imports de lógica
 import { getFeedCandidates } from "@/lib/appwrite";
 import { parseSongData, normalize } from "@/utils/exploreHelpers";
@@ -78,9 +79,7 @@ const ArtistPosts = () => {
           <Text className="font-bold text-lg" style={{ color: textColor }}>
             {artistName}
           </Text>
-          <Text className="text-xs" style={{ color: subTextColor }}>
-            Canciones en Mood
-          </Text>
+          <Text className="text-xs" style={{ color: subTextColor }}>{tStatic("ui.s_10e1e287")}</Text>
         </View>
       </View>
 
@@ -117,9 +116,7 @@ const ArtistPosts = () => {
               <Text
                 className="mt-4 font-medium"
                 style={{ color: subTextColor }}
-              >
-                No se encontraron posts de este artista.
-              </Text>
+              >{tStatic("ui.s_c1215e36")}</Text>
             </View>
           }
         />

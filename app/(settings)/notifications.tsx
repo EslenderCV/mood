@@ -402,6 +402,9 @@ const NotificationsScreen = () => {
           avatar: item.senderAvatar,
         },
       } as any);
+    } else if (item.type === "weekly_vibe") {
+      router.push({ pathname: "/home", params: { weeklyVibe: "1" } } as any);
+
     }
   };
 

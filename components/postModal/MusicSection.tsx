@@ -21,6 +21,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { BlurView } from "expo-blur";
+import { tStatic } from "@/context/LanguageContext";
 // Subcomponentes
 import LinkedSongCard from "./LinkedSongCard";
 import SongResultRow from "./SongResultRow";
@@ -202,7 +203,7 @@ export default function MusicSection({
           <TextInput
             className="flex-1 ml-2 text-[15px] font-medium"
             style={{ color: isDark ? "white" : "black" }}
-            placeholder="Buscar artista o canción..."
+            placeholder={tStatic("ui.s_eb99ce82")}
             placeholderTextColor={isDark ? "#52525B" : "#A1A1AA"}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -232,9 +233,7 @@ export default function MusicSection({
             {searchResults.length === 0 &&
               searchQuery.length > 2 &&
               !isLoadingSearch && (
-                <Text className="text-zinc-500 text-center mt-4 text-xs">
-                  No encontrado
-                </Text>
+                <Text className="text-zinc-500 text-center mt-4 text-xs">{tStatic("ui.s_c1943897")}</Text>
               )}
           </ScrollView>
         </View>
@@ -467,7 +466,7 @@ export default function MusicSection({
 <TouchableOpacity
   onPress={onCancelShazam}
   accessibilityRole="button"
-  accessibilityLabel="Cancelar reconocimiento"
+  accessibilityLabel={tStatic("ui.s_0c4bfd06")}
   style={{
     marginTop: 22,
     paddingVertical: 10,
@@ -478,9 +477,7 @@ export default function MusicSection({
     backgroundColor: "rgba(255,255,255,0.06)",
   }}
 >
-  <Text style={{ color: "white", fontWeight: "700" }}>
-    Cancelar
-  </Text>
+  <Text style={{ color: "white", fontWeight: "700" }}>{tStatic("ui.s_847607d7")}</Text>
 </TouchableOpacity>
           </View>
         </View>

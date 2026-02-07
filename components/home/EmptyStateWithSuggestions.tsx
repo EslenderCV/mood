@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
+import { tStatic } from "@/context/LanguageContext";
 interface EmptyStateProps {
   suggestions: any[];
   onGoToExplore: () => void;
@@ -25,22 +26,15 @@ const EmptyStateWithSuggestions = ({
             <Ionicons name="musical-notes" size={42} color="#5E17EB" />
           </View>
         </View>
-        <Text className="text-white text-2xl font-bold text-center mt-6 mb-2 tracking-tight">
-          Tu feed está muy callado...
-        </Text>
-        <Text className="text-zinc-400 text-center text-base px-6 leading-6">
-          Sigue a creadores y artistas para llenar tu inicio con la mejor
-          música.
-        </Text>
+        <Text className="text-white text-2xl font-bold text-center mt-6 mb-2 tracking-tight">{tStatic("ui.s_7ce96a09")}</Text>
+        <Text className="text-zinc-400 text-center text-base px-6 leading-6">{tStatic("ui.s_5a661d50")}</Text>
       </View>
       {suggestions.length > 0 && (
         <View className="w-full mb-10">
           <View className="flex-row items-center justify-between px-2 mb-4">
-            <Text className="text-white font-bold text-lg">
-              Sugerencias para ti
-            </Text>
+            <Text className="text-white font-bold text-lg">{tStatic("ui.s_729ed57e")}</Text>
             <TouchableOpacity onPress={onGoToExplore}>
-              <Text className="text-[#5E17EB] font-bold text-xs">Ver más</Text>
+              <Text className="text-[#5E17EB] font-bold text-xs">{tStatic("ui.s_2c001e11")}</Text>
             </TouchableOpacity>
           </View>
           <FlatList
@@ -81,9 +75,7 @@ const EmptyStateWithSuggestions = ({
                     end={{ x: 1, y: 1 }}
                     className="w-full h-full items-center justify-center"
                   >
-                    <Text className="text-white font-bold text-[10px] uppercase tracking-wide">
-                      Ver Perfil
-                    </Text>
+                    <Text className="text-white font-bold text-[10px] uppercase tracking-wide">{tStatic("ui.s_9df2a2f9")}</Text>
                   </LinearGradient>
                 </View>
               </TouchableOpacity>
@@ -108,9 +100,7 @@ const EmptyStateWithSuggestions = ({
             color="white"
             style={{ marginRight: 8 }}
           />
-          <Text className="text-white font-bold text-lg">
-            Explorar Comunidad
-          </Text>
+          <Text className="text-white font-bold text-lg">{tStatic("ui.s_ad5f6240")}</Text>
         </LinearGradient>
       </TouchableOpacity>
     </View>

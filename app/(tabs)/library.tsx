@@ -14,7 +14,7 @@ import { router } from "expo-router";
 import { useColorScheme } from "nativewind";
 import * as Haptics from "expo-haptics";
 
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 import { useLibraryLogic } from "@/hooks/useLibraryLogic";
 import {
   SongCard,
@@ -73,7 +73,7 @@ const Library = () => {
   const openAddToPlaylist = () => {
     logic.setOptionsModalVisible(false);
     if (logic.playlists.length === 0) {
-      Alert.alert("Sin Playlists", "Primero crea una playlist.", [
+      Alert.alert(tStatic("ui.s_518f6d6a"), tStatic("ui.s_faa5e48d"), [
         { text: "Cancelar", style: "cancel" },
         { text: "Crear", onPress: () => logic.setCreateModalVisible(true) },
       ]);

@@ -17,7 +17,7 @@ import {
   MaterialIcons,
 } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { Databases } from "react-native-appwrite";
 import { client, appwriteConfig, getCurrentUser } from "@/lib/appwrite";
@@ -85,9 +85,7 @@ const GetPlus = () => {
           // Usamos 'as any' para decirle a TypeScript que confíe en que la estructura es correcta
           setUser(updatedUser as any);
 
-          Alert.alert(
-            "¡Bienvenido a Mood Plus!",
-            "Código canjeado con éxito. Ahora eres un usuario verificado.",
+          Alert.alert(tStatic("ui.s_fca9e94b"), tStatic("ui.s_c99ca222"),
             [
               {
                 text: "Genial",
@@ -97,7 +95,7 @@ const GetPlus = () => {
           );
         } catch (error) {
           console.error("Error activating plus:", error);
-          Alert.alert("Error", "No se pudo activar la membresía.");
+          Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_cf4e15f2"));
         } finally {
           setLoading(false);
         }
@@ -106,11 +104,9 @@ const GetPlus = () => {
       // Flujo de pago normal
       setLoading(false);
       if (promoCode.trim() !== "") {
-        Alert.alert("Código inválido", "El código promocional no existe.");
+        Alert.alert(tStatic("ui.s_4636d03e"), tStatic("ui.s_fd034769"));
       } else {
-        Alert.alert(
-          "Pago",
-          "La pasarela de pago estará disponible pronto. Intenta conseguir un código promocional."
+        Alert.alert(tStatic("ui.s_563d5e56"), tStatic("ui.s_df6980c4")
         );
       }
     }
@@ -139,7 +135,7 @@ const GetPlus = () => {
               <Ionicons name="diamond" size={40} color="#5E17EB" />
             </View>
             <Text className="text-white text-4xl font-black tracking-tighter">
-              MOOD<Text className="text-[#5E17EB]">{t("plus.title")}</Text>
+              {tStatic("ui.s_891d33e4")}<Text className="text-[#5E17EB]">{t("plus.title")}</Text>
             </Text>
             <Text className="text-zinc-400 text-center mt-3 text-base px-4 leading-6">
               {t("plus.subtitle")}
@@ -216,7 +212,7 @@ const GetPlus = () => {
               color="#71717A"
             />
             <TextInput
-              placeholder="Código Promocional"
+              placeholder={tStatic("ui.s_7089b605")}
               placeholderTextColor="#71717A"
               className="flex-1 ml-3 text-white py-4 font-medium"
               value={promoCode}

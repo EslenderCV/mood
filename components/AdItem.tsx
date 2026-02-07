@@ -5,6 +5,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import * as Haptics from "expo-haptics";
 
+import { tStatic } from "@/context/LanguageContext";
 interface AdItemProps {
   ad: {
     id: string;
@@ -66,9 +67,7 @@ const AdItem: React.FC<AdItemProps> = ({ ad }) => {
             <Text
               className="text-[12px] font-semibold tracking-wide"
               style={{ color: subTextColor }}
-            >
-              Publicidad
-            </Text>
+            >{tStatic("ui.s_c96b1a9c")}</Text>
           </View>
         </View>
 
@@ -112,7 +111,7 @@ const AdItem: React.FC<AdItemProps> = ({ ad }) => {
                 cachePolicy="memory-disk" // Cache agresivo
               />
               <View className="absolute top-3 right-3 bg-black/60 px-2 py-1 rounded-md border border-white/10">
-                <Text className="text-white text-[10px] font-bold">AD</Text>
+                <Text className="text-white text-[10px] font-bold">{tStatic("ui.s_e182ebbc")}</Text>
               </View>
             </View>
           )}
@@ -127,7 +126,7 @@ const AdItem: React.FC<AdItemProps> = ({ ad }) => {
               </Text>
             </View>
             <View className="bg-white px-4 py-2 rounded-full">
-              <Text className="text-black font-bold text-[12px]">Abrir</Text>
+              <Text className="text-black font-bold text-[12px]">{tStatic("ui.s_a5f9ee83")}</Text>
             </View>
           </View>
         </TouchableOpacity>

@@ -23,7 +23,7 @@ import {
 } from "@/lib/appwrite";
 import { sendWelcomeEmail } from "@/lib/email";
 import { AppwriteException } from "react-native-appwrite";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 
 // 🔥 IMPORTAMOS EL ACCOUNT MANAGER
 import { AccountManager } from "@/lib/accountManager";
@@ -106,7 +106,7 @@ const SignUp = () => {
             router.replace("/home");
           }, 500);
         } else {
-          Alert.alert("Error", "No se pudo sincronizar el perfil del usuario.");
+          Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_ef9b7e8d"));
         }
       }
     } catch (error: any) {
@@ -121,7 +121,7 @@ const SignUp = () => {
     if (supported) {
       await Linking.openURL(url);
     } else {
-      Alert.alert("Error", "No se pudo abrir el enlace");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_0dc9f6a6"));
     }
   };
 
@@ -188,7 +188,7 @@ const SignUp = () => {
 
             <View className="mt-6 px-2">
               <Text className="text-zinc-500 text-xs text-center leading-4">
-                By creating an account, you agree to our{" "}
+                {tStatic("ui.s_0cb3cac0")}{" "}
                 <Text
                   className="text-[#5E17EB] font-bold"
                   onPress={() =>
@@ -197,9 +197,11 @@ const SignUp = () => {
                     )
                   }
                 >
-                  Terms of Use (EULA)
+                  {tStatic("ui.s_74947a95")}
                 </Text>
-                {" and our "}
+                {" "}
+                {t("auth.andOur")}
+                {" "}
                 <Text
                   className="text-[#5E17EB] font-bold"
                   onPress={() =>
@@ -208,7 +210,7 @@ const SignUp = () => {
                     )
                   }
                 >
-                  Privacy Policy
+                  {t("help.privacy")}
                 </Text>
                 .
               </Text>

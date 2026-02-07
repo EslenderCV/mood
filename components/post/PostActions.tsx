@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import PressableScale from "@/components/shared/PressableScale";
 
+import { tStatic } from "@/context/LanguageContext";
 export const PostActions = ({
   postId,
   likesCount,
@@ -46,7 +47,7 @@ export const PostActions = ({
           hapticKind="light"
           hitSlop={hit}
           accessibilityLabel={isLiked ? "Quitar like" : "Dar like"}
-          accessibilityHint="Marca este post como que te gusta"
+          accessibilityHint={tStatic("ui.s_74eaabcc")}
           // ensure the touch target is confined to its own bounds
           style={{ paddingHorizontal: 2, paddingVertical: 2 }}
         >
@@ -82,8 +83,8 @@ export const PostActions = ({
           }}
           hapticKind="selection"
           hitSlop={hit}
-          accessibilityLabel="Abrir comentarios"
-          accessibilityHint="Ver y escribir comentarios"
+          accessibilityLabel={tStatic("ui.s_faa961a1")}
+          accessibilityHint={tStatic("ui.s_d047815e")}
           style={{ paddingHorizontal: 2, paddingVertical: 2 }}
         >
           <Ionicons name="chatbubble-outline" size={24} color={iconColor} />
@@ -104,7 +105,7 @@ export const PostActions = ({
           hapticKind="selection"
           hitSlop={hit}
           accessibilityLabel={isSaved ? "Quitar guardado" : "Guardar"}
-          accessibilityHint="Guarda este post para verlo luego"
+          accessibilityHint={tStatic("ui.s_e793a3d6")}
           style={{ paddingHorizontal: 2, paddingVertical: 2 }}
         >
           <Ionicons
@@ -122,8 +123,8 @@ export const PostActions = ({
         }}
         hapticKind="selection"
         hitSlop={hit}
-        accessibilityLabel="Compartir"
-        accessibilityHint="Comparte este post"
+        accessibilityLabel={tStatic("ui.s_fba5ba0a")}
+        accessibilityHint={tStatic("ui.s_7da85d20")}
         style={{ paddingHorizontal: 2, paddingVertical: 2 }}
       >
         <Ionicons name="share-social-outline" size={24} color={iconColor} />

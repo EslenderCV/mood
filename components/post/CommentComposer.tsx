@@ -11,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { VoiceVibeRecorder } from "@/components/comments/VoiceVibeRecorder";
 
+import { tStatic } from "@/context/LanguageContext";
 interface CommentComposerProps {
   user: any;
   text: string;
@@ -59,7 +60,7 @@ export const CommentComposer = ({
             className="text-xs font-medium"
             style={{ color: styles.subTextColor }}
           >
-            Respondiendo a{" "}
+            {tStatic("ui.s_16f79c31")}{" "}
             <Text style={{ color: styles.accentColor }}>
               @{replyingTo.username}
             </Text>

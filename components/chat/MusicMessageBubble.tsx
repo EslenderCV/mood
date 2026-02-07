@@ -4,6 +4,7 @@ import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useAudioContext } from "@/context/AudioContext";
 
+import { tStatic } from "@/context/LanguageContext";
 interface MusicMessageBubbleProps {
   songData: string; // JSON string
   isMe: boolean;
@@ -20,7 +21,7 @@ export const MusicMessageBubble = ({
   try {
     song = JSON.parse(songData);
   } catch {
-    return <Text style={{ color: "red" }}>Error loading song</Text>;
+    return <Text style={{ color: "red" }}>{tStatic("ui.s_04e0348a")}</Text>;
   }
 
   const isThisPlaying = currentPlayingId === song.id && isPlaying;

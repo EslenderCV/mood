@@ -4,6 +4,7 @@ import { Stack, router } from "expo-router";
 
 import PressableScale from "@/components/shared/PressableScale";
 
+import { tStatic } from "@/context/LanguageContext";
 type Props = {
   error: Error;
   retry: () => void;
@@ -17,36 +18,30 @@ export default function ErrorBoundary({ error, retry }: Props) {
 
   return (
     <View className="flex-1 bg-black px-6 justify-center">
-      <Stack.Screen options={{ title: "Algo salió mal" }} />
+      <Stack.Screen options={{ title: tStatic("ui.s_a2375014") }} />
 
-      <Text className="text-white text-2xl font-bold mb-2">Algo salió mal</Text>
-      <Text className="text-zinc-400 text-base leading-6 mb-6">
-        Se produjo un error inesperado. Puedes intentar de nuevo o volver al inicio.
-      </Text>
+      <Text className="text-white text-2xl font-bold mb-2">{tStatic("ui.s_a2375014")}</Text>
+      <Text className="text-zinc-400 text-base leading-6 mb-6">{tStatic("ui.s_fceb6c3f")}</Text>
 
       <View className="flex-row">
         <PressableScale
           onPress={retry}
           hapticKind="selection"
           className="flex-1 bg-[#5E17EB] rounded-2xl px-5 py-4 mr-3"
-          accessibilityLabel="Reintentar"
-          accessibilityHint="Intenta cargar la pantalla nuevamente"
+          accessibilityLabel={tStatic("ui.s_17965461")}
+          accessibilityHint={tStatic("ui.s_e8c266e1")}
         >
-          <Text className="text-white text-base font-semibold text-center">
-            Reintentar
-          </Text>
+          <Text className="text-white text-base font-semibold text-center">{tStatic("ui.s_17965461")}</Text>
         </PressableScale>
 
         <PressableScale
           onPress={() => router.replace("/home" as any)}
           hapticKind="selection"
           className="flex-1 bg-white/10 border border-white/10 rounded-2xl px-5 py-4"
-          accessibilityLabel="Volver al inicio"
-          accessibilityHint="Regresa al feed principal"
+          accessibilityLabel={tStatic("ui.s_d657cdfd")}
+          accessibilityHint={tStatic("ui.s_f18a8fc3")}
         >
-          <Text className="text-white text-base font-semibold text-center">
-            Inicio
-          </Text>
+          <Text className="text-white text-base font-semibold text-center">{tStatic("ui.s_bf89f675")}</Text>
         </PressableScale>
       </View>
     </View>

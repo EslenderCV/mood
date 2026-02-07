@@ -14,6 +14,7 @@ import * as Haptics from "expo-haptics";
 import { BlurView } from "expo-blur";
 import { MoodState } from "@/hooks/usePostModalController";
 
+import { tStatic } from "@/context/LanguageContext";
 interface MoodSelectorPopupProps {
   isVisible: boolean;
   onClose: () => void;
@@ -124,9 +125,7 @@ const MoodSelectorPopup = ({
               >
                 <Ionicons name="sparkles" size={20} color={accentColor} />
               </View>
-              <Text className="text-white font-bold text-xl tracking-tight">
-                Tu Vibe
-              </Text>
+              <Text className="text-white font-bold text-xl tracking-tight">{tStatic("ui.s_2b6cf537")}</Text>
             </View>
             <TouchableOpacity
               onPress={handleClose}
@@ -171,17 +170,13 @@ const MoodSelectorPopup = ({
               </View>
             </TouchableOpacity>
             {!localEmoji && (
-              <Text className="text-zinc-500 text-xs font-medium">
-                Toca para elegir
-              </Text>
+              <Text className="text-zinc-500 text-xs font-medium">{tStatic("ui.s_95d82ec4")}</Text>
             )}
           </View>
 
           {/* --- SLIDE DE EMOJIS SUGERIDOS --- */}
           <View className="mb-6">
-            <Text className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-3 ml-1">
-              Vibes Populares
-            </Text>
+            <Text className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-3 ml-1">{tStatic("ui.s_d607e402")}</Text>
 
             <ScrollView
               horizontal
@@ -246,7 +241,7 @@ const MoodSelectorPopup = ({
             <TextInput
               value={localText}
               onChangeText={handleTextChange}
-              placeholder="Describe tu vibe..."
+              placeholder={tStatic("ui.s_0cb739ae")}
               placeholderTextColor={placeholderColor}
               style={{
                 color: "white",
@@ -280,7 +275,7 @@ const MoodSelectorPopup = ({
             <Text
               className={`font-bold text-base ${localEmoji ? "text-white" : "text-zinc-500"}`}
             >
-              {localEmoji ? "Listo" : "Elige un Vibe primero"}
+              {localEmoji ? tStatic("ui.s_8ddd8d88") : tStatic("ui.s_b274d2f7")}
             </Text>
           </TouchableOpacity>
         </View>

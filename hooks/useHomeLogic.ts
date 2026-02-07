@@ -27,6 +27,7 @@ import { useHomeFeedConstruction } from "./home/useHomeFeedConstruction";
 import { useFeedTelemetry } from "./home/useFeedTelemetry";
 import { useBrainFeedSync } from "./home/useBrainFeedSync";
 
+import { tStatic } from "@/context/LanguageContext";
 const STORIES_BUCKET_ID = "696bcdd6003277d6eefd";
 
 export const useHomeLogic = () => {
@@ -267,10 +268,10 @@ export const useHomeLogic = () => {
         const item = sortedFeedRef.current.find((i) => i.type === "post" && i.data?.$id === post.$id);
         if (item) trackShare(post.$id, item.id);
 
-        Alert.alert("Enviado", "Publicación compartida.");
+        Alert.alert(tStatic("ui.s_823a8f1e"), tStatic("ui.s_a233337c"));
         toggleModal("isShareSelector", false);
       } catch {
-        Alert.alert("Error", "No se pudo compartir.");
+        Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_acc0fa69"));
       }
     },
     [user, selectedPostToShare, postToShareData, trackShare, toggleModal],
@@ -309,7 +310,7 @@ export const useHomeLogic = () => {
 
     const link = `https://moodapp.com/post/${post.$id}`;
     await Clipboard.setStringAsync(link);
-    Alert.alert("Copiado", "Enlace en el portapapeles.");
+    Alert.alert(tStatic("ui.s_928bc7ca"), tStatic("ui.s_17c985bf"));
   }, [selectedPostToShare, postToShareData, trackShare]);
 
   const handleSystemShare = useCallback(async () => {
@@ -328,7 +329,7 @@ export const useHomeLogic = () => {
 
     setTimeout(async () => {
       if (!userId) return;
-      Alert.alert("Seleccionar", "¿Qué deseas subir?", [
+      Alert.alert(tStatic("ui.s_a846a650"), tStatic("ui.s_addcfb70"), [
         { text: "Cancelar", style: "cancel" },
         { text: "Foto", onPress: () => processMediaUpload("image") },
         { text: "Video", onPress: () => processMediaUpload("video") },
@@ -339,7 +340,7 @@ export const useHomeLogic = () => {
   const processMediaUpload = useCallback(
     async (type: "image" | "video") => {
       if (!userId) {
-        Alert.alert("Error", "No estás identificado.");
+        Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_93cc2da3"));
         return;
       }
 
@@ -347,7 +348,7 @@ export const useHomeLogic = () => {
         const asset = await pickMedia(type);
         if (!asset) return;
 
-        Alert.alert("Subiendo", "Tu historia se está subiendo en segundo plano...");
+        Alert.alert(tStatic("ui.s_967b15c4"), tStatic("ui.s_bb780b43"));
 
         const cleanExtension = type === "video" ? "mp4" : "jpg";
         const cleanFileName = `story_${Date.now()}.${cleanExtension}`;
@@ -376,9 +377,9 @@ export const useHomeLogic = () => {
 
         await createStory(songData, userId);
         void fetchAuxiliaryData(true);
-        Alert.alert("Éxito", "Historia publicada");
+        Alert.alert(tStatic("ui.s_56065055"), tStatic("ui.s_8faf8a3c"));
       } catch {
-        Alert.alert("Error", "No se pudo subir. Verifica el formato.");
+        Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_29721568"));
       }
     },
     [userId, fetchAuxiliaryData],

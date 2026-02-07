@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text } from "react-native";
 
+import { tStatic } from "@/context/LanguageContext";
 interface EmptyCommentsProps {
   t: (key: string) => string;
   styles: any;
@@ -18,9 +19,7 @@ export const EmptyComments = ({ t, styles }: EmptyCommentsProps) => {
       <Text
         className="text-center text-xs mt-2 opacity-60"
         style={{ color: styles.subTextColor }}
-      >
-        Sé el primero en opinar sobre este Vibe.
-      </Text>
+      >{tStatic("ui.s_bd99de7d")}</Text>
     </View>
   );
 };

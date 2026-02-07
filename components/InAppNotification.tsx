@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useNotification } from "@/context/NotificationContext";
 
+import { tStatic } from "@/context/LanguageContext";
 const { width } = Dimensions.get("window");
 
 // --- HELPER: Limpiador de Emojis ---
@@ -108,7 +109,7 @@ const InAppNotification = () => {
             <Text style={styles.titleText} numberOfLines={1}>
               {cleanTitle}
             </Text>
-            <Text style={styles.timeText}>Ahora</Text>
+            <Text style={styles.timeText}>{tStatic("ui.s_83a2de66")}</Text>
           </View>
 
           <Text style={styles.bodyText} numberOfLines={2}>

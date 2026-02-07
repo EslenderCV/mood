@@ -14,11 +14,15 @@ type ConnectionStatus = "connected" | "disconnected" | "connecting";
 
 interface ConnectionBannerProps {
   status: ConnectionStatus;
+  /** If false, the banner will not render (useful during boot/splash). */
+  enabled?: boolean;
 }
 
-const ConnectionBanner = ({ status }: ConnectionBannerProps) => {
+const ConnectionBanner = ({ status, enabled = true }: ConnectionBannerProps) => {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage(); // <--- Obtenemos la función de traducción
+
+  const prevStatus = useRef<ConnectionStatus | null>(null);
 
   // Animaciones
   const translateY = useRef(new Animated.Value(-50)).current;
@@ -60,19 +64,31 @@ const ConnectionBanner = ({ status }: ConnectionBannerProps) => {
 
 
   useEffect(() => {
+    if (!enabled) return;
+
+    // Avoid showing the "connected" success pill on initial app mount.
+    // Only show it when transitioning from a bad state to connected.
+    const prev = prevStatus.current;
+    prevStatus.current = status;
+
     if (status === "connected") {
-      // Mostrar éxito brevemente y luego salir
-      animateIn();
-      const timer = setTimeout(() => animateOut(), 2500);
-      return () => clearTimeout(timer);
-    } else if (status === "disconnected" || status === "connecting") {
-      // Mantener visible si hay problemas o cargando
+      if (prev === "disconnected" || prev === "connecting") {
+        animateIn();
+        const timer = setTimeout(() => animateOut(), 1600);
+        return () => clearTimeout(timer);
+      }
+      // Otherwise keep hidden.
+      animateOut();
+      return;
+    }
+
+    if (status === "disconnected" || status === "connecting") {
       animateIn();
     }
-  }, [status, animateIn, animateOut]);
+  }, [status, enabled, animateIn, animateOut]);
 
 
-  if (!visible) return null;
+  if (!enabled || !visible) return null;
 
   // Configuración de Estilos y Textos (Traducidos)
   const getConfig = () => {

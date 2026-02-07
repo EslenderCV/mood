@@ -14,6 +14,7 @@ import {
 import { useGlobalContext } from "@/context/GlobalProvider";
 import { useAudioContext } from "@/context/AudioContext";
 
+import { tStatic } from "@/context/LanguageContext";
 const databases = new Databases(client);
 
 export const useLibraryLogic = () => {
@@ -113,7 +114,7 @@ export const useLibraryLogic = () => {
       setPlaylists(pls || []);
     } catch (error) {
       console.log("Error cargando librería:", error);
-      Alert.alert("Error", "No se pudo cargar tu biblioteca.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_cb41286e"));
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -152,7 +153,7 @@ export const useLibraryLogic = () => {
       if (myReq !== playReqRef.current) return;
 
       if (!finalUrl) {
-        Alert.alert("Lo sentimos", "Audio no disponible.");
+        Alert.alert(tStatic("ui.s_b2a42773"), tStatic("ui.s_c2fcf39b"));
         return;
       }
 
@@ -164,7 +165,7 @@ export const useLibraryLogic = () => {
       });
     } catch (e) {
       console.log(e);
-      Alert.alert("Error", "Error al reproducir.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_21646377"));
     } finally {
       if (myReq === playReqRef.current) setLoadingAudioIdLocal(null);
     }
@@ -179,7 +180,7 @@ export const useLibraryLogic = () => {
       setCreateModalVisible(false);
       await fetchData();
     } catch {
-      Alert.alert("Error", "No se pudo crear la playlist.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_62cd7c18"));
     }
   };
 
@@ -189,9 +190,9 @@ export const useLibraryLogic = () => {
       await await addSongToPlaylist(playlist.$id, songToAdd);
       setAddToPlaylistModalVisible(false);
       setSongToAdd(null);
-      Alert.alert("Listo", "Canción agregada.");
+      Alert.alert(tStatic("ui.s_8ddd8d88"), tStatic("ui.s_21158300"));
     } catch {
-      Alert.alert("Error", "No se pudo agregar la canción.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_ac7622d8"));
     }
   };
 
@@ -217,7 +218,7 @@ export const useLibraryLogic = () => {
       }
     } catch {
       setMusicCollection(previousList);
-      Alert.alert("Error", "Fallo al eliminar.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_36f27c7e"));
     }
   };
 

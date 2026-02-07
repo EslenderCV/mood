@@ -17,6 +17,7 @@ import { followUser, unfollowUser, checkFollowStatus } from "@/lib/appwrite";
 import { BrainEmitter } from "@/src/brain/signals/emitters";
 import { InteractionType } from "@/src/brain/signals/InteractionSignals";
 
+import { tStatic } from "@/context/LanguageContext";
 type SuggestedUser = any;
 
 interface SuggestedUsersCarouselProps {
@@ -257,9 +258,7 @@ export default function SuggestedUsersCarousel({
                   <Text
                     className="text-[12px] font-bold"
                     style={{ color: textColor }}
-                  >
-                    Siguiendo
-                  </Text>
+                  >{tStatic("ui.s_2ee9c14a")}</Text>
                 )}
               </View>
             ) : (
@@ -274,9 +273,7 @@ export default function SuggestedUsersCarousel({
                   <ActivityIndicator size="small" color="white" />
                 ) : (
                   <>
-                    <Text className="text-white text-[12px] font-bold tracking-wide mr-1">
-                      Seguir
-                    </Text>
+                    <Text className="text-white text-[12px] font-bold tracking-wide mr-1">{tStatic("ui.s_bd23eb60")}</Text>
                     {/* Pequeño icono para invitar a la acción */}
                     <Ionicons name="add" size={12} color="white" />
                   </>
@@ -322,9 +319,7 @@ export default function SuggestedUsersCarousel({
           className={`text-base font-bold ${
             isDark ? "text-white" : "text-black"
           }`}
-        >
-          You Might Know
-        </Text>
+        >{tStatic("ui.s_5c163ee9")}</Text>
       </View>
 
       {/* Lista Horizontal */}

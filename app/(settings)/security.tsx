@@ -26,7 +26,7 @@ import {
   deleteAllSessions,
 } from "@/lib/appwrite";
 import { useGlobalContext } from "@/context/GlobalProvider";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 
 const Security = () => {
   const { colorScheme } = useColorScheme();
@@ -104,9 +104,7 @@ const Security = () => {
   const handlePrivacyModeToggle = async (val: boolean) => {
     setPrivacyMode(val);
     if (val) {
-      Alert.alert(
-        "Modo Privacidad Activado",
-        "Ahora no se pueden tomar capturas de pantalla ni grabar dentro de la app.",
+      Alert.alert(tStatic("ui.s_2e426f17"), tStatic("ui.s_e9eef2bc"),
       );
     }
   };
@@ -312,14 +310,12 @@ const Security = () => {
         >
           <View className="flex-row justify-between items-start mb-2">
             <View>
-              <Text className="text-sm font-bold uppercase tracking-widest text-[#5E17EB]">
-                Salud de Seguridad
-              </Text>
+              <Text className="text-sm font-bold uppercase tracking-widest text-[#5E17EB]">{tStatic("ui.s_59064fcd")}</Text>
               <Text
                 className="text-2xl font-bold mt-1"
                 style={{ color: textColor }}
               >
-                {score >= 80 ? "Excelente" : score >= 60 ? "Buena" : "Riesgo"}
+                {score >= 80 ? "Excelente" : score >= 60 ? tStatic("ui.s_8253ac9e") : tStatic("ui.s_3620a2f5")}
               </Text>
             </View>
             <View
@@ -373,14 +369,12 @@ const Security = () => {
         <Text
           className="text-xs font-bold uppercase mb-2 mt-6 tracking-widest pl-1"
           style={{ color: subTextColor }}
-        >
-          Privacidad
-        </Text>
+        >{tStatic("ui.s_965c9bb3")}</Text>
 
         <SecurityRow
           icon="eye-off-outline"
-          title="Modo Privacidad"
-          subtitle="Bloquea capturas y grabaciones de pantalla"
+          title={tStatic("ui.s_1d57a629")}
+          subtitle={tStatic("ui.s_f3f5a192")}
           hasSwitch
           value={privacyMode}
           onToggle={handlePrivacyModeToggle}
@@ -388,15 +382,15 @@ const Security = () => {
 
         <SecurityRow
           icon="clipboard-outline"
-          title="Limpiar Portapapeles"
-          subtitle="Borrar datos copiados por seguridad"
+          title={tStatic("ui.s_bdfd840e")}
+          subtitle={tStatic("ui.s_603d03f2")}
           onPress={async () => {
             await Clipboard.setStringAsync("");
-            Alert.alert("Listo", "Portapapeles limpiado.");
+            Alert.alert(tStatic("ui.s_8ddd8d88"), tStatic("ui.s_a0761a61"));
           }}
           rightElement={
             <View className="bg-zinc-100 dark:bg-zinc-800 px-3 py-1 rounded-md">
-              <Text style={{ color: subTextColor, fontSize: 10 }}>LIMPIAR</Text>
+              <Text style={{ color: subTextColor, fontSize: 10 }}>{tStatic("ui.s_9befe99b")}</Text>
             </View>
           }
         />
@@ -558,8 +552,8 @@ const Security = () => {
                     {field === "old"
                       ? "Actual"
                       : field === "new"
-                        ? "Nueva"
-                        : "Confirmar"}
+                        ? tStatic("ui.s_2e3d3876")
+                        : tStatic("ui.s_8487931b")}
                   </Text>
                   <TextInput
                     secureTextEntry

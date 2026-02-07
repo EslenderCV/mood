@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 
+import { tStatic } from "@/context/LanguageContext";
 interface PostNavbarProps {
   styles: any;
   onOptions: () => void;
@@ -24,9 +25,7 @@ export const PostNavbar = ({ styles, onOptions }: PostNavbarProps) => {
       >
         <Ionicons name="arrow-back" size={24} color={styles.backIconColor} />
       </TouchableOpacity>
-      <Text className="font-bold text-base" style={{ color: styles.textColor }}>
-        Vibe
-      </Text>
+      <Text className="font-bold text-base" style={{ color: styles.textColor }}>{tStatic("ui.s_6e16406e")}</Text>
       <TouchableOpacity
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

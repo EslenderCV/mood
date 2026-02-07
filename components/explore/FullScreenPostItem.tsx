@@ -25,6 +25,7 @@ import {
 import { parseSongData, getCreatorFromPost } from "@/utils/exploreHelpers";
 import CommentsSheet from "./CommentsSheet";
 
+import { tStatic } from "@/context/LanguageContext";
 // 🔥 1. IMPORTAR EL CONTEXTO
 import { useAudioContext } from "@/context/AudioContext";
 
@@ -134,7 +135,7 @@ const FullScreenPostItem = React.memo(
         await followUser(currentUser.$id, creator.id);
       } catch {
         setIsFollowing(false);
-        Alert.alert("Error", "No se pudo seguir al usuario");
+        Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_73e191f0"));
       }
     };
 
@@ -183,9 +184,7 @@ const FullScreenPostItem = React.memo(
           >
             <Ionicons name="chevron-down" size={24} color="white" />
           </TouchableOpacity>
-          <Text className="text-white/80 font-bold text-xs uppercase tracking-widest bg-black/20 px-3 py-1 rounded-full backdrop-blur-md">
-            Vibe Check
-          </Text>
+          <Text className="text-white/80 font-bold text-xs uppercase tracking-widest bg-black/20 px-3 py-1 rounded-full backdrop-blur-md">{tStatic("ui.s_65f35e27")}</Text>
           <TouchableOpacity
             onPress={() => onOption(item)}
             className="w-10 h-10 bg-black/20 rounded-full items-center justify-center backdrop-blur-md"
@@ -261,7 +260,7 @@ const FullScreenPostItem = React.memo(
             className="items-center"
           >
             <Ionicons name="chatbubble-ellipses" size={34} color="white" />
-            <Text className="text-white text-xs font-bold mt-1">Chat</Text>
+            <Text className="text-white text-xs font-bold mt-1">{tStatic("ui.s_55dcdf01")}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleSave} className="items-center">
             <Ionicons
@@ -269,7 +268,7 @@ const FullScreenPostItem = React.memo(
               size={34}
               color={isSaved ? "#5E17EB" : "white"}
             />
-            <Text className="text-white text-xs font-bold mt-1">Save</Text>
+            <Text className="text-white text-xs font-bold mt-1">{tStatic("ui.s_c9cc8cce")}</Text>
           </TouchableOpacity>
         </View>
 

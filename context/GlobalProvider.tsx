@@ -14,7 +14,8 @@ import { AppState } from "react-native";
 import { getCurrentUser, updateUserPresence } from "@/lib/appwrite";
 import { Models } from "react-native-appwrite";
 import { useColorScheme } from "nativewind";
-import { useRouter, useSegments } from "expo-router";
+// NOTE: Navigation should be handled by app/_layout.tsx.
+// Keeping GlobalProvider free of router side-effects reduces startup flicker.
 
 export interface User extends Models.Document {
   name: string;
@@ -78,8 +79,6 @@ const GlobalProvider = ({ children }: Props) => {
   const [isSwitching, setIsSwitching] = useState(false);
 
   const { colorScheme, setColorScheme } = useColorScheme();
-  const router = useRouter();
-  const segments = useSegments();
 
   const checkAuth = useCallback(
     async (force = false) => {
@@ -111,15 +110,6 @@ const GlobalProvider = ({ children }: Props) => {
     }
     checkAuth();
   }, []);
-
-  useEffect(() => {
-    if (loading) return;
-
-    const inAuthGroup = segments[0] === "(auth)";
-    if (!loggedIn && !inAuthGroup) {
-      router.replace("/signIn");
-    }
-  }, [loggedIn, loading, segments]);
 
   // 🔥🔥 DETECCIÓN AUTOMÁTICA DE ESTADO (ONLINE / OFFLINE) 🔥🔥
   useEffect(() => {

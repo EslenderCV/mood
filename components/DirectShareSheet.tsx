@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, Feather } from "@expo/vector-icons";
 
 
+import { tStatic } from "@/context/LanguageContext";
 const { height } = Dimensions.get("window");
 
 const DirectShareSheet = ({
@@ -88,7 +89,7 @@ const DirectShareSheet = ({
                 >
                   <Ionicons name="search" size={20} color={placeholderColor} />
                   <TextInput
-                    placeholder="Buscar persona..."
+                    placeholder={tStatic("ui.s_6a581ce4")}
                     placeholderTextColor={placeholderColor}
                     className="flex-1 ml-3 text-base"
                     style={{ color: textColor }}
@@ -119,9 +120,7 @@ const DirectShareSheet = ({
                     data={contacts}
                     keyExtractor={(item) => item.$id}
                     ListEmptyComponent={
-                      <Text className="text-zinc-500 mt-8 ml-2">
-                        No se encontraron usuarios.
-                      </Text>
+                      <Text className="text-zinc-500 mt-8 ml-2">{tStatic("ui.s_fecf6798")}</Text>
                     }
                     renderItem={({ item }) => {
                       const isSelected = selectedUsers.includes(item.$id);
@@ -248,7 +247,7 @@ const DirectShareSheet = ({
                     className="w-full bg-[#5E17EB] py-4 rounded-full items-center"
                   >
                     <Text className="text-white font-bold text-base">
-                      Enviar ({selectedUsers.length})
+                      {tStatic("ui.s_e27a30b0")}{selectedUsers.length})
                     </Text>
                   </TouchableOpacity>
                 </View>

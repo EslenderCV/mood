@@ -12,6 +12,7 @@ import { BlurView } from "expo-blur";
 import StreakBadge from "./StreakBadge";
 import * as Haptics from "expo-haptics";
 
+import { tStatic } from "@/context/LanguageContext";
 const { width } = Dimensions.get("window");
 
 interface StreakSuccessModalProps {
@@ -116,9 +117,9 @@ const StreakSuccessModal = ({
               transform: [{ translateY: textTranslateY }],
             }}
           >
-            <Text style={styles.title}>¡RACHA EN LLAMAS!</Text>
+            <Text style={styles.title}>{tStatic("ui.s_0b2a9cff")}</Text>
             <Text style={styles.subtitle}>
-              Has publicado {days} días seguidos.{"\n"}¡Sigue así!
+              {tStatic("ui.s_e79c19ed")} {days} {tStatic("ui.s_dc05e64f")}{tStatic("ui.s_1d787586")}{tStatic("ui.s_23cd3837")}
             </Text>
           </Animated.View>
         </View>

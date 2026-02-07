@@ -36,7 +36,7 @@ import {
   client,
   appwriteConfig,
 } from "@/lib/appwrite";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 
 // Componentes Premium
 import ProfileSkeleton from "@/components/profile/ProfileSkeleton";
@@ -231,12 +231,12 @@ const UserProfile = () => {
       if (!currentUser || !visitedUser) return;
       await blockUser(currentUser.$id, visitedUser.$id);
       setShowOptionsModal(false);
-      Alert.alert("Bloqueado", "El usuario ha sido bloqueado correctamente.", [
+      Alert.alert(tStatic("ui.s_ec07c2e7"), tStatic("ui.s_3e1e6082"), [
         { text: "OK", onPress: () => router.back() },
       ]);
     } catch {
       setShowOptionsModal(false);
-      Alert.alert("Error", "No se pudo bloquear al usuario.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_231d0667"));
     }
   };
 
@@ -294,11 +294,11 @@ const UserProfile = () => {
       if (chatDoc && chatDoc.$id) {
         router.push(`/chat/${chatDoc.$id}` as any);
       } else {
-        Alert.alert("Error", "No se pudo iniciar el chat.");
+        Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_04bccec7"));
       }
     } catch (error) {
       console.error("Error al iniciar chat:", error);
-      Alert.alert("Error", "Ocurrió un error al intentar abrir el chat.");
+      Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_ea44fb1e"));
     } finally {
       setIsChatLoading(false);
     }
@@ -573,13 +573,13 @@ const UserProfile = () => {
                     >
                       {followStatus === "accepted"
                         ? isFollowingMe
-                          ? "Friends"
-                          : "Following"
+                          ? tStatic("ui.s_3d594614")
+                          : tStatic("ui.s_6f796b0e")
                         : followStatus === "pending"
                           ? "Requested"
                           : isFollowingMe
-                            ? "Follow Back"
-                            : "Follow"}
+                            ? tStatic("ui.s_2ec3e1aa")
+                            : tStatic("ui.s_3903aab3")}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -778,9 +778,7 @@ const UserProfile = () => {
                 <Text
                   className="text-center mt-10"
                   style={{ color: subTextColor }}
-                >
-                  No posts
-                </Text>
+                >{tStatic("ui.s_5dba4ea3")}</Text>
               ) : (
                 <View className="flex-row flex-wrap">
                   {posts.map((item) => (
@@ -799,9 +797,7 @@ const UserProfile = () => {
                 <Text
                   className="text-center mt-10"
                   style={{ color: subTextColor }}
-                >
-                  No songs
-                </Text>
+                >{tStatic("ui.s_901b298f")}</Text>
               ) : (
                 <View>
                   {topSongs.map((song, index) => (

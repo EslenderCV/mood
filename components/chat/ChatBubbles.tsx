@@ -4,7 +4,7 @@ import { Image } from "expo-image"; // 🔥 Premium Image
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { useLanguage } from "@/context/LanguageContext";
+import { tStatic, useLanguage } from "@/context/LanguageContext";
 import { getPostById, getPlaylistById } from "@/lib/appwrite";
 import * as Haptics from "expo-haptics";
 
@@ -83,9 +83,7 @@ export const PostPreviewBubble = ({
         }}
       >
         <Ionicons name="alert-circle" size={16} color="#EF4444" />
-        <Text className="text-xs text-red-500 font-bold ml-1">
-          Post no disponible
-        </Text>
+        <Text className="text-xs text-red-500 font-bold ml-1">{tStatic("ui.s_0cef2828")}</Text>
       </View>
     );
 
@@ -212,9 +210,7 @@ export const ChatPlaylistCard = ({
         }}
       >
         <Ionicons name="alert-circle" size={16} color="#EF4444" />
-        <Text className="text-xs text-red-500 font-bold ml-1">
-          Playlist no disponible
-        </Text>
+        <Text className="text-xs text-red-500 font-bold ml-1">{tStatic("ui.s_361fee5a")}</Text>
       </View>
     );
 
@@ -275,7 +271,7 @@ export const ChatPlaylistCard = ({
             color={platformColor}
           />
           <Text className="text-[10px] ml-1" style={{ color: subTextColor }}>
-            {playlist.songs?.length || 0} canciones
+            {playlist.songs?.length || 0} {tStatic("ui.s_aff4803f")}
           </Text>
         </View>
       </View>

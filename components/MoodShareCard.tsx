@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
+import { tStatic } from "@/context/LanguageContext";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const MOOD_PURPLE = "#5E17EB";
@@ -65,7 +66,7 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
       });
 
       if (!(await Sharing.isAvailableAsync())) {
-        Alert.alert("Error", "Compartir no disponible.");
+        Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_640aeace"));
         return;
       }
       await Sharing.shareAsync(uri, {
@@ -122,9 +123,7 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
                 className={`font-bold text-xs ${
                   mode === "story" ? "text-black" : "text-zinc-400"
                 }`}
-              >
-                Story
-              </Text>
+              >{tStatic("ui.s_dfba89a6")}</Text>
             </TouchableOpacity>
             {post.comment && (
               <TouchableOpacity
@@ -137,9 +136,7 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
                   className={`font-bold text-xs ${
                     mode === "quote" ? "text-black" : "text-zinc-400"
                   }`}
-                >
-                  Quote
-                </Text>
+                >{tStatic("ui.s_c48e929b")}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -186,9 +183,7 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
                     color={MOOD_PURPLE}
                     style={{ marginRight: 6 }}
                   />
-                  <Text className="text-white/80 font-bold text-[10px] tracking-widest uppercase">
-                    Mood
-                  </Text>
+                  <Text className="text-white/80 font-bold text-[10px] tracking-widest uppercase">{tStatic("ui.s_3173b6b4")}</Text>
                 </View>
               </View>
               <View className="items-center justify-center flex-1 w-full relative">
@@ -298,9 +293,7 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
                     className="w-8 h-8 rounded-full border border-zinc-600 bg-zinc-800"
                   />
                   <View className="ml-2">
-                    <Text className="text-zinc-400 text-[8px] uppercase font-bold tracking-wide">
-                      Shared by
-                    </Text>
+                    <Text className="text-zinc-400 text-[8px] uppercase font-bold tracking-wide">{tStatic("ui.s_17414caf")}</Text>
                     <Text className="text-white font-bold text-xs">
                       @{post?.originalPostCreator || "user"}
                     </Text>
@@ -333,7 +326,7 @@ export default function MoodShareCard({ isVisible, onClose, post }: Props) {
                 style={{ marginRight: 8 }}
               />
               <Text className="text-white font-bold text-lg">
-                Compartir {isQuote ? "Quote" : "Canción"}
+                {tStatic("ui.s_fba5ba0a")} {isQuote ? tStatic("ui.s_c48e929b") : tStatic("ui.s_3abf536a")}
               </Text>
             </TouchableOpacity>
           )}

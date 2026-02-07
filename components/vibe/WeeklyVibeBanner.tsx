@@ -1,25 +1,44 @@
-import React, {useState, useEffect, useRef, useCallback} from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { View, Text, TouchableOpacity, Animated, Easing } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getLatestWeeklyVibe, WeeklyVibe } from "@/lib/appwrite";
+import {
+  getActiveWeeklyVibe,
+  WeeklyVibe,
+  markWeeklyVibeSeen,
+  consumeWeeklyVibe,
+} from "@/lib/appwrite";
 import WeeklyVibeModal from "./WeeklyVibeModal";
 
+import { tStatic } from "@/context/LanguageContext";
 interface WeeklyVibeBannerProps {
   userId?: string;
   onCreatePost?: () => void;
+
+  /**
+   * Si viene desde push notification, puedes pasar autoOpen para abrir el modal automáticamente.
+   * Por ejemplo: /home?weeklyVibe=1
+   */
+  autoOpen?: boolean;
 }
 
-const WeeklyVibeBanner = ({ userId, onCreatePost }: WeeklyVibeBannerProps) => {
+const LAST_SEEN_KEY = "last_seen_vibe_id";
+
+const WeeklyVibeBanner = ({
+  userId,
+  onCreatePost,
+  autoOpen = false,
+}: WeeklyVibeBannerProps) => {
   const [weeklyVibe, setWeeklyVibe] = useState<WeeklyVibe | null>(null);
   const [showVibeModal, setShowVibeModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isNew, setIsNew] = useState(false);
 
+  const [didAutoOpen, setDidAutoOpen] = useState(false);
+
   // Animación para el badge "NEW" (más suave)
   const bounceAnim = useRef(new Animated.Value(0)).current;
-
 
   const startBounceAnimation = useCallback(() => {
     Animated.loop(
@@ -40,102 +59,94 @@ const WeeklyVibeBanner = ({ userId, onCreatePost }: WeeklyVibeBannerProps) => {
     ).start();
   }, [bounceAnim]);
 
+  const refreshActiveVibe = useCallback(async () => {
+    if (!userId) return;
+    setIsLoading(true);
+    try {
+      const vibe = await getActiveWeeklyVibe(userId);
+      setWeeklyVibe(vibe);
 
-  useEffect(() => {
-    const checkVibe = async () => {
-      if (userId) {
-        setIsLoading(true);
-        try {
-          const vibe = await getLatestWeeklyVibe(userId);
-          setWeeklyVibe(vibe);
-
-          if (vibe) {
-            const lastSeenId = await AsyncStorage.getItem("last_seen_vibe_id");
-            if (lastSeenId !== vibe.$id) {
-              setIsNew(true);
-              startBounceAnimation();
-            }
-          }
-        } catch (error) {
-          console.log("Error loading vibe:", error);
-        } finally {
-          setIsLoading(false);
+      if (vibe) {
+        // NEW badge: si el server aún no marca visto, usamos un fallback local para UX
+        const lastSeenId = await AsyncStorage.getItem(LAST_SEEN_KEY);
+        const serverSeen = Boolean(vibe.seenAt);
+        if (!serverSeen && lastSeenId !== vibe.$id) {
+          setIsNew(true);
+          startBounceAnimation();
+        } else {
+          setIsNew(false);
         }
+      } else {
+        setIsNew(false);
       }
-    };
-    checkVibe();
+    } catch (error) {
+      console.log("Error loading vibe:", error);
+    } finally {
+      setIsLoading(false);
+    }
   }, [userId, startBounceAnimation]);
 
-  const handleOpenVibe = async () => {
-    setShowVibeModal(true);
-    if (isNew && weeklyVibe) {
-      setIsNew(false);
-      await AsyncStorage.setItem("last_seen_vibe_id", weeklyVibe.$id);
+  useEffect(() => {
+    refreshActiveVibe();
+  }, [refreshActiveVibe]);
+
+  const markSeenIfNeeded = useCallback(async (vibe: WeeklyVibe) => {
+    try {
+      if (!vibe.seenAt) {
+        await markWeeklyVibeSeen(vibe.$id);
+        setWeeklyVibe((prev) => (prev ? { ...prev, seenAt: new Date().toISOString() } : prev));
+      }
+      await AsyncStorage.setItem(LAST_SEEN_KEY, vibe.$id);
+    } catch (e) {
+      // best-effort
     }
-  };
+  }, []);
+
+  const handleOpenVibe = useCallback(async () => {
+    if (!weeklyVibe) return;
+    setShowVibeModal(true);
+
+    // Al abrir: lo marcamos como visto (para la notificación de 16h)
+    if (isNew) setIsNew(false);
+    await markSeenIfNeeded(weeklyVibe);
+  }, [weeklyVibe, isNew, markSeenIfNeeded]);
+
+  // Auto-open cuando vienes desde notificación
+  useEffect(() => {
+    if (!autoOpen) return;
+    if (didAutoOpen) return;
+    if (!weeklyVibe) return;
+
+    setDidAutoOpen(true);
+    handleOpenVibe();
+  }, [autoOpen, didAutoOpen, weeklyVibe, handleOpenVibe]);
+
+  const handleConsume = useCallback(
+    async (action: "posted" | "discarded") => {
+      if (!weeklyVibe) return;
+
+      // 1) Persistir en backend
+      await consumeWeeklyVibe(weeklyVibe.$id, action);
+
+      // 2) Ocultar del Home hasta el próximo vibe
+      setWeeklyVibe((prev) =>
+        prev ? { ...prev, consumedAt: new Date().toISOString(), consumedAction: action } : prev,
+      );
+
+      // 3) Cerrar modal
+      setShowVibeModal(false);
+
+      // Opcional: refresh por si hay lógica server side adicional
+      // await refreshActiveVibe();
+    },
+    [weeklyVibe],
+  );
 
   if (isLoading) return null;
 
-  // --- CASO 1: NO HAY VIBE (Banner Cyan) ---
-  if (!weeklyVibe) {
-    return (
-      <TouchableOpacity
-        onPress={onCreatePost}
-        activeOpacity={0.9}
-        className="mx-4 mt-4 mb-6"
-      >
-        <View
-          style={{
-            shadowColor: "#06b6d4",
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.4,
-            shadowRadius: 16,
-            elevation: 10,
-          }}
-        >
-          <LinearGradient
-            colors={["#0f172a", "#000000"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            className="rounded-3xl border border-white/10 overflow-hidden relative"
-          >
-            <LinearGradient
-              colors={["rgba(6, 182, 212, 0.25)", "transparent"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0.6, y: 0.6 }}
-              style={{ position: "absolute", width: "100%", height: "100%" }}
-            />
-            <View className="p-5 flex-row items-center justify-between z-10">
-              <View className="flex-row items-center flex-1">
-                <View className="w-16 h-16 bg-cyan-900/20 rounded-2xl items-center justify-center border border-cyan-500/30 mr-4">
-                  <Ionicons name="pulse" size={32} color="#22d3ee" />
-                </View>
-                <View className="flex-1 pr-2">
-                  <Text className="text-cyan-400 font-bold text-[10px] tracking-[2px] uppercase mb-1">
-                    No Vibe Detected
-                  </Text>
-                  <Text className="text-white font-black text-xl italic tracking-tighter shadow-black shadow-lg">
-                    UNLOCK YOUR VIBE
-                  </Text>
-                  <Text className="text-zinc-400 text-xs font-medium mt-1">
-                    Post a mood to see your stats
-                  </Text>
-                </View>
-              </View>
-              <LinearGradient
-                colors={["rgba(34, 211, 238, 0.2)", "rgba(34, 211, 238, 0.1)"]}
-                className="w-10 h-10 rounded-full items-center justify-center border border-cyan-500/30"
-              >
-                <Ionicons name="add" size={24} color="#22d3ee" />
-              </LinearGradient>
-            </View>
-          </LinearGradient>
-        </View>
-      </TouchableOpacity>
-    );
-  }
+  // Si no hay vibe activo, NO mostramos nada (según tu nuevo comportamiento)
+  if (!weeklyVibe) return null;
 
-  // --- CASO 2: HAY VIBE (Banner Premium Purple) ---
   return (
     <>
       <TouchableOpacity
@@ -143,33 +154,31 @@ const WeeklyVibeBanner = ({ userId, onCreatePost }: WeeklyVibeBannerProps) => {
         activeOpacity={0.9}
         className="mx-4 mt-4 mb-6 relative"
       >
-        {/* 🔥 BADGE "NEW" REDISEÑADO (Paleta Mood) */}
+        {/* 🔥 BADGE "NEW" (Paleta Mood) */}
         {isNew && (
           <Animated.View
             style={{
               position: "absolute",
-              top: -14, // Un poco más alto
+              top: -14,
               right: 10,
               zIndex: 50,
               transform: [{ translateY: bounceAnim }],
             }}
           >
             <LinearGradient
-              // 🔥 NUEVA PALETA: Violeta Eléctrico a Magenta Vibrante
               colors={["#8B5CF6", "#EC4899"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{
                 paddingHorizontal: 14,
                 paddingVertical: 6,
-                borderRadius: 30, // Forma de píldora completa
+                borderRadius: 30,
                 borderWidth: 1.5,
-                borderColor: "rgba(255, 255, 255, 0.3)", // Borde semitransparente "glassy"
-                // 🔥 NUEVO GLOW: A juego con el gradiente
+                borderColor: "rgba(255, 255, 255, 0.3)",
                 shadowColor: "#EC4899",
-                shadowOffset: { width: 0, height: 0 }, // Glow centrado
-                shadowOpacity: 0.9, // Muy brillante
-                shadowRadius: 12, // Difuminado suave
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.9,
+                shadowRadius: 12,
                 elevation: 15,
               }}
             >
@@ -180,9 +189,7 @@ const WeeklyVibeBanner = ({ userId, onCreatePost }: WeeklyVibeBannerProps) => {
                   fontSize: 11,
                   letterSpacing: 0.5,
                 }}
-              >
-                NEW ✨
-              </Text>
+              >{tStatic("ui.s_60829e2a")}</Text>
             </LinearGradient>
           </Animated.View>
         )}
@@ -226,19 +233,13 @@ const WeeklyVibeBanner = ({ userId, onCreatePost }: WeeklyVibeBannerProps) => {
                       color="#A78BFA"
                       style={{ marginRight: 4 }}
                     />
-                    <Text className="text-[#A78BFA] font-bold text-[10px] tracking-[2px] uppercase">
-                      Ready Now
-                    </Text>
+                    <Text className="text-[#A78BFA] font-bold text-[10px] tracking-[2px] uppercase">{tStatic("ui.s_ee1d951d")}</Text>
                   </View>
-                  <Text className="text-white font-black text-xl italic tracking-tighter shadow-black shadow-lg">
-                    WEEKLY VIBE
-                  </Text>
+                  <Text className="text-white font-black text-xl italic tracking-tighter shadow-black shadow-lg">{tStatic("ui.s_b81d61fc")}</Text>
                   <Text
                     className="text-zinc-400 text-xs font-medium mt-0.5"
                     numberOfLines={1}
-                  >
-                    Your music summary is here
-                  </Text>
+                  >{tStatic("ui.s_3fab5c57")}</Text>
                 </View>
               </View>
 
@@ -257,6 +258,7 @@ const WeeklyVibeBanner = ({ userId, onCreatePost }: WeeklyVibeBannerProps) => {
         visible={showVibeModal}
         onClose={() => setShowVibeModal(false)}
         vibeData={weeklyVibe}
+        onConsume={handleConsume}
       />
     </>
   );

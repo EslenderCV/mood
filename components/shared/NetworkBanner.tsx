@@ -3,6 +3,7 @@ import { Animated, Text, View } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { useColorScheme } from "nativewind";
 
+import { tStatic } from "@/context/LanguageContext";
 const NetworkBanner = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -56,9 +57,7 @@ const NetworkBanner = () => {
           borderBottomColor: "rgba(255,255,255,0.06)",
         }}
       >
-        <Text style={{ color: "#fff", fontWeight: "700" }}>
-          Sin conexión · Algunas acciones pueden fallar
-        </Text>
+        <Text style={{ color: "#fff", fontWeight: "700" }}>{tStatic("ui.s_511a343f")}</Text>
       </View>
     </Animated.View>
   );

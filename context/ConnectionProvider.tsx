@@ -8,6 +8,7 @@ import React, {
 import { AppState, LogBox } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import ConnectionBanner from "@/components/ui/ConnectionBanner";
+import { useBoot } from "@/src/boot/BootContext";
 
 // Ocultar el error específico de Socket en desarrollo
 LogBox.ignoreLogs(["Realtime got disconnected"]);
@@ -33,9 +34,12 @@ export const ConnectionProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
+  const { bootComplete } = useBoot();
   const [status, setStatus] = useState<ConnectionStatus>("connected");
   const [isOnline, setIsOnline] = useState(true);
   const wasDisconnected = useRef(false); // Flag para saber si venimos de un error
+  const initializedRef = useRef(false);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // Función para disparar manualmente el banner si falla el Realtime
   const notifyConnectionError = () => {
@@ -43,21 +47,39 @@ export const ConnectionProvider = ({
       wasDisconnected.current = true;
       setStatus("disconnected");
       // Intentar reconectar visualmente tras un momento
-      setTimeout(() => {
+      const t1 = setTimeout(() => {
         if (isOnline) {
           setStatus("connecting");
-          setTimeout(() => setStatus("connected"), 2000);
+          const t2 = setTimeout(() => setStatus("connected"), 2000);
+          timersRef.current.push(t2);
         }
       }, 1000);
+      timersRef.current.push(t1);
     }
   };
 
   // 1. Monitorear Internet Real (NetInfo)
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      const online = !!(state.isConnected && state.isInternetReachable);
+    // Establish a stable initial connectivity state.
+    // On iOS, `isInternetReachable` can start as null which would incorrectly mark the app offline.
+    NetInfo.fetch().then((state) => {
+      const reachable = state.isInternetReachable;
+      const online = state.isConnected === true && (reachable == null ? true : reachable);
+      setIsOnline(online);
+      if (!online) {
+        wasDisconnected.current = true;
+        setStatus("disconnected");
+      } else {
+        setStatus("connected");
+      }
+      initializedRef.current = true;
+    });
 
-      // Solo actuar si hay un cambio real de estado
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      if (!initializedRef.current) return;
+      const reachable = state.isInternetReachable;
+      const online = state.isConnected === true && (reachable == null ? true : reachable);
+
       if (online !== isOnline) {
         setIsOnline(online);
 
@@ -65,13 +87,14 @@ export const ConnectionProvider = ({
           wasDisconnected.current = true;
           setStatus("disconnected");
         } else {
-          // SOLO si veníamos de estar desconectados, mostramos el proceso de restauración
+          // Only show the "connecting → connected" flow if we were previously disconnected.
           if (wasDisconnected.current) {
             setStatus("connecting");
-            setTimeout(() => {
+            const t = setTimeout(() => {
               setStatus("connected");
               wasDisconnected.current = false;
-            }, 2000);
+            }, 1500);
+            timersRef.current.push(t);
           } else {
             setStatus("connected");
           }
@@ -79,7 +102,11 @@ export const ConnectionProvider = ({
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      for (const t of timersRef.current) clearTimeout(t);
+      timersRef.current = [];
+    };
   }, [isOnline]);
 
   // 2. Monitorear AppState (Silencioso)
@@ -88,13 +115,23 @@ export const ConnectionProvider = ({
       if (nextAppState === "active") {
         // Al volver, verificamos internet silenciosamente
         NetInfo.fetch().then((state) => {
-          const online = !!(state.isConnected && state.isInternetReachable);
+          const reachable = state.isInternetReachable;
+          const online =
+            state.isConnected === true && (reachable == null ? true : reachable);
           setIsOnline(online);
 
           // Si al volver NO hay internet, marcamos error
           if (!online) {
             wasDisconnected.current = true;
             setStatus("disconnected");
+          } else if (wasDisconnected.current) {
+            // We were offline before, show the reconnection flow.
+            setStatus("connecting");
+            const t = setTimeout(() => {
+              setStatus("connected");
+              wasDisconnected.current = false;
+            }, 1500);
+            timersRef.current.push(t);
           }
           // Si volvimos y TODO ESTÁ BIEN, no hacemos nada (mantenemos "connected")
           // evitando el banner molesto.
@@ -109,7 +146,8 @@ export const ConnectionProvider = ({
     <ConnectionContext.Provider
       value={{ status, isOnline, notifyConnectionError }}
     >
-      <ConnectionBanner status={status} />
+      {/* Suppress noisy connectivity UI during boot/splash */}
+      <ConnectionBanner status={status} enabled={bootComplete} />
       {children}
     </ConnectionContext.Provider>
   );

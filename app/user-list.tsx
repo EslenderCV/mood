@@ -21,6 +21,7 @@ import {
   createChat,
 } from "@/lib/appwrite";
 
+import { tStatic } from "@/context/LanguageContext";
 const UserList = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -85,7 +86,7 @@ const UserList = () => {
           router.push(`/chat/${chatDoc.$id}` as any);
         }
       } catch {
-        Alert.alert("Error", "No se pudo abrir el chat");
+        Alert.alert(tStatic("ui.s_902b0d55"), tStatic("ui.s_8ff05b94"));
       } finally {
         setActionLoading(null);
       }
@@ -147,7 +148,7 @@ const UserList = () => {
                 className="font-semibold text-sm"
                 style={{ color: isFollowing ? textColor : "white" }}
               >
-                {isFollowing ? "Message" : "Follow"}
+                {isFollowing ? tStatic("ui.s_4c2a8fe7") : tStatic("ui.s_3903aab3")}
               </Text>
             )}
           </TouchableOpacity>
@@ -166,7 +167,7 @@ const UserList = () => {
           <Ionicons name="arrow-back" size={24} color={textColor} />
         </TouchableOpacity>
         <Text className="text-lg font-bold" style={{ color: textColor }}>
-          {type === "followers" ? "Followers" : "Following"}
+          {type === "followers" ? tStatic("ui.s_24c714cc") : tStatic("ui.s_6f796b0e")}
         </Text>
       </View>
 
@@ -182,7 +183,7 @@ const UserList = () => {
           contentContainerStyle={{ paddingVertical: 10 }}
           ListEmptyComponent={
             <View className="items-center mt-20">
-              <Text style={{ color: subTextColor }}>No users found.</Text>
+              <Text style={{ color: subTextColor }}>{tStatic("ui.s_ef68cf0d")}</Text>
             </View>
           }
           refreshControl={

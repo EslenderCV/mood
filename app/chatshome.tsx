@@ -18,6 +18,7 @@ import { useGlobalContext } from "@/context/GlobalProvider";
 import { ChatListItem } from "@/components/chats/ChatListItem";
 import { NewChatModal } from "@/components/chats/NewChatModal";
 
+import { tStatic } from "@/context/LanguageContext";
 const ChatsHome = () => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -93,9 +94,7 @@ const ChatsHome = () => {
         <View className="flex-row justify-between items-center mb-2 mt-2">
           <Text
             className={`text-[34px] font-bold ${isDark ? "text-white" : "text-black"}`}
-          >
-            Chats
-          </Text>
+          >{tStatic("ui.s_b39a7338")}</Text>
           <TouchableOpacity
             onPress={() => setShowNewChatModal(true)}
             className="w-9 h-9 bg-[#5E17EB] rounded-full items-center justify-center shadow-md"
@@ -110,7 +109,7 @@ const ChatsHome = () => {
         >
           <Ionicons name="search" size={18} color="#A1A1AA" />
           <TextInput
-            placeholder="Buscar"
+            placeholder={tStatic("ui.s_113f7428")}
             placeholderTextColor="#A1A1AA"
             className={`flex-1 ml-2 text-[16px] ${isDark ? "text-white" : "text-black"}`}
             value={searchQuery}
@@ -143,12 +142,8 @@ const ChatsHome = () => {
               <View className="w-20 h-20 bg-zinc-100 dark:bg-zinc-900 rounded-full items-center justify-center mb-4">
                 <Ionicons name="chatbubbles" size={40} color="#5E17EB" />
               </View>
-              <Text className="text-zinc-500 text-center text-lg font-medium">
-                Sin mensajes aún
-              </Text>
-              <Text className="text-zinc-400 text-center mt-1">
-                Inicia una conversación con tus amigos de Mood.
-              </Text>
+              <Text className="text-zinc-500 text-center text-lg font-medium">{tStatic("ui.s_35d6b383")}</Text>
+              <Text className="text-zinc-400 text-center mt-1">{tStatic("ui.s_89e6fa73")}</Text>
             </View>
           }
           refreshing={loadingChats}
