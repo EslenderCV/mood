@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { Alert } from "react-native";
 import {
   getFeedCandidates,
@@ -7,6 +7,8 @@ import {
   searchSongs,
 } from "@/lib/appwrite";
 import { ID } from "react-native-appwrite";
+import { useGlobalContext } from "@/context/GlobalProvider";
+import { useBoot } from "@/src/boot/BootContext";
 
 import { tStatic } from "@/context/LanguageContext";
 export type FeedItemType = "post" | "suggested_users" | "trending_song";
@@ -51,6 +53,10 @@ export const FeedProvider = ({ children }: { children: React.ReactNode }) => {
   const [userInterests, setUserInterests] = useState<string[]>([]);
 
   const [viralSongToUse, setViralSongToUse] = useState<any | null>(null);
+
+  const { loggedIn, loading: authLoading } = useGlobalContext();
+  const { bootComplete } = useBoot();
+  const didInitRef = useRef(false);
 
   const trackUserInterest = (term: string) => {
     if (!term) return;
@@ -282,8 +288,18 @@ export const FeedProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    refreshFeed();
-  }, []);
+    // Don't fetch feed during auth boot or on auth screens.
+    // This prevents startup stalls and noisy retries when the user isn't logged in yet.
+    if (authLoading) return;
+    if (!loggedIn) {
+      setIsLoading(false);
+      return;
+    }
+    if (!bootComplete) return;
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+    void refreshFeed();
+  }, [authLoading, loggedIn, bootComplete]);
 
   return (
     <FeedContext.Provider

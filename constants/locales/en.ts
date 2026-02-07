@@ -20,6 +20,11 @@ export default {
     reconnecting: "Syncing...",
     restored: "You're Online",
   },
+  boot: {
+    title: "Getting things ready",
+    subtitle: "Hang tight — we're connecting you to Mood.",
+    retry: "Try again",
+  },
   home: {
     suggestedUsers: "Suggested for you",
   },
@@ -549,103 +554,160 @@ export default {
     empty: "Be the first to comment.",
   },
   ui: {
-    s_007a41ed: "Sé el primero en comentar.",
-    s_04bccec7: "No se pudo iniciar el chat.",
+    s_007a41ed: "Be the first to comment.",
+
+    s_04bccec7: "We couldn't start the chat.",
+
     s_04e0348a: "Error loading song",
-    s_0b2a9cff: "¡RACHA EN LLAMAS!",
-    s_0c4bfd06: "Cancelar reconocimiento",
-    s_0cb739ae: "Describe tu vibe...",
-    s_0cef2828: "Post no disponible",
-    s_0dc9f6a6: "No se pudo abrir el enlace",
-    s_0e9a90c8: "No se pudo abrir WhatsApp",
-    s_10e1e287: "Canciones en Mood",
-    s_113f7428: "Buscar",
-    s_114de65f: "Esta acción es irreversible",
-    s_13baa745: "Gestionar tu publicación",
-    s_1451e1c4: "Eliminar publicación",
-    s_15fa29e2: "Voz",
+    s_0b2a9cff: "STREAK ON FIRE!",
+
+    s_0c4bfd06: "Cancel recognition",
+
+    s_0cb739ae: "Describe your vibe…",
+
+    s_0cef2828: "Post unavailable",
+
+    s_0dc9f6a6: "We couldn't open that link.",
+
+    s_0e9a90c8: "We couldn't open WhatsApp.",
+
+    s_10e1e287: "Songs on Mood",
+
+    s_113f7428: "Search",
+
+    s_114de65f: "This can’t be undone.",
+
+    s_13baa745: "Manage your post",
+
+    s_1451e1c4: "Delete post",
+
+    s_15fa29e2: "Voice",
+
     s_17414caf: "Shared by",
-    s_17965461: "Reintentar",
-    s_17c985bf: "Enlace en el portapapeles.",
+    s_17965461: "Try again",
+
+    s_17c985bf: "Link copied to your clipboard.",
+
     s_187a2495: "Apple Music",
     s_18b9d3db: "You Might Like",
-    s_1abf56f2: "URL no disponible",
+    s_1abf56f2: "URL not available",
+
     s_1c373962: "Reset a defaults",
-    s_1d57a629: "Modo Privacidad",
+    s_1d57a629: "Privacy Mode",
+
     s_1d787586: "\\n",
     s_1eeb507d: "Feature flags / kill switches",
-    s_1feb1fbf: "¿Eliminar?",
-    s_207b4a8c: "No encontramos resultados. Prueba otro chip.",
-    s_21158300: "Canción agregada.",
-    s_21646377: "Error al reproducir.",
-    s_2164de00: "Compartir Música",
-    s_22051e50: "Usar este sonido",
-    s_231d0667: "No se pudo bloquear al usuario.",
+    s_1feb1fbf: "Delete?",
+
+    s_207b4a8c: "No results yet—try a different chip.",
+
+    s_21158300: "Added.",
+
+    s_21646377: "Playback error.",
+
+    s_2164de00: "Share Music",
+
+    s_22051e50: "Use this sound",
+
+    s_231d0667: "We couldn't block this user.",
+
     s_24c714cc: "Followers",
-    s_25380339: "No se pudo eliminar.",
-    s_25416c71: "🎙️ Grabar voz",
+    s_25380339: "We couldn't delete that.",
+
+    s_25416c71: "🎙️ Record voice",
+
     s_263746fa: "Card ✨",
-    s_271870a7: "Crear Publicación",
-    s_275a856f: "Música",
-    s_29721568: "No se pudo subir. Verifica el formato.",
-    s_29fa9760: "No verás más contenido de este usuario",
+    s_271870a7: "Create Post",
+
+    s_275a856f: "Music",
+
+    s_29721568: "We couldn't upload that. Please check the file format.",
+
+    s_29fa9760: "You won't see this user’s content anymore.",
+
     s_2ad35866: "Compartir via...",
-    s_2b01b9c3: "Renombrar Playlist",
+    s_2b01b9c3: "Rename playlist",
+
     s_2b6cf537: "Tu Vibe",
-    s_2c001e11: "Ver más",
-    s_2dfa76c3: "Opciones del post",
-    s_2e3d3876: "Nueva",
-    s_2e4228cd: "No se pudo reproducir el audio.",
-    s_2e426f17: "Modo Privacidad Activado",
-    s_2eac473a: "No se pudo enviar el mensaje.",
+    s_2c001e11: "See more",
+
+    s_2dfa76c3: "Post options",
+
+    s_2e3d3876: "New",
+
+    s_2e4228cd: "We couldn't play the audio.",
+
+    s_2e426f17: "Mode Privacy Activado",
+
+    s_2eac473a: "We couldn't send el message.",
+
     s_2ec3e1aa: "Follow Back",
     s_2ee9c14a: "Siguiendo",
     s_30cc00ae: "Enviar",
     s_3173b6b4: "Mood",
     s_33847840: "Esta pantalla no existe o fue movida.",
-    s_33aef9ff: "Foto o Video",
-    s_3536ef2d: "RESUMEN SEMANAL",
-    s_35859cd3: "No se pudo enviar",
-    s_35d6b383: "Sin mensajes aún",
-    s_361fee5a: "Playlist no disponible",
+    s_33aef9ff: "Photo or video",
+
+    s_3536ef2d: "WEEKLY RECAP",
+
+    s_35859cd3: "We couldn't send.",
+
+    s_35d6b383: "No messages yet",
+
+    s_361fee5a: "Playlist unavailable",
+
     s_3620a2f5: "Riesgo",
     s_36f27c7e: "Fallo al eliminar.",
     s_36ff3924: "Contenido inapropiado, spam...",
     s_3903aab3: "Follow",
     s_3a2c2589: "Cargando",
-    s_3abf536a: "Canción",
+    s_3abf536a: "Song",
     s_3bd5180d: "Buscar usuarios...",
     s_3d594614: "Friends",
     s_3da61fd2: "Voice Vibe",
     s_3e1e6082: "El usuario ha sido bloqueado correctamente.",
-    s_3f112ff0: "Esta playlist está vacía.",
-    s_3fab5c57: "Tu resumen semanal está listo",
+    s_3f112ff0: "This playlist is empty.",
+
+    s_3fab5c57: "Your weekly recap is ready",
     s_4059cd09: "Visible por 24 horas",
-    s_40fa5b6e: "Hola, necesito asistencia con la aplicación Mood.",
-    s_4250995c: "Galería",
-    s_4636d03e: "Código inválido",
+    s_40fa5b6e: "Hi! I need help with the Mood app.",
+
+    s_4250995c: "Gallery",
+
+    s_4636d03e: "Invalid code",
+
     s_476e7d19: "Limpiar",
-    s_47d8c19f: "Eliminar comentario",
+    s_47d8c19f: "Delete comment",
+
     s_488a4d16: "Local Playlist",
-    s_48c990a1: "No se pudo subir la nota de voz.",
-    s_4925f6ff: "Agregar Canciones",
+    s_48c990a1: "We couldn't upload la nota de voz.",
+
+    s_4925f6ff: "Agregar Songs",
+
     s_4ae91cce: "Error al reportar.",
     s_4c2a8fe7: "Message",
-    s_4e1ac340: "No se pudo eliminar la canción.",
-    s_511a343f: "Sin conexión · Algunas acciones pueden fallar",
-    s_518f6d6a: "Sin Playlists",
-    s_5315e19d: "Abre el menú de opciones",
+    s_4e1ac340: "We couldn't delete la song.",
+
+    s_511a343f: "You're offline · Some actions may not work",
+
+    s_518f6d6a: "No playlists yet",
+
+    s_5315e19d: "Open options menu",
+
     s_54fa29f1: "Compartido correctamente.",
     s_55dcdf01: "Chat",
-    s_56065055: "Éxito",
-    s_563d5e56: "Pago",
+    s_56065055: "Success",
+
+    s_563d5e56: "Payment",
     s_57f15268: "MOOD PREVIEW",
-    s_581696c1: "Selecciona una acción",
-    s_584ec4e9: "Política de Privacidad",
+    s_581696c1: "Choose an action",
+
+    s_584ec4e9: "Privacy Policy",
+
     s_58795825: "Reporte enviado",
     s_59064fcd: "Salud de Seguridad",
     s_5981dfcb: "Sincronizando...",
-    s_5a661d50: "Sigue a creadores y artistas para llenar tu inicio con la mejor música.",
+    s_5a661d50: "Follow creators and artists to fill your home with the best music.",
     s_5c163ee9: "You Might Know",
     s_5dba4ea3: "No posts",
     s_5dc52ca9: "Posts",
@@ -653,8 +715,10 @@ export default {
     s_603d03f2: "Borrar datos copiados por seguridad",
     s_603d05a8: "Experimentos",
     s_60829e2a: "NEW ✨",
-    s_622526e3: "No se pudo cargar la playlist",
-    s_62cd7c18: "No se pudo crear la playlist.",
+    s_622526e3: "We couldn't load the playlist.",
+
+    s_62cd7c18: "We couldn't create the playlist.",
+
     s_640aeace: "Compartir no disponible.",
     s_64409c8c: "Buscar por nombre o usuario...",
     s_6550dcdb: "Reproducir en Spotify",
@@ -664,130 +728,170 @@ export default {
     s_6a951304: "Enviar a...",
     s_6aba49f8: "Viral Card",
     s_6becacaf: "TOP ARTIST",
-    s_6dba6580: "El audio no se pudo cargar.",
+    s_6dba6580: "We couldn't load the audio.",
+
     s_6e16406e: "Vibe",
     s_6ec22507: "Alertas push y actividades",
     s_6f796b0e: "Following",
     s_6fce0d2a: "Crear Nueva Historia",
-    s_7089b605: "Código Promocional",
+    s_7089b605: "Promo Code",
+
     s_729ed57e: "Sugerencias para ti",
     s_72ce2533: "Reportar",
-    s_73e191f0: "No se pudo seguir al usuario",
+    s_73e191f0: "We couldn't follow this user.",
+
     s_74eaabcc: "Marca este post como que te gusta",
-    s_77c0ff57: "No se pudo crear el perfil de usuario.",
+    s_77c0ff57: "We couldn't create el profile de user.",
+
     s_78f9355b: "Reproducir en Apple Music",
     s_7a0c462b: "Sincronizada",
-    s_7ad91252: "No se pudo publicar.",
+    s_7ad91252: "We couldn't publicar.",
+
     s_7ae8b433: "Buscar...",
-    s_7aeddfb8: "No se pudo enviar el comentario",
-    s_7baa000e: "No se encontraron usuarios",
-    s_7ca59d57: "Con música",
-    s_7ce96a09: "Tu feed está muy callado...",
-    s_7d43f01d: "No se pudo actualizar la preferencia de música.",
+    s_7aeddfb8: "We couldn't send the comment.",
+
+    s_7baa000e: "No encontraron usuarios",
+
+    s_7ca59d57: "With music",
+    s_7ce96a09: "Your feed feels quiet…",
+    s_7d43f01d: "We couldn't update la preferencia de musica.",
+
     s_7da85d20: "Comparte este post",
     s_7e962398: "Nuevo Mensaje",
     s_8235c5d0: "Ups…",
     s_823a8f1e: "Enviado",
     s_8253ac9e: "Buena",
-    s_83227328: "¿Estás seguro de que quieres eliminar este comentario?",
+    s_83227328: "Are you sure you want to delete this comment?",
+
     s_83a2de66: "Ahora",
     s_847607d7: "Cancelar",
     s_8487931b: "Confirmar",
-    s_862cea3f: "No se pudo enviar la canción",
-    s_86d6df01: "Reportar publicación",
+    s_862cea3f: "We couldn't send la song.",
+
+    s_86d6df01: "Report post",
     s_8734dcc8: "Audio no disponible",
     s_88559a0c: "OFF",
     s_8877f3a2: "Opciones",
     s_890f8c45: "Gracias.",
     s_891d33e4: "MOOD",
-    s_89e6fa73: "Inicia una conversación con tus amigos de Mood.",
+    s_89e6fa73: "Start a chat with your Mood friends.",
+
     s_8b8040eb: "VIBE CHECK",
     s_8ddd8d88: "Listo",
     s_8faf8a3c: "Historia publicada",
-    s_8ff05b94: "No se pudo abrir el chat",
+    s_8ff05b94: "We couldn't open the chat.",
+
     s_901b298f: "No songs",
     s_902b0d55: "Error",
     s_90651ebe: "ON",
     s_90fe8a93: "Bloquear usuario",
-    s_91429eb8: "No tienes canciones guardadas.",
+    s_91429eb8: "No tienes songs guardadas.",
+
     s_9173f50f: "DESARROLLO",
-    s_9202d8b5: "¿Seguro que quieres eliminar esta historia?",
+    s_9202d8b5: "Are you sure you want to delete this story?",
+
     s_928bc7ca: "Copiado",
-    s_93cc2da3: "No estás identificado.",
+    s_93cc2da3: "You're not signed in.",
+
     s_95d82ec4: "Toca para elegir",
-    s_965c9bb3: "Privacidad",
+    s_965c9bb3: "Privacy",
+
     s_967b15c4: "Subiendo",
-    s_97124c8c: "Comparte una canción",
+    s_97124c8c: "Share a song",
+
     s_9befe99b: "LIMPIAR",
     s_9df2a2f9: "Ver Perfil",
     s_a0761a61: "Portapapeles limpiado.",
     s_a0ba125b: "Mensaje...",
-    s_a14c1ba0: "No se pudo eliminar",
+    s_a14c1ba0: "We couldn't delete.",
+
     s_a218d22c: "Descartar",
-    s_a233337c: "Publicación compartida.",
-    s_a2375014: "Algo salió mal",
-    s_a3a48447: "No se pudo renombrar.",
+    s_a233337c: "Post shared.",
+    s_a2375014: "Something went wrong",
+    s_a3a48447: "We couldn't renombrar.",
+
     s_a465034c: "Detectamos un posible crash-loop. Desactivamos temporalmente algunos experimentos para que la app pueda iniciar.",
     s_a5f9ee83: "Abrir",
-    s_a6b30ef4: "Selecciona una razón:",
-    s_a6f0cb2b: "Acciones",
-    s_a7bc973f: "No se pudo subir el audio.",
-    s_a816ff98: "Añadir comentario...",
-    s_a846a650: "Seleccionar",
+    s_a6b30ef4: "Choose a reason:",
+
+    s_a6f0cb2b: "Actions",
+
+    s_a7bc973f: "We couldn't upload the audio.",
+
+    s_a816ff98: "Add a comment…",
+
+    s_a846a650: "Select",
     s_a96f30f0: "Borrar",
     s_aa293eb1: "Es posible que haya cambiado su nombre.",
-    s_ac7622d8: "No se pudo agregar la canción.",
-    s_acc0fa69: "No se pudo compartir.",
+    s_ac7622d8: "We couldn't agregar la song.",
+
+    s_acc0fa69: "We couldn't share.",
+
     s_ad56bdfe: "Notificaciones",
     s_ad5f6240: "Explorar Comunidad",
-    s_addcfb70: "¿Qué deseas subir?",
-    s_adea0441: "No se pudo cargar el post",
+    s_addcfb70: "What would you like to upload?",
+
+    s_adea0441: "We couldn't load el post.",
+
     s_b04b4c33: "Para tu perfil y el feed",
-    s_b0c28ea0: "Descubre música rápido",
+    s_b0c28ea0: "Discover music in seconds",
     s_b274d2f7: "Elige un Vibe primero",
-    s_b27e11d7: "Términos y Condiciones (EULA)",
+    s_b27e11d7: "Terms of Use (EULA)",
     s_b2a42773: "Lo sentimos",
     s_b39a7338: "Chats",
-    s_b47d0019: "Esta acción es irreversible.",
-    s_b4c8ef1d: "Busca canciones...",
-    s_b5387d43: "No se pudo agregar.",
+    s_b47d0019: "This can’t be undone.",
+
+    s_b4c8ef1d: "Busca songs...",
+
+    s_b5387d43: "We couldn't agregar.",
+
     s_b81d61fc: "WEEKLY VIBE",
-    s_bb780b43: "Tu historia se está subiendo en segundo plano...",
+    s_bb780b43: "Your story is uploading in the background…",
+
     s_bd23eb60: "Seguir",
-    s_bd99de7d: "Sé el primero en opinar sobre este Vibe.",
+    s_bd99de7d: "el primero en opinar sobre este Vibe.",
+
     s_bdfd840e: "Limpiar Portapapeles",
     s_be6e5d4d: "Enlace en portapapeles.",
     s_bf89f675: "Inicio",
-    s_c1215e36: "No se encontraron posts de este artista.",
+    s_c1215e36: "No encontraron posts de este artista.",
+
     s_c1943897: "No encontrado",
     s_c1d6a671: "Seguridad",
-    s_c1e5b5f4: "No se pudo abrir el enlace.",
+    s_c1e5b5f4: "We couldn't open the link.",
+
     s_c2fcf39b: "Audio no disponible.",
     s_c43399f2: "MY WEEKLY",
     s_c48e929b: "Quote",
     s_c53151ff: "LEGAL",
     s_c96b1a9c: "Publicidad",
-    s_c99ca222: "Código canjeado con éxito. Ahora eres un usuario verificado.",
+    s_c99ca222: "Code redeemed successfully. You're now a verified user.",
+
     s_c9cc8cce: "Save",
-    s_ca536490: "Tus Canciones Guardadas",
-    s_cb41286e: "No se pudo cargar tu biblioteca.",
-    s_cceb0f88: "Cómo cuidamos tus datos",
+    s_ca536490: "Tus Songs Guardadas",
+
+    s_cb41286e: "We couldn't load your library.",
+
+    s_cceb0f88: "How we protect your data",
     s_ce308b4c: "Crear Historia",
     s_cf21e637: "Usuario no encontrado",
-    s_cf4e15f2: "No se pudo activar la membresía.",
-    s_d047815e: "Ver y escribir comentarios",
-    s_d0edd9a7: "PLATAFORMA DE MÚSICA",
-    s_d1489c0f: "🎙️ Grabar con música",
+    s_cf4e15f2: "We couldn't activar la membresia.",
+
+    s_d047815e: "Ver y escribir comments",
+
+    s_d0edd9a7: "MUSIC PLATFORM",
+    s_d1489c0f: "🎙️ Record with music",
     s_d310cee9: "Cargando flags...",
     s_d3270bdb: "Guardar",
     s_d39c3d31: "Nuevo nombre...",
     s_d607e402: "Vibes Populares",
     s_d657cdfd: "Volver al inicio",
     s_d8f00338: "Volver a Ajustes",
-    s_d96b6b7e: "Explora por mood o género",
+    s_d96b6b7e: "Explore by mood or genre",
     s_db931740: "Publicando...",
     s_dc52ced9: "Ocultar",
-    s_df6980c4: "La pasarela de pago estará disponible pronto. Intenta conseguir un código promocional.",
+    s_df6980c4: "Payments are coming soon. In the meantime, try a promo code.",
+
     s_df7e8969: "Responder",
     s_dfba171a: "respuesta",
     s_dfba89a6: "Story",
@@ -803,48 +907,61 @@ export default {
     s_e8c266e1: "Intenta cargar la pantalla nuevamente",
     s_e9eef2bc: "Ahora no se pueden tomar capturas de pantalla ni grabar dentro de la app.",
     s_ea32bb9f: "Tu historia",
-    s_ea44fb1e: "Ocurrió un error al intentar abrir el chat.",
-    s_eb99ce82: "Buscar artista o canción...",
+    s_ea44fb1e: "We ran into an issue opening the chat.",
+
+    s_eb99ce82: "Search artist or song…",
+
     s_ec07c2e7: "Bloqueado",
     s_ed330643: "Safe Mode activo",
     s_ee1d951d: "Disponible 24h",
     s_eeafb3fb: "Reglas de convivencia",
-    s_eee2c16a: "No se pudo eliminar el comentario.",
+    s_eee2c16a: "We couldn't delete the comment.",
+
     s_ef68cf0d: "No users found.",
-    s_ef9b7e8d: "No se pudo sincronizar el perfil del usuario.",
+    s_ef9b7e8d: "We couldn't sync el profile del user.",
+
     s_f1498459: "respuestas",
     s_f18a8fc3: "Regresa al feed principal",
-    s_f1caef3b: "Más",
-    s_f1e99752: "Crear contenido con esta música",
+    s_f1caef3b: "More",
+    s_f1e99752: "Create content with this music",
+
     s_f3f5a192: "Bloquea capturas y grabaciones de pantalla",
-    s_f40d5ede: "Estados de ánimo & géneros",
-    s_f4299922: "No encontramos canciones",
+    s_f40d5ede: "Moods & Genres",
+    s_f4299922: "No songs found",
+
     s_f5c87d64: "Eliminar historia",
     s_f5e652a3: "ANALIZANDO VIBES...",
     s_faa5e48d: "Primero crea una playlist.",
-    s_faa961a1: "Abrir comentarios",
+    s_faa961a1: "Open comments",
+
     s_fba5ba0a: "Compartir",
-    s_fca9e94b: "¡Bienvenido a Mood Plus!",
+    s_fca9e94b: "Welcome to Mood Plus!",
     s_fceb6c3f: "Se produjo un error inesperado. Puedes intentar de nuevo o volver al inicio.",
-    s_fd034769: "El código promocional no existe.",
+    s_fd034769: "That promo code doesn’t exist.",
+
     s_fd539ca1: "Spotify",
-    s_fecf6798: "No se encontraron usuarios.",
+    s_fecf6798: "No encontraron usuarios.",
+
     s_0cb3cac0: "By creating an account, you agree to our",
     s_16f79c31: "Respondiendo a",
     s_20568f6e: "Playlist •",
-    s_23cd3837: "¡Sigue así!",
+    s_23cd3837: "Keep it up!",
     s_74947a95: "Terms of Use (EULA)",
-    s_74dc3bac: "Comentarios (",
-    s_85d853bf: "¿Deseas bloquear a",
+    s_74dc3bac: "Comments (",
+
+    s_85d853bf: "Would you like to block ",
     s_862fa4ae: "Ver",
-    s_9c56a723: "canciones en Mood",
-    s_a7f94442: "• Con música",
+    s_9c56a723: "songs en Mood",
+
+    s_a7f94442: "• With music",
     s_ac5711d8: "Modo",
-    s_aff4803f: "canciones",
+    s_aff4803f: "songs",
+
     s_bfb68000: "Playlist",
     s_cc71d8f3: "likes",
     s_d8e87c09: "Sync",
-    s_dc05e64f: "días seguidos.",
+    s_dc05e64f: "days in a row.",
+
     s_e27a30b0: "Enviar (",
     s_e5f7f63d: "Default:",
     s_e79c19ed: "Has publicado",

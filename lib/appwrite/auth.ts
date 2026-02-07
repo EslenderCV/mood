@@ -7,6 +7,7 @@ import {
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { account, databases, appwriteConfig } from "./config";
+import { appwriteCall } from "./request";
 
 // Almacén temporal
 export const authStore = { secret: "" };
@@ -158,12 +159,20 @@ export const createUser = async (
 
 export const getCurrentUser = async () => {
   try {
-    const currentAccount = await account.get();
+    // Fast, boot-safe auth lookup. Never block startup on long network stalls.
+    const currentAccount = await appwriteCall(
+      { name: "auth.account.get", retries: 1, timeoutMs: 6500 },
+      () => account.get(),
+    );
 
-    const currentUser = await databases.listDocuments(
-      appwriteConfig.databaseId,
-      appwriteConfig.usersCollectionId,
-      [Query.equal("accId", currentAccount.$id)],
+    const currentUser = await appwriteCall(
+      { name: "auth.users.byAccId", retries: 1, timeoutMs: 6500 },
+      () =>
+        databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.usersCollectionId,
+          [Query.equal("accId", currentAccount.$id)],
+        ),
     );
 
     if (!currentUser || currentUser.documents.length === 0) return null;
@@ -174,7 +183,7 @@ export const getCurrentUser = async () => {
       try {
         await signOut();
       } catch (e) {}
-      throw new Error("Cuenta suspendida por administración.");
+      throw new Error("Account suspended by admin.");
     }
 
     return userData;

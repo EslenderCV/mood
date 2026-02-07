@@ -19,6 +19,11 @@ export default {
     reconnecting: "Sincronizzazione...",
     restored: "Sei online",
   },
+  boot: {
+    title: "Sto preparando tutto",
+    subtitle: "Un attimo — ti stiamo connettendo a Mood.",
+    retry: "Riprova",
+  },
   home: {
     suggestedUsers: "Persone che potresti conoscere",
   },

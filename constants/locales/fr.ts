@@ -19,6 +19,11 @@ export default {
     reconnecting: "Synchronisation...",
     restored: "Vous êtes en ligne",
   },
+  boot: {
+    title: "Préparation en cours",
+    subtitle: "Un instant — connexion à Mood.",
+    retry: "Réessayer",
+  },
   home: {
     suggestedUsers: "Vous connaissez peut-être",
   },

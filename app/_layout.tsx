@@ -24,6 +24,7 @@ import { BootProvider, useBoot } from "@/src/boot/BootContext";
 
 // Componentes
 import CustomSplashScreen from "@/components/CustomSplashScreen";
+import BootLoadingScreen from "@/components/BootLoadingScreen";
 import CommentsSheet from "@/components/comments/CommentsSheet";
 import InAppNotification from "@/components/InAppNotification";
 // 🔥 IMPORT NUEVO
@@ -33,7 +34,7 @@ SplashScreen.preventAutoHideAsync();
 
 const StackLayout = () => {
   const enableFade = useFlag("fadeTransitions");
-  const { loggedIn, loading } = useGlobalContext();
+  const { loggedIn, loading, checkAuth } = useGlobalContext();
   const { setBootComplete } = useBoot();
   const segments = useSegments();
   const router = useRouter();
@@ -71,8 +72,41 @@ const StackLayout = () => {
     }
   }, [loading, loggedIn, segments, router]);
 
+  // --- Boot gating ---
+  // Never allow network stalls to keep the native splash on-screen.
+  // We hide the native splash quickly, then (if auth is still resolving)
+  // we show our own premium boot screen.
+  const MIN_SPLASH_MS = 450;
+  const MAX_SPLASH_MS = 2500;
+
   useEffect(() => {
-    if (!loading) setIsAppReady(true);
+    const start = Date.now();
+    let minTimer: any;
+    let maxTimer: any;
+    let cancelled = false;
+
+    const arm = () => {
+      // If auth resolved fast, keep splash at least MIN_SPLASH_MS.
+      if (!loading) {
+        const elapsed = Date.now() - start;
+        const wait = Math.max(0, MIN_SPLASH_MS - elapsed);
+        minTimer = setTimeout(() => {
+          if (!cancelled) setIsAppReady(true);
+        }, wait);
+      }
+
+      // Absolute cap: always proceed.
+      maxTimer = setTimeout(() => {
+        if (!cancelled) setIsAppReady(true);
+      }, MAX_SPLASH_MS);
+    };
+
+    arm();
+    return () => {
+      cancelled = true;
+      if (minTimer) clearTimeout(minTimer);
+      if (maxTimer) clearTimeout(maxTimer);
+    };
   }, [loading]);
 
   useEffect(() => {
@@ -121,6 +155,16 @@ const StackLayout = () => {
         >
           <CustomSplashScreen />
         </Animated.View>
+      )}
+
+      {/* If auth is still resolving after the splash is gone, show a clean boot screen. */}
+      {isSplashAnimationComplete && loading && (
+        <BootLoadingScreen
+          onRetry={() => {
+            // Force auth re-check (e.g. after network comes back)
+            void checkAuth(true);
+          }}
+        />
       )}
     </View>
   );
