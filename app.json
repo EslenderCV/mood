@@ -19,7 +19,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.Gammes.Mood",
       "usesAppleSignIn": true,
-      "buildNumber": "24",
+      "buildNumber": "25",
       "infoPlist": {
         "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos directamente desde la app para crear nuevos Vibes o actualizar tu foto de perfil.",
         "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar imágenes y compartirlas en tus publicaciones o historias.",
@@ -56,7 +56,8 @@
       "expo-web-browser",
       "expo-apple-authentication",
       "expo-secure-store",
-      "expo-video"
+      "expo-video",
+      "expo-shazamkit"
     ],
     "runtimeVersion": {
       "policy": "appVersion"
