@@ -5,7 +5,10 @@
     "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": ["mood", "appwrite-callback-697d0db30009f4ca4dd6"],
+    "scheme": [
+      "mood",
+      "appwrite-callback-697d0db30009f4ca4dd6"
+    ],
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/images/splash-full.png",
@@ -16,7 +19,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.Gammes.Mood",
       "usesAppleSignIn": true,
-      "buildNumber": "23",
+      "buildNumber": "24",
       "infoPlist": {
         "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos directamente desde la app para crear nuevos Vibes o actualizar tu foto de perfil.",
         "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar imágenes y compartirlas en tus publicaciones o historias.",
