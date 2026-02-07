@@ -129,6 +129,7 @@ export const useHomeLogic = () => {
     trackFollow,
     updateViewableIndex,
     updateViewableItem,
+    closeTelemetryAnchor,
     flushQueue,
   } = useFeedTelemetry({ userId, sortedFeedRef, lastAnchorRef, currentAnchorRef });
 
@@ -146,6 +147,13 @@ export const useHomeLogic = () => {
   });
 
   const onRefresh = useCallback(async () => {
+    // Close any open dwell anchor so we don't lose durationMs and so a refresh doesn't
+    // accidentally keep an old anchor alive.
+    try {
+      closeTelemetryAnchor?.("refresh");
+    } catch {}
+    void flushQueue();
+
     realtimePostsCacheRef.current = [];
 
     if (serverMode) {
@@ -156,7 +164,7 @@ export const useHomeLogic = () => {
 
     refreshFeed();
     void fetchAuxiliaryData(true);
-  }, [serverMode, refreshServerFeed, refreshFeed, fetchAuxiliaryData]);
+  }, [serverMode, refreshServerFeed, refreshFeed, fetchAuxiliaryData, closeTelemetryAnchor, flushQueue]);
 
   // --- Realtime (counts + my new posts) ---
   useHomeRealtime({ userId, user, fetchCounts, setSortedFeed, realtimePostsCacheRef });
@@ -424,6 +432,8 @@ export const useHomeLogic = () => {
     openShare,
     updateViewableIndex,
     updateViewableItem,
+    closeTelemetryAnchor,
+    flushQueue,
     trackLike,
     trackSave,
     trackShare,

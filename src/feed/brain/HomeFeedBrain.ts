@@ -12,6 +12,7 @@ export type RankedCandidate = {
   score: number;
   reasonCodes: string[];
   primaryTag?: string; // for diversity (artist/mood tag)
+  tagType?: "mood" | "artist";
 };
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
@@ -61,6 +62,7 @@ const chooseSource = (args: {
   engagement: number;
   artistAffinity: number;
   creatorAffinity: number;
+  tagAffinity: number;
 }): FeedSource => {
   if (args.isFollowedOrMine) return "following";
 
@@ -71,6 +73,7 @@ const chooseSource = (args: {
   if (
     args.artistAffinity >= 0.20 ||
     args.creatorAffinity >= 0.20 ||
+    args.tagAffinity >= 0.20 ||
     args.engagement >= 0.18
   )
     return "reco";
@@ -174,14 +177,26 @@ const violatesDiversity = (
     .length;
   if (countCreator >= 2) return true;
 
-  // Optional tag diversity
+  // Tag / mood diversity (anti-fatigue)
   if (cand.primaryTag) {
     const t = cand.primaryTag;
-    const lastTags = picked
-      .slice(-3)
-      .map((x) => x.primaryTag)
-      .filter(Boolean);
-    if (lastTags.length === 3 && lastTags.every((x) => x === t)) return true;
+    const isMood = cand.tagType === "mood";
+
+    // No more than 2 consecutive mood tags; artist tags can be a bit looser.
+    const maxConsecutive = isMood ? 2 : 3;
+    let streak = 0;
+    for (let i = picked.length - 1; i >= 0; i--) {
+      if (picked[i].primaryTag === t) streak += 1;
+      else break;
+    }
+    if (streak >= maxConsecutive) return true;
+
+    // Window cap (prevents repeating the same mood/artist too frequently)
+    const windowSize = 7;
+    const maxInWindow = isMood ? 2 : 3;
+    const w = picked.slice(-windowSize);
+    const countTag = w.filter((x) => x.primaryTag === t).length;
+    if (countTag >= maxInWindow) return true;
   }
 
   return false;
@@ -228,6 +243,8 @@ export class HomeFeedBrain {
         typeof post?.songData === "string" ? parseSongData(post.songData) : null;
       const artistName = (song?.artistName || song?.artist || "").toString();
 
+      const moodTag = post?.emotionalTag ? String(post.emotionalTag) : undefined;
+
       const artistAffinity = normalizeAffinity(
         args.session.getArtistAffinity(artistName),
       );
@@ -235,12 +252,17 @@ export class HomeFeedBrain {
         args.session.getCreatorAffinity(creatorId),
       );
 
+      const tagAffinity = moodTag
+        ? normalizeAffinity(args.session.getTagAffinity(moodTag))
+        : 0;
+
       const src = chooseSource({
         isFollowedOrMine: isMineOrFollowed,
         ageHours,
         engagement: eng,
         artistAffinity,
         creatorAffinity,
+        tagAffinity,
       });
 
       const penalty = args.seen.penalty(postId, ts);
@@ -253,7 +275,9 @@ export class HomeFeedBrain {
               ? 0.04
               : 0.0;
 
-      const affinity = clamp01(Math.max(artistAffinity, creatorAffinity));
+      const affinity = clamp01(
+        Math.max(artistAffinity, creatorAffinity, tagAffinity),
+      );
       const base =
         0.30 * rec +
         0.22 * eng +
@@ -263,15 +287,23 @@ export class HomeFeedBrain {
 
       const score = base * (1 - Math.min(0.9, penalty));
 
-      const primaryTag = post?.emotionalTag
-        ? String(post.emotionalTag)
+      const primaryTag = moodTag
+        ? moodTag
         : artistName
           ? String(artistName).toLowerCase()
           : undefined;
 
+      const tagType: RankedCandidate["tagType"] = moodTag
+        ? "mood"
+        : artistName
+          ? "artist"
+          : undefined;
+
       const reasonCodes: string[] = [];
       if (src === "following") reasonCodes.push("FOLLOWING");
-      if (src === "reco" && affinity > 0.2) reasonCodes.push("AFFINITY");
+      if (src === "reco" && affinity > 0.2) {
+        reasonCodes.push(moodTag && tagAffinity >= 0.2 ? "MOOD_AFFINITY" : "AFFINITY");
+      }
       if (src === "trending") reasonCodes.push("TRENDING");
       if (penalty > 0.12) reasonCodes.push("SEEN_PENALTY");
 
@@ -283,6 +315,7 @@ export class HomeFeedBrain {
         score,
         reasonCodes,
         primaryTag,
+        tagType,
       });
     }
 

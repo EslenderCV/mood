@@ -8,6 +8,7 @@ import {
   isServerHomeFeedEnabled,
   ServerFeedResponse,
 } from "@/lib/appwrite";
+import { extractMoodEmojiFromSongDataString } from "@/lib/postUtils";
 import { MoodSessionManager } from "@/src/brain/session/MoodSessionManager";
 
 import { SeenStateStore } from "@/src/feed/seen/SeenStateStore";
@@ -36,6 +37,21 @@ const getCreatorId = (post: any): string => {
     post?.userId ||
     "unknown"
   );
+};
+
+const decoratePostForBrain = (post: any): any => {
+  try {
+    if (!post || typeof post !== "object") return post;
+    if (post.emotionalTag) return post;
+    const raw = post.songData;
+    if (typeof raw === "string") {
+      const e = extractMoodEmojiFromSongDataString(raw);
+      if (e) post.emotionalTag = e;
+    }
+  } catch {
+    // best-effort
+  }
+  return post;
 };
 
 const getPostDateMs = (post: any): number => {
@@ -137,6 +153,7 @@ export const useHomeFeedConstruction = ({
       const toAdd: FeedItem[] = [];
       for (const post of posts) {
         if (!post?.$id) continue;
+        decoratePostForBrain(post);
         const creatorId = getCreatorId(post);
         if (creatorId && blocked.has(creatorId)) continue;
         if (servedPostIdsRef.current.has(post.$id)) continue;
@@ -336,6 +353,7 @@ export const useHomeFeedConstruction = ({
             const hydratedPosts = await hydratePostsWithUsers(
               Array.from(rawPostsById.values()),
             );
+            hydratedPosts.forEach((p: any) => decoratePostForBrain(p));
             const hydratedById = new Map(
               hydratedPosts.map((p: any) => [p?.$id, p]),
             );
@@ -344,6 +362,7 @@ export const useHomeFeedConstruction = ({
               .map((postId) => {
                 const post = hydratedById.get(postId) || rawPostsById.get(postId);
                 if (!post) return null;
+                decoratePostForBrain(post);
                 return {
                   _id: postId,
                   type: "post",

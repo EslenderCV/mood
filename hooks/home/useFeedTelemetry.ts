@@ -227,6 +227,17 @@ export const useFeedTelemetry = ({
     [applyBanditReward, enqueueEvent, currentAnchorRef, seenStore],
   );
 
+  /**
+   * Public escape hatch so callers can force-close the current anchor
+   * (eg. refresh, tab switch edge cases, transient viewability gaps).
+   */
+  const closeTelemetryAnchor = useCallback(
+    (reason?: string) => {
+      closeAnchor(Date.now(), reason || "manual");
+    },
+    [closeAnchor],
+  );
+
   // Close on background / inactive to avoid orphan anchors
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
@@ -251,13 +262,25 @@ export const useFeedTelemetry = ({
       const list = sortedFeedRef.current || [];
       const now = Date.now();
 
+      // If list is empty or index is out of range, close any open anchor.
+      if (!list.length || index < 0 || index >= list.length) {
+        closeAnchor(now, "out_of_range");
+        return;
+      }
+
       // If index points at a module/ad, scan forward for the next post.
       let idx = index;
       while (idx < list.length && list[idx]?.type !== "post") idx += 1;
-      if (idx < 0 || idx >= list.length) return;
+      if (idx < 0 || idx >= list.length) {
+        closeAnchor(now, "no_post_in_view");
+        return;
+      }
 
       const currentItem = list[idx];
-      if (!currentItem || currentItem.type !== "post" || !currentItem.data?.$id) return;
+      if (!currentItem || currentItem.type !== "post" || !currentItem.data?.$id) {
+        closeAnchor(now, "invalid_anchor_item");
+        return;
+      }
 
       const postId = currentItem.data.$id;
       const feedItemId = currentItem.id;
@@ -436,6 +459,7 @@ export const useFeedTelemetry = ({
     trackFollow,
     updateViewableIndex,
     updateViewableItem,
+    closeTelemetryAnchor,
     flushQueue,
   };
 };

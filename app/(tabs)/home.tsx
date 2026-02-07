@@ -177,7 +177,14 @@ const Home = () => {
         .filter((v) => v.isViewable && v.index !== null)
         .sort((a, b) => (a.index as number) - (b.index as number));
 
-      if (validItems.length === 0) return;
+      // When viewability briefly drops to 0 (fast fling, transition), force-close
+      // the open anchor so we don't lose durationMs and so we can classify skip_fast.
+      if (validItems.length === 0) {
+        try {
+          (logicRef.current as any).closeTelemetryAnchor?.("no_viewables");
+        } catch {}
+        return;
+      }
 
       const firstPostToken = validItems.find((v) => {
         const it: any = v.item as any;

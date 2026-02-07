@@ -12,6 +12,77 @@ export const parseSongData = (songDataString: string) => {
   }
 };
 
+// --- Feed brain helpers ---
+// Mood/tag emojis are currently embedded inside `songData` (e.g. `songData.mood`) and
+// sometimes inside `songData.text`.
+// We keep extraction logic in one place to avoid drift across UI + feed brain + telemetry.
+const KNOWN_MOOD_EMOJIS = [
+  "😂",
+  "🥺",
+  "😭",
+  "😡",
+  "😎",
+  "🤍",
+  "❤️",
+  "💔",
+  "🖤",
+  "🔥",
+  "✨",
+  "🥰",
+  "😍",
+  "😴",
+  "🤯",
+  "😇",
+  "😈",
+  "🥵",
+  "🥶",
+  "🤩",
+  "😢",
+  "😌",
+  "😤",
+  "😱",
+  "🤔",
+  "😮‍💨",
+  "🎧",
+  "🎶",
+  "🎵",
+];
+
+const pickFirstEmoji = (s: string): string | null => {
+  if (!s) return null;
+  let best: { e: string; idx: number } | null = null;
+  for (const e of KNOWN_MOOD_EMOJIS) {
+    const idx = s.indexOf(e);
+    if (idx === -1) continue;
+    if (!best || idx < best.idx) best = { e, idx };
+  }
+  return best ? best.e : null;
+};
+
+export const extractMoodEmojiFromSong = (song: any): string | null => {
+  if (!song || typeof song !== "object") return null;
+
+  const m = song?.mood;
+  if (typeof m === "string" && m.trim().length > 0) return m.trim();
+
+  // Fallbacks: some payloads store the emoji in text/caption-like fields.
+  const textCandidates = [song?.text, song?.caption, song?.moodText, song?.moodStyle];
+  for (const t of textCandidates) {
+    if (typeof t !== "string") continue;
+    const e = pickFirstEmoji(t);
+    if (e) return e;
+  }
+
+  return null;
+};
+
+export const extractMoodEmojiFromSongDataString = (
+  songDataString: string,
+): string | null => {
+  const song = parseSongData(songDataString);
+  return extractMoodEmojiFromSong(song);
+};
+
 export const formatTimeAgo = (
   dateString: string,
   t: (key: string) => string,

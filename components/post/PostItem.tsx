@@ -17,6 +17,7 @@ import { getRelativeTime } from "@/lib/dateUtils";
 import { useAudioContext } from "@/context/AudioContext";
 
 import { parseSongData } from "@/components/post/postUtils";
+import { extractMoodEmojiFromSong } from "@/lib/postUtils";
 import { PostHeader } from "@/components/post/PostHeader";
 import { PostBody } from "@/components/post/PostBody";
 import { PostActions } from "@/components/post/PostActions";
@@ -117,7 +118,11 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const songData = parseSongData(post.songData);
   const hasMusic = !!(songData && songData.title);
-  const mood = JSON.parse(post.songData.trim()).mood;
+  const mood =
+    post?.emotionalTag ||
+    (songData as any)?.mood ||
+    extractMoodEmojiFromSong(songData) ||
+    null;
   const isPlayingThis = currentPlayingId === post.$id && isPlaying;
   const isLoadingThis =
     currentPlayingId === post.$id && isLoading && !isPlaying;

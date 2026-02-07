@@ -300,6 +300,15 @@ export class MoodSessionManager {
   }
 
   /**
+   * Short-term affinity for an emotional tag (mood emoji).
+   * Used by HomeFeedBrain to adapt quickly based on attention/skip.
+   */
+  public getTagAffinity(emotionalTag: string): number {
+    if (!emotionalTag) return 0;
+    return this.tagAffinity.get(emotionalTag) || 0;
+  }
+
+  /**
    * Used to personalize music discovery...
    */
   public getArtistAffinity(artistName: string): number {
