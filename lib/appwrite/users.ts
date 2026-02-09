@@ -283,6 +283,23 @@ export async function updateProfile(userId: string, form: any) {
   }
 }
 
+
+// Store preferred language on the user document (used to localize push notifications per recipient).
+export async function updateUserLanguage(userId: string, language: string) {
+  try {
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.usersCollectionId,
+      userId,
+      { language },
+    );
+    return true;
+  } catch {
+    // If the attribute does not exist yet in Appwrite, we silently ignore.
+    return false;
+  }
+}
+
 export async function updatePrivacy(userId: string, isPrivate: boolean) {
   try {
     return await databases.updateDocument(
@@ -420,7 +437,7 @@ export async function getFollowedUserIds(currentUserId: string) {
 export async function followUser(followerId: string, followedId: string) {
   try {
     const target = await getUser(followedId);
-    if (!target) throw new Error("Usuario no existe");
+    if (!target) throw new Error("User not found");
     const status = target.isPrivate ? "pending" : "accepted";
 
     const res = await databases.createDocument(
@@ -432,13 +449,10 @@ export async function followUser(followerId: string, followedId: string) {
 
     const follower = await getUser(followerId);
     if (follower) {
-      const type = target.isPrivate ? "follow_request" : "follow";
-      const msg = target.isPrivate ? "quiere seguirte" : "comenzó a seguirte";
-      await createNotification({
+      const type = target.isPrivate ? "follow_request" : "follow";      await createNotification({
         userId: followedId,
         type: type as any,
-        message: msg,
-        senderId: followerId,
+                senderId: followerId,
         senderName: follower.username || follower.name,
         senderAvatar: follower.pfp,
       });
@@ -567,8 +581,7 @@ export async function acceptFollowRequest(
       await createNotification({
         userId: myUserId,
         type: "follow",
-        message: "comenzó a seguirte",
-        senderId: followerId,
+                senderId: followerId,
         senderName: follower.username || follower.name,
         senderAvatar: follower.pfp,
       });
@@ -578,8 +591,7 @@ export async function acceptFollowRequest(
       await createNotification({
         userId: followerId,
         type: "follow",
-        message: "aceptó tu solicitud",
-        senderId: myUserId,
+                senderId: myUserId,
         senderName: me.username || me.name,
         senderAvatar: me.pfp,
       });

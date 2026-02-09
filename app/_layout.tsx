@@ -1,6 +1,6 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import React, { useEffect, useState, useRef } from "react";
-import { View, Animated, StyleSheet } from "react-native";
+import { View, Animated, StyleSheet, LogBox } from "react-native";
 import * as SplashScreen from "expo-splash-screen";
 import { Audio } from "expo-av";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -45,6 +45,13 @@ const StackLayout = () => {
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    // Suppress Expo AV deprecation warning (does not affect runtime).
+    LogBox.ignoreLogs([
+      "[expo-av]: Expo AV has been deprecated",
+    ]);
+  }, []);
+
+  useEffect(() => {
     (async () => {
       try {
         await Audio.setAudioModeAsync({
@@ -64,8 +71,15 @@ const StackLayout = () => {
     const segmentsArray = segments as string[];
     const root = segmentsArray[0];
 
+    const second = segmentsArray[1];
+
     if (loggedIn) {
-      if (!root || root === "(auth)") router.replace("/home");
+      // Keep logged-in users out of the auth flow, except for deep-linked
+      // password recovery screens.
+      const isRecoveryFlow =
+        root === "(auth)" && (second === "recovery" || second === "forgotPassword");
+
+      if (!root || (root === "(auth)" && !isRecoveryFlow)) router.replace("/home");
     } else {
       // Send unauthenticated users to the auth flow.
       if (root === "(tabs)" || root === "chat") router.replace("/signIn");

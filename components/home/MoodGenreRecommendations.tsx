@@ -15,13 +15,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { BottomSheetBackdrop, BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useColorScheme } from "nativewind";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import {
-  getDeezerChartPlaylists,
-  getDeezerChartTracks,
-  getDeezerPlaylistTracks,
-  searchSongs,
-} from "@/lib/appwrite/utils";
 import { useFeed } from "@/context/FeedProvider";
 import { useModal } from "@/context/ModalContext";
 import { AudioActions, useAudioContext } from "@/context/AudioContext";
@@ -51,9 +46,113 @@ type Track = {
   album?: any;
 };
 
+// --- Music Provider (Apple Charts + iTunes preview) ---
+// Goal: show "today's" (or at least periodically rotating) trending suggestions to everyone,
+// without personalizing per user profile, and using reliable, globally-popular catalogs.
+// We use Apple Marketing Tools RSS charts (free) to get "most played" songs (updated daily),
+// then iTunes Search API lookup to obtain a short preview URL for playback.
+// Sources:
+// - Apple Marketing Tools RSS (JSON): https://rss.applemarketingtools.com
+// - iTunes Search API (lookup): https://itunes.apple.com/lookup (previewUrl field)
+
+const APPLE_RSS_BASE = "https://rss.applemarketingtools.com/api/v2";
+const ITUNES_LOOKUP_BASE = "https://itunes.apple.com/lookup";
+const ITUNES_SEARCH_BASE = "https://itunes.apple.com/search";
+
+// Storefronts: Dominican Republic first, then a few big catalogs for broader/global variety.
+// (More storefronts -> more diverse pool, still trending.)
+const STOREFRONTS = ["do", "us", "gb", "es"];
+
+// "Today's suggestions": rotate daily (same list within the same day).
+const ROTATION_WINDOW_HOURS = 24;
+
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_TRACKS = 12;
 
+// --- "Today's suggestions" caching + deterministic per-device shuffle ---
+// Goal: suggestions change at least daily, and differ across users (device seed),
+// without personalizing by user profile.
+const DEVICE_SEED_STORAGE_KEY = "mood:device_seed:v1";
+// Bump cache version so older recommendation caches won't keep showing the same list forever.
+// Bump cache version whenever the recommendation strategy changes,
+// so users don't keep seeing a stale list.
+const DAILY_RECS_STORAGE_KEY_PREFIX = "mood:daily_recs:v4";
+
+type DailyStoredRecs = { cycleKey: string; tracks: Track[] };
+
+function getLocalCycleKey(windowHours: number = ROTATION_WINDOW_HOURS): string {
+  const d = new Date();
+  const yyyy = String(d.getFullYear());
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  // Daily rotation (no buckets). If you ever want to rotate more often,
+  // set ROTATION_WINDOW_HOURS < 24.
+  if (windowHours >= 24) return `${yyyy}-${mm}-${dd}`;
+
+  const hours = d.getHours();
+  const bucket = Math.floor(hours / Math.max(windowHours, 1));
+  return `${yyyy}-${mm}-${dd}-b${bucket}`;
+}
+
+function hashToSeed32(input: string): number {
+  // FNV-1a 32-bit
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+function mulberry32(seed: number) {
+  return function () {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffleInPlace<T>(arr: T[], rand: () => number) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+async function getOrCreateDeviceSeed(): Promise<string> {
+  try {
+    const existing = await AsyncStorage.getItem(DEVICE_SEED_STORAGE_KEY);
+    if (existing) return existing;
+  } catch {}
+  const seed = String(Math.floor(Math.random() * 1_000_000_000));
+  try {
+    await AsyncStorage.setItem(DEVICE_SEED_STORAGE_KEY, seed);
+  } catch {}
+  return seed;
+}
+
+async function loadDailyRecs(chipId: string): Promise<DailyStoredRecs | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`${DAILY_RECS_STORAGE_KEY_PREFIX}:${chipId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.cycleKey || !Array.isArray(parsed?.tracks)) return null;
+    return parsed as DailyStoredRecs;
+  } catch {
+    return null;
+  }
+}
+
+async function saveDailyRecs(chipId: string, cycleKey: string, tracks: Track[]) {
+  try {
+    const payload: DailyStoredRecs = { cycleKey, tracks };
+    await AsyncStorage.setItem(`${DAILY_RECS_STORAGE_KEY_PREFIX}:${chipId}`, JSON.stringify(payload));
+  } catch {}
+}
+
+// Chips visibles en UI (2 filas: moods arriba, géneros abajo)
+// Importante: no cambiar el diseño; solo se usa como "filtro" suave para tendencias.
 const CHIPS: Chip[] = [
   {
     id: "mood_energy",
@@ -117,7 +216,7 @@ const CHIPS: Chip[] = [
     type: "genre",
     accent: "#38BDF8",
     playlistKeywords: ["pop", "top pop", "pop hits", "hits"],
-    queries: ["pop hits", "top pop", "pop viral", "pop 2024"],
+    queries: ["pop hits", "top pop", "pop viral", "pop"],
   },
   {
     id: "genre_rock",
@@ -133,7 +232,7 @@ const CHIPS: Chip[] = [
     type: "genre",
     accent: "#FBBF24",
     playlistKeywords: ["hip hop", "hip-hop", "rap", "trap"],
-    queries: ["hip hop hits", "rap hits", "trap hits", "hip hop viral"],
+    queries: ["hip hop hits", "rap hits", "trap hits", "hip hop"],
   },
   {
     id: "genre_edm",
@@ -141,7 +240,7 @@ const CHIPS: Chip[] = [
     type: "genre",
     accent: "#A78BFA",
     playlistKeywords: ["dance", "edm", "electronic", "house", "techno"],
-    queries: ["edm hits", "electronic dance", "house hits", "techno essentials"],
+    queries: ["edm hits", "electronic dance", "house hits", "techno"],
   },
   {
     id: "genre_kpop",
@@ -149,9 +248,299 @@ const CHIPS: Chip[] = [
     type: "genre",
     accent: "#C084FC",
     playlistKeywords: ["k-pop", "kpop", "k pop"],
-    queries: ["kpop hits", "k-pop trending", "kpop essentials", "kpop viral"],
+    queries: ["kpop hits", "k-pop trending", "kpop essentials", "kpop"],
   },
 ];
+
+// --- Genre separation: strong matching per chip ---
+// Apple charts are global "most played" lists. To keep recommendations truly aligned with the selected chip
+// (K-Pop, Hip-Hop, Rock, etc.), we do a stricter match on Apple-provided genre names, and if that pool is
+// too small we fill using iTunes Search with genre-specific terms (still trending-ish / popular, but accurate).
+type ChipMatchConfig = {
+  // Tokens that should appear in Apple genre/name/artist text (normalized).
+  includeAny: string[];
+  // Tokens that should NOT appear (helps avoid bleed between chips).
+  excludeAny?: string[];
+  // iTunes Search fallback terms to fill up to MAX_TRACKS.
+  itunesTerms?: string[];
+  // Prefer searching in a specific country catalog (US tends to be more global; DO for local latin picks).
+  preferCountry?: "DO" | "US";
+};
+
+const CHIP_QUERY_CONFIG: Record<string, ChipMatchConfig> = {
+  genre_kpop: {
+    includeAny: ["k-pop", "kpop", "korean pop", "korean"],
+    itunesTerms: ["k-pop hits", "kpop", "k-pop essentials", "korean pop"],
+    preferCountry: "US",
+  },
+  genre_hiphop: {
+    includeAny: ["hip-hop", "hip hop", "rap", "trap"],
+    // keep it more global by excluding latin-urban terms here
+    excludeAny: ["reggaeton", "dembow", "latin", "urbano"],
+    itunesTerms: ["hip-hop hits", "rap hits", "trap hits", "hip hop"],
+    preferCountry: "US",
+  },
+  genre_rock: {
+    includeAny: ["rock", "alternative", "alt rock", "indie", "metal", "punk"],
+    itunesTerms: ["rock hits", "alternative rock", "indie rock", "rock classics"],
+    preferCountry: "US",
+  },
+  genre_edm: {
+    includeAny: ["edm", "electronic", "dance", "house", "techno", "trance"],
+    itunesTerms: ["edm hits", "dance hits", "electronic", "house", "techno"],
+    preferCountry: "US",
+  },
+  genre_pop: {
+    includeAny: ["pop"],
+    itunesTerms: ["pop hits", "top pop", "pop"],
+    preferCountry: "US",
+  },
+  genre_latino: {
+    includeAny: ["reggaeton", "dembow", "latin", "urbano", "latin trap", "trap latino"],
+    itunesTerms: ["dembow", "reggaeton hits", "latin trap", "urbano latino"],
+    preferCountry: "DO",
+  },
+};
+
+function normalizeForMatch(s?: string): string {
+  // Lowercase, strip accents-ish, and normalize punctuation to spaces.
+  // (We keep it simple to avoid heavy deps.)
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function getMatchConfigForChip(
+  chip: Chip,
+): Required<Pick<ChipMatchConfig, "includeAny" | "excludeAny" | "itunesTerms" | "preferCountry">> & { strict: boolean } {
+  const cfg = CHIP_QUERY_CONFIG[chip.id];
+  const includeAny =
+    cfg?.includeAny?.length
+      ? cfg.includeAny
+      : Array.from(
+          new Set([
+            ...(chip.playlistKeywords || []),
+            ...(chip.queries || []),
+            chip.label,
+          ]),
+        );
+
+  const excludeAny = cfg?.excludeAny?.length ? cfg.excludeAny : [];
+  const itunesTerms =
+    cfg?.itunesTerms?.length
+      ? cfg.itunesTerms
+      : Array.from(new Set([...(chip.queries || []), chip.label]));
+
+  const preferCountry = cfg?.preferCountry || "US";
+  const strict = chip.type === "genre";
+  return { includeAny, excludeAny, itunesTerms, preferCountry, strict };
+}
+
+
+type AppleGenre = { genreId?: string; name?: string; url?: string };
+type AppleChartItem = {
+  id: string;
+  name?: string;
+  artistName?: string;
+  artworkUrl100?: string;
+  genres?: AppleGenre[];
+};
+
+function safeLower(s?: string) {
+  return (s || "").toLowerCase();
+}
+
+function buildHaystackFromAppleItem(i: AppleChartItem): string {
+  const genres = (i.genres || []).map((g) => g?.name || "").join(" ");
+  return `${i.name || ""} ${i.artistName || ""} ${genres}`.toLowerCase();
+}
+
+function replaceArtworkSize(url?: string, size: number = 512): string | undefined {
+  if (!url || typeof url !== "string") return url;
+  // Common patterns from Apple artwork URLs.
+  // Examples: .../100x100bb.jpg  or .../100x100bb.png
+  return url.replace(/\d+x\d+bb\.(jpg|png)/i, `${size}x${size}bb.$1`);
+}
+
+const appleChartCache: Map<string, { ts: number; items: AppleChartItem[] }> = new Map();
+
+async function fetchAppleMostPlayed(storefront: string, limit: number): Promise<AppleChartItem[]> {
+  const key = `${storefront}:most-played:${limit}`;
+  const cached = appleChartCache.get(key);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.items;
+
+  const url = `${APPLE_RSS_BASE}/${encodeURIComponent(storefront)}/music/most-played/${Math.min(Math.max(limit, 1), 100)}/songs.json`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Apple charts failed: ${res.status}`);
+  const json = await res.json();
+
+  const items: AppleChartItem[] = (json?.feed?.results || [])
+    .map((x: any) => ({
+      id: String(x?.id ?? ""),
+      name: x?.name,
+      artistName: x?.artistName,
+      artworkUrl100: x?.artworkUrl100,
+      genres: x?.genres || [],
+    }))
+    .filter((x: AppleChartItem) => Boolean(x.id));
+
+  appleChartCache.set(key, { ts: Date.now(), items });
+  return items;
+}
+
+async function getAppleCandidates(): Promise<AppleChartItem[]> {
+  // Merge multiple storefronts, de-dupe by id preserving order.
+  const settled = await Promise.allSettled(
+    STOREFRONTS.map((sf) => fetchAppleMostPlayed(sf, 100)),
+  );
+
+  const merged: AppleChartItem[] = [];
+  const seen = new Set<string>();
+
+  for (const part of settled) {
+    if (part.status !== "fulfilled") continue;
+    for (const item of part.value) {
+      if (!item?.id || seen.has(item.id)) continue;
+      seen.add(item.id);
+      merged.push(item);
+    }
+  }
+
+  return merged;
+}
+
+type ItunesLookupResult = {
+  trackId?: number;
+  trackName?: string;
+  artistName?: string;
+  previewUrl?: string;
+  artworkUrl100?: string;
+  trackTimeMillis?: number;
+};
+
+async function itunesLookup(ids: string[], countryCode: string = "DO"): Promise<Map<string, ItunesLookupResult>> {
+  const clean = (ids || []).map((x) => String(x)).filter(Boolean);
+  const out = new Map<string, ItunesLookupResult>();
+  if (!clean.length) return out;
+
+  // iTunes lookup supports multiple ids separated by commas.
+  const qs = new URLSearchParams();
+  qs.set("id", clean.join(","));
+  qs.set("entity", "song");
+  // country is supported by iTunes Search API (defaults to US if omitted).
+  qs.set("country", countryCode);
+
+  const url = `${ITUNES_LOOKUP_BASE}?${qs.toString()}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`iTunes lookup failed: ${res.status}`);
+  const json = await res.json();
+
+  const results: ItunesLookupResult[] = json?.results || [];
+  for (const r of results) {
+    const id = r?.trackId != null ? String(r.trackId) : "";
+    if (!id) continue;
+    out.set(id, r);
+  }
+  return out;
+}
+
+async function itunesSearch(
+  term: string,
+  countryCode: string = "US",
+  limit: number = 25,
+): Promise<ItunesLookupResult[]> {
+  const q = String(term || "").trim();
+  if (!q) return [];
+  const qs = new URLSearchParams();
+  qs.set("term", q);
+  qs.set("entity", "song");
+  qs.set("media", "music");
+  qs.set("limit", String(Math.min(Math.max(limit, 1), 50)));
+  qs.set("country", countryCode);
+
+  const url = `${ITUNES_SEARCH_BASE}?${qs.toString()}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`iTunes search failed: ${res.status}`);
+  const json = await res.json();
+  return (json?.results || []) as ItunesLookupResult[];
+}
+
+function tracksFromItunesResults(
+  results: ItunesLookupResult[],
+  rand: () => number,
+  seen: Set<string>,
+  max: number,
+): Track[] {
+  const items = (results || [])
+    .map((r) => {
+      const id = r?.trackId != null ? String(r.trackId) : "";
+      const title = r?.trackName || "";
+      const artist = r?.artistName || "";
+      const preview = r?.previewUrl ? String(r.previewUrl).replace(/^http:/i, "https:") : undefined;
+      const cover = replaceArtworkSize(
+        r?.artworkUrl100 ? String(r.artworkUrl100).replace(/^http:/i, "https:") : undefined,
+        512,
+      );
+
+      if (!id || !title || !artist || !preview) return null;
+      return {
+        id,
+        title,
+        artist,
+        preview,
+        cover,
+        duration: r?.trackTimeMillis ? Math.round(r.trackTimeMillis / 1000) : undefined,
+      } as Track;
+    })
+    .filter(Boolean) as Track[];
+
+  // deterministic shuffle then take uniques
+  shuffleInPlace(items, rand);
+
+  const out: Track[] = [];
+  for (const t of items) {
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    out.push(t);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+function buildTracksFromLookup(
+  candidateIds: string[],
+  lookupMap: Map<string, ItunesLookupResult>,
+  fallbackCandidates: Map<string, AppleChartItem>,
+): Track[] {
+  const tracks: Track[] = [];
+  for (const id of candidateIds) {
+    const r = lookupMap.get(id);
+    const c = fallbackCandidates.get(id);
+
+    const title = r?.trackName || c?.name || "";
+    const artist = r?.artistName || c?.artistName || "";
+    const preview = r?.previewUrl ? String(r.previewUrl).replace(/^http:/i, "https:") : undefined;
+    const cover = replaceArtworkSize(
+      (r?.artworkUrl100 ? String(r.artworkUrl100).replace(/^http:/i, "https:") : undefined) || c?.artworkUrl100,
+      512,
+    );
+
+    if (!id || !title || !artist || !preview) continue;
+
+    tracks.push({
+      id: String(id),
+      title,
+      artist,
+      preview,
+      cover,
+      duration: r?.trackTimeMillis ? Math.round(r.trackTimeMillis / 1000) : undefined,
+    });
+  }
+  return tracks;
+}
 
 function mapTrack(t: any): Track {
   return {
@@ -200,53 +589,99 @@ function scorePlaylistTitle(title: string, keywords: string[]) {
 
 async function fetchBetterTracksForChip(
   chip: Chip,
-  ctx: {
-    getChartPlaylistsCached: () => Promise<Array<{ id: number; title: string }>>;
-    getPlaylistTracksCached: (playlistId: number) => Promise<any[]>;
-  },
+  rand: () => number,
 ): Promise<Track[]> {
-  const seen = new Set<string>();
+  // Fetch trending candidates (charts) and keep them tightly aligned with the selected chip.
+  // For genre chips, we match strongly against Apple-provided genre labels and avoid falling back to the full
+  // chart list (which caused cross-genre mixes). If the aligned pool is too small, we fill from
+  // iTunes Search using genre-specific terms.
+  const allCandidates = await getAppleCandidates();
 
-  // 1) Try to find a relevant TOP playlist from charts (best quality)
-  const playlists = await ctx.getChartPlaylistsCached();
-  let best: { id: number; title: string } | null = null;
-  let bestScore = 0;
-  for (const p of playlists || []) {
-    const s = scorePlaylistTitle(p.title, chip.playlistKeywords);
-    if (s > bestScore) {
-      bestScore = s;
-      best = p;
-    }
+  const { includeAny, excludeAny, itunesTerms, preferCountry, strict } = getMatchConfigForChip(chip);
+
+  const includeNorm = Array.from(
+    new Set(
+      (includeAny || [])
+        .flatMap((k) => String(k || "").split(/\s+/g))
+        .map((k) => normalizeForMatch(k))
+        .filter((k) => k.length >= 3),
+    ),
+  );
+
+  const excludeNorm = Array.from(
+    new Set(
+      (excludeAny || [])
+        .flatMap((k) => String(k || "").split(/\s+/g))
+        .map((k) => normalizeForMatch(k))
+        .filter((k) => k.length >= 3),
+    ),
+  );
+
+  const matches = (item: AppleChartItem) => {
+    const hay = normalizeForMatch(buildHaystackFromAppleItem(item));
+    const hasInclude = includeNorm.length ? includeNorm.some((k) => hay.includes(k)) : true;
+    const hasExclude = excludeNorm.length ? excludeNorm.some((k) => hay.includes(k)) : false;
+    return hasInclude && !hasExclude;
+  };
+
+  let filtered = allCandidates.filter(matches);
+
+  // For mood chips (non-strict), if filtering gets too narrow, we can broaden a bit.
+  // For genre chips (strict), DO NOT fall back to the full charts, because that breaks the category.
+  if (!strict && filtered.length < 25) filtered = allCandidates;
+
+  // Deterministic rotation (cycleKey + device seed): sample from the pool.
+  const poolSize = Math.min(filtered.length, 80);
+  const pool = filtered.slice(0, poolSize);
+  shuffleInPlace(pool, rand);
+
+  // Take more than we need (some lookups may not have previewUrl in the chosen country).
+  const candidateIds: string[] = [];
+  const fallbackMap = new Map<string, AppleChartItem>();
+
+  for (const item of pool) {
+    if (!item?.id) continue;
+    if (candidateIds.includes(item.id)) continue;
+    candidateIds.push(item.id);
+    fallbackMap.set(item.id, item);
+    if (candidateIds.length >= 60) break;
   }
 
-  if (best && bestScore >= 3) {
-    const plTracks = await ctx.getPlaylistTracksCached(best.id);
-    const picked = normalizeAndTake(plTracks, seen, MAX_TRACKS);
-    if (picked.length > 0) {
-      // If the playlist is a bit short/unusable (no previews), fill with global chart tracks.
-      if (picked.length < MAX_TRACKS) {
-        const chart = await getDeezerChartTracks(60);
-        const fill = normalizeAndTake(chart, seen, MAX_TRACKS - picked.length);
-        picked.push(...fill);
+  // Lookup previews: try preferred country first (DO for latin, US for global), then fall back to US.
+  let lookupMap = await itunesLookup(candidateIds, preferCountry);
+  const missing = candidateIds.filter((id) => !lookupMap.has(id));
+
+  if (missing.length) {
+    try {
+      const fallback = await itunesLookup(missing, "US");
+      for (const [k, v] of fallback.entries()) lookupMap.set(k, v);
+    } catch {}
+  }
+
+  const built = buildTracksFromLookup(candidateIds, lookupMap, fallbackMap);
+  const out: Track[] = built.slice(0, MAX_TRACKS);
+
+  // If we still don't have enough (common for stricter genres), fill with iTunes Search.
+  if (out.length < MAX_TRACKS) {
+    const seen = new Set(out.map((t) => t.id));
+    const terms = [...(itunesTerms || [])].map((t) => String(t || "").trim()).filter(Boolean);
+    shuffleInPlace(terms, rand);
+
+    // Small number of searches to keep it fast.
+    for (const term of terms.slice(0, 3)) {
+      if (out.length >= MAX_TRACKS) break;
+      try {
+        const results = await itunesSearch(term, preferCountry, 35);
+        const more = tracksFromItunesResults(results, rand, seen, MAX_TRACKS - out.length);
+        out.push(...more);
+      } catch {
+        // ignore and continue
       }
-      if (picked.length >= 6) return picked.slice(0, MAX_TRACKS);
     }
   }
 
-  // 2) Fallback: global chart tracks (still highly recognizable)
-  const chart = await getDeezerChartTracks(60);
-  const pickedChart = normalizeAndTake(chart, seen, MAX_TRACKS);
-  if (pickedChart.length >= 8) return pickedChart;
-
-  // 3) Last fallback: curated search queries
-  const out: Track[] = [];
-  for (const q of chip.queries) {
-    const res = await searchSongs(q);
-    const picked = normalizeAndTake(res, seen, MAX_TRACKS - out.length);
-    out.push(...picked);
-    if (out.length >= MAX_TRACKS) break;
-  }
-  return out;
+  // Guarantee max size
+  return out.slice(0, MAX_TRACKS);
 }
 
 export default function MoodGenreRecommendations({
@@ -275,29 +710,7 @@ export default function MoodGenreRecommendations({
   );
   const reqIdRef = useRef<number>(0);
 
-  // shared Deezer chart caches (avoid re-fetching across chips)
-  const chartPlaylistsRef = useRef<{ ts: number; playlists: Array<{ id: number; title: string }> } | null>(
-    null,
-  );
-  const playlistTracksRef = useRef<Map<string, { ts: number; tracks: any[] }>>(new Map());
 
-  const getChartPlaylistsCached = useCallback(async () => {
-    const cached = chartPlaylistsRef.current;
-    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.playlists;
-    // More playlists = higher chance of matching a relevant "Top" editorial playlist
-    const playlists = await getDeezerChartPlaylists(120);
-    chartPlaylistsRef.current = { ts: Date.now(), playlists };
-    return playlists;
-  }, []);
-
-  const getPlaylistTracksCached = useCallback(async (playlistId: number) => {
-    const key = String(playlistId);
-    const cached = playlistTracksRef.current.get(key);
-    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.tracks;
-    const tracks = await getDeezerPlaylistTracks(playlistId, 60);
-    playlistTracksRef.current.set(key, { ts: Date.now(), tracks });
-    return tracks;
-  }, []);
 
   // Fade-in for the rail when results load
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -350,38 +763,44 @@ export default function MoodGenreRecommendations({
   }, []);
 
   useEffect(() => {
-    const cached = cacheRef.current.get(activeChipId);
-    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
-      setTracks(cached.tracks);
-      setError(null);
-      try {
-        cached.tracks.slice(0, 2).forEach((t) => {
-          if (t.preview) AudioActions.prefetchTrack(t.preview);
-        });
-      } catch {}
-      return;
-    }
+  let alive = true;
+  const reqId = ++reqIdRef.current;
 
-    let alive = true;
-    const reqId = ++reqIdRef.current;
-    setLoading(true);
+  const cycleKey = getLocalCycleKey();
+  const dayKey = `${activeChipId}:${cycleKey}`;
+
+  const applyTracks = (list: Track[]) => {
+    setTracks(list);
     setError(null);
+  };
 
-    // soften-out while loading, then fade-in when ready
+  // 1) In-memory cache for *today*
+  const cached = cacheRef.current.get(dayKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+    applyTracks(cached.tracks);
+    return () => {
+      alive = false;
+    };
+  }
+
+  setLoading(true);
+  setError(null);
+
+  // soften-out while loading, then fade-in when ready
+  try {
+    fadeAnim.stopAnimation();
+    fadeAnim.setValue(0.55);
+  } catch {}
+
+  (async () => {
     try {
-      fadeAnim.stopAnimation();
-      fadeAnim.setValue(0.55);
-    } catch {}
+      // 2) Persistent daily cache ("Today's suggestions") so it doesn't change within the same day.
+      const stored = await loadDailyRecs(activeChipId);
+      if (!alive || reqId !== reqIdRef.current) return;
 
-    (async () => {
-      try {
-        const res = await fetchBetterTracksForChip(activeChip, {
-          getChartPlaylistsCached,
-          getPlaylistTracksCached,
-        });
-        if (!alive || reqId !== reqIdRef.current) return;
-        cacheRef.current.set(activeChipId, { ts: Date.now(), tracks: res });
-        setTracks(res);
+      if (stored?.cycleKey === cycleKey && stored.tracks?.length) {
+        cacheRef.current.set(dayKey, { ts: Date.now(), tracks: stored.tracks });
+        applyTracks(stored.tracks);
         try {
           Animated.timing(fadeAnim, {
             toValue: 1,
@@ -389,25 +808,44 @@ export default function MoodGenreRecommendations({
             useNativeDriver: true,
           }).start();
         } catch {}
-        try {
-          res.slice(0, 2).forEach((t) => {
-            if (t.preview) AudioActions.prefetchTrack(t.preview);
-          });
-        } catch {}
-      } catch {
-        if (!alive || reqId !== reqIdRef.current) return;
-        setTracks([]);
-        setError("No se pudieron cargar recomendaciones.");
-      } finally {
-        if (!alive || reqId !== reqIdRef.current) return;
-        setLoading(false);
+        return;
       }
-    })();
 
-    return () => {
-      alive = false;
-    };
-  }, [activeChipId, activeChip]);
+      // 3) Fetch trending/curated candidates and pick a deterministic (per-device) shuffled set for today.
+      const deviceSeed = await getOrCreateDeviceSeed();
+      const seed = hashToSeed32(`${deviceSeed}:${cycleKey}:${activeChipId}`);
+      const rand = mulberry32(seed);
+
+      const res = await fetchBetterTracksForChip(activeChip, rand);
+      if (!alive || reqId !== reqIdRef.current) return;
+
+      cacheRef.current.set(dayKey, { ts: Date.now(), tracks: res });
+      applyTracks(res);
+      // Save in background; even if it fails, the UX still works.
+      saveDailyRecs(activeChipId, cycleKey, res);
+
+      try {
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 220,
+          useNativeDriver: true,
+        }).start();
+      } catch {}
+    } catch {
+      if (!alive || reqId !== reqIdRef.current) return;
+      setTracks([]);
+      setError("No se pudieron cargar recomendaciones.");
+    } finally {
+      if (!alive || reqId !== reqIdRef.current) return;
+      setLoading(false);
+    }
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [activeChipId, activeChip]);
+
 
   // ---- Bottom sheet ("Más") ----
   const sheetRef = useRef<BottomSheetModal>(null);

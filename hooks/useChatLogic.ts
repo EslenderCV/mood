@@ -228,7 +228,7 @@ export const useChatLogic = () => {
         await sendPushNotification(
           chatUser.expoPushToken,
           currentUser.name || "Mood Chat",
-          "🎵 Te envió una canción: " + song.title,
+          tStatic("chat.push.sentSong", (chatUser as any)?.language).replace("{{title}}", song.title),
           { type: "chat", chatId: chatId, url: `/chat/${chatId}` },
           currentUser.pfp,
         );

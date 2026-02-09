@@ -107,7 +107,7 @@ export const SongOptionsModal = ({
                   className="font-semibold text-lg"
                   style={{ color: dangerColor }}
                 >
-                  {t("library.removeFromLibrary") || "Eliminar de Librería"}
+                  {t("library.removeFromLibrary") || "Remove from Library"}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity

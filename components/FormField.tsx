@@ -10,6 +10,7 @@ interface FormFieldProps {
   secureTextEntry?: boolean;
   keyboardType?: "default" | "email-address" | "numeric" | "phone-pad";
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  maxLength?: number;
   // AGREGADOS: Propiedades para el autocompletado
   textContentType?: TextInputProps["textContentType"];
   autoComplete?: TextInputProps["autoComplete"];
@@ -23,6 +24,7 @@ const FormField = ({
   secureTextEntry,
   keyboardType = "default",
   autoCapitalize = "none",
+  maxLength,
   // Recibir las nuevas props
   textContentType,
   autoComplete,
@@ -48,6 +50,7 @@ const FormField = ({
           secureTextEntry={secureTextEntry && !showPassword}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
+          maxLength={maxLength}
           // Pasarlas al componente nativo
           textContentType={textContentType}
           autoComplete={autoComplete}

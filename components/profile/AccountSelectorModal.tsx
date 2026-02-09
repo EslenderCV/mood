@@ -145,7 +145,7 @@ const AccountSelectorModal = ({
       t("auth.logoutTitle") || "Cerrar sesión",
       t("auth.logoutConfirm") || "¿Cerrar todas las sesiones?",
       [
-        { text: t("common.cancel") || "Cancelar", style: "cancel" },
+        { text: t("common.cancel") || "Cancel", style: "cancel" },
         {
           text: t("profile.logoutAll") || "Cerrar todas",
           style: "destructive",

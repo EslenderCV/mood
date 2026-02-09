@@ -218,6 +218,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
   const preloadedRef = useRef<{ uri: string; sound: Audio.Sound } | null>(null);
   const prefetchInFlightRef = useRef<string | null>(null);
   const prefetchedAtRef = useRef<Map<string, number>>(new Map());
+  const prefetchFailedAtRef = useRef<Map<string, number>>(new Map());
 
   const currentTrackIdRef = useRef<string | null>(null);
   const currentUriRef = useRef<string | null>(null);
@@ -383,6 +384,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
       const lastAt = prefetchedAtRef.current.get(uri);
       if (lastAt && now - lastAt < 2 * 60 * 1000) return;
 
+      // Si falló recientemente (p.ej. URL geobloqueada / redirect inseguro), no spameamos logs ni red.
+      const failedAt = prefetchFailedAtRef.current.get(uri);
+      if (failedAt && now - failedAt < 12 * 60 * 60 * 1000) return;
+
       // Si ya está preloaded ese mismo, listo
       if (preloadedRef.current?.uri === uri) return;
 
@@ -399,22 +404,24 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
         }
         preloadedRef.current = null;
 
-        // downloadFirst=true => mejor "tap-to-play"
+        // Prefetch best-effort: usamos streaming (downloadFirst=false) para evitar fallos con redirects o archivos grandes.
         const { sound } = await Audio.Sound.createAsync(
           { uri },
           { shouldPlay: false, volume: 1.0 },
           undefined,
-          true,
+          false,
         );
 
         preloadedRef.current = { uri, sound };
         prefetchedAtRef.current.set(uri, now);
+        prefetchFailedAtRef.current.delete(uri);
 
         if (__DEV__) {
           console.log("[Audio] prefetched:", uri);
         }
       } catch (e) {
-        // Silencioso: prefetch es best-effort
+        // Prefetch es best-effort. Marcamos fallo para no reintentar constantemente.
+        prefetchFailedAtRef.current.set(uri, Date.now());
         if (__DEV__) console.log("[Audio] prefetch failed", e);
       } finally {
         prefetchInFlightRef.current = null;
@@ -578,11 +585,26 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
           }
 
           // createAsync puede tardar: si el user navega, opId cambia => no aplicamos el resultado
-          const { sound: newSound, status } = await Audio.Sound.createAsync(
-            { uri },
-            { shouldPlay: true, volume: 1.0 },
-            onPlaybackStatusUpdate,
-          );
+          let created: { sound: Audio.Sound; status: AVPlaybackStatus } | null = null;
+          try {
+            // Preferimos streaming (downloadFirst=false) para evitar fallos al "descargar primero" en ciertas URLs.
+            created = await Audio.Sound.createAsync(
+              { uri },
+              { shouldPlay: true, volume: 1.0 },
+              onPlaybackStatusUpdate,
+              false,
+            );
+          } catch {
+            // Fallback: algunos hosts funcionan mejor con downloadFirst=true.
+            created = await Audio.Sound.createAsync(
+              { uri },
+              { shouldPlay: true, volume: 1.0 },
+              onPlaybackStatusUpdate,
+              true,
+            );
+          }
+
+          const { sound: newSound, status } = created!;
 
           // Si quedó stale, unload y sal
           if (!mountedRef.current || myOp !== opIdRef.current) {

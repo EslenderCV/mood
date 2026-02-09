@@ -11,9 +11,10 @@ import {
 } from "react";
 // 🔥 IMPORTAMOS AppState y la función nueva
 import { AppState } from "react-native";
-import { getCurrentUser, updateUserPresence } from "@/lib/appwrite";
+import { getCurrentUser, updateUserPresence, updateUserLanguage } from "@/lib/appwrite";
 import { Models } from "react-native-appwrite";
 import { useColorScheme } from "nativewind";
+import { useLanguage } from "@/context/LanguageContext";
 // NOTE: Navigation should be handled by app/_layout.tsx.
 // Keeping GlobalProvider free of router side-effects reduces startup flicker.
 
@@ -72,11 +73,18 @@ const GlobalContext = createContext<GlobalContextType>({
 export const useGlobalContext = () => useContext(GlobalContext);
 
 const GlobalProvider = ({ children }: Props) => {
+  const { language } = useLanguage();
   const [loggedIn, setLoggedIn] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [chats, setChats] = useState<any[]>([]);
   const [isSwitching, setIsSwitching] = useState(false);
+
+  // Keep preferred language stored on the user document (used for push notifications).
+  useEffect(() => {
+    if (!user?.$id) return;
+    updateUserLanguage(user.$id, language).catch(() => {});
+  }, [user?.$id, language]);
 
   const { colorScheme, setColorScheme } = useColorScheme();
 

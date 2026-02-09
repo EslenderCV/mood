@@ -3,10 +3,11 @@ import {
   OAuthProvider,
   AppwriteException,
   Query,
+  Functions,
 } from "react-native-appwrite";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
-import { account, databases, appwriteConfig } from "./config";
+import { account, databases, appwriteConfig, client } from "./config";
 import { appwriteCall } from "./request";
 
 // Almacén temporal
@@ -222,4 +223,144 @@ export async function deleteAllSessions() {
   } catch (error: any) {
     throw new Error(error.message);
   }
+}
+// -----------------------------
+// Password reset (no deep-link)
+// -----------------------------
+
+/**
+ * We avoid Appwrite's `createRecovery(url)` because it requires a valid, whitelisted
+ * URL (domain/hostname) in Appwrite platforms. Since we don't have a domain and we
+ * want the reset fully in-app, we use Email OTP:
+ *  1) Send OTP code to the user's email
+ *  2) User enters the code in-app
+ *  3) Create a token session
+ *  4) Update password
+ */
+
+// NOTE: Temporary migration password used after DB migration.
+// Keep this only for the migration window and rotate/remove ASAP.
+export const MIGRATION_DEFAULT_PASSWORD = "Mood.2026!";
+
+export async function requestPasswordResetCode(email: string) {
+  const a: any = account as any;
+  const userId = ID.unique();
+  // Support both SDK styles (positional vs object) depending on version.
+  // We enable the security phrase for better user safety.
+  try {
+    return await a.createEmailToken(userId, email, true);
+  } catch (e) {
+    return await a.createEmailToken({ userId, email, phrase: true });
+  }
+}
+
+export async function resetPasswordWithEmailCode(
+  userId: string,
+  secret: string,
+  newPassword: string,
+) {
+  const a: any = account as any;
+
+  // Ensure a clean auth state before creating a token session.
+  try {
+    await account.deleteSession("current");
+  } catch (e) {}
+
+  // 1) Create token session using OTP code (secret)
+  try {
+    await a.createSession(userId, secret);
+  } catch (e) {
+    await a.createSession({ userId, secret });
+  }
+
+  // 2) Update password
+  // IMPORTANT:
+  // When the user is authenticated via Email OTP / Magic URL, Appwrite allows
+  // updating the password *without* providing oldPassword.
+  // This is exactly what we need for an in-app reset flow.
+  let updated = false;
+
+  // 2.1) Preferred: try without oldPassword (works for OTP/Magic URL sessions)
+  try {
+    await a.updatePassword(newPassword);
+    updated = true;
+  } catch (e) {
+    // Some SDKs use object-style or require explicit undefined
+    try {
+      await a.updatePassword({ password: newPassword });
+      updated = true;
+    } catch (e2) {
+      updated = false;
+    }
+  }
+
+  // 2.2) Migration-only fallback: if the account is still using the default
+  // migration password, try validating with it.
+  if (!updated) {
+    try {
+      await a.updatePassword(newPassword, MIGRATION_DEFAULT_PASSWORD);
+      updated = true;
+    } catch (e) {
+      try {
+        await a.updatePassword({
+          password: newPassword,
+          oldPassword: MIGRATION_DEFAULT_PASSWORD,
+        });
+        updated = true;
+      } catch (e2) {
+        updated = false;
+      }
+    }
+  }
+
+  // 2.3) Optional: Appwrite Function fallback (admin Users API)
+  // Only needed if your server enforces oldPassword in your setup.
+  if (!updated) {
+    const fnId = (appwriteConfig.passwordReset?.functionId || "").trim();
+    if (fnId) {
+      try {
+        const functions = new Functions(client);
+        const execution: any = await functions.createExecution(
+          fnId,
+          JSON.stringify({ password: newPassword }),
+          false,
+        );
+
+        let parsed: any = null;
+        try {
+          parsed =
+            typeof execution?.responseBody === "string"
+              ? JSON.parse(execution.responseBody)
+              : execution?.responseBody;
+        } catch (_) {
+          parsed = null;
+        }
+
+        if (parsed?.ok === true) {
+          updated = true;
+        } else {
+          throw new Error(
+            parsed?.message ||
+              parsed?.error ||
+              "No se pudo actualizar la contraseña (Function).",
+          );
+        }
+      } catch (e) {
+        updated = false;
+      }
+    }
+  }
+
+  if (!updated) {
+    throw new Error(
+      "No se pudo actualizar la contraseña. Intenta de nuevo o revisa la configuración de autenticación en Appwrite (Email OTP/Magic URL).",
+    );
+  }
+
+  // 3) Log out token session to force login with the new password
+  try {
+    await account.deleteSession("current");
+  } catch (e) {}
+
+  return true;
 }

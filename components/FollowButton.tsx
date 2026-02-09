@@ -1,6 +1,7 @@
 import React from "react";
 import { Text } from "react-native";
 import PressableScale from "@/components/shared/PressableScale";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface FollowButtonProps {
   isFollowing: boolean;
@@ -13,10 +14,11 @@ export const FollowButton = ({
   isFollower,
   onPress,
 }: FollowButtonProps) => {
+  const { t } = useLanguage();
   const getLabel = () => {
-    if (isFollowing) return "Siguiendo";
-    if (isFollower) return "Seguir también";
-    return "Seguir";
+    if (isFollowing) return t("common.following");
+    if (isFollower) return t("common.followBack");
+    return t("common.follow");
   };
 
   return (

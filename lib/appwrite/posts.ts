@@ -416,8 +416,7 @@ export async function toggleLikePost(
           await createNotification({
             userId: ownerId,
             type: "like",
-            message: "le gustó tu post",
-            senderId: userId,
+                        senderId: userId,
             senderName: likerUser.username || likerUser.name,
             senderAvatar: likerUser.pfp,
             postId: postId,
@@ -511,7 +510,7 @@ export async function createComment(
           await createNotification({
             userId: ownerId,
             type: "comment",
-            message: `comentó: "${commentData.content.substring(0, 20)}..."`,
+            message: commentData.content,
             senderId: commentData.userId,
             senderName: commentData.username,
             senderAvatar: commentData.avatar,

@@ -197,10 +197,10 @@ const PostDetails = () => {
     const song = parseSongData(post.songData);
     const creator = post.postedBy || post.creator || {};
     return {
-      title: song?.title || "Música",
-      artist: song?.artist || "Artista",
+      title: song?.title || t("common.music"),
+      artist: song?.artist || t("common.artist"),
       cover: song?.cover || null,
-      originalPostCreator: creator.username || "usuario",
+      originalPostCreator: creator.username || t("common.user").toLowerCase(),
       creatorPfp: creator.pfp || null,
       comment: post.comment || null,
     };
@@ -238,8 +238,8 @@ const PostDetails = () => {
 
       if (previewUrl) {
         await playTrack(postId, previewUrl, {
-          title: songData?.title || "Música",
-          artist: songData?.artist || "Artista",
+          title: songData?.title || t("common.music"),
+          artist: songData?.artist || t("common.artist"),
           cover: songData?.cover,
         });
       }
@@ -374,9 +374,9 @@ const PostDetails = () => {
   const handleDeleteAction = () => {
     toggleModal("isOptions", false);
     Alert.alert(tStatic("ui.s_1feb1fbf"), tStatic("ui.s_b47d0019"), [
-      { text: "Cancelar", style: "cancel" },
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Eliminar",
+        text: t("common.delete"),
         style: "destructive",
         onPress: async () => {
           try {
@@ -392,9 +392,9 @@ const PostDetails = () => {
   const handleReportAction = () => {
     toggleModal("isOptions", false);
     Alert.alert(tStatic("ui.s_72ce2533"), tStatic("ui.s_a6b30ef4"), [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Spam/Inapropiado", onPress: () => submitReport("spam") },
-      { text: "Otro", onPress: () => submitReport("other") },
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("report.spamInappropriate"), onPress: () => submitReport("spam") },
+      { text: t("report.other"), onPress: () => submitReport("other") },
     ]);
   };
   const submitReport = async (reason: string) => {
@@ -493,7 +493,7 @@ const PostDetails = () => {
           {
             senderId: user.$id,
             receiverId: targetId,
-            content: message || "Compartió una publicación",
+            content: message || t("messages.sharedPost"),
             sharedPostId: post.$id,
             createdAt: new Date().toISOString(),
           },

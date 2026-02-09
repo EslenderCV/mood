@@ -10,6 +10,8 @@ export default {
     user: "Usuario",
     anonymous: "Anónimo",
     follow: "Seguir",
+    copyLink: "Copiar enlace",
+    followBack: "Seguir también",
     loading: "Cargando...",
     back: "Volver",
     and: "and",
@@ -259,6 +261,9 @@ export default {
     footer: "Mood App © 2024",
   },
   chat: {
+    push: {
+      sentSong: "🎵 Te envió una canción: {{title}}",
+    },
     online: "En línea",
     song: "Canción",
     artist: "Artista",
@@ -297,6 +302,23 @@ export default {
       requests: "Solicitudes",
       activity: "Actividad",
     },
+        pushTitles: {
+      like: "❤️ Nuevo like",
+      comment: "💬 Nuevo comentario",
+      follow: "👤 Nuevo seguidor",
+      follow_request: "👤 Solicitud de seguimiento",
+      follow_accepted: "✅ Solicitud aceptada",
+      tag: "🏷️ Mención",
+    },
+        activityText: {
+      like: "le dio like a tu post",
+      comment: 'comentó: "{{snippet}}"',
+      follow: "comenzó a seguirte",
+      follow_request: "quiere seguirte",
+      follow_accepted: "aceptó tu solicitud",
+      tag: "te mencionó en un post",
+    },
+
     emptyTitle: "Sin notificaciones",
     emptyMsg: "Aquí aparecerán tus likes, comentarios y nuevos seguidores.",
     confirm: "Confirmar",
@@ -554,7 +576,15 @@ export default {
   comments: {
     title: "Comentarios",
     placeholder: "Escribe un comentario...",
+    deleteComment: "Eliminar comentario",
     empty: "Sé el primero en comentar.",
+  },
+  report: {
+    spamInappropriate: "Spam / inapropiado",
+    other: "Otro",
+  },
+  messages: {
+    sharedPost: "Compartió una publicación",
   },
   ui: {
     s_007a41ed: "Sé el primero en comentar.",

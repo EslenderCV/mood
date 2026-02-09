@@ -174,9 +174,9 @@ const CommentItem = ({
   const handleDeletePress = () => {
     Alert.alert(tStatic("ui.s_47d8c19f"), tStatic("ui.s_83227328"),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Eliminar",
+          text: t("common.delete"),
           style: "destructive",
           onPress: () => {
             if (onDelete) onDelete(item.$id);
@@ -190,7 +190,7 @@ const CommentItem = ({
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ["Cancelar", "Eliminar comentario"],
+          options: [t("common.cancel"), t("comments.deleteComment")],
           destructiveButtonIndex: 1,
           cancelButtonIndex: 0,
         },
@@ -200,8 +200,8 @@ const CommentItem = ({
       );
     } else {
       Alert.alert(tStatic("ui.s_8877f3a2"), tStatic("ui.s_581696c1"), [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Eliminar", onPress: handleDeletePress },
+        { text: t("common.cancel"), style: "cancel" },
+        { text: t("common.delete"), onPress: handleDeletePress },
       ]);
     }
   };

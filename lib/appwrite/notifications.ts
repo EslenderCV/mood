@@ -2,6 +2,7 @@ import { ID, Query } from "react-native-appwrite";
 import { databases, appwriteConfig } from "./config";
 // ✅ CORRECCIÓN: Importamos desde el nuevo archivo neutral
 import { getUser } from "./userUtils";
+import { tStatic } from "@/context/LanguageContext";
 
 export async function sendPushNotification(
   expoPushToken: string,
@@ -58,10 +59,44 @@ export async function updateUserPushToken(userId: string, token: string) {
   }
 }
 
+
+type NotifType = "like" | "comment" | "follow" | "follow_request" | "follow_accepted" | "tag";
+
+const normalizeLang = (lang?: string): "en" | "es" | "fr" | "pt" | "it" => {
+  const v = (lang || "").toLowerCase();
+  if (v.startsWith("es")) return "es";
+  if (v.startsWith("fr")) return "fr";
+  if (v.startsWith("pt")) return "pt";
+  if (v.startsWith("it")) return "it";
+  return "en";
+};
+
+const interpolateTemplate = (template: string, params: Record<string, string>) => {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => params[key] ?? "");
+};
+
+const buildNotificationMessage = (type: NotifType, lang: "en" | "es" | "fr" | "pt" | "it", snippet?: string) => {
+  const base = tStatic(`notifications.activityText.${type}`, lang);
+  if (type === "comment") {
+    const clean = (snippet || "").replace(/\s+/g, " ").trim();
+    const short = clean.length > 60 ? clean.slice(0, 57) + "…" : clean;
+    return interpolateTemplate(base, { snippet: short });
+  }
+  return base;
+};
+
+const buildNotificationTitle = (type: NotifType, lang: "en" | "es" | "fr" | "pt" | "it") => {
+  return tStatic(`notifications.pushTitles.${type}`, lang) || "Mood";
+};
+
 export async function createNotification(data: {
   userId: string;
-  type: "like" | "comment" | "follow" | "follow_request" | "tag";
-  message: string;
+  type: NotifType;
+  /**
+   * Optional extra text (only used for comment notifications).
+   * Pass the raw comment content; it will be trimmed and localized per recipient language.
+   */
+  message?: string;
   senderId: string;
   senderName: string;
   senderAvatar: string;
@@ -71,7 +106,11 @@ export async function createNotification(data: {
   try {
     if (data.userId === data.senderId) return;
 
-    // Crear en DB siempre (para que aparezca en la campana de notificaciones)
+    const targetUser: any = await getUser(data.userId).catch(() => null);
+    const lang = normalizeLang(targetUser?.language);
+    const activity = buildNotificationMessage(data.type, lang, data.message);
+
+    // Always create DB record (in-app bell). Stored in recipient language.
     await databases.createDocument(
       appwriteConfig.databaseId,
       appwriteConfig.notificationsCollectionId,
@@ -79,7 +118,7 @@ export async function createNotification(data: {
       {
         userId: data.userId,
         type: data.type,
-        message: data.message,
+        message: activity,
         senderId: data.senderId,
         senderName: data.senderName,
         senderAvatar: data.senderAvatar,
@@ -88,22 +127,14 @@ export async function createNotification(data: {
       },
     );
 
-    const targetUser = await getUser(data.userId);
-
-    // 🔥 CORRECCIÓN: Verificamos 'notificationsEnabled !== false' antes de enviar Push
+    // Push notification (respects user setting)
     if (
       targetUser &&
       targetUser.expoPushToken &&
       targetUser.notificationsEnabled !== false
     ) {
-      let title = "Mood";
-      let body = `${data.senderName} ${data.message}`;
-
-      if (data.type === "like") title = "❤️ Nuevo Like";
-      if (data.type === "comment") title = "💬 Comentario";
-      if (data.type === "follow") title = "👤 Nuevo Seguidor";
-      if (data.type === "tag") title = "🏷️ Etiqueta";
-
+      const title = buildNotificationTitle(data.type, lang);
+      const body = `${data.senderName} ${activity}`;
       await sendPushNotification(
         targetUser.expoPushToken,
         title,

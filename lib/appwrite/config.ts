@@ -33,6 +33,16 @@ export const appwriteConfig = {
     feedFunctionId: "69851d10000d231b66b3",
     feedEventsFunctionId: "6985241c000f43efd797",
   },
+
+  // ---- Password reset (in-app) ----
+  // By default, the app will try to reset using the migration default password
+  // (Mood.2026!) after verifying the Email OTP code.
+  // If you want password reset to work even after the user has already changed
+  // their password (i.e., you don't know the old password), create an Appwrite
+  // Function and put its ID here (or set EXPO_PUBLIC_APPWRITE_PASSWORD_RESET_FUNCTION_ID).
+  passwordReset: {
+    functionId: process.env.EXPO_PUBLIC_APPWRITE_PASSWORD_RESET_FUNCTION_ID || "",
+  },
 };
 
 export const client = new Client();

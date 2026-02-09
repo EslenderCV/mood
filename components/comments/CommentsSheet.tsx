@@ -271,7 +271,7 @@ const CommentsSheet = () => {
           <Text
             className={`font-bold text-base ${isDark ? "text-white" : "text-black"}`}
           >
-            {t("comments.title") || "Comentarios"}
+            {t("comments.title") || "Comments"}
           </Text>
         </View>
 

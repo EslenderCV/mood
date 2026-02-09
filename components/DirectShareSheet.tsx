@@ -197,14 +197,14 @@ const DirectShareSheet = ({
                     color: "#ec4899",
                   },
                   {
-                    label: "Compartir via...",
+                    label: tStatic("ui.s_2ad35866"),
                     icon: "share",
                     onPress: onSystemShare,
                     color: textColor,
                     Feather: true,
                   },
                   {
-                    label: "Copiar enlace",
+                    label: tStatic("common.copyLink"),
                     icon: "link",
                     onPress: onCopyLink,
                     color: textColor,

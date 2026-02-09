@@ -33,7 +33,9 @@ const SignIn = () => {
   const { t } = useLanguage();
 
   // ✅ Capturar parámetros de navegación
-  const params = useLocalSearchParams();
+  // Nota: useLocalSearchParams puede devolver un objeto con identidad distinta en cada render.
+  // Por eso, extraemos solo el valor que nos interesa para evitar loops de useEffect.
+  const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
 
   const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({
@@ -41,14 +43,14 @@ const SignIn = () => {
     password: "",
   });
 
-  // ✅ CORRECCIÓN TYPE SCRIPT:
-  // Capturamos el valor en una variable const para asegurar el tipo string
+  // ✅ Prellenar el email (ej: después del reset) sin provocar un loop de renders.
   useEffect(() => {
-    const incomingEmail = params.email; // 1. Asignamos a variable
-    if (incomingEmail && typeof incomingEmail === "string") {
-      setForm((prev) => ({ ...prev, email: incomingEmail })); // 2. Usamos la variable segura
-    }
-  }, [params]);
+    if (!emailParam || typeof emailParam !== "string") return;
+    const incomingEmail = emailParam;
+
+    // Evitar setState si el valor ya es el mismo
+    setForm((prev) => (prev.email === incomingEmail ? prev : { ...prev, email: incomingEmail }));
+  }, [emailParam]);
 
   const submit = async () => {
     if (!form.email.trim() || !form.password.trim()) {
@@ -78,9 +80,40 @@ const SignIn = () => {
       }
     } catch (error: any) {
       const appwriteError = error as AppwriteException;
+
+      const code = (appwriteError as any)?.code;
+      const type = (appwriteError as any)?.type as string | undefined;
+      const msg = (appwriteError?.message || "").toLowerCase();
+
+      const isInvalidCreds =
+        code === 401 ||
+        (type && type.includes("user_invalid_credentials")) ||
+        msg.includes("invalid credentials") ||
+        msg.includes("wrong") ||
+        msg.includes("password");
+
+      if (isInvalidCreds) {
+        Alert.alert(
+          t("auth.alerts.errorTitle") || "No pudimos iniciar sesión",
+          "Si tu cuenta fue migrada recientemente, es posible que necesites restablecer tu contraseña para volver a entrar.",
+          [
+            { text: "Cancelar", style: "cancel" },
+            {
+              text: "Restablecer contraseña",
+              onPress: () =>
+                router.push({
+                  pathname: "/forgotPassword",
+                  params: { email: form.email },
+                }),
+            },
+          ],
+        );
+        return;
+      }
+
       Alert.alert(
         t("auth.alerts.errorTitle") || "Error",
-        appwriteError.message || t("auth.alerts.wrongCredentials"),
+        appwriteError.message || "Ocurrió un error inesperado.",
       );
     } finally {
       setIsLoading(false);
@@ -167,7 +200,15 @@ const SignIn = () => {
                 autoComplete="password"
               />
               <View className="items-end mb-6">
-                <TouchableOpacity activeOpacity={0.7}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/forgotPassword",
+                      params: { email: form.email },
+                    })
+                  }
+                >
                   <Text className="text-zinc-500 text-sm font-medium">
                     {t("auth.forgotPassword")}
                   </Text>

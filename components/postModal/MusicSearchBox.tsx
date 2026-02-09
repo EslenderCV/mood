@@ -35,7 +35,7 @@ const MusicSearchBox = React.memo(
       >
         <Ionicons name="search" color={accentColor} size={22} />
         <TextInput
-          placeholder={t("post.searchPlaceholder") || "Buscar canciones..."}
+          placeholder={t("post.searchPlaceholder") || "Search songs…"}
           placeholderTextColor={subTextColor}
           className="flex-1 py-3 ml-3 text-[16px] font-medium"
           style={{ color: textColor }}

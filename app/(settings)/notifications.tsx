@@ -50,7 +50,7 @@ const formatTimeAgo = (dateString: string, t: (key: string) => string) => {
   const date = new Date(dateString);
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  if (diffInSeconds < 60) return t("notifications.time.justNow") || "Ahora";
+  if (diffInSeconds < 60) return t("notifications.time.justNow") || "Now";
   const diffInMinutes = Math.floor(diffInSeconds / 60);
   if (diffInMinutes < 60)
     return `${diffInMinutes}${t("notifications.time.m") || "m"}`;
@@ -249,7 +249,7 @@ const NotificationItem = ({
                   className="font-bold text-xs"
                   style={{ color: textColor }}
                 >
-                  {t("notifications.delete") || "Eliminar"}
+                  {t("notifications.delete") || "Delete"}
                 </Text>
               </TouchableOpacity>
             </View>
