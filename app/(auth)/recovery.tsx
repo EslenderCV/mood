@@ -56,10 +56,12 @@ const Recovery = () => {
     // Appwrite Email OTP codes can be alphanumeric depending on configuration.
     // Don't strip to digits-only (it would corrupt valid codes containing letters).
     const cleanCode = code.replace(/[\s-]/g, "").trim();
+    // Appwrite Email OTP suele ser 6 dígitos, pero en algunas configuraciones puede ser más largo.
+    // Validamos un mínimo razonable y NO truncamos el input.
     if (!cleanCode || cleanCode.length < 6) {
       Alert.alert(
         "Código inválido",
-        "Escribe el código de 6 caracteres que recibiste por correo.",
+        "Escribe el código exacto que recibiste por correo (usa el más reciente).",
       );
       return;
     }
@@ -143,14 +145,14 @@ const Recovery = () => {
 
             <View className="w-full mt-10">
               <FormField
-                placeholder={"Código (6 caracteres)"}
+                placeholder={"Código"}
                 value={code}
                 handleChangeText={(text: string) => setCode(text)}
                 otherStyles="mt-0"
-                keyboardType="default"
+                keyboardType={Platform.OS === "ios" ? "ascii-capable" : "default"}
                 autoCapitalize="none"
                 autoCorrect={false}
-                maxLength={6}
+                // No limit: Appwrite puede emitir OTPs de longitudes distintas según versión/config.
               />
 
               {phrase ? (

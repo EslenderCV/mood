@@ -8,9 +8,11 @@ interface FormFieldProps {
   handleChangeText: (text: string) => void;
   otherStyles?: string;
   secureTextEntry?: boolean;
-  keyboardType?: "default" | "email-address" | "numeric" | "phone-pad";
+  // Use RN's native union so we can pass iOS-only types like "ascii-capable"
+  keyboardType?: TextInputProps["keyboardType"];
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   maxLength?: number;
+  autoCorrect?: boolean;
   // AGREGADOS: Propiedades para el autocompletado
   textContentType?: TextInputProps["textContentType"];
   autoComplete?: TextInputProps["autoComplete"];
@@ -25,6 +27,7 @@ const FormField = ({
   keyboardType = "default",
   autoCapitalize = "none",
   maxLength,
+  autoCorrect,
   // Recibir las nuevas props
   textContentType,
   autoComplete,
@@ -51,6 +54,7 @@ const FormField = ({
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
           maxLength={maxLength}
+          autoCorrect={autoCorrect}
           // Pasarlas al componente nativo
           textContentType={textContentType}
           autoComplete={autoComplete}
