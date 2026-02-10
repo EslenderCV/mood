@@ -63,9 +63,19 @@ const ForgotPassword = () => {
         ],
       );
     } catch (error: any) {
+      // Show a short message in-app and log full details to the console.
+      // Some errors can be very large (HTTP bodies / debug info).
+      // eslint-disable-next-line no-console
+      console.error("[ForgotPassword] requestPasswordResetCode failed:", {
+        message: error?.message,
+        name: error?.name,
+        stack: error?.stack,
+        raw: error,
+      });
+
       Alert.alert(
         t("auth.alerts.errorTitle") || "Error",
-        error?.message || "No pudimos enviar el correo de recuperación.",
+        "No pudimos enviar el código. Revisa la consola para ver el error completo.",
       );
     } finally {
       setIsLoading(false);

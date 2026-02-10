@@ -34,7 +34,7 @@
       },
       "package": "com.Gammes.Mood",
       "softwareKeyboardLayoutMode": "resize",
-      "versionCode": 21,
+      "versionCode": 20,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",

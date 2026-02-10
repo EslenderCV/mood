@@ -39,7 +39,9 @@ export default async ({ req, res, log, error }) => {
 
     // Appwrite injects the caller context when the execution is triggered by a client.
     const callerUserId =
-      req?.headers?.["x-appwrite-user-id"] || req?.headers?.["X-Appwrite-User-Id"];
+      vars.APPWRITE_FUNCTION_USER_ID ||
+      req?.headers?.["x-appwrite-user-id"] ||
+      req?.headers?.["X-Appwrite-User-Id"];
 
     if (!callerUserId) {
       return res.json({ ok: false, message: "Unauthorized" });

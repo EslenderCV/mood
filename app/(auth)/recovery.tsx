@@ -14,7 +14,7 @@ import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
 import CustomButtom from "@/components/CustomButtom";
 import FormField from "@/components/FormField";
-import { resetPasswordWithEmailCode } from "@/lib/appwrite";
+import { resetPasswordWithEmailCode, signInn } from "@/lib/appwrite";
 import { useLanguage } from "@/context/LanguageContext";
 import { useGlobalContext } from "@/context/GlobalProvider";
 
@@ -81,10 +81,18 @@ const Recovery = () => {
 
     try {
       setIsLoading(true);
-      await resetPasswordWithEmailCode(userId, cleanCode, password);
+      await resetPasswordWithEmailCode({
+        userId,
+        secret: cleanCode,
+        newPassword: password,
+      });
 
-      // We just created a valid session (via Email OTP). Refresh auth state so the
-      // router doesn't bounce the user back to auth screens.
+      // Auto-login with the new password so the user can continue seamlessly.
+      if (email) {
+        await signInn(email, password);
+      }
+
+      // Refresh auth state so the router doesn't bounce the user back to auth screens.
       await checkAuth(true);
 
       Alert.alert(
@@ -93,8 +101,8 @@ const Recovery = () => {
         [
           {
             text: "OK",
-            // Mantén la sesión creada con el código (OTP) y envía al usuario
-            // directamente a la app para evitar fricción y loops de navegación.
+            // Ya tenemos la contraseña actualizada (y si fue posible, hicimos login).
+            // Enviamos al usuario a la app.
             onPress: () => router.replace("/home"),
           },
         ],
@@ -107,11 +115,21 @@ const Recovery = () => {
         /token/i.test(msg) ||
         /otp/i.test(msg);
 
+      // Log full error details to console. Some errors contain large payloads.
+      // eslint-disable-next-line no-console
+      console.error("[Recovery] resetPasswordWithEmailCode failed:", msg);
+      // eslint-disable-next-line no-console
+      console.error("[Recovery] resetPasswordWithEmailCode failed (details):", {
+        name: error?.name,
+        stack: error?.stack,
+        raw: error,
+      });
+
       Alert.alert(
         t("auth.alerts.errorTitle") || "Error",
         looksLikeCodeIssue
           ? "El código es incorrecto o expiró. Si pediste otro, usa el más reciente."
-          : error?.message || "No pudimos actualizar tu contraseña.",
+          : "No pudimos actualizar tu contraseña. Revisa la consola para ver el error completo.",
       );
     } finally {
       setIsLoading(false);

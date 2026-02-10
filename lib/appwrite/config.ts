@@ -1,5 +1,13 @@
 import { Client, Account, Databases, Storage } from "react-native-appwrite";
 
+// ---------------------------------------------------------------------------
+// ✅ Appwrite Config (sin .env)
+// ---------------------------------------------------------------------------
+// 🔑 Function ID (Password Reset): pega aqui el ID real de tu Appwrite Function
+// Appwrite Console → Functions → (tu función) → Overview → Function ID
+// ✅ Function ID provided by the user (Appwrite Console → Functions → Overview)
+const PASSWORD_RESET_FUNCTION_ID = "698a4d7b00230415986b";
+
 export const appwriteConfig = {
   endpoint: "https://nyc.cloud.appwrite.io/v1",
   platform: "com.Gammes.Mood",
@@ -41,7 +49,8 @@ export const appwriteConfig = {
   // their password (i.e., you don't know the old password), create an Appwrite
   // Function and put its ID here (or set EXPO_PUBLIC_APPWRITE_PASSWORD_RESET_FUNCTION_ID).
   passwordReset: {
-    functionId: process.env.EXPO_PUBLIC_APPWRITE_PASSWORD_RESET_FUNCTION_ID || "",
+    functionId: PASSWORD_RESET_FUNCTION_ID,
+    migrationDefaultPassword: "Mood.2026!",
   },
 };
 

@@ -3,7 +3,6 @@ import {
   OAuthProvider,
   AppwriteException,
   Query,
-  Functions,
 } from "react-native-appwrite";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -242,125 +241,254 @@ export async function deleteAllSessions() {
 // Keep this only for the migration window and rotate/remove ASAP.
 export const MIGRATION_DEFAULT_PASSWORD = "Mood.2026!";
 
-export async function requestPasswordResetCode(email: string) {
+export async function requestPasswordResetCode(email: string): Promise<{
+  userId: string;
+  phrase?: string;
+}> {
+  const clean = email.trim().toLowerCase();
+  if (!clean || !clean.includes("@")) throw new Error("Email inválido");
+
+  // Appwrite requires a userId param. For existing users, the server ignores it and returns the real userId.
+  const tmpUserId = ID.unique();
+
   const a: any = account as any;
-  const userId = ID.unique();
-  // Support both SDK styles (positional vs object) depending on version.
-  // We enable the security phrase for better user safety.
+
+let token: any;
+// SDK signatures differ by version: try positional first, then object.
+try {
+  token = await a.createEmailToken(tmpUserId, clean, true);
+} catch {
   try {
-    return await a.createEmailToken(userId, email, true);
-  } catch (e) {
-    return await a.createEmailToken({ userId, email, phrase: true });
+    token = await a.createEmailToken({
+      userId: tmpUserId,
+      email: clean,
+      phrase: true,
+    });
+  } catch {
+    token = await a.createEmailToken(tmpUserId, clean);
   }
 }
 
-export async function resetPasswordWithEmailCode(
-  userId: string,
-  secret: string,
-  newPassword: string,
-) {
-  const a: any = account as any;
 
-  // Ensure a clean auth state before creating a token session.
-  try {
-    await account.deleteSession("current");
-  } catch (e) {}
+  const userId = token?.userId ? String(token.userId) : "";
+  if (!userId) throw new Error("No se pudo generar el código. Intenta de nuevo.");
 
-  // 1) Create token session using OTP code (secret)
-  try {
-    await a.createSession(userId, secret);
-  } catch (e) {
-    await a.createSession({ userId, secret });
-  }
+  const phrase =
+    typeof token?.phrase === "string" && token.phrase.trim().length
+      ? token.phrase
+      : undefined;
 
-  // 2) Update password
-  // IMPORTANT:
-  // When the user is authenticated via Email OTP / Magic URL, Appwrite allows
-  // updating the password *without* providing oldPassword.
-  // This is exactly what we need for an in-app reset flow.
-  let updated = false;
+  return { userId, phrase };
+}
 
-  // 2.1) Preferred: try without oldPassword (works for OTP/Magic URL sessions)
-  try {
-    await a.updatePassword(newPassword);
-    updated = true;
-  } catch (e) {
-    // Some SDKs use object-style or require explicit undefined
-    try {
-      await a.updatePassword({ password: newPassword });
-      updated = true;
-    } catch (e2) {
-      updated = false;
-    }
-  }
 
-  // 2.2) Migration-only fallback: if the account is still using the default
-  // migration password, try validating with it.
-  if (!updated) {
-    try {
-      await a.updatePassword(newPassword, MIGRATION_DEFAULT_PASSWORD);
-      updated = true;
-    } catch (e) {
-      try {
-        await a.updatePassword({
-          password: newPassword,
-          oldPassword: MIGRATION_DEFAULT_PASSWORD,
-        });
-        updated = true;
-      } catch (e2) {
-        updated = false;
-      }
-    }
-  }
 
-  // 2.3) Optional: Appwrite Function fallback (admin Users API)
-  // Only needed if your server enforces oldPassword in your setup.
-  if (!updated) {
-    const fnId = (appwriteConfig.passwordReset?.functionId || "").trim();
-    if (fnId) {
-      try {
-        const functions = new Functions(client);
-        const execution: any = await functions.createExecution(
-          fnId,
-          JSON.stringify({ password: newPassword }),
-          false,
-        );
+async function resetPasswordViaFunction(params: {
+  userId: string;
+  secret: string;
+  newPassword: string;
+}): Promise<void> {
+  const functionId = appwriteConfig.passwordReset?.functionId;
 
-        let parsed: any = null;
-        try {
-          parsed =
-            typeof execution?.responseBody === "string"
-              ? JSON.parse(execution.responseBody)
-              : execution?.responseBody;
-        } catch (_) {
-          parsed = null;
-        }
-
-        if (parsed?.ok === true) {
-          updated = true;
-        } else {
-          throw new Error(
-            parsed?.message ||
-              parsed?.error ||
-              "No se pudo actualizar la contraseña (Function).",
-          );
-        }
-      } catch (e) {
-        updated = false;
-      }
-    }
-  }
-
-  if (!updated) {
+  if (!functionId || /^REPLACE/i.test(functionId)) {
     throw new Error(
-      "No se pudo actualizar la contraseña. Intenta de nuevo o revisa la configuración de autenticación en Appwrite (Email OTP/Magic URL).",
+      "La Function de reset no está configurada. Coloca tu Function ID en lib/appwrite/config.ts",
     );
   }
 
-  // 3) Log out token session to force login with the new password
-  try {
-    await account.deleteSession("current");
-  } catch (e) {}
+  // This Function expects: { userId, secret, newPassword }
+  const payload = JSON.stringify({
+    userId: params.userId,
+    secret: params.secret,
+    newPassword: params.newPassword,
+  });
 
-  return true;
+  // Raw REST call instead of SDK createExecution(): avoids SDK signature differences
+  // and gives consistent error details.
+  const endpoint = String(appwriteConfig.endpoint || "").replace(/\/+$/g, "");
+  const url = `${endpoint}/functions/${functionId}/executions`;
+
+  let res: any;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Appwrite-Project": appwriteConfig.projectId,
+      },
+      body: JSON.stringify({
+        // Appwrite REST API expects this field to be named `body`.
+        // We also keep `data` for compatibility with older SDK-style naming.
+        body: payload,
+        data: payload,
+        async: false,
+      }),
+    });
+  } catch (networkErr: any) {
+    throw new Error(
+      `No se pudo conectar con Appwrite para ejecutar la Function. Revisa tu conexión y el endpoint. (${String(
+        networkErr?.message || networkErr,
+      )})`,
+    );
+  }
+
+  const text = await res.text();
+  let execution: any = null;
+
+  try {
+    execution = text ? JSON.parse(text) : null;
+  } catch {
+    execution = null;
+  }
+
+  if (!res.ok) {
+    const msg =
+      execution?.message ||
+      execution?.error ||
+      execution?.details ||
+      (typeof text === "string" && text.trim().length ? text : "");
+    throw new Error(
+      `No se pudo ejecutar la Function (${res.status}). ${
+        msg || "Verifica Execute Access (Any) y que haya un deployment activo."
+      }`,
+    );
+  }
+
+  // Helpful logs to locate the execution in Appwrite Console → Functions → Executions
+  // and to debug when the response body is not returned as expected by the API.
+  if (execution?.$id) {
+    const previewSource =
+      execution?.responseBody ?? execution?.response ?? execution?.stdout ?? execution?.body ?? execution?.result;
+    const preview =
+      typeof previewSource === "string"
+        ? previewSource.slice(0, 400)
+        : previewSource
+          ? JSON.stringify(previewSource).slice(0, 400)
+          : "";
+
+    // eslint-disable-next-line no-console
+    console.log("[PasswordReset] Function execution:", {
+      id: execution.$id,
+      status: execution.status,
+      responseStatusCode: execution?.responseStatusCode,
+      preview,
+      hasStderr: Boolean(execution?.stderr),
+      hasErrors: Boolean(execution?.errors),
+    });
+  }
+
+  const raw =
+    execution?.responseBody ??
+    execution?.response ??
+    execution?.stdout ??
+    execution?.body ??
+    execution?.result ??
+    "";
+
+  let parsed: any = null;
+
+  if (typeof raw === "string" && raw.trim().length) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+  } else if (typeof raw === "object" && raw !== null) {
+    parsed = raw;
+  }
+
+  if (parsed?.ok === true) return;
+
+  const debugHint =
+    parsed?.debug && typeof parsed.debug === "object"
+      ? ` Debug: ${JSON.stringify(parsed.debug)}`
+      : "";
+
+  const fallbackDetails =
+    (parsed?.message ? `${parsed.message}${debugHint}` : null) ||
+    parsed?.error ||
+    parsed?.details ||
+    (typeof raw === "string" && raw.trim().length
+      ? raw
+      : execution?.stderr || execution?.errors || execution?.logs || execution?.status);
+
+  const extraHint =
+    "Verifica en Appwrite: Functions → tu Function → Deployments (uno ACTIVO/verde) y Settings → Execute Access = Any. " +
+    "Además, asegúrate de que la Function tenga un API Key con scope users.write (Project → API Keys).";
+
+  const message =
+    typeof fallbackDetails === "string" && fallbackDetails.trim().length
+      ? `No pudimos actualizar la contraseña. Detalles: ${fallbackDetails}. ${extraHint}`
+      : `No pudimos actualizar la contraseña. ${extraHint}`;
+
+  throw new Error(message);
+}
+
+export async function resetPasswordWithEmailCode(params: {
+  userId: string;
+  secret: string;
+  newPassword: string;
+  oldPassword?: string;
+}): Promise<boolean> {
+  const userId = params.userId?.trim();
+  const secret = params.secret?.trim().replace(/[\s-]/g, "");
+  const newPassword = params.newPassword;
+
+  if (!userId) throw new Error("Falta userId");
+  if (!secret) throw new Error("Falta el código");
+  if (!newPassword || newPassword.length < 8)
+    throw new Error("La contraseña debe tener al menos 8 caracteres.");
+
+  const a: any = account as any;
+
+const safeUpdatePassword = async (password: string, oldPassword?: string) => {
+    // SDKs have slightly different signatures across versions.
+    try {
+      // Most SDKs: updatePassword(password, oldPassword?)
+      return await a.updatePassword(password, oldPassword);
+    } catch {
+      // Newer SDKs (object-style)
+      const payload: any = { password };
+      if (oldPassword) payload.oldPassword = oldPassword;
+      return await a.updatePassword(payload);
+    }
+  };
+
+  // 2) Update password
+  try {
+    const functionId = appwriteConfig.passwordReset?.functionId;
+
+    // Best option: use the server-side Function (it validates OTP and force-updates password).
+    if (functionId && !/^REPLACE/i.test(functionId)) {
+      await resetPasswordViaFunction({ userId, secret, newPassword });
+      return true;
+    }
+
+    // Fallback A: try without oldPassword (works for accounts created via OAuth/Magic URL/invites).
+    try {
+      await safeUpdatePassword(newPassword);
+      return true;
+    } catch (eNoOld: any) {
+      // Fallback B: migrated accounts where we know the temporary password.
+      const old =
+        (params.oldPassword && params.oldPassword.trim()) ||
+        appwriteConfig.passwordReset?.migrationDefaultPassword ||
+        "Mood.2026!";
+
+      try {
+        await safeUpdatePassword(newPassword, old);
+        return true;
+      } catch (eOld: any) {
+        const msgOld = String(eOld?.message || "");
+        if (/oldpassword|required|missing/i.test(msgOld) || /invalid/i.test(msgOld)) {
+          throw new Error(
+            "No pudimos actualizar la contraseña. Si tu cuenta no tiene la contraseña temporal, habilita la Function de reset en Appwrite para forzar el cambio."
+          );
+        }
+        throw eOld;
+      }
+    }
+  } finally {
+    // no-op
+  }
 }
