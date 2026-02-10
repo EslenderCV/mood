@@ -1,127 +1,98 @@
-import React, { useEffect, useRef } from "react";
-import { View, ScrollView, useWindowDimensions, Animated, Easing } from "react-native";
-
-import SkeletonBlock from "@/components/shared/SkeletonBlock";
-import { useFlag } from "@/src/config/flags";
-
-interface SkeletonProps {
-  isDark: boolean;
-  shimmer: Animated.Value;
-  enableShimmer: boolean;
-}
+import React from "react";
+import { ScrollView, View } from "react-native";
 
 interface FeedSkeletonProps {
   isDark: boolean;
 }
 
-const StoriesSkeleton = ({ isDark, shimmer, enableShimmer }: SkeletonProps) => {
-  return (
-    <View className="flex-row py-4 pl-4 border-b border-zinc-900/50 bg-black">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <View key={i} className="items-center mr-5">
-          <SkeletonBlock
-            isDark={isDark}
-            shimmer={shimmer}
-            enabled={enableShimmer}
-            style={{ width: 68, height: 68, borderRadius: 34, marginBottom: 8 }}
-          />
-          <SkeletonBlock
-            isDark={isDark}
-            shimmer={shimmer}
-            enabled={enableShimmer}
-            style={{ width: 56, height: 10, borderRadius: 6 }}
-          />
-        </View>
-      ))}
-    </View>
-  );
-};
-
-const PostSkeleton = ({ isDark, shimmer, enableShimmer }: SkeletonProps) => {
-  const cardBg = isDark ? "#18181B" : "#F4F4F5";
-  return (
-    <View className={`py-4 px-4 mb-2 ${isDark ? "border-b border-zinc-900/50" : "border-b border-zinc-200"}`}>
-      <View className="flex-row items-center mb-3">
-        <SkeletonBlock
-          isDark={isDark}
-          shimmer={shimmer}
-          enabled={enableShimmer}
-          style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }}
-        />
-        <View className="space-y-1.5">
-          <SkeletonBlock isDark={isDark} shimmer={shimmer} enabled={enableShimmer} style={{ width: 96, height: 14, borderRadius: 6 }} />
-          <SkeletonBlock isDark={isDark} shimmer={shimmer} enabled={enableShimmer} style={{ width: 128, height: 10, borderRadius: 6, marginTop: 6 }} />
-        </View>
-      </View>
-      <View
-        style={{
-          width: "100%",
-          height: 100,
-          borderRadius: 24,
-          backgroundColor: cardBg,
-          marginBottom: 16,
-          flexDirection: "row",
-          alignItems: "center",
-          padding: 12,
-          overflow: "hidden",
-        }}
-      >
-        <SkeletonBlock
-          isDark={isDark}
-          shimmer={shimmer}
-          enabled={enableShimmer}
-          style={{ width: 76, height: 76, borderRadius: 18, marginRight: 12 }}
-        />
-        <View className="flex-1 justify-center space-y-2">
-          <SkeletonBlock
-            isDark={isDark}
-            shimmer={shimmer}
-            enabled={enableShimmer}
-            style={{ width: "75%", height: 16, borderRadius: 6 }}
-          />
-          <SkeletonBlock
-            isDark={isDark}
-            shimmer={shimmer}
-            enabled={enableShimmer}
-            style={{ width: "50%", height: 12, borderRadius: 6, marginTop: 8 }}
-          />
-        </View>
-      </View>
-    </View>
-  );
-};
-
 const FeedSkeleton = ({ isDark }: FeedSkeletonProps) => {
-  const shimmer = useRef(new Animated.Value(0)).current;
-  const enableShimmer = useFlag("shimmerSkeleton");
+  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-200";
 
-  useEffect(() => {
-    // If shimmer is disabled, keep blocks static (no animated highlight).
-    shimmer.setValue(0);
-    if (!enableShimmer) return;
-
-    const loop = Animated.loop(
-      Animated.timing(shimmer, {
-        toValue: 1,
-        duration: 1300,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true,
-      }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [shimmer, enableShimmer]);
-
-  const { height } = useWindowDimensions();
-  const POST_HEIGHT_ESTIMATE = 220;
-  const itemCount = Math.ceil(height / POST_HEIGHT_ESTIMATE) + 1;
   return (
-    <View className="flex-1">
-      <StoriesSkeleton isDark={isDark} shimmer={shimmer} enableShimmer={enableShimmer} />
-      <ScrollView showsVerticalScrollIndicator={false} scrollEnabled={false}>
-        {[...Array(itemCount)].map((_, i) => (
-          <PostSkeleton key={i} isDark={isDark} shimmer={shimmer} enableShimmer={enableShimmer} />
-        ))}
+    <View className="flex-1 bg-background">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 24 }}
+      >
+        <View className="animate-pulse">
+          {/* StoriesRail */}
+          <View className="flex-row px-4 pt-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <View key={i} className="items-center mr-4">
+                <View className={`w-16 h-16 rounded-full ${elementBg}`} />
+                <View className={`w-12 h-3 rounded-md mt-2 ${elementBg}`} />
+              </View>
+            ))}
+          </View>
+
+          {/* WeeklyVibeBanner */}
+          <View className="mx-4 mt-4 mb-6">
+            <View className={`w-full h-[130px] rounded-3xl ${elementBg}`} />
+          </View>
+
+          {/* MoodGenreRecommendations */}
+          <View className="mx-4 mb-6">
+            <View className={`w-48 h-6 rounded-md mb-4 ${elementBg}`} />
+            <View className="flex-row gap-2 mb-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <View
+                  key={i}
+                  className={`h-9 w-20 rounded-full ${elementBg}`}
+                />
+              ))}
+            </View>
+
+            <View className="gap-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <View
+                  key={i}
+                  className="flex-row items-center justify-between"
+                >
+                  <View className="flex-row items-center flex-1">
+                    <View className={`w-14 h-14 rounded-2xl ${elementBg}`} />
+                    <View className="ml-3 flex-1">
+                      <View className={`w-2/3 h-4 rounded-md ${elementBg}`} />
+                      <View
+                        className={`w-1/2 h-3 rounded-md mt-2 ${elementBg}`}
+                      />
+                    </View>
+                  </View>
+                  <View className={`w-10 h-10 rounded-full ${elementBg}`} />
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Feed posts */}
+          {Array.from({ length: 4 }).map((_, i) => (
+            <View key={i} className="mx-4 mb-8">
+              {/* Header */}
+              <View className="flex-row items-center mb-3">
+                <View className={`w-10 h-10 rounded-full ${elementBg}`} />
+                <View className="ml-3 flex-1">
+                  <View className={`w-36 h-4 rounded-md ${elementBg}`} />
+                  <View className={`w-24 h-3 rounded-md mt-2 ${elementBg}`} />
+                </View>
+                <View className={`w-8 h-8 rounded-full ${elementBg}`} />
+              </View>
+
+              {/* Caption */}
+              <View className={`w-full h-4 rounded-md mb-2 ${elementBg}`} />
+              <View className={`w-3/4 h-4 rounded-md mb-3 ${elementBg}`} />
+
+              {/* Media */}
+              <View className={`w-full aspect-[4/3] rounded-3xl ${elementBg}`} />
+
+              {/* Actions */}
+              <View className="flex-row justify-between mt-4 px-2">
+                <View className={`w-12 h-4 rounded-md ${elementBg}`} />
+                <View className={`w-12 h-4 rounded-md ${elementBg}`} />
+                <View className={`w-12 h-4 rounded-md ${elementBg}`} />
+                <View className={`w-12 h-4 rounded-md ${elementBg}`} />
+              </View>
+            </View>
+          ))}
+        </View>
       </ScrollView>
     </View>
   );

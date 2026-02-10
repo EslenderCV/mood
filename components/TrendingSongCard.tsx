@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useColorScheme } from "nativewind";
-import { Audio } from "expo-av";
 import { useAudioContext } from "@/context/AudioContext";
 import { getDeezerTrackUrl } from "@/lib/appwrite";
 
@@ -26,95 +25,51 @@ const TrendingSongCard = ({ song }: { song: any }) => {
   const { setViralSongToUse } = useFeed();
   const { setPostModalVisible } = useModal();
 
-  // Audio State
-  const { currentPlayingId, setPlayingId } = useAudioContext();
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  // ✅ Usar el reproductor global (evita solapes de audio)
+  const {
+    currentPlayingId,
+    isPlaying,
+    isLoading,
+    isBuffering,
+    playTrack,
+    pauseTrack,
+    resumeTrack,
+  } = useAudioContext();
 
-  useEffect(() => {
-    return () => {
-      if (sound) sound.unloadAsync();
-    };
-  }, [sound]);
-
-  useEffect(() => {
-    const manageGlobalAudio = async () => {
-      if (currentPlayingId && currentPlayingId !== song.id && sound) {
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded && status.isPlaying) {
-          await sound.pauseAsync();
-          setIsPlaying(false);
-        }
-      }
-    };
-    manageGlobalAudio();
-  }, [currentPlayingId, song.id, sound]);
+  const isThisTrackActive = useMemo(() => currentPlayingId === song?.id, [currentPlayingId, song?.id]);
+  const isThisTrackPlaying = isThisTrackActive && isPlaying;
+  const isThisTrackLoading = isThisTrackActive && (isLoading || isBuffering);
 
   const handlePlayPause = async () => {
     try {
-      if (sound) {
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded) {
-          if (status.isPlaying) {
-            await sound.pauseAsync();
-            setIsPlaying(false);
-            setPlayingId(null);
-          } else {
-            if (status.positionMillis >= status.durationMillis!) {
-              await sound.replayAsync();
-            } else {
-              await sound.playAsync();
-            }
-            setPlayingId(song.id);
-            setIsPlaying(true);
-          }
-        }
+      // Si ya es la pista activa, solo togglear play/pause
+      if (isThisTrackActive) {
+        if (isPlaying) await pauseTrack();
+        else await resumeTrack();
         return;
       }
 
-      setIsLoadingAudio(true);
-      const previewUrl = song.preview || (await getDeezerTrackUrl(song.id));
+      // Caso nuevo track: hacemos play en el player global.
+      const previewUrl = song?.preview || (await getDeezerTrackUrl(song?.id));
 
-      if (!previewUrl) {
-        setIsLoadingAudio(false);
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-      });
-
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: previewUrl },
-        { shouldPlay: true },
+      await playTrack(
+        song?.id,
+        previewUrl,
+        {
+          title: song?.title,
+          artist: song?.artist?.name || song?.artist,
+          cover: song?.cover || song?.album?.cover_xl,
+        },
       );
-
-      setSound(newSound);
-      setIsPlaying(true);
-      setPlayingId(song.id);
-
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setIsPlaying(false);
-          setPlayingId(null);
-        }
-      });
-
-      setIsLoadingAudio(false);
     } catch (error) {
-      console.log("Error playing viral song:", error);
-      setIsLoadingAudio(false);
+      console.log("Error playing viral song via global player:", error);
     }
   };
 
   const handleUseSound = () => {
-    // 1. Pausar si está sonando
-    if (sound && isPlaying) {
-      sound.pauseAsync();
-      setIsPlaying(false);
+    // 1. Pausar si está sonando (en el player global)
+    if (isThisTrackPlaying) {
+      pauseTrack();
     }
 
     // 2. Establecer la canción en el "Puente" del proveedor
@@ -178,14 +133,14 @@ const TrendingSongCard = ({ song }: { song: any }) => {
             </View>
 
             <View className="bg-[#5E17EB] w-16 h-16 rounded-full items-center justify-center border-2 border-white/20 shadow-xl">
-              {isLoadingAudio ? (
+              {isThisTrackLoading ? (
                 <ActivityIndicator color="white" />
               ) : (
                 <Ionicons
-                  name={isPlaying ? "pause" : "play"}
+                  name={isThisTrackPlaying ? "pause" : "play"}
                   size={32}
                   color="white"
-                  style={{ marginLeft: isPlaying ? 0 : 4 }}
+                  style={{ marginLeft: isThisTrackPlaying ? 0 : 4 }}
                 />
               )}
             </View>

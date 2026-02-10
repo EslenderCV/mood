@@ -1,89 +1,106 @@
 import React from "react";
 import { View } from "react-native";
 
-export const ExplorePostSkeleton = ({ isDark }: { isDark: boolean }) => {
-  const cardBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
+type SkeletonProps = {
+  isDark: boolean;
+};
+
+const getElementBg = (isDark: boolean) => (isDark ? "bg-zinc-800" : "bg-zinc-200");
+const getBorderColor = (isDark: boolean) => (isDark ? "#27272A" : "#E5E5E5");
+
+export const TrendingVibeSkeleton = ({ isDark }: SkeletonProps) => {
+  const elementBg = getElementBg(isDark);
+  const borderColor = getBorderColor(isDark);
+
+  // Matches the Daily Picks card layout in ExploreHeader.
   return (
-    <View className={`flex-1 m-[1px] aspect-square ${cardBg} opacity-50`} />
+    <View
+      className="animate-pulse flex-row items-center px-5 py-3 mb-2 mx-2 rounded-2xl bg-surface2 border"
+      style={{ borderColor }}
+    >
+      <View className={`w-14 h-14 rounded-xl ${elementBg}`} />
+      <View className="flex-1 ml-4">
+        <View className={`w-2/3 h-4 rounded-md ${elementBg}`} />
+        <View className={`w-1/2 h-3 rounded-md mt-2 ${elementBg}`} />
+      </View>
+      <View className="flex-row items-center">
+        <View className={`w-10 h-10 rounded-full mr-2 ${elementBg}`} />
+        <View className={`w-10 h-10 rounded-full ${elementBg}`} />
+      </View>
+    </View>
   );
 };
 
-export const TrendingVibeSkeleton = ({ isDark }: { isDark: boolean }) => {
-  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
+export const ExplorePostSkeleton = ({ isDark }: SkeletonProps) => {
+  const elementBg = getElementBg(isDark);
   return (
-    <View className="flex-row items-center px-5 py-3 mb-2 mx-2">
-      <View className={`w-14 h-14 rounded-xl ${elementBg} mr-4`} />
-      <View className="flex-1 justify-center mr-2 space-y-2">
-        <View className={`w-32 h-4 rounded ${elementBg}`} />
-        <View className={`w-20 h-3 rounded ${elementBg}`} />
+    <View className="animate-pulse flex-1 aspect-square m-[1px]">
+      <View className={`flex-1 ${elementBg}`} />
+    </View>
+  );
+};
+
+export const MusicSkeleton = ({ isDark }: SkeletonProps) => {
+  const elementBg = getElementBg(isDark);
+  const borderColor = getBorderColor(isDark);
+
+  // Matches MusicListRow layout in ExploreScreen.
+  return (
+    <View
+      className="animate-pulse flex-row items-center px-5 py-4 border-b"
+      style={{ borderColor }}
+    >
+      <View className={`h-5 w-6 rounded-md mr-4 ${elementBg}`} />
+      <View className={`w-12 h-12 rounded-lg ${elementBg}`} />
+      <View className="flex-1 mx-3">
+        <View className={`h-4 w-2/3 rounded-md ${elementBg}`} />
+        <View className={`h-3 w-1/2 rounded-md mt-2 ${elementBg}`} />
       </View>
       <View className={`w-10 h-10 rounded-full ${elementBg}`} />
     </View>
   );
 };
 
-export const CreatorSkeleton = ({ isDark }: { isDark: boolean }) => {
-  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
+export const ArtistSkeleton = ({ isDark }: SkeletonProps) => {
+  const elementBg = getElementBg(isDark);
+  const borderColor = getBorderColor(isDark);
+
+  // Matches renderArtistRow layout in ExploreScreen.
   return (
-    <View className="mr-5 items-center w-20">
-      <View
-        className={`w-[68px] h-[68px] rounded-full ${elementBg} border-2 border-transparent`}
-      />
-      <View className={`mt-2 w-16 h-3 rounded ${elementBg}`} />
+    <View
+      className="animate-pulse flex-row items-center justify-between px-5 py-4 border-b"
+      style={{ borderColor }}
+    >
+      <View className="flex-row items-center flex-1">
+        <View className={`w-14 h-14 rounded-full ${elementBg}`} />
+        <View className="ml-4 flex-1">
+          <View className={`h-4 w-1/2 rounded-md ${elementBg}`} />
+          <View className={`h-3 w-1/3 rounded-md mt-2 ${elementBg}`} />
+        </View>
+      </View>
+      <View className={`w-5 h-5 rounded-md ${elementBg}`} />
     </View>
   );
 };
 
-export const MusicSkeleton = ({ isDark }: { isDark: boolean }) => {
-  const cardBg = isDark ? "bg-zinc-900" : "bg-zinc-100";
-  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
-  const borderColor = isDark ? "border-zinc-800" : "border-zinc-200";
-  return (
-    <View
-      className={`flex-row items-center px-4 py-4 border-b ${borderColor} ${cardBg}`}
-    >
-      <View className={`w-8 h-6 rounded ${elementBg} mr-4`} />
-      <View className={`w-12 h-12 rounded-lg ${elementBg} mr-4`} />
-      <View className="flex-1 space-y-2">
-        <View className={`w-32 h-4 rounded ${elementBg}`} />
-        <View className={`w-20 h-3 rounded ${elementBg}`} />
-      </View>
-      <View className={`w-10 h-10 rounded-full ${elementBg}`} />
-    </View>
-  );
-};
+export const ProfileSkeleton = ({ isDark }: SkeletonProps) => {
+  const elementBg = getElementBg(isDark);
+  const borderColor = getBorderColor(isDark);
 
-export const ArtistSkeleton = ({ isDark }: { isDark: boolean }) => {
-  const cardBg = isDark ? "bg-zinc-900" : "bg-zinc-100";
-  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
-  const borderColor = isDark ? "border-zinc-800" : "border-zinc-200";
+  // Matches renderProfileRow layout in ExploreScreen.
   return (
     <View
-      className={`flex-row items-center px-5 py-4 border-b ${borderColor} ${cardBg}`}
+      className="animate-pulse flex-row items-center justify-between px-5 py-4 border-b"
+      style={{ borderColor }}
     >
-      <View className={`w-14 h-14 rounded-full ${elementBg} mr-4`} />
-      <View className="flex-1 space-y-2">
-        <View className={`w-24 h-4 rounded ${elementBg}`} />
-        <View className={`w-16 h-3 rounded ${elementBg}`} />
+      <View className="flex-row items-center flex-1">
+        <View className={`w-12 h-12 rounded-full ${elementBg}`} />
+        <View className="ml-4 flex-1">
+          <View className={`h-4 w-1/2 rounded-md ${elementBg}`} />
+          <View className={`h-3 w-1/3 rounded-md mt-2 ${elementBg}`} />
+        </View>
       </View>
-    </View>
-  );
-};
-
-export const ProfileSkeleton = ({ isDark }: { isDark: boolean }) => {
-  const cardBg = isDark ? "bg-zinc-900" : "bg-zinc-100";
-  const elementBg = isDark ? "bg-zinc-800" : "bg-zinc-300";
-  const borderColor = isDark ? "border-zinc-800" : "border-zinc-200";
-  return (
-    <View
-      className={`flex-row items-center px-5 py-4 border-b ${borderColor} ${cardBg}`}
-    >
-      <View className={`w-14 h-14 rounded-full ${elementBg}`} />
-      <View className="ml-4 flex-1 space-y-2">
-        <View className={`w-32 h-4 rounded ${elementBg}`} />
-        <View className={`w-20 h-3 rounded ${elementBg}`} />
-      </View>
-      <View className={`w-16 h-8 rounded-full ${elementBg}`} />
+      <View className={`h-9 w-24 rounded-full ${elementBg}`} />
     </View>
   );
 };

@@ -9,6 +9,7 @@ import React, {
   useMemo,
 } from "react";
 import { Audio, AVPlaybackStatus } from "expo-av";
+import { getDeezerTrackUrl, searchSongs } from "../lib/appwrite/utils";
 import { useFlag } from "@/src/config/flags";
 // Asegúrate de que estas rutas de importación existan en tu proyecto, si no, coméntalas
 import { BrainEmitter } from "@/src/brain/signals/emitters";
@@ -65,11 +66,11 @@ export const useAudioProgress = () =>
 
 // Exponemos acciones globales sin suscribirse al Context (evita re-renders en pantallas pesadas).
 export const AudioActions = {
-  playTrack: async (_id: string, _uri: string, _meta?: TrackMetadata) => {},
+  playTrack: async (_id: string, _uri?: string, _meta?: TrackMetadata) => {},
   pauseTrack: async () => {},
   resumeTrack: async () => {},
   stopTrack: async () => {},
-  prefetchTrack: (_uri: string) => {},
+  prefetchTrack: (_uri?: string) => {},
   /** Snapshot ultra-ligero (sin subscribirse al Context). */
   getState: () => ({
     currentPlayingId: null as string | null,
@@ -128,14 +129,14 @@ interface AudioContextType {
   isLoading: boolean;
   isBuffering: boolean;
 
-  playTrack: (id: string, uri: string, meta?: TrackMetadata) => Promise<void>;
+  playTrack: (id: string, uri?: string, meta?: TrackMetadata) => Promise<void>;
   pauseTrack: () => Promise<void>;
   resumeTrack: () => Promise<void>;
   stopTrack: () => Promise<void>;
   setPlayingId: (id: string | null) => void;
 
   /** Prefetch ultraligero del siguiente preview (para "tap-to-play" instantáneo). */
-  prefetchTrack: (uri: string) => void;
+  prefetchTrack: (uri?: string) => void;
 }
 
 const AudioContext = createContext<AudioContextType>({
@@ -372,7 +373,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const prefetchTrackImpl = useCallback(
-    async (uri: string) => {
+    async (uri?: string) => {
       if (!uri || typeof uri !== "string") return;
       if (!uri.startsWith("http")) return;
 
@@ -431,7 +432,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const prefetchTrack = useCallback(
-    (uri: string) => {
+    (uri?: string) => {
       if (!enablePrefetchRef.current) return;
       void prefetchTrackImpl(uri);
     },
@@ -442,12 +443,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     AudioActions.prefetchTrack = prefetchTrack;
     return () => {
-      AudioActions.prefetchTrack = (_uri: string) => {};
+      AudioActions.prefetchTrack = (_uri?: string) => {};
     };
   }, [prefetchTrack]);
 
   const playTrack = useCallback(
-    async (id: string, uri: string, meta?: TrackMetadata) => {
+    async (id: string, uri?: string, meta?: TrackMetadata) => {
       const myOp = ++opIdRef.current;
 
       await withLock(async () => {
@@ -457,6 +458,35 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
 
           // 🔥 Forzar modo Playback siempre que empiece una canción (por si venías del grabador)
           await ensurePlaybackMode();
+
+          const normalizeUri = (value?: string) =>
+            typeof value === "string" ? value.trim() : "";
+
+          const resolveDeezerPreviewUri = async (): Promise<string | null> => {
+            // 1) Si el id parece ser un trackId numérico de Deezer, úsalo directo
+            if (id && /^[0-9]+$/.test(id)) {
+              try {
+                const preview = await getDeezerTrackUrl(id);
+                if (preview) return preview;
+              } catch {
+                // ignore
+              }
+            }
+
+            // 2) Buscar por título + artista (sirve aunque el track venga de otra fuente)
+            const queryParts: string[] = [];
+            if (meta?.title) queryParts.push(meta.title);
+            if (meta?.artist) queryParts.push(meta.artist);
+            if (queryParts.length === 0) return null;
+
+            try {
+              const results: any[] = await searchSongs(queryParts.join(" "));
+              const first = results?.find((r) => !!r?.preview);
+              return first?.preview ?? null;
+            } catch {
+              return null;
+            }
+          };
 
           // Si es la misma canción, toggle play/pause (solo si está loaded)
           if (currentTrackIdRef.current === id && soundRef.current) {
@@ -529,13 +559,26 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
           setIsBuffering(false);
           setCurrentPlayingId(id);
           setActiveTrackMetadata(meta || null);
+
+          let effectiveUri = normalizeUri(uri);
+          if (!effectiveUri) {
+            const resolved = await resolveDeezerPreviewUri();
+            effectiveUri = normalizeUri(resolved ?? undefined);
+          }
+
+          if (!effectiveUri) {
+            throw new Error(
+              `[AudioContext] Missing preview URL for track id=${id} (${meta?.title ?? ""} - ${meta?.artist ?? ""})`
+            );
+          }
+
           currentTrackIdRef.current = id;
-          currentUriRef.current = uri;
+          currentUriRef.current = effectiveUri;
           lastProgressEmitMsRef.current = 0;
           audioProgressStore.reset();
 
           // ✅ Camino rápido: si ya está preloaded, lo usamos
-          if (preloadedRef.current?.uri === uri && preloadedRef.current.sound) {
+          if (preloadedRef.current?.uri === effectiveUri && preloadedRef.current.sound) {
             const pre = preloadedRef.current.sound;
             preloadedRef.current = null;
 
@@ -589,22 +632,48 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
           try {
             // Preferimos streaming (downloadFirst=false) para evitar fallos al "descargar primero" en ciertas URLs.
             created = await Audio.Sound.createAsync(
-              { uri },
+              { uri: effectiveUri },
               { shouldPlay: true, volume: 1.0 },
               onPlaybackStatusUpdate,
               false,
             );
-          } catch {
-            // Fallback: algunos hosts funcionan mejor con downloadFirst=true.
-            created = await Audio.Sound.createAsync(
-              { uri },
-              { shouldPlay: true, volume: 1.0 },
-              onPlaybackStatusUpdate,
-              true,
+          } catch (primaryErr) {
+            try {
+              // Fallback: algunos hosts funcionan mejor con downloadFirst=true.
+              created = await Audio.Sound.createAsync(
+                { uri: effectiveUri },
+                { shouldPlay: true, volume: 1.0 },
+                onPlaybackStatusUpdate,
+                true,
+              );
+            } catch (secondaryErr) {
+              // Último recurso: resolver un preview de Deezer por título/artista (útil si el URI original no era un mp3 directo)
+              const deezerFallback = normalizeUri(
+                (await resolveDeezerPreviewUri()) ?? undefined,
+              );
+
+              if (deezerFallback && deezerFallback !== effectiveUri) {
+                effectiveUri = deezerFallback;
+                currentUriRef.current = effectiveUri;
+                created = await Audio.Sound.createAsync(
+                  { uri: effectiveUri },
+                  { shouldPlay: true, volume: 1.0 },
+                  onPlaybackStatusUpdate,
+                  false,
+                );
+              } else {
+                throw secondaryErr ?? primaryErr;
+              }
+            }
+          }
+
+          if (!created || !(created as any).sound) {
+            throw new Error(
+              "[AudioContext] Audio.Sound.createAsync returned null/invalid result",
             );
           }
 
-          const { sound: newSound, status } = created!;
+          const { sound: newSound, status } = created;
 
           // Si quedó stale, unload y sal
           if (!mountedRef.current || myOp !== opIdRef.current) {
