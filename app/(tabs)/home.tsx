@@ -112,6 +112,23 @@ const Home = () => {
     feedWithAdsRef.current = feedWithAds;
   }, [feedWithAds]);
 
+  // ✅ Avoid FlatList calling onEndReached on mount when content is short.
+  // We only start paging after the user actually scrolls.
+  const didUserScrollRef = useRef(false);
+  const onMomentumScrollBegin = useCallback(() => {
+    didUserScrollRef.current = true;
+  }, []);
+
+  const onEndReached = useCallback(() => {
+    if (!didUserScrollRef.current) return;
+
+    const l: any = logicRef.current;
+    if (l?.isLoadingMore) return;
+    if (l?.hasMore === false) return;
+
+    void l?.handleLoadMore?.();
+  }, []);
+
 
 
   const onPullToRefresh = useCallback(() => {
@@ -355,8 +372,20 @@ const Home = () => {
                 <MoodGenreRecommendations />
               </View>
             }
-            onEndReached={() => logic.handleLoadMore()}
-            onEndReachedThreshold={0.5}
+            onMomentumScrollBegin={onMomentumScrollBegin}
+            onEndReached={onEndReached}
+            // Higher threshold = prefetch earlier so the footer spinner is rarely visible
+            // during normal/slow scrolling.
+            onEndReachedThreshold={0.8}
+            ListFooterComponent={
+              logic.isLoadingMore ? (
+                <View className="py-6 items-center justify-center">
+                  <ActivityIndicator size="small" color="#5E17EB" />
+                </View>
+              ) : (
+                <View className="h-6" />
+              )
+            }
             ListEmptyComponent={
               <EmptyStateWithSuggestions
                 suggestions={[]}

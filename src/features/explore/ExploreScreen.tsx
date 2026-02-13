@@ -343,7 +343,7 @@ const ExploreHeader = memo(
               </Text>
               {logic.isLoading ? (
                 <View>
-                  {[1, 2, 3].map((i) => (
+                  {[1, 2, 3, 4, 5].map((i) => (
                     <TrendingVibeSkeleton key={i} isDark={isDark} />
                   ))}
                 </View>

@@ -85,12 +85,39 @@ export const useHomeLogic = () => {
 
   const lastFetchTimeRef = useRef<number>(0);
 
+  // Boot loading: show skeleton immediately on app start.
+  // Without this, `useFeed()` can be `isLoading=false` for a short moment before the
+  // first fetch begins, which causes the Home feed to render as an empty screen.
+  const [bootLoading, setBootLoading] = useState(true);
+  const hasEverStartedLoadingRef = useRef(false);
+
   useEffect(() => {
     isMounted.current = true;
     return () => {
       isMounted.current = false;
     };
   }, []);
+
+  // Turn off boot loading once we either:
+  // - already have something to render, OR
+  // - the first loading cycle has completed.
+  useEffect(() => {
+    const loadingNow = serverMode ? serverLoading : isFeedLoading;
+
+    if ((sortedFeed?.length ?? 0) > 0) {
+      if (bootLoading) setBootLoading(false);
+      return;
+    }
+
+    if (loadingNow) {
+      hasEverStartedLoadingRef.current = true;
+      return;
+    }
+
+    if (hasEverStartedLoadingRef.current) {
+      if (bootLoading) setBootLoading(false);
+    }
+  }, [serverMode, serverLoading, isFeedLoading, sortedFeed, bootLoading]);
 
   useEffect(() => {
     sortedFeedRef.current = sortedFeed;
@@ -171,7 +198,15 @@ export const useHomeLogic = () => {
   useHomeRealtime({ userId, user, fetchCounts, setSortedFeed, realtimePostsCacheRef });
 
   // --- Feed construction & pagination (extracted) ---
-  const { handleLoadMore, refreshServerFeed, serverLoading, serverRefreshing, serverMode } = useHomeFeedConstruction({
+  const {
+    handleLoadMore,
+    refreshServerFeed,
+    serverLoading,
+    serverRefreshing,
+    serverMode,
+    isLoadingMore,
+    hasMore,
+  } = useHomeFeedConstruction({
     feed,
     userId,
     myFollowedIds,
@@ -392,9 +427,14 @@ export const useHomeLogic = () => {
     };
   }, [flushQueue]);
 
+  // Avoid loading-state flicker: once we have something rendered (e.g., cached feed),
+  // keep it visible while we refresh in the background.
+  const effectiveIsFeedLoading = (bootLoading || (serverMode ? serverLoading : isFeedLoading)) &&
+    (sortedFeed?.length ?? 0) === 0;
+
   return {
     user,
-    isFeedLoading: serverMode ? serverLoading : isFeedLoading,
+    isFeedLoading: effectiveIsFeedLoading,
     isRefreshing: serverMode ? serverRefreshing : isRefreshing,
     onRefresh,
     sortedFeed,
@@ -422,6 +462,8 @@ export const useHomeLogic = () => {
     MOOD_OFFICIAL_ID,
     handleMoodMediaPick,
     handleLoadMore,
+    isLoadingMore,
+    hasMore,
     flatListRef,
     handleShareSearch,
     handleSendShare,

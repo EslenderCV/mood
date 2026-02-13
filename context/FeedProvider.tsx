@@ -12,7 +12,6 @@ import { useBoot } from "@/src/boot/BootContext";
 
 import { tStatic } from "@/context/LanguageContext";
 export type FeedItemType = "post" | "suggested_users" | "trending_song";
-0;
 export interface FeedItem {
   _id: string;
   type: FeedItemType;
@@ -57,6 +56,10 @@ export const FeedProvider = ({ children }: { children: React.ReactNode }) => {
   const { loggedIn, loading: authLoading } = useGlobalContext();
   const { bootComplete } = useBoot();
   const didInitRef = useRef(false);
+
+  // ✅ UX/Perf: Keep startup snappy by fetching only a tiny first page.
+  // Next pages are loaded by Home's infinite scroll logic.
+  const INITIAL_FEED_LIMIT = 3;
 
   const trackUserInterest = (term: string) => {
     if (!term) return;
@@ -213,7 +216,7 @@ export const FeedProvider = ({ children }: { children: React.ReactNode }) => {
   const refreshFeed = async () => {
     setIsRefreshing(true);
     try {
-      const posts = await getFeedCandidates();
+      const posts = await getFeedCandidates({ limit: INITIAL_FEED_LIMIT });
       const newFeed = await mixContent(posts);
 
       setFeed((prev) => {

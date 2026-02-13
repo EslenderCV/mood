@@ -32,39 +32,56 @@ const FeedSkeleton = ({ isDark }: FeedSkeletonProps) => {
 
           {/* MoodGenreRecommendations */}
           <View className="mx-4 mb-6">
-            <View className={`w-48 h-6 rounded-md mb-4 ${elementBg}`} />
-            <View className="flex-row gap-2 mb-4">
-              {Array.from({ length: 4 }).map((_, i) => (
+            {/* Section header (mirrors the loaded UI) */}
+            <View className="flex-row items-center justify-between mb-2">
+              <View className={`w-44 h-6 rounded-md ${elementBg}`} />
+              <View className={`w-16 h-4 rounded-md ${elementBg}`} />
+            </View>
+            <View className={`w-56 h-3 rounded-md mb-4 ${elementBg}`} />
+
+            {/* Chips (wrap like the real layout) */}
+            <View className="flex-row flex-wrap gap-2 mb-4">
+              {[104, 112, 96, 124, 92, 108, 84, 116].map((w, i) => (
                 <View
                   key={i}
-                  className={`h-9 w-20 rounded-full ${elementBg}`}
+                  style={{ width: w }}
+                  className={`h-9 rounded-full ${elementBg}`}
                 />
               ))}
             </View>
 
-            <View className="gap-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <View
-                  key={i}
-                  className="flex-row items-center justify-between"
-                >
-                  <View className="flex-row items-center flex-1">
-                    <View className={`w-14 h-14 rounded-2xl ${elementBg}`} />
-                    <View className="ml-3 flex-1">
-                      <View className={`w-2/3 h-4 rounded-md ${elementBg}`} />
+            {/* Selected category title */}
+            <View className={`w-28 h-5 rounded-md mb-3 ${elementBg}`} />
+
+            {/* Horizontal song rail */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: 16 }}
+            >
+              <View className="flex-row gap-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <View key={i} className="w-[158px]">
+                    <View className="relative">
+                      <View className={`w-[158px] h-[158px] rounded-3xl ${elementBg}`} />
                       <View
-                        className={`w-1/2 h-3 rounded-md mt-2 ${elementBg}`}
+                        className={`w-9 h-9 rounded-full ${elementBg} absolute bottom-3 right-3`}
                       />
                     </View>
+
+                    <View className="mt-3">
+                      <View className={`w-28 h-4 rounded-md ${elementBg}`} />
+                      <View className={`w-24 h-3 rounded-md mt-2 ${elementBg}`} />
+                      <View className={`w-28 h-9 rounded-full mt-3 ${elementBg}`} />
+                    </View>
                   </View>
-                  <View className={`w-10 h-10 rounded-full ${elementBg}`} />
-                </View>
-              ))}
-            </View>
+                ))}
+              </View>
+            </ScrollView>
           </View>
 
           {/* Feed posts */}
-          {Array.from({ length: 4 }).map((_, i) => (
+          {Array.from({ length: 2 }).map((_, i) => (
             <View key={i} className="mx-4 mb-8">
               {/* Header */}
               <View className="flex-row items-center mb-3">

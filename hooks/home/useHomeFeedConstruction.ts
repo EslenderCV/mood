@@ -100,6 +100,12 @@ export const useHomeFeedConstruction = ({
   currentAnchorRef: React.MutableRefObject<any>;
   isMounted: React.MutableRefObject<boolean>;
 }) => {
+  // ✅ UX/Perf targets
+  // - First screen: fetch/show only 2-3 posts so Home opens fast.
+  // - Infinite scroll: load more when nearing the end (spinner only visible on fast scroll).
+  const INITIAL_POSTS_TO_SHOW = 3;
+  const TOP_OF_FEED_PAGE_SIZE = 3;
+
   const servedPostIdsRef = useRef<Set<string>>(new Set());
   const poolIdsRef = useRef<Set<string>>(new Set());
   const candidatePoolRef = useRef<FeedItem[]>([]);
@@ -120,6 +126,9 @@ export const useHomeFeedConstruction = ({
   const serverCursorIdRef = useRef<string | null>(null);
   const serverPrefetchRef = useRef<{ cursor: string | null; resp: ServerFeedResponse | null } | null>(null);
   const serverPrefetchInFlightRef = useRef<boolean>(false);
+
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [hasMore, setHasMore] = useState<boolean>(true);
 
   const prefetchServerNextPage = useCallback(async () => {
     if (!serverMode) return;
@@ -223,14 +232,25 @@ export const useHomeFeedConstruction = ({
 
   useEffect(() => {
     void (async () => {
-      if (!feed || feed.length === 0 || !userId) {
-        if (
-          isMounted.current &&
-          sortedFeedRef.current.length > 0 &&
-          (!feed || feed.length === 0)
-        ) {
+      // If the user is logged out, we must clear the feed to avoid leaking stale content.
+      if (!userId) {
+        if (isMounted.current && sortedFeedRef.current.length > 0) {
           setSortedFeed([]);
         }
+
+        candidatePoolRef.current = [];
+        seenPoolRef.current = [];
+        itemsMapRef.current.clear();
+        servedPostIdsRef.current = new Set();
+        servedArtistIdsRef.current = new Set();
+        servedSongIdsRef.current = new Set();
+        servedAdSlotKeysRef.current = new Set();
+        return;
+      }
+
+      // While the feed is being fetched, keep rendering whatever is already on screen (e.g. cached feed)
+      // to avoid a skeleton flicker. We'll rebuild the pools once `feed` arrives.
+      if (!feed || feed.length === 0) {
         return;
       }
 
@@ -247,6 +267,11 @@ export const useHomeFeedConstruction = ({
       nextCursorRef.current = null;
       hasMoreRef.current = true;
       isLoadingMoreRef.current = false;
+
+      if (isMounted.current) {
+        setIsLoadingMore(false);
+        setHasMore(true);
+      }
 
       await Promise.all([seenStore.ensureLoaded(userId), bandit.ensureLoaded(userId)]);
 
@@ -293,7 +318,14 @@ export const useHomeFeedConstruction = ({
 
       // --- Server mode: backend source of truth for Home feed ---
       if (serverMode) {
-        setServerLoading(true);
+        // If we already have something rendered (e.g. cached feed from a previous session),
+        // don't flip the whole screen back into a loading skeleton. We'll refresh in-place.
+        const hasRenderedFeed = sortedFeedRef.current.length > 0;
+        if (!hasRenderedFeed) setServerLoading(true);
+
+        // Block server paging while we refresh the top-of-feed, to avoid races where
+        // a user scrolls and triggers load-more using stale cursors.
+        serverIsLoadingMoreRef.current = true;
         let serverOk = false;
         try {
           const sessionId = MoodSessionManager.getInstance().getSessionId();
@@ -309,7 +341,7 @@ export const useHomeFeedConstruction = ({
           servedPostIdsRef.current = new Set();
           itemsMapRef.current.clear();
 
-          const resp = await getServerHomeFeedPage({ limit: 20, cursor: null, sessionId });
+          const resp = await getServerHomeFeedPage({ limit: INITIAL_POSTS_TO_SHOW, cursor: null, sessionId });
 
           if (!resp?.ok) {
             console.warn("[Mood] server feed init failed; degrading to local feed", resp);
@@ -317,10 +349,11 @@ export const useHomeFeedConstruction = ({
             serverOk = false;
           } else {
             serverNextCursorRef.current = resp?.next_cursor ?? null;
-            void prefetchServerNextPage();
             serverHasMoreRef.current = !!serverNextCursorRef.current;
             serverSnapshotIdRef.current = (resp as any)?.snapshot_id ?? null;
             serverCursorIdRef.current = (resp as any)?.cursor_id ?? null;
+
+            if (isMounted.current) setHasMore(serverHasMoreRef.current);
 
             const metaByPostId = new Map<string, any>();
             const rawPostsById = new Map<string, any>();
@@ -406,6 +439,7 @@ export const useHomeFeedConstruction = ({
           setServerDegraded(true);
         } finally {
           if (isMounted.current) setServerLoading(false);
+          serverIsLoadingMoreRef.current = false;
         }
         if (serverOk) return;
       }
@@ -418,7 +452,12 @@ export const useHomeFeedConstruction = ({
         (a, b) => getPostDateMs(b) - getPostDateMs(a),
       );
       nextCursorRef.current =
-        sortedByCreated.length >= 60 ? sortedByCreated[sortedByCreated.length - 1]?.$id : null;
+        sortedByCreated.length > 0 ? sortedByCreated[sortedByCreated.length - 1]?.$id : null;
+
+      // We assume there may be more pages if we have at least one post.
+      // If there aren't any, paging will naturally stop on the next request.
+      hasMoreRef.current = !!nextCursorRef.current;
+      if (isMounted.current) setHasMore(hasMoreRef.current);
 
       // 4) Rank top-of-feed (Phase-2 IG-like behavior)
       const ranked = HomeFeedBrain.buildPage({
@@ -426,7 +465,7 @@ export const useHomeFeedConstruction = ({
         userId,
         myFollowedIds,
         servedPostIds: servedPostIdsRef.current,
-        pageSize: 20,
+        pageSize: TOP_OF_FEED_PAGE_SIZE,
         isTopOfFeed: true,
         seen: seenStore,
         bandit,
@@ -526,6 +565,7 @@ export const useHomeFeedConstruction = ({
 
     nextCursorRef.current = res?.nextCursor || null;
     if (!nextCursorRef.current) hasMoreRef.current = false;
+    if (isMounted.current) setHasMore(hasMoreRef.current);
   }, [addCandidatesToPool, userId]);
 
   const refreshServerFeed = useCallback(async () => {
@@ -541,7 +581,7 @@ export const useHomeFeedConstruction = ({
       serverPrefetchRef.current = null;
 
       const resp = await getServerHomeFeedPage({
-        limit: 20,
+        limit: INITIAL_POSTS_TO_SHOW,
         cursor: null,
         sessionId,
       });
@@ -553,10 +593,11 @@ export const useHomeFeedConstruction = ({
       }
 
       serverNextCursorRef.current = resp?.next_cursor ?? null;
-      void prefetchServerNextPage();
       serverHasMoreRef.current = !!serverNextCursorRef.current;
       serverSnapshotIdRef.current = (resp as any)?.snapshot_id ?? null;
       serverCursorIdRef.current = (resp as any)?.cursor_id ?? null;
+
+      if (isMounted.current) setHasMore(serverHasMoreRef.current);
 
       const metaByPostId = new Map<string, any>();
       const rawPostsById = new Map<string, any>();
@@ -637,6 +678,7 @@ export const useHomeFeedConstruction = ({
       if (!serverHasMoreRef.current) return;
 
       serverIsLoadingMoreRef.current = true;
+      if (isMounted.current) setIsLoadingMore(true);
       try {
         const sessionId = MoodSessionManager.getInstance().getSessionId();
         const cursor = serverNextCursorRef.current;
@@ -663,8 +705,8 @@ export const useHomeFeedConstruction = ({
         }
 
         serverNextCursorRef.current = resp?.next_cursor ?? null;
-        void prefetchServerNextPage();
         serverHasMoreRef.current = !!serverNextCursorRef.current;
+        if (isMounted.current) setHasMore(serverHasMoreRef.current);
 
         const blocked = new Set(blockedUserIds || []);
         const metaByPostId = new Map<string, any>();
@@ -753,11 +795,16 @@ export const useHomeFeedConstruction = ({
         setSortedFeed((prev) => [...prev, ...enrichedBatch]);
       } finally {
         serverIsLoadingMoreRef.current = false;
+        if (isMounted.current) {
+          setIsLoadingMore(false);
+          setHasMore(serverHasMoreRef.current);
+        }
       }
       return;
     }
     if (isLoadingMoreRef.current) return;
     isLoadingMoreRef.current = true;
+    if (isMounted.current) setIsLoadingMore(true);
 
     try {
       await Promise.all([seenStore.ensureLoaded(userId), bandit.ensureLoaded(userId)]);
@@ -858,6 +905,10 @@ export const useHomeFeedConstruction = ({
       setSortedFeed((prev) => [...prev, ...enrichedBatch]);
     } finally {
       isLoadingMoreRef.current = false;
+      if (isMounted.current) {
+        setIsLoadingMore(false);
+        setHasMore(hasMoreRef.current);
+      }
     }
   }, [
     serverMode,
@@ -876,5 +927,13 @@ export const useHomeFeedConstruction = ({
     setSortedFeed,
   ]);
 
-  return { handleLoadMore, refreshServerFeed, serverLoading, serverRefreshing, serverMode };
+  return {
+    handleLoadMore,
+    refreshServerFeed,
+    serverLoading,
+    serverRefreshing,
+    serverMode,
+    isLoadingMore,
+    hasMore,
+  };
 };

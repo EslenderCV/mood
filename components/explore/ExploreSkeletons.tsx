@@ -24,8 +24,8 @@ export const TrendingVibeSkeleton = ({ isDark }: SkeletonProps) => {
         <View className={`w-1/2 h-3 rounded-md mt-2 ${elementBg}`} />
       </View>
       <View className="flex-row items-center">
-        <View className={`w-10 h-10 rounded-full mr-2 ${elementBg}`} />
-        <View className={`w-10 h-10 rounded-full ${elementBg}`} />
+        <View className={`w-8 h-8 rounded-full mr-3 ${elementBg}`} />
+        <View className={`w-8 h-8 rounded-full ${elementBg}`} />
       </View>
     </View>
   );
