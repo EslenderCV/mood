@@ -1,10 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getFunctionsClient } from "./functionsClient";
+import { appwriteConfig } from "./config";
 
 // Configura el Function ID en appwriteConfig o usa la variable de entorno.
 // Appwrite Console → Functions → get_shazam_token → Overview → Function ID
-const FUNCTION_ID =
-  process.env["EXPO_PUBLIC_APPWRITE_SHAZAM_TOKEN_FUNCTION_ID"] ?? "";
+const FUNCTION_ID = appwriteConfig.shazamToken.functionId;
 
 const CACHE_KEY = "shazam_token_cache";
 
@@ -26,7 +26,7 @@ function isValid(cache: TokenCache): boolean {
 async function fetchFromServer(): Promise<TokenCache> {
   const functions = getFunctionsClient();
   if (!functions) throw new Error("Appwrite Functions no disponible.");
-  if (!FUNCTION_ID) throw new Error("EXPO_PUBLIC_APPWRITE_SHAZAM_TOKEN_FUNCTION_ID no configurado.");
+  if (!FUNCTION_ID) throw new Error("Shazam Token Function ID no configurado.");
 
   const result = await functions.createExecution(FUNCTION_ID, "", false);
 

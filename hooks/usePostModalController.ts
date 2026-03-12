@@ -76,16 +76,16 @@ export const usePostModalController = (props?: any) => {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [moodStyle, setMoodStyle] = useState<"standard" | "card">("standard");
   const [isShazamScanning, setIsShazamScanning] = useState(false);
-// Shazam premium UI helpers
-const [shazamUiState, setShazamUiState] = useState<"idle" | "listening" | "matching">("idle");
-const [shazamSecondsLeft, setShazamSecondsLeft] = useState<number>(0);
-const [shazamDetected, setShazamDetected] = useState<{
-  title: string;
-  artist: string;
-  artworkURL?: string;
-} | null>(null);
-const shazamCancelRef = useRef({ cancelled: false });
-const shazamTimerRef = useRef<any>(null);
+  // Shazam premium UI helpers
+  const [shazamUiState, setShazamUiState] = useState<"idle" | "listening" | "matching">("idle");
+  const [shazamSecondsLeft, setShazamSecondsLeft] = useState<number>(0);
+  const [shazamDetected, setShazamDetected] = useState<{
+    title: string;
+    artist: string;
+    artworkURL?: string;
+  } | null>(null);
+  const shazamCancelRef = useRef({ cancelled: false });
+  const shazamTimerRef = useRef<any>(null);
 
 
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -403,12 +403,12 @@ const shazamTimerRef = useRef<any>(null);
     shazamCancelRef.current.cancelled = true;
 
     // Stop listening ASAP
-    stopShazamListening().catch(() => {});
+    stopShazamListening();
 
     // Clear UI + timers immediately
     try {
       if (shazamTimerRef.current) clearInterval(shazamTimerRef.current);
-    } catch {}
+    } catch { }
     shazamTimerRef.current = null;
 
     setShazamUiState("idle");
@@ -423,7 +423,7 @@ const shazamTimerRef = useRef<any>(null);
         staysActiveInBackground: false,
         shouldDuckAndroid: true,
       });
-    } catch {}
+    } catch { }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [isShazamScanning]);
@@ -461,7 +461,7 @@ const shazamTimerRef = useRef<any>(null);
     // Countdown timer (premium UX)
     try {
       if (shazamTimerRef.current) clearInterval(shazamTimerRef.current);
-    } catch {}
+    } catch { }
     shazamTimerRef.current = setInterval(() => {
       setShazamSecondsLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
@@ -584,11 +584,11 @@ const shazamTimerRef = useRef<any>(null);
         error?.message === "SHAZAM_TIMEOUT" ? "Tiempo agotado" : "Error",
         message,
       );
-      stopShazamListening().catch(() => {});
+      stopShazamListening();
     } finally {
       try {
         if (shazamTimerRef.current) clearInterval(shazamTimerRef.current);
-      } catch {}
+      } catch { }
       shazamTimerRef.current = null;
 
       setIsShazamScanning(false);
@@ -604,7 +604,7 @@ const shazamTimerRef = useRef<any>(null);
           staysActiveInBackground: false,
           shouldDuckAndroid: true,
         });
-      } catch {}
+      } catch { }
     }
   };
 
@@ -689,7 +689,7 @@ const shazamTimerRef = useRef<any>(null);
         const results = await searchUsers(lastWord.substring(1));
         setSuggestions(results.filter((u) => u.$id !== user?.$id));
         setShowSuggestions(true);
-      } catch {}
+      } catch { }
     } else setShowSuggestions(false);
   };
 
