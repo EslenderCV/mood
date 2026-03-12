@@ -23,4 +23,5 @@ expo-env.d.ts
 android/
 ios/
 
+# Don't ignore the shazam-android module
 !/modules/shazam-android/android/
