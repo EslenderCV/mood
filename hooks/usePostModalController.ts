@@ -14,6 +14,12 @@ import {
   pickBestDeezerMatch,
   toShazamDetected,
 } from "@/lib/shazam";
+import {
+  isShazamAvailable,
+  startShazamListening,
+  stopShazamListening,
+} from "@/lib/shazamkit";
+import { getMusicKitToken } from "@/lib/appwrite/shazamToken";
 
 const { height } = Dimensions.get("window");
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
@@ -398,10 +404,7 @@ const shazamTimerRef = useRef<any>(null);
     shazamCancelRef.current.cancelled = true;
 
     // Stop listening ASAP
-    try {
-      const ExpoShazamKit = await import("expo-shazamkit");
-      ExpoShazamKit.stopListening();
-    } catch {}
+    stopShazamListening().catch(() => {});
 
     // Clear UI + timers immediately
     try {
@@ -428,16 +431,6 @@ const shazamTimerRef = useRef<any>(null);
 
 
   const handleShazam = async () => {
-    // ShazamKit (expo-shazamkit) es iOS-only. En Android mostramos un mensaje.
-    if (Platform.OS !== "ios") {
-      showToast(
-        "info",
-        "No disponible",
-        "Shazam está disponible solo en iOS por ahora.",
-      );
-      return;
-    }
-
     if (linkedSong) {
       showToast(
         "info",
@@ -496,15 +489,27 @@ const shazamTimerRef = useRef<any>(null);
         return;
       }
 
-      const ExpoShazamKit = await import("expo-shazamkit");
-      const available = await ExpoShazamKit.isAvailable();
+      const available = await isShazamAvailable();
       if (!available) {
         showToast(
           "error",
           "No disponible",
-          "ShazamKit no está disponible en este dispositivo (requiere iOS 15+ y un build nativo).",
+          "ShazamKit no está disponible en este dispositivo.",
         );
         return;
+      }
+
+      if (shazamCancelRef.current.cancelled) return;
+
+      // En Android obtenemos el Developer Token antes de escuchar.
+      let musicKitToken: string | undefined;
+      if (Platform.OS === "android") {
+        try {
+          musicKitToken = await getMusicKitToken();
+        } catch (e: any) {
+          showToast("error", "Error de configuración", "No se pudo obtener el token de Shazam.");
+          return;
+        }
       }
 
       if (shazamCancelRef.current.cancelled) return;
@@ -512,13 +517,11 @@ const shazamTimerRef = useRef<any>(null);
       // Ejecutamos el reconocimiento con timeout para no quedarnos colgados en el overlay.
       const result = await new Promise<any[]>((resolve, reject) => {
         const timer = setTimeout(() => {
-          try {
-            ExpoShazamKit.stopListening();
-          } catch {}
+          stopShazamListening().catch(() => {});
           reject(new Error("SHAZAM_TIMEOUT"));
         }, timeoutMs);
 
-        ExpoShazamKit.startListening()
+        startShazamListening(musicKitToken)
           .then((matches: any[]) => {
             clearTimeout(timer);
             resolve(matches ?? []);
@@ -594,10 +597,7 @@ const shazamTimerRef = useRef<any>(null);
         error?.message === "SHAZAM_TIMEOUT" ? "Tiempo agotado" : "Error",
         message,
       );
-      try {
-        const ExpoShazamKit = await import("expo-shazamkit");
-        ExpoShazamKit.stopListening();
-      } catch {}
+      stopShazamListening().catch(() => {});
     } finally {
       try {
         if (shazamTimerRef.current) clearInterval(shazamTimerRef.current);
