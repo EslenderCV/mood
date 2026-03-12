@@ -1,0 +1,6 @@
+{
+  "name": "weekly-vibe-generate",
+  "version": "1.0.0",
+  "main": "dist/main.js",
+  "type": "module"
+}

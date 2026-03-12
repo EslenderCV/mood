@@ -1,0 +1,8 @@
+{
+  "name": "mood-password-reset",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "node-appwrite": "^15.1.0"
+  }
+}

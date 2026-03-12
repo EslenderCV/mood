@@ -9,11 +9,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useColorScheme } from "nativewind";
-import { useAudioContext } from "@/context/AudioContext";
-import { getDeezerTrackUrl } from "@/lib/appwrite";
+import { AudioActions, useAudioContext } from "@/context/AudioContext";
 
 import { tStatic } from "@/context/LanguageContext";
-// 🔥 IMPORTS PARA LA ACCIÓN
 import { useFeed } from "@/context/FeedProvider";
 import { useModal } from "@/context/ModalContext";
 
@@ -21,61 +19,73 @@ const TrendingSongCard = ({ song }: { song: any }) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  // Contextos para acción
   const { setViralSongToUse } = useFeed();
   const { setPostModalVisible } = useModal();
 
-  // ✅ Usar el reproductor global (evita solapes de audio)
-  const {
-    currentPlayingId,
-    isPlaying,
-    isLoading,
-    isBuffering,
-    playTrack,
-    pauseTrack,
-    resumeTrack,
-  } = useAudioContext();
+  // Solo usamos el context para reflejar el estado visual del player global.
+  const { currentPlayingId, isPlaying, isLoading, isBuffering } =
+    useAudioContext();
+
+  const trackId = useMemo(() => {
+    if (song?.id === undefined || song?.id === null) return null;
+    return String(song.id);
+  }, [song?.id]);
+
+  const normalizedCurrentPlayingId = useMemo(() => {
+    if (currentPlayingId === undefined || currentPlayingId === null) return null;
+    return String(currentPlayingId);
+  }, [currentPlayingId]);
 
   const isThisTrackActive = useMemo(
-    () => currentPlayingId === song?.id,
-    [currentPlayingId, song?.id],
+    () => normalizedCurrentPlayingId === trackId,
+    [normalizedCurrentPlayingId, trackId],
   );
   const isThisTrackPlaying = isThisTrackActive && isPlaying;
   const isThisTrackLoading = isThisTrackActive && (isLoading || isBuffering);
 
   const handlePlayPause = async () => {
     try {
-      // Si ya es la pista activa, solo togglear play/pause
-      if (isThisTrackActive) {
-        if (isPlaying) await pauseTrack();
-        else await resumeTrack();
+      if (!trackId) return;
+
+      // Misma lógica que el audio global del home/feed:
+      // usamos AudioActions para interactuar con la fuente única del reproductor.
+      const state = AudioActions.getState();
+      const isThisTrack =
+        state.currentPlayingId !== null &&
+        state.currentPlayingId !== undefined &&
+        String(state.currentPlayingId) === trackId;
+
+      if (isThisTrack) {
+        if (state.isPlaying) await AudioActions.pauseTrack();
+        else await AudioActions.resumeTrack();
         return;
       }
 
-      // Caso nuevo track: hacemos play en el player global.
-      const previewUrl = song?.preview || (await getDeezerTrackUrl(song?.id));
-
-      await playTrack(song?.id, previewUrl, {
+      await AudioActions.playTrack(trackId, song?.preview, {
         title: song?.title,
         artist: song?.artist?.name || song?.artist,
-        cover: song?.cover || song?.album?.cover_xl,
+        cover: song?.cover || song?.album?.cover_xl || song?.album?.cover_big,
       });
     } catch (error) {
       console.log("Error playing viral song via global player:", error);
     }
   };
 
-  const handleUseSound = () => {
-    // 1. Pausar si está sonando (en el player global)
-    if (isThisTrackPlaying) {
-      pauseTrack();
-    }
+  const handleUseSound = async () => {
+    try {
+      const state = AudioActions.getState();
+      if (state.currentPlayingId && state.isPlaying) {
+        await AudioActions.pauseTrack();
+      }
+    } catch {}
 
-    // 2. Establecer la canción en el "Puente" del proveedor
     setViralSongToUse(song);
-
-    // 3. Abrir el modal de crear post
     setPostModalVisible(true);
+  };
+
+  const handleUseSoundPress = (event?: any) => {
+    event?.stopPropagation?.();
+    void handleUseSound();
   };
 
   if (!song) return null;
@@ -147,9 +157,8 @@ const TrendingSongCard = ({ song }: { song: any }) => {
             </View>
           </View>
 
-          {/* 🔥 BOTÓN CONECTADO */}
           <TouchableOpacity
-            onPress={handleUseSound}
+            onPress={handleUseSoundPress}
             className="mt-6 flex-row items-center bg-white/10 self-start px-4 py-3 rounded-full backdrop-blur-md border border-white/10 active:bg-white/20"
           >
             <Ionicons name="musical-notes" size={16} color="#fff" />

@@ -1,0 +1,7 @@
+{
+  "name": "mood-feed-metrics",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/main.js",
+  "private": true
+}

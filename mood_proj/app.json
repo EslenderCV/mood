@@ -1,0 +1,79 @@
+{
+  "expo": {
+    "name": "Mood",
+    "slug": "mood",
+    "version": "1.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": [
+      "mood",
+      "appwrite-callback-697d0db30009f4ca4dd6"
+    ],
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/images/splash-full.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.Gammes.Mood",
+      "usesAppleSignIn": true,
+      "buildNumber": "25",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos directamente desde la app para crear nuevos Vibes o actualizar tu foto de perfil.",
+        "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar imágenes y compartirlas en tus publicaciones o historias.",
+        "NSMicrophoneUsageDescription": "Mood necesita acceso al micrófono para capturar audio cuando grabas videos para tus historias.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "package": "com.Gammes.Mood",
+      "softwareKeyboardLayoutMode": "resize",
+      "versionCode": 20,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "googleServicesFile": "./google-services.json"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permite a Mood acceder a tus fotos para crear publicaciones.",
+          "cameraPermission": "Permite a Mood usar la cámara para tomar fotos de perfil o contenido."
+        }
+      ],
+      "expo-audio",
+      "expo-localization",
+      "expo-web-browser",
+      "expo-apple-authentication",
+      "expo-secure-store",
+      "expo-video",
+      "expo-shazamkit"
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0a9bc82d-9da3-408d-a6c8-1e172ca17a61"
+      },
+      "router": {}
+    },
+    "owner": "gammes"
+  }
+}
