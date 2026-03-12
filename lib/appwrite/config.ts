@@ -42,6 +42,13 @@ export const appwriteConfig = {
     feedEventsFunctionId: "6985241c000f43efd797",
   },
 
+  // ---- ShazamKit token (Android) ----
+  // Appwrite Console → Functions → get_shazam_token → Overview → Function ID
+  // También puedes sobreescribir con EXPO_PUBLIC_APPWRITE_SHAZAM_TOKEN_FUNCTION_ID
+  shazamToken: {
+    functionId: process.env["EXPO_PUBLIC_APPWRITE_SHAZAM_TOKEN_FUNCTION_ID"] ?? "",
+  },
+
   // ---- Password reset (in-app) ----
   // By default, the app will try to reset using the migration default password
   // (Mood.2026!) after verifying the Email OTP code.
