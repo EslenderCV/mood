@@ -43,10 +43,12 @@ export async function startShazamListening(): Promise<ShazamMatch[]> {
   return [];
 }
 
-export function stopShazamListening(): void {
+export async function stopShazamListening(): Promise<void> {
   if (Platform.OS === "ios") {
-    import("expo-shazamkit").then((mod) => mod.stopListening()).catch(() => {});
+    const mod = await import("expo-shazamkit");
+    mod.stopListening();
   } else if (Platform.OS === "android") {
-    import("shazam-android").then(({ default: ShazamAndroid }) => ShazamAndroid.stopListening()).catch(() => {});
+    const { default: ShazamAndroid } = await import("shazam-android");
+    ShazamAndroid.stopListening();
   }
 }

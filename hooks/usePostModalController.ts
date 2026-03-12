@@ -403,8 +403,12 @@ export const usePostModalController = (props?: any) => {
     shazamCancelRef.current.cancelled = true;
 
     // Stop listening ASAP
-    stopShazamListening();
+    try {
+      stopShazamListening();
+    }
+    catch {
 
+    }
     // Clear UI + timers immediately
     try {
       if (shazamTimerRef.current) clearInterval(shazamTimerRef.current);
@@ -504,7 +508,9 @@ export const usePostModalController = (props?: any) => {
       // El token de Android se obtiene dentro de startShazamListening().
       const result = await new Promise<any[]>((resolve, reject) => {
         const timer = setTimeout(() => {
-          stopShazamListening();
+          try {
+            stopShazamListening();
+          } catch { }
           reject(new Error("SHAZAM_TIMEOUT"));
         }, timeoutMs);
 
@@ -584,7 +590,10 @@ export const usePostModalController = (props?: any) => {
         error?.message === "SHAZAM_TIMEOUT" ? "Tiempo agotado" : "Error",
         message,
       );
-      stopShazamListening();
+      try {
+        stopShazamListening();
+      }
+      catch { }
     } finally {
       try {
         if (shazamTimerRef.current) clearInterval(shazamTimerRef.current);
