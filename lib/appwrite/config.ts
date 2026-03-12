@@ -7,6 +7,7 @@ import { Client, Account, Databases, Storage } from "react-native-appwrite";
 // Appwrite Console → Functions → (tu función) → Overview → Function ID
 // ✅ Function ID provided by the user (Appwrite Console → Functions → Overview)
 const PASSWORD_RESET_FUNCTION_ID = "698a4d7b00230415986b";
+const SHAZAM_TOKEN_FUNCTION_ID = "69b2ecee00314ec8950b"; // Reemplaza con el ID real de tu función de token Shazam
 
 export const appwriteConfig = {
   endpoint: "https://nyc.cloud.appwrite.io/v1",
@@ -46,7 +47,7 @@ export const appwriteConfig = {
   // Appwrite Console → Functions → get_shazam_token → Overview → Function ID
   // También puedes sobreescribir con EXPO_PUBLIC_APPWRITE_SHAZAM_TOKEN_FUNCTION_ID
   shazamToken: {
-    functionId: process.env["EXPO_PUBLIC_APPWRITE_SHAZAM_TOKEN_FUNCTION_ID"] ?? "",
+    functionId: SHAZAM_TOKEN_FUNCTION_ID,
   },
 
   // ---- Password reset (in-app) ----

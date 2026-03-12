@@ -2,7 +2,7 @@
   "expo": {
     "name": "Mood",
     "slug": "mood",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": [
@@ -19,7 +19,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.Gammes.Mood",
       "usesAppleSignIn": true,
-      "buildNumber": "26",
+      "buildNumber": "28",
       "infoPlist": {
         "NSCameraUsageDescription": "Mood necesita acceso a tu cámara para que puedas tomar fotos directamente desde la app para crear nuevos Vibes o actualizar tu foto de perfil.",
         "NSPhotoLibraryUsageDescription": "Mood necesita acceso a tu galería para que puedas seleccionar imágenes y compartirlas en tus publicaciones o historias.",
@@ -34,7 +34,7 @@
       },
       "package": "com.Gammes.Mood",
       "softwareKeyboardLayoutMode": "resize",
-      "versionCode": 21,
+      "versionCode": 28,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
@@ -51,6 +51,7 @@
           "cameraPermission": "Permite a Mood usar la cámara para tomar fotos de perfil o contenido."
         }
       ],
+      "@react-native-async-storage/expo-with-async-storage",
       "expo-audio",
       "expo-localization",
       "expo-web-browser",
