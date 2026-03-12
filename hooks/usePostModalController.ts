@@ -19,7 +19,6 @@ import {
   startShazamListening,
   stopShazamListening,
 } from "@/lib/shazamkit";
-import { getMusicKitToken } from "@/lib/appwrite/shazamToken";
 
 const { height } = Dimensions.get("window");
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
@@ -501,27 +500,15 @@ const shazamTimerRef = useRef<any>(null);
 
       if (shazamCancelRef.current.cancelled) return;
 
-      // En Android obtenemos el Developer Token antes de escuchar.
-      let musicKitToken: string | undefined;
-      if (Platform.OS === "android") {
-        try {
-          musicKitToken = await getMusicKitToken();
-        } catch (e: any) {
-          showToast("error", "Error de configuración", "No se pudo obtener el token de Shazam.");
-          return;
-        }
-      }
-
-      if (shazamCancelRef.current.cancelled) return;
-
       // Ejecutamos el reconocimiento con timeout para no quedarnos colgados en el overlay.
+      // El token de Android se obtiene dentro de startShazamListening().
       const result = await new Promise<any[]>((resolve, reject) => {
         const timer = setTimeout(() => {
-          stopShazamListening().catch(() => {});
+          stopShazamListening();
           reject(new Error("SHAZAM_TIMEOUT"));
         }, timeoutMs);
 
-        startShazamListening(musicKitToken)
+        startShazamListening()
           .then((matches: any[]) => {
             clearTimeout(timer);
             resolve(matches ?? []);

@@ -1,6 +1,10 @@
 {
-  "platforms": ["android"],
+  "platforms": [
+    "android"
+  ],
   "android": {
-    "modules": ["expo.modules.shazamandroid.ShazamAndroidModule"]
+    "modules": [
+      "expo.modules.shazamandroid.ShazamAndroidModule"
+    ]
   }
 }

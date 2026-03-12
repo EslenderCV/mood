@@ -1,8 +1,0 @@
-{
-  "name": "shazam-android",
-  "version": "1.0.0",
-  "description": "ShazamKit para Android — módulo nativo local de Expo",
-  "main": "src/index",
-  "types": "src/index.ts",
-  "private": true
-}

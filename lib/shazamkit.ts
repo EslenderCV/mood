@@ -1,11 +1,11 @@
 /**
  * Wrapper unificado de ShazamKit para iOS y Android.
  *
- * iOS  → expo-shazamkit (sin token, usa entitlement del app)
- * Android → módulo local shazam-android (requiere Developer Token de MusicKit)
+ * iOS     → expo-shazamkit  (nativo Apple, sin token explícito)
+ * Android → shazam-android  (SDK de Apple para Android, requiere Developer Token)
  */
 import { Platform } from "react-native";
-import type { ShazamMatch as AndroidShazamMatch } from "shazam-android";
+import { getMusicKitToken } from "@/lib/appwrite/shazamToken";
 
 export type ShazamMatch = {
   title?: string | null;
@@ -21,40 +21,32 @@ export async function isShazamAvailable(): Promise<boolean> {
     return mod.isAvailable();
   }
   if (Platform.OS === "android") {
-    const mod = await import("shazam-android");
-    return mod.isAvailable();
+    const { default: ShazamAndroid } = await import("shazam-android");
+    return ShazamAndroid.isAvailable();
   }
   return false;
 }
 
-/**
- * Inicia el reconocimiento de música.
- *
- * En Android el token se pasa explícitamente porque el SDK de Apple lo requiere.
- * El caller debe obtenerlo con getMusicKitToken() de lib/appwrite/shazamToken.ts.
- */
-export async function startShazamListening(token?: string): Promise<ShazamMatch[]> {
+export async function startShazamListening(): Promise<ShazamMatch[]> {
   if (Platform.OS === "ios") {
     const mod = await import("expo-shazamkit");
-    return (mod.startListening() as unknown as Promise<ShazamMatch[]>);
+    return mod.startListening() as unknown as Promise<ShazamMatch[]>;
   }
 
   if (Platform.OS === "android") {
-    if (!token) throw new Error("Se requiere el Developer Token en Android.");
-    const mod = await import("shazam-android");
-    const results: AndroidShazamMatch[] = await mod.startListening(token);
-    return results as ShazamMatch[];
+    const { default: ShazamAndroid } = await import("shazam-android");
+    const token = await getMusicKitToken();
+    ShazamAndroid.setDeveloperToken(token);
+    return ShazamAndroid.startListening() as Promise<ShazamMatch[]>;
   }
 
   return [];
 }
 
-export async function stopShazamListening(): Promise<void> {
+export function stopShazamListening(): void {
   if (Platform.OS === "ios") {
-    const mod = await import("expo-shazamkit");
-    mod.stopListening();
+    import("expo-shazamkit").then((mod) => mod.stopListening()).catch(() => {});
   } else if (Platform.OS === "android") {
-    const mod = await import("shazam-android");
-    mod.stopListening();
+    import("shazam-android").then(({ default: ShazamAndroid }) => ShazamAndroid.stopListening()).catch(() => {});
   }
 }
