@@ -22,3 +22,10 @@ expo-env.d.ts
 
 android/
 ios/
+
+.vscode/
+
+# Don't ignore the shazam-android module
+!/modules/shazam-android/android/
+/modules/**/.gradle/
+/modules/**/build/

@@ -14,6 +14,11 @@ import {
   pickBestDeezerMatch,
   toShazamDetected,
 } from "@/lib/shazam";
+import {
+  isShazamAvailable,
+  startShazamListening,
+  stopShazamListening,
+} from "@/lib/shazamkit";
 
 const { height } = Dimensions.get("window");
 const MOOD_OFFICIAL_ID = "696b571b00112fd5c1e9";
@@ -71,16 +76,16 @@ export const usePostModalController = (props?: any) => {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [moodStyle, setMoodStyle] = useState<"standard" | "card">("standard");
   const [isShazamScanning, setIsShazamScanning] = useState(false);
-// Shazam premium UI helpers
-const [shazamUiState, setShazamUiState] = useState<"idle" | "listening" | "matching">("idle");
-const [shazamSecondsLeft, setShazamSecondsLeft] = useState<number>(0);
-const [shazamDetected, setShazamDetected] = useState<{
-  title: string;
-  artist: string;
-  artworkURL?: string;
-} | null>(null);
-const shazamCancelRef = useRef({ cancelled: false });
-const shazamTimerRef = useRef<any>(null);
+  // Shazam premium UI helpers
+  const [shazamUiState, setShazamUiState] = useState<"idle" | "listening" | "matching">("idle");
+  const [shazamSecondsLeft, setShazamSecondsLeft] = useState<number>(0);
+  const [shazamDetected, setShazamDetected] = useState<{
+    title: string;
+    artist: string;
+    artworkURL?: string;
+  } | null>(null);
+  const shazamCancelRef = useRef({ cancelled: false });
+  const shazamTimerRef = useRef<any>(null);
 
 
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -399,14 +404,15 @@ const shazamTimerRef = useRef<any>(null);
 
     // Stop listening ASAP
     try {
-      const ExpoShazamKit = await import("expo-shazamkit");
-      ExpoShazamKit.stopListening();
-    } catch {}
+      stopShazamListening();
+    }
+    catch {
 
+    }
     // Clear UI + timers immediately
     try {
       if (shazamTimerRef.current) clearInterval(shazamTimerRef.current);
-    } catch {}
+    } catch { }
     shazamTimerRef.current = null;
 
     setShazamUiState("idle");
@@ -421,23 +427,13 @@ const shazamTimerRef = useRef<any>(null);
         staysActiveInBackground: false,
         shouldDuckAndroid: true,
       });
-    } catch {}
+    } catch { }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [isShazamScanning]);
 
 
   const handleShazam = async () => {
-    // ShazamKit (expo-shazamkit) es iOS-only. En Android mostramos un mensaje.
-    if (Platform.OS !== "ios") {
-      showToast(
-        "info",
-        "No disponible",
-        "Shazam está disponible solo en iOS por ahora.",
-      );
-      return;
-    }
-
     if (linkedSong) {
       showToast(
         "info",
@@ -469,7 +465,7 @@ const shazamTimerRef = useRef<any>(null);
     // Countdown timer (premium UX)
     try {
       if (shazamTimerRef.current) clearInterval(shazamTimerRef.current);
-    } catch {}
+    } catch { }
     shazamTimerRef.current = setInterval(() => {
       setShazamSecondsLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
@@ -496,13 +492,12 @@ const shazamTimerRef = useRef<any>(null);
         return;
       }
 
-      const ExpoShazamKit = await import("expo-shazamkit");
-      const available = await ExpoShazamKit.isAvailable();
+      const available = await isShazamAvailable();
       if (!available) {
         showToast(
           "error",
           "No disponible",
-          "ShazamKit no está disponible en este dispositivo (requiere iOS 15+ y un build nativo).",
+          "ShazamKit no está disponible en este dispositivo.",
         );
         return;
       }
@@ -510,15 +505,16 @@ const shazamTimerRef = useRef<any>(null);
       if (shazamCancelRef.current.cancelled) return;
 
       // Ejecutamos el reconocimiento con timeout para no quedarnos colgados en el overlay.
+      // El token de Android se obtiene dentro de startShazamListening().
       const result = await new Promise<any[]>((resolve, reject) => {
         const timer = setTimeout(() => {
           try {
-            ExpoShazamKit.stopListening();
-          } catch {}
+            stopShazamListening();
+          } catch { }
           reject(new Error("SHAZAM_TIMEOUT"));
         }, timeoutMs);
 
-        ExpoShazamKit.startListening()
+        startShazamListening()
           .then((matches: any[]) => {
             clearTimeout(timer);
             resolve(matches ?? []);
@@ -595,13 +591,13 @@ const shazamTimerRef = useRef<any>(null);
         message,
       );
       try {
-        const ExpoShazamKit = await import("expo-shazamkit");
-        ExpoShazamKit.stopListening();
-      } catch {}
+        stopShazamListening();
+      }
+      catch { }
     } finally {
       try {
         if (shazamTimerRef.current) clearInterval(shazamTimerRef.current);
-      } catch {}
+      } catch { }
       shazamTimerRef.current = null;
 
       setIsShazamScanning(false);
@@ -617,7 +613,7 @@ const shazamTimerRef = useRef<any>(null);
           staysActiveInBackground: false,
           shouldDuckAndroid: true,
         });
-      } catch {}
+      } catch { }
     }
   };
 
@@ -702,7 +698,7 @@ const shazamTimerRef = useRef<any>(null);
         const results = await searchUsers(lastWord.substring(1));
         setSuggestions(results.filter((u) => u.$id !== user?.$id));
         setShowSuggestions(true);
-      } catch {}
+      } catch { }
     } else setShowSuggestions(false);
   };
 
